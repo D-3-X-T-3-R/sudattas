@@ -1,0 +1,1 @@
+ docker exec -it sudattas-local-sql-server bash
