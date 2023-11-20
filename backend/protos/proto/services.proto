@@ -1,0 +1,14 @@
+// service.proto
+
+syntax = "proto3";
+
+package proto;
+
+import "proto/messages.proto";
+
+service CartService {
+    rpc CreateCartItem(CreateCartItemRequest) returns (CartItemResponse);
+    rpc ReadCartItems(ReadCartItemsRequest) returns (CartItemsResponse);
+    rpc UpdateCartItem(UpdateCartItemRequest) returns (CartItemResponse);
+    rpc DeleteCartItem(DeleteCartItemRequest) returns (CartItemResponse);
+}
