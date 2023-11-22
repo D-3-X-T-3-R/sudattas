@@ -47,15 +47,15 @@ pub struct CartItemsResponse {
     pub items: ::prost::alloc::vec::Vec<CartItemResponse>,
 }
 /// Generated client implementations.
-pub mod cart_service_client {
+pub mod grpc_services_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
     #[derive(Debug, Clone)]
-    pub struct CartServiceClient<T> {
+    pub struct GrpcServicesClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl CartServiceClient<tonic::transport::Channel> {
+    impl GrpcServicesClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -66,7 +66,7 @@ pub mod cart_service_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> CartServiceClient<T>
+    impl<T> GrpcServicesClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
@@ -84,7 +84,7 @@ pub mod cart_service_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> CartServiceClient<InterceptedService<T, F>>
+        ) -> GrpcServicesClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -98,7 +98,7 @@ pub mod cart_service_client {
                 http::Request<tonic::body::BoxBody>,
             >>::Error: Into<StdError> + Send + Sync,
         {
-            CartServiceClient::new(InterceptedService::new(inner, interceptor))
+            GrpcServicesClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -135,7 +135,7 @@ pub mod cart_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreateCartItemRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::CartItemResponse>,
+            tonic::Response<super::CartItemsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -149,11 +149,11 @@ pub mod cart_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/proto.CartService/CreateCartItem",
+                "/grpc_services.GRPCServices/CreateCartItem",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("proto.CartService", "CreateCartItem"));
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "CreateCartItem"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn read_cart_items(
@@ -174,18 +174,18 @@ pub mod cart_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/proto.CartService/ReadCartItems",
+                "/grpc_services.GRPCServices/ReadCartItems",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("proto.CartService", "ReadCartItems"));
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "ReadCartItems"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn update_cart_item(
             &mut self,
             request: impl tonic::IntoRequest<super::UpdateCartItemRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::CartItemResponse>,
+            tonic::Response<super::CartItemsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -199,18 +199,18 @@ pub mod cart_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/proto.CartService/UpdateCartItem",
+                "/grpc_services.GRPCServices/UpdateCartItem",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("proto.CartService", "UpdateCartItem"));
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "UpdateCartItem"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn delete_cart_item(
             &mut self,
             request: impl tonic::IntoRequest<super::DeleteCartItemRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::CartItemResponse>,
+            tonic::Response<super::CartItemsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -224,27 +224,27 @@ pub mod cart_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/proto.CartService/DeleteCartItem",
+                "/grpc_services.GRPCServices/DeleteCartItem",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("proto.CartService", "DeleteCartItem"));
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "DeleteCartItem"));
             self.inner.unary(req, path, codec).await
         }
     }
 }
 /// Generated server implementations.
-pub mod cart_service_server {
+pub mod grpc_services_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with CartServiceServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with GrpcServicesServer.
     #[async_trait]
-    pub trait CartService: Send + Sync + 'static {
+    pub trait GrpcServices: Send + Sync + 'static {
         async fn create_cart_item(
             &self,
             request: tonic::Request<super::CreateCartItemRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::CartItemResponse>,
+            tonic::Response<super::CartItemsResponse>,
             tonic::Status,
         >;
         async fn read_cart_items(
@@ -258,19 +258,19 @@ pub mod cart_service_server {
             &self,
             request: tonic::Request<super::UpdateCartItemRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::CartItemResponse>,
+            tonic::Response<super::CartItemsResponse>,
             tonic::Status,
         >;
         async fn delete_cart_item(
             &self,
             request: tonic::Request<super::DeleteCartItemRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::CartItemResponse>,
+            tonic::Response<super::CartItemsResponse>,
             tonic::Status,
         >;
     }
     #[derive(Debug)]
-    pub struct CartServiceServer<T: CartService> {
+    pub struct GrpcServicesServer<T: GrpcServices> {
         inner: _Inner<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
@@ -278,7 +278,7 @@ pub mod cart_service_server {
         max_encoding_message_size: Option<usize>,
     }
     struct _Inner<T>(Arc<T>);
-    impl<T: CartService> CartServiceServer<T> {
+    impl<T: GrpcServices> GrpcServicesServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -330,9 +330,9 @@ pub mod cart_service_server {
             self
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for CartServiceServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for GrpcServicesServer<T>
     where
-        T: CartService,
+        T: GrpcServices,
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
@@ -348,14 +348,14 @@ pub mod cart_service_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/proto.CartService/CreateCartItem" => {
+                "/grpc_services.GRPCServices/CreateCartItem" => {
                     #[allow(non_camel_case_types)]
-                    struct CreateCartItemSvc<T: CartService>(pub Arc<T>);
+                    struct CreateCartItemSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
-                        T: CartService,
+                        T: GrpcServices,
                     > tonic::server::UnaryService<super::CreateCartItemRequest>
                     for CreateCartItemSvc<T> {
-                        type Response = super::CartItemResponse;
+                        type Response = super::CartItemsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -366,7 +366,7 @@ pub mod cart_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CartService>::create_cart_item(&inner, request).await
+                                <T as GrpcServices>::create_cart_item(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -394,11 +394,11 @@ pub mod cart_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/proto.CartService/ReadCartItems" => {
+                "/grpc_services.GRPCServices/ReadCartItems" => {
                     #[allow(non_camel_case_types)]
-                    struct ReadCartItemsSvc<T: CartService>(pub Arc<T>);
+                    struct ReadCartItemsSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
-                        T: CartService,
+                        T: GrpcServices,
                     > tonic::server::UnaryService<super::ReadCartItemsRequest>
                     for ReadCartItemsSvc<T> {
                         type Response = super::CartItemsResponse;
@@ -412,7 +412,7 @@ pub mod cart_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CartService>::read_cart_items(&inner, request).await
+                                <T as GrpcServices>::read_cart_items(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -440,14 +440,14 @@ pub mod cart_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/proto.CartService/UpdateCartItem" => {
+                "/grpc_services.GRPCServices/UpdateCartItem" => {
                     #[allow(non_camel_case_types)]
-                    struct UpdateCartItemSvc<T: CartService>(pub Arc<T>);
+                    struct UpdateCartItemSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
-                        T: CartService,
+                        T: GrpcServices,
                     > tonic::server::UnaryService<super::UpdateCartItemRequest>
                     for UpdateCartItemSvc<T> {
-                        type Response = super::CartItemResponse;
+                        type Response = super::CartItemsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -458,7 +458,7 @@ pub mod cart_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CartService>::update_cart_item(&inner, request).await
+                                <T as GrpcServices>::update_cart_item(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -486,14 +486,14 @@ pub mod cart_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/proto.CartService/DeleteCartItem" => {
+                "/grpc_services.GRPCServices/DeleteCartItem" => {
                     #[allow(non_camel_case_types)]
-                    struct DeleteCartItemSvc<T: CartService>(pub Arc<T>);
+                    struct DeleteCartItemSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
-                        T: CartService,
+                        T: GrpcServices,
                     > tonic::server::UnaryService<super::DeleteCartItemRequest>
                     for DeleteCartItemSvc<T> {
-                        type Response = super::CartItemResponse;
+                        type Response = super::CartItemsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -504,7 +504,7 @@ pub mod cart_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as CartService>::delete_cart_item(&inner, request).await
+                                <T as GrpcServices>::delete_cart_item(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -547,7 +547,7 @@ pub mod cart_service_server {
             }
         }
     }
-    impl<T: CartService> Clone for CartServiceServer<T> {
+    impl<T: GrpcServices> Clone for GrpcServicesServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -559,7 +559,7 @@ pub mod cart_service_server {
             }
         }
     }
-    impl<T: CartService> Clone for _Inner<T> {
+    impl<T: GrpcServices> Clone for _Inner<T> {
         fn clone(&self) -> Self {
             Self(Arc::clone(&self.0))
         }
@@ -569,7 +569,7 @@ pub mod cart_service_server {
             write!(f, "{:?}", self.0)
         }
     }
-    impl<T: CartService> tonic::server::NamedService for CartServiceServer<T> {
-        const NAME: &'static str = "proto.CartService";
+    impl<T: GrpcServices> tonic::server::NamedService for GrpcServicesServer<T> {
+        const NAME: &'static str = "grpc_services.GRPCServices";
     }
 }

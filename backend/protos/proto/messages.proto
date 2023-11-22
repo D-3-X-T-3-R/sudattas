@@ -1,7 +1,7 @@
 
 syntax = "proto3";
 
-package proto;
+package grpc_services;
 
 message CreateCartItemRequest {
     int32 user_id = 1;

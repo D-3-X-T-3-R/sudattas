@@ -2,13 +2,13 @@
 
 syntax = "proto3";
 
-package proto;
+package grpc_services;
 
 import "proto/messages.proto";
 
-service CartService {
-    rpc CreateCartItem(CreateCartItemRequest) returns (CartItemResponse);
+service GRPCServices {
+    rpc CreateCartItem(CreateCartItemRequest) returns (CartItemsResponse);
     rpc ReadCartItems(ReadCartItemsRequest) returns (CartItemsResponse);
-    rpc UpdateCartItem(UpdateCartItemRequest) returns (CartItemResponse);
-    rpc DeleteCartItem(DeleteCartItemRequest) returns (CartItemResponse);
+    rpc UpdateCartItem(UpdateCartItemRequest) returns (CartItemsResponse);
+    rpc DeleteCartItem(DeleteCartItemRequest) returns (CartItemsResponse);
 }

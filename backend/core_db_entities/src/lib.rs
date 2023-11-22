@@ -10,7 +10,7 @@ pub type CoreDatabaseConnection = sea_orm::DatabaseConnection;
 pub mod entity;
 
 #[tokio::main]
-pub async fn main() {
+pub async fn get_db() {
     let conn_str = "mysql://root:12345678@localhost:3306/SUDATTAS";
 
     info!("Connecting to database: {conn_str}");
