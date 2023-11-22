@@ -1,0 +1,26 @@
+[package]
+name = "proto"
+version = "0.12.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+tonic = "0.10.2"
+prost = "0.12.2"
+prost-types = "0.12.2"
+prost-wkt = "0.5.0"
+prost-wkt-types = "0.5.0"
+
+num = "0.4"
+num-derive = "0.4.0"
+num-traits = "0.2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[build-dependencies]
+tonic-build = "0.10.2"
+prost-build = "0.12.2"
+prost-wkt-build = "0.5.0"
