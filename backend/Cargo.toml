@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "core_db_entities",
+    "core_operations",
+    "protos"
+    
+]
