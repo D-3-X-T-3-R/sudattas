@@ -1,5 +1,3 @@
-// CodeGen'd code produces a million of these.
-//#![allow(clippy::derive_partial_eq_without_eq)]
 pub use sea_orm;
 use sea_orm::{Database, DatabaseConnection, DbErr};
 use std::env;

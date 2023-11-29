@@ -34,12 +34,11 @@ pub enum JWKSLoaderError {
 pub async fn load_jwks() -> Result<JWKSet, JWKSLoaderError> {
     info!("Loading JWKS");
 
-    let issuer = std::env::var("OAUTH_ISSUER")
-        .map_err(|_| JWKSLoaderError::Configuration("OAUTH_ISSUER env var not set".to_string()))?;
+    let issuer = std::env::var("OAUTH_DOMAIN")
+        .map_err(|_| JWKSLoaderError::Configuration("OAUTH_DOMAIN env var not set".to_string()))?;
 
     info!("Using issuer: {issuer}");
 
-    // Some issuers end with a slash, some don't. Annoying.
     let sep = if issuer.ends_with('/') { "" } else { "/" };
 
     let oidc_config = reqwest::get(format!(

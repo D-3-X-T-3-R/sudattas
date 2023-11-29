@@ -40,12 +40,11 @@ pub fn validate_token(b64_token: &str, jwks: &JWKSet) -> Result<Claims, TokenPar
     let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
     validation.leeway = 5;
 
-    // TODO change this later
-    // validation.iss =
-    //     Some(hashset! {std::env::var("OAUTH_ISSUER").expect("OAUTH_ISSUER env var not set")});
+    validation.iss =
+        Some(hashset! {std::env::var("OAUTH_DOMAIN").expect("OAUTH_DOMAIN env var not set")});
 
-    // validation.aud =
-    //     Some(hashset! {std::env::var("OAUTH_AUD").expect("OAUTH_AUD env var not set")});
+    validation.aud =
+        Some(hashset! {std::env::var("OAUTH_AUDIANCE").expect("OAUTH_AUDIANCE env var not set")});
 
     for jwk in &jwks.keys {
         let key = jsonwebtoken::DecodingKey::from_rsa_components(&jwk.n, &jwk.e).map_err(|_e| {
