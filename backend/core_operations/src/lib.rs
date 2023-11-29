@@ -1,4 +1,4 @@
-use core_db_entities::{CoreDatabaseConnection,get_db};
+use core_db_entities::{get_db, CoreDatabaseConnection};
 use proto::proto::core::{
     grpc_services_server::GrpcServices, CartItemsResponse, CreateCartItemRequest,
     DeleteCartItemRequest, ReadCartItemsRequest, UpdateCartItemRequest,
