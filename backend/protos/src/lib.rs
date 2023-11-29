@@ -1,4 +1,3 @@
-// CodeGen'd code produces a million of these.
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 pub use prost_types;

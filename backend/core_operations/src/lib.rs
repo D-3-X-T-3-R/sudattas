@@ -1,4 +1,4 @@
-use core_db_entities::{CoreDatabaseConnection,get_db};
+use core_db_entities::{get_db, CoreDatabaseConnection};
 use proto::proto::core::{
     grpc_services_server::GrpcServices, CartItemsResponse, CreateCartItemRequest,
     DeleteCartItemRequest, ReadCartItemsRequest, UpdateCartItemRequest,
@@ -32,7 +32,6 @@ impl GrpcServices for MyGRPCServices {
         request: Request<CreateCartItemRequest>,
     ) -> Result<Response<CartItemsResponse>, Status> {
         handlers::cart::create_cart_item(self.db.as_ref().unwrap(), request).await
-        // todo!()
     }
 
     async fn read_cart_items(
@@ -40,7 +39,6 @@ impl GrpcServices for MyGRPCServices {
         request: Request<ReadCartItemsRequest>,
     ) -> Result<Response<CartItemsResponse>, Status> {
         todo!()
-        // handlers::cart::create_cart_item(self.db.as_ref().unwrap(), request).await
     }
 
     async fn update_cart_item(
@@ -48,7 +46,6 @@ impl GrpcServices for MyGRPCServices {
         request: Request<UpdateCartItemRequest>,
     ) -> Result<Response<CartItemsResponse>, Status> {
         todo!()
-        // handlers::cart::create_cart_item(self.db.as_ref().unwrap(), request).await
     }
 
     async fn delete_cart_item(
@@ -56,6 +53,5 @@ impl GrpcServices for MyGRPCServices {
         request: Request<DeleteCartItemRequest>,
     ) -> Result<Response<CartItemsResponse>, Status> {
         todo!()
-        // handlers::cart::create_cart_item(self.db.as_ref().unwrap(), request).await
     }
 }

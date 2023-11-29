@@ -1,13 +1,18 @@
+use crate::{
+    resolvers::cart::schema::{Cart, NewCart},
+    security::jwks_loader::JWKSet,
+};
 use juniper::FieldResult;
-
 use warp::Reply;
 
 pub mod cart;
 pub mod error;
 
+pub struct QueryRoot;
+
 #[derive(Clone, Debug)]
 pub struct Context {
-    // pub jwks: JWKSet,
+    pub jwks: JWKSet,
 }
 
 impl Reply for Context {
@@ -15,18 +20,6 @@ impl Reply for Context {
         warp::reply::Response::new("foo".into())
     }
 }
-
-pub struct QueryRoot;
-use crate::{
-    resolvers::cart::schema::{Cart, NewCart},
-    security::jwks_loader::JWKSet,
-};
-
-// use self::{
-//     account::schema::SearchAccount,
-//     entity::schema::{EntityAttributes, NewEntityAttributes},
-//     transaction::schema::NewTransaction,
-// };
 
 #[juniper::graphql_object(Context = Context)]
 impl QueryRoot {
