@@ -1,12 +1,11 @@
-// src/main.rs or a suitable module file
-
-use crate::handlers;
-use core_db_entities::CoreDatabaseConnection;
+use core_db_entities::{CoreDatabaseConnection,get_db};
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, CartItemsResponse,
-    CreateCartItemRequest, DeleteCartItemRequest, ReadCartItemsRequest, UpdateCartItemRequest,
+    grpc_services_server::GrpcServices, CartItemsResponse, CreateCartItemRequest,
+    DeleteCartItemRequest, ReadCartItemsRequest, UpdateCartItemRequest,
 };
 use tonic::{Request, Response, Status};
+
+mod handlers;
 
 #[derive(Default, Debug)]
 pub struct MyGRPCServices {
@@ -19,6 +18,13 @@ pub fn check_auth(req: Request<()>) -> Result<Request<()>, Status> {
     Ok(req)
 }
 
+impl MyGRPCServices {
+    pub async fn init(&mut self) {
+        let db = get_db().await.unwrap();
+        self.db = Some(db);
+    }
+}
+
 #[tonic::async_trait]
 impl GrpcServices for MyGRPCServices {
     async fn create_cart_item(
@@ -26,6 +32,7 @@ impl GrpcServices for MyGRPCServices {
         request: Request<CreateCartItemRequest>,
     ) -> Result<Response<CartItemsResponse>, Status> {
         handlers::cart::create_cart_item(self.db.as_ref().unwrap(), request).await
+        // todo!()
     }
 
     async fn read_cart_items(
