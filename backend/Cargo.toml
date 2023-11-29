@@ -2,6 +2,6 @@
 members = [
     "core_db_entities",
     "core_operations",
-    "protos"
-    
+    "protos",
+    "graphql"
 ]
