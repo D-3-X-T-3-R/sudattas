@@ -1,4 +1,4 @@
-use crate::db_errors::map_db_error_to_status;
+use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::cart;
 use proto::proto::core::{CartItemResponse, CartItemsResponse, CreateCartItemRequest};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection, EntityTrait, QueryResult};
@@ -9,14 +9,12 @@ pub async fn create_cart_item(
     request: Request<CreateCartItemRequest>,
 ) -> Result<Response<CartItemsResponse>, Status> {
     let req = request.into_inner();
-
     let cart = cart::ActiveModel {
         cart_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(req.user_id)),
         product_id: ActiveValue::Set(Some(req.product_id)),
         quantity: ActiveValue::Set(Some(req.quantity)),
     };
-
     match cart.insert(db).await {
         Ok(cart_model) => {
             let response = CartItemsResponse {
