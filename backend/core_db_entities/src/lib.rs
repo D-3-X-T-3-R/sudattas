@@ -1,5 +1,3 @@
-// CodeGen'd code produces a million of these.
-//#![allow(clippy::derive_partial_eq_without_eq)]
 pub use sea_orm;
 use sea_orm::{Database, DatabaseConnection, DbErr};
 use std::env;
@@ -10,7 +8,7 @@ pub type CoreDatabaseConnection = sea_orm::DatabaseConnection;
 pub mod entity;
 
 // #[tokio::main]
-pub async fn get_db()  -> Result<DatabaseConnection, DbErr> {
+pub async fn get_db() -> Result<DatabaseConnection, DbErr> {
     let conn_str = "mysql://root:12345678@localhost:3306/SUDATTAS";
 
     info!("Connecting to database: {conn_str}");

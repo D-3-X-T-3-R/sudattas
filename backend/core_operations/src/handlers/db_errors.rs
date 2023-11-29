@@ -1,12 +1,10 @@
 use log::error;
 use sea_orm::DbErr;
-use tonic::Status; // Import the log function
+use tonic::Status;
 
 pub fn map_db_error_to_status(db_error: DbErr) -> Status {
-    // Log the detailed error
     error!("Database error occurred: {:?}", db_error);
 
-    // Return a generic error to the client
     match db_error {
         DbErr::ConnectionAcquire(_) => Status::unavailable("Database connection acquire error"),
         DbErr::TryIntoErr { from, into, source } => Status::internal(format!(
