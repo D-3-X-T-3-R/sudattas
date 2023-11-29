@@ -6,17 +6,28 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-graphql = "6.0.11"  # Check for the latest version
-async-graphql-warp = "6.0.11"  # Check for the latest version
-warp = "0.3"  # HTTP server framework
-tonic = "0.10.2"  # gRPC framework
-prost = "0.12.3"  # Protocol Buffers framework
-tokio = { version = "1", features = ["full"] }
-log = "0.4"
-env_logger = "0.10.1"
+rand = "0.8"
 juniper = "0.15"
-tide = "0.16.0"
-async-std = { version = "1.0", features = ["attributes"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+strum = { version = "0.25.0", features = ["derive", "strum_macros"] }
+num = "0.4"
+num-derive = "0.4.0"
+num-traits = "0.2"
+maplit = "1.0"
+reqwest = { version = "0.11", default-features = false, features = [
+    "rustls-tls",
+] }
+dotenv = "0.15.0"
+jsonwebtoken = "9.1.0"
+chrono = "0.4"
+tokio = { version = "1", features = ["full"] }
+juniper_warp = "0.7"
+warp = "0.3"
+rust_decimal = { version = "1" }
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+proto = {path = "../protos/"}
 
 [build-dependencies]
 tonic-build = "0.10.2"
