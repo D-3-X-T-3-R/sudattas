@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "EventLogs")]
 pub struct Model {
     #[sea_orm(column_name = "LogID", primary_key)]
-    pub log_id: i32,
+    pub log_id: i64,
     #[sea_orm(column_name = "EventType")]
     pub event_type: String,
     #[sea_orm(column_name = "EventDescription", column_type = "Text", nullable)]
     pub event_description: Option<String>,
     #[sea_orm(column_name = "UserID")]
-    pub user_id: Option<i32>,
+    pub user_id: Option<i64>,
     #[sea_orm(column_name = "EventTime")]
     pub event_time: DateTimeUtc,
 }

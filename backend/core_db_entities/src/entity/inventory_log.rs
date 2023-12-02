@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "InventoryLog")]
 pub struct Model {
     #[sea_orm(column_name = "LogID", primary_key)]
-    pub log_id: i32,
+    pub log_id: i64,
     #[sea_orm(column_name = "ProductID")]
-    pub product_id: i32,
+    pub product_id: i64,
     #[sea_orm(column_name = "ChangeQuantity")]
-    pub change_quantity: i32,
+    pub change_quantity: i64,
     #[sea_orm(column_name = "LogTime")]
     pub log_time: DateTimeUtc,
     #[sea_orm(column_name = "Reason")]
