@@ -7,15 +7,15 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "Inventory")]
 pub struct Model {
     #[sea_orm(column_name = "InventoryID", primary_key)]
-    pub inventory_id: i32,
+    pub inventory_id: i64,
     #[sea_orm(column_name = "ProductID")]
-    pub product_id: Option<i32>,
+    pub product_id: Option<i64>,
     #[sea_orm(column_name = "QuantityAvailable")]
-    pub quantity_available: Option<i32>,
+    pub quantity_available: Option<i64>,
     #[sea_orm(column_name = "ReorderLevel")]
-    pub reorder_level: Option<i32>,
+    pub reorder_level: Option<i64>,
     #[sea_orm(column_name = "SupplierID")]
-    pub supplier_id: Option<i32>,
+    pub supplier_id: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

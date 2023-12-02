@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "ProductColorMapping")]
 pub struct Model {
     #[sea_orm(column_name = "ProductID", primary_key, auto_increment = false)]
-    pub product_id: i32,
+    pub product_id: i64,
     #[sea_orm(column_name = "ColorID", primary_key, auto_increment = false)]
-    pub color_id: i32,
+    pub color_id: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

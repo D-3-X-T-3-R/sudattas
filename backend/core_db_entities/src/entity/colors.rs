@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "Colors")]
 pub struct Model {
     #[sea_orm(column_name = "ColorID", primary_key)]
-    pub color_id: i32,
+    pub color_id: i64,
     #[sea_orm(column_name = "ColorName")]
     pub color_name: String,
 }

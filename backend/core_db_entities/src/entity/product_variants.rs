@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "ProductVariants")]
 pub struct Model {
     #[sea_orm(column_name = "VariantID", primary_key)]
-    pub variant_id: i32,
+    pub variant_id: i64,
     #[sea_orm(column_name = "ProductID")]
-    pub product_id: i32,
+    pub product_id: i64,
     #[sea_orm(column_name = "SizeID")]
-    pub size_id: Option<i32>,
+    pub size_id: Option<i64>,
     #[sea_orm(column_name = "ColorID")]
-    pub color_id: Option<i32>,
+    pub color_id: Option<i64>,
     #[sea_orm(
         column_name = "AdditionalPrice",
         column_type = "Decimal(Some((10, 2)))",
