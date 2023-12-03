@@ -7,6 +7,7 @@ use warp::Reply;
 
 pub mod cart;
 pub mod error;
+pub mod utils;
 
 pub struct QueryRoot;
 
@@ -23,19 +24,16 @@ impl Reply for Context {
 
 #[juniper::graphql_object(Context = Context)]
 impl QueryRoot {
-    /*
-
-        #[instrument(err, ret)]
-        async fn transaction_flows_by_transaction_ids(transaction_ids: Vec<String>) -> -> FieldResult<Vec<TransactionFlow>> {
-            application::handlers::get_application(&id)
-                .await
-                .map_err(|e| e.into())
-        }
-
-    */
     #[instrument(err, ret)]
     async fn add_cart_item(cart_item: NewCart) -> FieldResult<Vec<Cart>> {
         cart::handlers::add_cart_item(cart_item)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn get_cart_items(user_id: String) -> FieldResult<Vec<Cart>> {
+        cart::handlers::get_cart_items(user_id)
             .await
             .map_err(|e| e.into())
     }

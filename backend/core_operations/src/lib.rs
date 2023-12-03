@@ -1,7 +1,7 @@
 use core_db_entities::{get_db, CoreDatabaseConnection};
 use proto::proto::core::{
     grpc_services_server::GrpcServices, CartItemsResponse, CreateCartItemRequest,
-    DeleteCartItemRequest, ReadCartItemsRequest, UpdateCartItemRequest,
+    DeleteCartItemRequest, GetCartItemsRequest, UpdateCartItemRequest,
 };
 use tonic::{Request, Response, Status};
 
@@ -34,11 +34,11 @@ impl GrpcServices for MyGRPCServices {
         handlers::cart::create_cart_item(self.db.as_ref().unwrap(), request).await
     }
 
-    async fn read_cart_items(
+    async fn get_cart_items(
         &self,
-        request: Request<ReadCartItemsRequest>,
+        request: Request<GetCartItemsRequest>,
     ) -> Result<Response<CartItemsResponse>, Status> {
-        todo!()
+        handlers::cart::get_cart_items(self.db.as_ref().unwrap(), request).await
     }
 
     async fn update_cart_item(

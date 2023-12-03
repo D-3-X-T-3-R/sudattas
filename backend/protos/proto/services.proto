@@ -8,7 +8,7 @@ import "proto/messages.proto";
 
 service GRPCServices {
     rpc CreateCartItem(CreateCartItemRequest) returns (CartItemsResponse);
-    rpc ReadCartItems(ReadCartItemsRequest) returns (CartItemsResponse);
+    rpc GetCartItems(GetCartItemsRequest) returns (CartItemsResponse);
     rpc UpdateCartItem(UpdateCartItemRequest) returns (CartItemsResponse);
     rpc DeleteCartItem(DeleteCartItemRequest) returns (CartItemsResponse);
 }
