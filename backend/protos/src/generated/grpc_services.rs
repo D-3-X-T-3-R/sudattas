@@ -10,7 +10,7 @@ pub struct CreateCartItemRequest {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ReadCartItemsRequest {
+pub struct GetCartItemsRequest {
     #[prost(int64, tag = "1")]
     pub user_id: i64,
 }
@@ -156,9 +156,9 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "CreateCartItem"));
             self.inner.unary(req, path, codec).await
         }
-        pub async fn read_cart_items(
+        pub async fn get_cart_items(
             &mut self,
-            request: impl tonic::IntoRequest<super::ReadCartItemsRequest>,
+            request: impl tonic::IntoRequest<super::GetCartItemsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::CartItemsResponse>,
             tonic::Status,
@@ -174,11 +174,11 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/ReadCartItems",
+                "/grpc_services.GRPCServices/GetCartItems",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("grpc_services.GRPCServices", "ReadCartItems"));
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "GetCartItems"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn update_cart_item(
@@ -247,9 +247,9 @@ pub mod grpc_services_server {
             tonic::Response<super::CartItemsResponse>,
             tonic::Status,
         >;
-        async fn read_cart_items(
+        async fn get_cart_items(
             &self,
-            request: tonic::Request<super::ReadCartItemsRequest>,
+            request: tonic::Request<super::GetCartItemsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::CartItemsResponse>,
             tonic::Status,
@@ -394,13 +394,13 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/ReadCartItems" => {
+                "/grpc_services.GRPCServices/GetCartItems" => {
                     #[allow(non_camel_case_types)]
-                    struct ReadCartItemsSvc<T: GrpcServices>(pub Arc<T>);
+                    struct GetCartItemsSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<super::ReadCartItemsRequest>
-                    for ReadCartItemsSvc<T> {
+                    > tonic::server::UnaryService<super::GetCartItemsRequest>
+                    for GetCartItemsSvc<T> {
                         type Response = super::CartItemsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -408,11 +408,11 @@ pub mod grpc_services_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::ReadCartItemsRequest>,
+                            request: tonic::Request<super::GetCartItemsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::read_cart_items(&inner, request).await
+                                <T as GrpcServices>::get_cart_items(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -424,7 +424,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = ReadCartItemsSvc(inner);
+                        let method = GetCartItemsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

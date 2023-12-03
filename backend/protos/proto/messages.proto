@@ -9,7 +9,7 @@ message CreateCartItemRequest {
     int64 quantity = 3;
 }
 
-message ReadCartItemsRequest {
+message GetCartItemsRequest {
     int64 user_id = 1;
 }
 
