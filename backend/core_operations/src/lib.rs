@@ -45,13 +45,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<UpdateCartItemRequest>,
     ) -> Result<Response<CartItemsResponse>, Status> {
-        todo!()
+        handlers::cart::update_cart_item(self.db.as_ref().unwrap(), request).await
     }
 
     async fn delete_cart_item(
         &self,
         request: Request<DeleteCartItemRequest>,
     ) -> Result<Response<CartItemsResponse>, Status> {
-        todo!()
+        handlers::cart::delete_cart_item(self.db.as_ref().unwrap(), request).await
     }
 }

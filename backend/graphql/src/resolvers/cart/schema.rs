@@ -35,3 +35,11 @@ pub struct NewCart {
     pub product_id: String,
     pub quantity: String,
 }
+
+#[derive(Default, Debug, Clone, GraphQLInputObject)]
+pub struct CartMutation {
+    pub cart_id: String,
+    pub user_id: String,
+    pub product_id: String,
+    pub quantity: String,
+}

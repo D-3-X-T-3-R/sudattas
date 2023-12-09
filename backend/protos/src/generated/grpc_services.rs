@@ -20,7 +20,11 @@ pub struct UpdateCartItemRequest {
     #[prost(int64, tag = "1")]
     pub cart_id: i64,
     #[prost(int64, tag = "2")]
-    pub new_quantity: i64,
+    pub user_id: i64,
+    #[prost(int64, tag = "3")]
+    pub product_id: i64,
+    #[prost(int64, tag = "4")]
+    pub quantity: i64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
