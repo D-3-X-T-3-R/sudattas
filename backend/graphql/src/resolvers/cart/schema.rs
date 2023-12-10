@@ -1,4 +1,6 @@
-use juniper::{graphql_object, GraphQLInputObject};
+use juniper::{graphql_object, FieldResult, GraphQLInputObject};
+
+use crate::resolvers::product::schema::{Product, SearchProduct};
 
 #[derive(Default, Debug, Clone)]
 pub struct Cart {
@@ -25,6 +27,20 @@ impl Cart {
 
     async fn quantity(&self) -> &String {
         &self.quantity
+    }
+
+    async fn product_details(&self) -> FieldResult<Vec<Product>> {
+        crate::resolvers::product::handlers::search_product(SearchProduct {
+            product_id: Some(self.product_id.to_string()),
+            name: None,
+            description: None,
+            starting_price: None,
+            ending_price: None,
+            stock_quantity: None,
+            category_id: None,
+        })
+        .await
+        .map_err(|e| e.into())
     }
 }
 

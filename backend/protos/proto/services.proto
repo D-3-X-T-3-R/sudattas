@@ -7,8 +7,15 @@ package grpc_services;
 import "proto/messages.proto";
 
 service GRPCServices {
+    // Cart
     rpc CreateCartItem(CreateCartItemRequest) returns (CartItemsResponse);
     rpc GetCartItems(GetCartItemsRequest) returns (CartItemsResponse);
     rpc UpdateCartItem(UpdateCartItemRequest) returns (CartItemsResponse);
     rpc DeleteCartItem(DeleteCartItemRequest) returns (CartItemsResponse);
+
+    // Product
+    rpc CreateProduct(CreateProductRequest) returns (ProductsResponse);
+    rpc SearchProduct(SearchProductRequest) returns (ProductsResponse);
+    rpc UpdateProduct(UpdateProductRequest) returns (ProductsResponse);
+    rpc DeleteProduct(DeleteProductRequest) returns (ProductsResponse);
 }

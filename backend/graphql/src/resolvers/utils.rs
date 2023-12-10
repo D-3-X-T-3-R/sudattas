@@ -12,3 +12,25 @@ pub async fn connect_grpc_client() -> Result<GrpcServicesClient<Channel>, GqlErr
         )
     })
 }
+
+pub fn to_option_i64<T: Into<Option<String>>>(input: T) -> Option<i64> {
+    input.into().and_then(|val| val.parse::<i64>().ok())
+}
+
+pub fn to_option_f64<T: Into<Option<String>>>(input: T) -> Option<f64> {
+    input.into().and_then(|val| val.parse::<f64>().ok())
+}
+
+pub fn to_i64<T: Into<Option<String>>>(input: T) -> i64 {
+    input
+        .into()
+        .and_then(|val| val.parse::<i64>().ok())
+        .unwrap_or(0)
+}
+
+pub fn to_f64<T: Into<Option<String>>>(input: T) -> f64 {
+    input
+        .into()
+        .and_then(|val| val.parse::<f64>().ok())
+        .unwrap_or(0.0)
+}

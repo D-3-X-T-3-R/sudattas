@@ -3,6 +3,8 @@ syntax = "proto3";
 
 package grpc_services;
 
+// Cart
+
 message CreateCartItemRequest {
     int64 user_id = 1;
     int64 product_id = 2;
@@ -33,4 +35,50 @@ message CartItemResponse {
 
 message CartItemsResponse {
     repeated CartItemResponse items = 1;
+}
+
+// Products
+
+message CreateProductRequest {
+    string name = 1;
+    optional string description = 2;
+    double price = 3;
+    optional int64 stock_quantity = 4;
+    optional int64 category_id = 5;
+}
+
+message SearchProductRequest {
+    optional string name = 1;
+    optional string description = 2;
+    optional double starting_price = 3;
+    optional int64 stock_quantity = 4;
+    optional int64 category_id = 5;
+    optional double ending_price = 6;
+    optional int64 product_id = 7;
+}
+
+message UpdateProductRequest {
+    string name = 1;
+    optional string description = 2;
+    double price = 3;
+    optional int64 stock_quantity = 4;
+    optional int64 category_id = 5;
+    int64 product_id =6;
+}
+
+message DeleteProductRequest {
+    int64 product_id = 1;
+}
+
+message ProductResponse {
+    string name = 1;
+    optional string description = 2;
+    double price = 3;
+    optional int64 stock_quantity = 4;
+    optional int64 category_id = 5;
+    int64 product_id = 6;
+}
+
+message ProductsResponse {
+    repeated ProductResponse items = 1;
 }
