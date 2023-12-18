@@ -18,4 +18,185 @@ service GRPCServices {
     rpc SearchProduct(SearchProductRequest) returns (ProductsResponse);
     rpc UpdateProduct(UpdateProductRequest) returns (ProductsResponse);
     rpc DeleteProduct(DeleteProductRequest) returns (ProductsResponse);
+
+    // Users
+    rpc CreateUser(CreateUserRequest) returns (UsersResponse);
+    rpc GetUser(GetUserRequest) returns (UserResponse);
+    rpc UpdateUser(UpdateUserRequest) returns (UsersResponse);
+    rpc DeleteUser(DeleteUserRequest) returns (UsersResponse);
+
+    // Categories
+    rpc CreateCategory(CreateCategoryRequest) returns (CategoriesResponse);
+    rpc GetCategory(GetCategoryRequest) returns (CategoryResponse);
+    rpc UpdateCategory(UpdateCategoryRequest) returns (CategoriesResponse);
+    rpc DeleteCategory(DeleteCategoryRequest) returns (CategoriesResponse);
+
+    // Orders
+    rpc CreateOrder(CreateOrderRequest) returns (OrdersResponse);
+    rpc GetOrder(GetOrderRequest) returns (OrderResponse);
+    rpc UpdateOrder(UpdateOrderRequest) returns (OrdersResponse);
+    rpc DeleteOrder(DeleteOrderRequest) returns (OrdersResponse);
+
+    // OrderDetails
+    rpc CreateOrderDetail(CreateOrderDetailRequest) returns (OrderDetailsResponse);
+    rpc GetOrderDetail(GetOrderDetailRequest) returns (OrderDetailResponse);
+    rpc UpdateOrderDetail(UpdateOrderDetailRequest) returns (OrderDetailsResponse);
+    rpc DeleteOrderDetail(DeleteOrderDetailRequest) returns (OrderDetailsResponse);
+
+    // Reviews
+    rpc CreateReview(CreateReviewRequest) returns (ReviewsResponse);
+    rpc GetReview(GetReviewRequest) returns (ReviewResponse);
+    rpc UpdateReview(UpdateReviewRequest) returns (ReviewsResponse);
+    rpc DeleteReview(DeleteReviewRequest) returns (ReviewsResponse);
+
+    // ProductImages
+    rpc CreateProductImage(CreateProductImageRequest) returns (ProductImagesResponse);
+    rpc GetProductImage(GetProductImageRequest) returns (ProductImageResponse);
+    rpc UpdateProductImage(UpdateProductImageRequest) returns (ProductImagesResponse);
+    rpc DeleteProductImage(DeleteProductImageRequest) returns (ProductImagesResponse);
+
+    // Suppliers
+    rpc CreateSupplier(CreateSupplierRequest) returns (SuppliersResponse);
+    rpc GetSupplier(GetSupplierRequest) returns (SupplierResponse);
+    rpc UpdateSupplier(UpdateSupplierRequest) returns (SuppliersResponse);
+    rpc DeleteSupplier(DeleteSupplierRequest) returns (SuppliersResponse);
+
+    // Inventory
+    rpc CreateInventoryItem(CreateInventoryItemRequest) returns (InventoryItemsResponse);
+    rpc GetInventoryItem(GetInventoryItemRequest) returns (InventoryItemResponse);
+    rpc UpdateInventoryItem(UpdateInventoryItemRequest) returns (InventoryItemsResponse);
+    rpc DeleteInventoryItem(DeleteInventoryItemRequest) returns (InventoryItemsResponse);
+
+    // Wishlist
+    rpc CreateWishlistItem(CreateWishlistItemRequest) returns (WishlistItemsResponse);
+    rpc GetWishlistItem(GetWishlistItemRequest) returns (WishlistItemResponse);
+    rpc UpdateWishlistItem(UpdateWishlistItemRequest) returns (WishlistItemsResponse);
+    rpc DeleteWishlistItem(DeleteWishlistItemRequest) returns (WishlistItemsResponse);
+
+    // ProductAttributes
+    rpc CreateProductAttribute(CreateProductAttributeRequest) returns (ProductAttributesResponse);
+    rpc GetProductAttribute(GetProductAttributeRequest) returns (ProductAttributeResponse);
+    rpc UpdateProductAttribute(UpdateProductAttributeRequest) returns (ProductAttributesResponse);
+    rpc DeleteProductAttribute(DeleteProductAttributeRequest) returns (ProductAttributesResponse);
+
+    // Discounts
+    rpc CreateDiscount(CreateDiscountRequest) returns (DiscountsResponse);
+    rpc GetDiscount(GetDiscountRequest) returns (DiscountResponse);
+    rpc UpdateDiscount(UpdateDiscountRequest) returns (DiscountsResponse);
+    rpc DeleteDiscount(DeleteDiscountRequest) returns (DiscountsResponse);
+
+    // ShippingMethods
+    rpc CreateShippingMethod(CreateShippingMethodRequest) returns (ShippingMethodsResponse);
+    rpc GetShippingMethod(GetShippingMethodRequest) returns (ShippingMethodResponse);
+    rpc UpdateShippingMethod(UpdateShippingMethodRequest) returns (ShippingMethodsResponse);
+    rpc DeleteShippingMethod(DeleteShippingMethodRequest) returns (ShippingMethodsResponse);
+
+    // UserRoles
+    rpc CreateUserRole(CreateUserRoleRequest) returns (UserRolesResponse);
+    rpc GetUserRole(GetUserRoleRequest) returns (UserRoleResponse);
+    rpc UpdateUserRole(UpdateUserRoleRequest) returns (UserRolesResponse);
+    rpc DeleteUserRole(DeleteUserRoleRequest) returns (UserRolesResponse);
+
+    // UserRolesMapping
+    rpc CreateUserRolesMapping(CreateUserRolesMappingRequest) returns (UserRolesMappingsResponse);
+    rpc GetUserRolesMapping(GetUserRolesMappingRequest) returns (UserRolesMappingResponse);
+    rpc UpdateUserRolesMapping(UpdateUserRolesMappingRequest) returns (UserRolesMappingsResponse);
+    rpc DeleteUserRolesMapping(DeleteUserRolesMappingRequest) returns (UserRolesMappingsResponse);
+
+    // Transactions
+    rpc CreateTransaction(CreateTransactionRequest) returns (TransactionsResponse);
+    rpc GetTransaction(GetTransactionRequest) returns (TransactionResponse);
+    rpc UpdateTransaction(UpdateTransactionRequest) returns (TransactionsResponse);
+    rpc DeleteTransaction(DeleteTransactionRequest) returns (TransactionsResponse);
+
+    // NewsletterSubscribers
+    rpc CreateNewsletterSubscriber(CreateNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
+    rpc GetNewsletterSubscriber(GetNewsletterSubscriberRequest) returns (NewsletterSubscriberResponse);
+    rpc UpdateNewsletterSubscriber(UpdateNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
+    rpc DeleteNewsletterSubscriber(DeleteNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
+
+    // ProductRatings
+    rpc CreateProductRating(CreateProductRatingRequest) returns (ProductRatingsResponse);
+    rpc GetProductRating(GetProductRatingRequest) returns (ProductRatingResponse);
+    rpc UpdateProductRating(UpdateProductRatingRequest) returns (ProductRatingsResponse);
+    rpc DeleteProductRating(DeleteProductRatingRequest) returns (ProductRatingsResponse);
+
+    // Sizes
+    rpc CreateSize(CreateSizeRequest) returns (SizesResponse);
+    rpc GetSize(GetSizeRequest) returns (SizeResponse);
+    rpc UpdateSize(UpdateSizeRequest) returns (SizesResponse);
+    rpc DeleteSize(DeleteSizeRequest) returns (SizesResponse);
+
+    // Colors
+    rpc CreateColor(CreateColorRequest) returns (ColorsResponse);
+    rpc GetColor(GetColorRequest) returns (ColorResponse);
+    rpc UpdateColor(UpdateColorRequest) returns (ColorsResponse);
+    rpc DeleteColor(DeleteColorRequest) returns (ColorsResponse);
+
+    // ProductCategoryMapping
+    rpc CreateProductCategoryMapping(CreateProductCategoryMappingRequest) returns (ProductCategoryMappingsResponse);
+    rpc GetProductCategoryMapping(GetProductCategoryMappingRequest) returns (ProductCategoryMappingResponse);
+    rpc DeleteProductCategoryMapping(DeleteProductCategoryMappingRequest) returns (ProductCategoryMappingsResponse);
+
+    // ProductAttributeMapping
+    rpc CreateProductAttributeMapping(CreateProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
+    rpc GetProductAttributeMapping(GetProductAttributeMappingRequest) returns (ProductAttributeMappingResponse);
+    rpc DeleteProductAttributeMapping(DeleteProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
+
+    // UserRoleMapping
+    rpc CreateUserRoleMapping(CreateUserRoleMappingRequest) returns (UserRoleMappingsResponse);
+    rpc GetUserRoleMapping(GetUserRoleMappingRequest) returns (UserRoleMappingResponse);
+    rpc DeleteUserRoleMapping(DeleteUserRoleMappingRequest) returns (UserRoleMappingsResponse);
+
+    // ProductSizeMapping
+    rpc CreateProductSizeMapping(CreateProductSizeMappingRequest) returns (ProductSizeMappingsResponse);
+    rpc GetProductSizeMapping(GetProductSizeMappingRequest) returns (ProductSizeMappingResponse);
+    rpc DeleteProductSizeMapping(DeleteProductSizeMappingRequest) returns (ProductSizeMappingsResponse);
+
+    // ProductColorMapping
+    rpc CreateProductColorMapping(CreateProductColorMappingRequest) returns (ProductColorMappingsResponse);
+    rpc GetProductColorMapping(GetProductColorMappingRequest) returns (ProductColorMappingResponse);
+    rpc DeleteProductColorMapping(DeleteProductColorMappingRequest) returns (ProductColorMappingsResponse);
+
+    // ProductVariants
+    rpc CreateProductVariant(CreateProductVariantRequest) returns (ProductVariantsResponse);
+    rpc GetProductVariant(GetProductVariantRequest) returns (ProductVariantResponse);
+    rpc UpdateProductVariant(UpdateProductVariantRequest) returns (ProductVariantsResponse);
+    rpc DeleteProductVariant(DeleteProductVariantRequest) returns (ProductVariantsResponse);
+
+    // EventLogs
+    rpc CreateEventLog(CreateEventLogRequest) returns (EventLogsResponse);
+    rpc GetEventLog(GetEventLogRequest) returns (EventLogResponse);
+    rpc UpdateEventLog(UpdateEventLogRequest) returns (EventLogsResponse);
+    rpc DeleteEventLog(DeleteEventLogRequest) returns (EventLogsResponse);
+
+    // UserActivity
+    rpc CreateUserActivity(CreateUserActivityRequest) returns (UserActivitiesResponse);
+    rpc GetUserActivity(GetUserActivityRequest) returns (UserActivityResponse);
+    rpc UpdateUserActivity(UpdateUserActivityRequest) returns (UserActivitiesResponse);
+    rpc DeleteUserActivity(DeleteUserActivityRequest) returns (UserActivitiesResponse);
+
+    // InventoryLog
+    rpc CreateInventoryLog(CreateInventoryLogRequest) returns (InventoryLogsResponse);
+    rpc GetInventoryLog(GetInventoryLogRequest) returns (InventoryLogResponse);
+    rpc UpdateInventoryLog(UpdateInventoryLogRequest) returns (InventoryLogsResponse);
+    rpc DeleteInventoryLog(DeleteInventoryLogRequest) returns (InventoryLogsResponse);
+
+    // Promotions
+    rpc CreatePromotion(CreatePromotionRequest) returns (PromotionsResponse);
+    rpc GetPromotion(GetPromotionRequest) returns (PromotionResponse);
+    rpc UpdatePromotion(UpdatePromotionRequest) returns (PromotionsResponse);
+    rpc DeletePromotion(DeletePromotionRequest) returns (PromotionsResponse);
+
+    // ShippingZones
+    rpc CreateShippingZone(CreateShippingZoneRequest) returns (ShippingZonesResponse);
+    rpc GetShippingZone(GetShippingZoneRequest) returns (ShippingZoneResponse);
+    rpc UpdateShippingZone(UpdateShippingZoneRequest) returns (ShippingZonesResponse);
+    rpc DeleteShippingZone(DeleteShippingZoneRequest) returns (ShippingZonesResponse);
+
+    // PaymentMethods
+    rpc CreatePaymentMethod(CreatePaymentMethodRequest) returns (PaymentMethodsResponse);
+    rpc GetPaymentMethod(GetPaymentMethodRequest) returns (PaymentMethodResponse);
+    rpc UpdatePaymentMethod(UpdatePaymentMethodRequest) returns (PaymentMethodsResponse);
+    rpc DeletePaymentMethod(DeletePaymentMethodRequest) returns (PaymentMethodsResponse);
 }
