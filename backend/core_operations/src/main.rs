@@ -1,5 +1,6 @@
 use core_operations::{check_auth, MyGRPCServices};
 use tonic::{transport::Server, Request, Response, Status};
+use dotenv::dotenv;
 
 pub mod handlers;
 
@@ -7,7 +8,9 @@ use proto::proto::core::grpc_services_server::GrpcServicesServer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "0.0.0.0:50051".parse()?;
+    dotenv().ok();
+
+    let addr = std::env::var("GRPC_SERVER").unwrap().parse()?;
     let mut service = MyGRPCServices::default();
     service.init().await;
 
