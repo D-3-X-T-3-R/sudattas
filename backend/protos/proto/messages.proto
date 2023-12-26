@@ -3,32 +3,1063 @@ syntax = "proto3";
 
 package grpc_services;
 
+// Cart
+
 message CreateCartItemRequest {
-    int32 user_id = 1;
-    int32 product_id = 2;
-    int32 quantity = 3;
+    int64 user_id = 1;
+    int64 product_id = 2;
+    int64 quantity = 3;
 }
 
-message ReadCartItemsRequest {
-    int32 user_id = 1;
+message GetCartItemsRequest {
+    int64 user_id = 1;
 }
 
 message UpdateCartItemRequest {
-    int32 cart_id = 1;
-    int32 new_quantity = 2;
+    int64 cart_id = 1;
+    int64 user_id = 2;
+    int64 product_id = 3;
+    int64 quantity = 4;
 }
 
 message DeleteCartItemRequest {
-    int32 cart_id = 1;
+    int64 cart_id = 1;
 }
 
 message CartItemResponse {
-    int32 cart_id = 1;
-    int32 user_id = 2;
-    int32 product_id = 3;
-    int32 quantity = 4;
+    int64 cart_id = 1;
+    int64 user_id = 2;
+    int64 product_id = 3;
+    int64 quantity = 4;
 }
 
 message CartItemsResponse {
     repeated CartItemResponse items = 1;
+}
+
+// Products
+
+message CreateProductRequest {
+    string name = 1;
+    optional string description = 2;
+    double price = 3;
+    optional int64 stock_quantity = 4;
+    optional int64 category_id = 5;
+}
+
+message SearchProductRequest {
+    optional string name = 1;
+    optional string description = 2;
+    optional double starting_price = 3;
+    optional int64 stock_quantity = 4;
+    optional int64 category_id = 5;
+    optional double ending_price = 6;
+    optional int64 product_id = 7;
+}
+
+message UpdateProductRequest {
+    string name = 1;
+    optional string description = 2;
+    double price = 3;
+    optional int64 stock_quantity = 4;
+    optional int64 category_id = 5;
+    int64 product_id =6;
+}
+
+message DeleteProductRequest {
+    int64 product_id = 1;
+}
+
+message ProductResponse {
+    string name = 1;
+    optional string description = 2;
+    double price = 3;
+    optional int64 stock_quantity = 4;
+    optional int64 category_id = 5;
+    int64 product_id = 6;
+}
+
+message ProductsResponse {
+    repeated ProductResponse items = 1;
+}
+
+// Users
+
+message CreateUserRequest {
+    string username = 1;
+    string password = 2;
+    string email = 3;
+    optional string full_name = 4;
+    optional string address = 5;
+    optional string phone = 6;
+}
+
+message SearchUserRequest {
+    int64 user_id = 1;
+}
+
+message UpdateUserRequest {
+    int64 user_id = 1;
+    optional string username = 2;
+    optional string password = 3;
+    optional string email = 4;
+    optional string full_name = 5;
+    optional string address = 6;
+    optional string phone = 7;
+}
+
+message DeleteUserRequest {
+    int64 user_id = 1;
+}
+
+message UserResponse {
+    int64 user_id = 1;
+    string username = 2;
+    string email = 3;
+    optional string full_name = 4;
+    optional string address = 5;
+    optional string phone = 6;
+    string create_date = 7;
+}
+
+message UsersResponse {
+    repeated UserResponse items = 1;
+}
+
+// Categories
+
+message CreateCategoryRequest {
+    string name = 1;
+}
+
+message SearchCategoryRequest {
+    optional int64 category_id = 1;
+    optional string name = 2;
+}
+
+message UpdateCategoryRequest {
+    int64 category_id = 1;
+    string name = 2;
+}
+
+message DeleteCategoryRequest {
+    int64 category_id = 1;
+}
+
+message CategoryResponse {
+    int64 category_id = 1;
+    string name = 2;
+}
+
+message CategoriesResponse {
+    repeated CategoryResponse items = 1;
+}
+
+// Orders
+
+message CreateOrderRequest {
+    int64 user_id = 1;
+    string shipping_address = 2;
+    double total_amount = 3;
+    int64 status_id = 4;
+}
+
+message SearchOrderRequest {
+    int64 order_id = 1;
+}
+
+message UpdateOrderRequest {
+    int64 order_id = 1;
+    optional int64 user_id = 2;
+    optional string shipping_address = 3;
+    optional double total_amount = 4;
+    optional int64 status_id = 5;
+}
+
+message DeleteOrderRequest {
+    int64 order_id = 1;
+}
+
+message OrderResponse {
+    int64 order_id = 1;
+    int64 user_id = 2;
+    string order_date = 3;
+    string shipping_address = 4;
+    double total_amount = 5;
+    int64 status_id = 6;
+}
+
+message OrdersResponse {
+    repeated OrderResponse items = 1;
+}
+
+// OrderDetails
+
+message CreateOrderDetailRequest {
+    int64 order_id = 1;
+    int64 product_id = 2;
+    int64 quantity = 3;
+    double price = 4;
+}
+
+message SearchOrderDetailRequest {
+    int64 order_detail_id = 1;
+}
+
+message UpdateOrderDetailRequest {
+    int64 order_detail_id = 1;
+    optional int64 order_id = 2;
+    optional int64 product_id = 3;
+    optional int64 quantity = 4;
+    optional double price = 5;
+}
+
+message DeleteOrderDetailRequest {
+    int64 order_detail_id = 1;
+}
+
+message OrderDetailResponse {
+    int64 order_detail_id = 1;
+    int64 order_id = 2;
+    int64 product_id = 3;
+    int64 quantity = 4;
+    double price = 5;
+}
+
+message OrderDetailsResponse {
+    repeated OrderDetailResponse items = 1;
+}
+
+// Reviews
+
+message CreateReviewRequest {
+    int64 product_id = 1;
+    int64 user_id = 2;
+    int64 rating = 3;
+    string comment = 4;
+}
+
+message SearchReviewRequest {
+    int64 review_id = 1;
+}
+
+message UpdateReviewRequest {
+    int64 review_id = 1;
+    optional int64 product_id = 2;
+    optional int64 user_id = 3;
+    optional int64 rating = 4;
+    optional string comment = 5;
+}
+
+message DeleteReviewRequest {
+    int64 review_id = 1;
+}
+
+message ReviewResponse {
+    int64 review_id = 1;
+    int64 product_id = 2;
+    int64 user_id = 3;
+    int64 rating = 4;
+    string comment = 5;
+}
+
+message ReviewsResponse {
+    repeated ReviewResponse items = 1;
+}
+
+// ProductImages
+
+message CreateProductImageRequest {
+    int64 product_id = 1;
+    string image_url = 2;
+    string alt_text = 3;
+}
+
+message SearchProductImageRequest {
+    int64 image_id = 1;
+}
+
+message UpdateProductImageRequest {
+    int64 image_id = 1;
+    optional int64 product_id = 2;
+    optional string image_url = 3;
+    optional string alt_text = 4;
+}
+
+message DeleteProductImageRequest {
+    int64 image_id = 1;
+}
+
+message ProductImageResponse {
+    int64 image_id = 1;
+    int64 product_id = 2;
+    string image_url = 3;
+    string alt_text = 4;
+}
+
+message ProductImagesResponse {
+    repeated ProductImageResponse items = 1;
+}
+
+// Suppliers
+
+message CreateSupplierRequest {
+    string name = 1;
+    string contact_info = 2;
+    string address = 3;
+}
+
+message SearchSupplierRequest {
+    int64 supplier_id = 1;
+}
+
+message UpdateSupplierRequest {
+    int64 supplier_id = 1;
+    optional string name = 2;
+    optional string contact_info = 3;
+    optional string address = 4;
+}
+
+message DeleteSupplierRequest {
+    int64 supplier_id = 1;
+}
+
+message SupplierResponse {
+    int64 supplier_id = 1;
+    string name = 2;
+    string contact_info = 3;
+    string address = 4;
+}
+
+message SuppliersResponse {
+    repeated SupplierResponse items = 1;
+}
+
+// Inventory
+
+message CreateInventoryItemRequest {
+    int64 product_id = 1;
+    int64 quantity_available = 2;
+    int64 reorder_level = 3;
+    int64 supplier_id = 4;
+}
+
+message SearchInventoryItemRequest {
+    int64 inventory_id = 1;
+}
+
+message UpdateInventoryItemRequest {
+    int64 inventory_id = 1;
+    optional int64 product_id = 2;
+    optional int64 quantity_available = 3;
+    optional int64 reorder_level = 4;
+    optional int64 supplier_id = 5;
+}
+
+message DeleteInventoryItemRequest {
+    int64 inventory_id = 1;
+}
+
+message InventoryItemResponse {
+    int64 inventory_id = 1;
+    int64 product_id = 2;
+    int64 quantity_available = 3;
+    int64 reorder_level = 4;
+    int64 supplier_id = 5;
+}
+
+message InventoryItemsResponse {
+    repeated InventoryItemResponse items = 1;
+}
+
+// Wishlist
+
+message CreateWishlistItemRequest {
+    int64 user_id = 1;
+    int64 product_id = 2;
+    string date_added = 3;
+}
+
+message SearchWishlistItemRequest {
+    int64 wishlist_id = 1;
+}
+
+message UpdateWishlistItemRequest {
+    int64 wishlist_id = 1;
+    optional int64 user_id = 2;
+    optional int64 product_id = 3;
+    optional string date_added = 4;
+}
+
+message DeleteWishlistItemRequest {
+    int64 wishlist_id = 1;
+}
+
+message WishlistItemResponse {
+    int64 wishlist_id = 1;
+    int64 user_id = 2;
+    int64 product_id = 3;
+    string date_added = 4;
+}
+
+message WishlistItemsResponse {
+    repeated WishlistItemResponse items = 1;
+}
+
+// ProductAttributes
+
+message CreateProductAttributeRequest {
+    int64 product_id = 1;
+    string attribute_name = 2;
+    string attribute_value = 3;
+}
+
+message SearchProductAttributeRequest {
+    int64 attribute_id = 1;
+}
+
+message UpdateProductAttributeRequest {
+    int64 attribute_id = 1;
+    optional int64 product_id = 2;
+    optional string attribute_name = 3;
+    optional string attribute_value = 4;
+}
+
+message DeleteProductAttributeRequest {
+    int64 attribute_id = 1;
+}
+
+message ProductAttributeResponse {
+    int64 attribute_id = 1;
+    int64 product_id = 2;
+    string attribute_name = 3;
+    string attribute_value = 4;
+}
+
+message ProductAttributesResponse {
+    repeated ProductAttributeResponse items = 1;
+}
+
+// Discounts
+
+message CreateDiscountRequest {
+    int64 product_id = 1;
+    double discount_percentage = 2;
+    string start_date = 3;
+    string end_date = 4;
+}
+
+message SearchDiscountRequest {
+    int64 discount_id = 1;
+}
+
+message UpdateDiscountRequest {
+    int64 discount_id = 1;
+    optional int64 product_id = 2;
+    optional double discount_percentage = 3;
+    optional string start_date = 4;
+    optional string end_date = 5;
+}
+
+message DeleteDiscountRequest {
+    int64 discount_id = 1;
+}
+
+message DiscountResponse {
+    int64 discount_id = 1;
+    int64 product_id = 2;
+    double discount_percentage = 3;
+    string start_date = 4;
+    string end_date = 5;
+}
+
+message DiscountsResponse {
+    repeated DiscountResponse items = 1;
+}
+
+// ShippingMethods
+
+message CreateShippingMethodRequest {
+    string method_name = 1;
+    double cost = 2;
+    string estimated_delivery_time = 3;
+}
+
+message SearchShippingMethodRequest {
+    int64 method_id = 1;
+}
+
+message UpdateShippingMethodRequest {
+    int64 method_id = 1;
+    optional string method_name = 2;
+    optional double cost = 3;
+    optional string estimated_delivery_time = 4;
+}
+
+message DeleteShippingMethodRequest {
+    int64 method_id = 1;
+}
+
+message ShippingMethodResponse {
+    int64 method_id = 1;
+    string method_name = 2;
+    double cost = 3;
+    string estimated_delivery_time = 4;
+}
+
+message ShippingMethodsResponse {
+    repeated ShippingMethodResponse items = 1;
+}
+
+// UserRoles
+
+message CreateUserRoleRequest {
+    string role_name = 1;
+}
+
+message SearchUserRoleRequest {
+    int64 role_id = 1;
+}
+
+message UpdateUserRoleRequest {
+    int64 role_id = 1;
+    string role_name = 2;
+}
+
+message DeleteUserRoleRequest {
+    int64 role_id = 1;
+}
+
+message UserRoleResponse {
+    int64 role_id = 1;
+    string role_name = 2;
+}
+
+message UserRolesResponse {
+    repeated UserRoleResponse items = 1;
+}
+
+// Transactions
+
+message CreateTransactionRequest {
+    int64 user_id = 1;
+    double amount = 2;
+    string type = 3;
+}
+
+message SearchTransactionRequest {
+    int64 transaction_id = 1;
+}
+
+message UpdateTransactionRequest {
+    int64 transaction_id = 1;
+    optional int64 user_id = 2;
+    optional double amount = 3;
+    optional string type = 4;
+}
+
+message DeleteTransactionRequest {
+    int64 transaction_id = 1;
+}
+
+message TransactionResponse {
+    int64 transaction_id = 1;
+    int64 user_id = 2;
+    double amount = 3;
+    string transaction_date = 4;
+    string type = 5;
+}
+
+message TransactionsResponse {
+    repeated TransactionResponse items = 1;
+}
+
+// NewsletterSubscribers
+
+message CreateNewsletterSubscriberRequest {
+    string email = 1;
+}
+
+message SearchNewsletterSubscriberRequest {
+    int64 subscriber_id = 1;
+}
+
+message UpdateNewsletterSubscriberRequest {
+    int64 subscriber_id = 1;
+    string email = 2;
+}
+
+message DeleteNewsletterSubscriberRequest {
+    int64 subscriber_id = 1;
+}
+
+message NewsletterSubscriberResponse {
+    int64 subscriber_id = 1;
+    string email = 2;
+    string subscription_date = 3;
+}
+
+message NewsletterSubscribersResponse {
+    repeated NewsletterSubscriberResponse items = 1;
+}
+
+// ProductRatings
+
+message CreateProductRatingRequest {
+    int64 product_id = 1;
+    int64 user_id = 2;
+    int64 rating = 3;
+}
+
+message SearchProductRatingRequest {
+    int64 rating_id = 1;
+}
+
+message UpdateProductRatingRequest {
+    int64 rating_id = 1;
+    optional int64 product_id = 2;
+    optional int64 user_id = 3;
+    optional int64 rating = 4;
+}
+
+message DeleteProductRatingRequest {
+    int64 rating_id = 1;
+}
+
+message ProductRatingResponse {
+    int64 rating_id = 1;
+    int64 product_id = 2;
+    int64 user_id = 3;
+    int64 rating = 4;
+}
+
+message ProductRatingsResponse {
+    repeated ProductRatingResponse items = 1;
+}
+
+// Sizes
+
+message CreateSizeRequest {
+    string size_name = 1;
+}
+
+message SearchSizeRequest {
+    int64 size_id = 1;
+}
+
+message UpdateSizeRequest {
+    int64 size_id = 1;
+    string size_name = 2;
+}
+
+message DeleteSizeRequest {
+    int64 size_id = 1;
+}
+
+message SizeResponse {
+    int64 size_id = 1;
+    string size_name = 2;
+}
+
+message SizesResponse {
+    repeated SizeResponse items = 1;
+}
+
+// Colors
+
+message CreateColorRequest {
+    string color_name = 1;
+}
+
+message SearchColorRequest {
+    int64 color_id = 1;
+}
+
+message UpdateColorRequest {
+    int64 color_id = 1;
+    string color_name = 2;
+}
+
+message DeleteColorRequest {
+    int64 color_id = 1;
+}
+
+message ColorResponse {
+    int64 color_id = 1;
+    string color_name = 2;
+}
+
+message ColorsResponse {
+    repeated ColorResponse items = 1;
+}
+
+// ProductCategoryMapping
+
+message CreateProductCategoryMappingRequest {
+    int64 product_id = 1;
+    int64 category_id = 2;
+}
+
+message SearchProductCategoryMappingRequest {
+    int64 product_id = 1;
+    int64 category_id = 2;
+}
+
+message DeleteProductCategoryMappingRequest {
+    int64 product_id = 1;
+    int64 category_id = 2;
+}
+
+message ProductCategoryMappingResponse {
+    int64 product_id = 1;
+    int64 category_id = 2;
+}
+
+message ProductCategoryMappingsResponse {
+    repeated ProductCategoryMappingResponse items = 1;
+}
+
+// ProductAttributeMapping
+
+message CreateProductAttributeMappingRequest {
+    int64 product_id = 1;
+    int64 attribute_id = 2;
+}
+
+message SearchProductAttributeMappingRequest {
+    int64 product_id = 1;
+    int64 attribute_id = 2;
+}
+
+message DeleteProductAttributeMappingRequest {
+    int64 product_id = 1;
+    int64 attribute_id = 2;
+}
+
+message ProductAttributeMappingResponse {
+    int64 product_id = 1;
+    int64 attribute_id = 2;
+}
+
+message ProductAttributeMappingsResponse {
+    repeated ProductAttributeMappingResponse items = 1;
+}
+
+// UserRoleMapping
+
+message CreateUserRoleMappingRequest {
+    int64 user_id = 1;
+    int64 role_id = 2;
+}
+
+message SearchUserRoleMappingRequest {
+    int64 user_id = 1;
+    int64 role_id = 2;
+}
+
+message DeleteUserRoleMappingRequest {
+    int64 user_id = 1;
+    int64 role_id = 2;
+}
+
+message UserRoleMappingResponse {
+    int64 user_id = 1;
+    int64 role_id = 2;
+}
+
+message UserRoleMappingsResponse {
+    repeated UserRoleMappingResponse items = 1;
+}
+
+// ProductSizeMapping
+
+message CreateProductSizeMappingRequest {
+    int64 product_id = 1;
+    int64 size_id = 2;
+}
+
+message SearchProductSizeMappingRequest {
+    int64 product_id = 1;
+    int64 size_id = 2;
+}
+
+message DeleteProductSizeMappingRequest {
+    int64 product_id = 1;
+    int64 size_id = 2;
+}
+
+message ProductSizeMappingResponse {
+    int64 product_id = 1;
+    int64 size_id = 2;
+}
+
+message ProductSizeMappingsResponse {
+    repeated ProductSizeMappingResponse items = 1;
+}
+
+// ProductColorMapping
+
+message CreateProductColorMappingRequest {
+    int64 product_id = 1;
+    int64 color_id = 2;
+}
+
+message SearchProductColorMappingRequest {
+    int64 product_id = 1;
+    int64 color_id = 2;
+}
+
+message DeleteProductColorMappingRequest {
+    int64 product_id = 1;
+    int64 color_id = 2;
+}
+
+message ProductColorMappingResponse {
+    int64 product_id = 1;
+    int64 color_id = 2;
+}
+
+message ProductColorMappingsResponse {
+    repeated ProductColorMappingResponse items = 1;
+}
+
+// ProductVariants
+
+message CreateProductVariantRequest {
+    int64 product_id = 1;
+    optional int64 size_id = 2;
+    optional int64 color_id = 3;
+    optional double additional_price = 4;
+}
+
+message SearchProductVariantRequest {
+    int64 variant_id = 1;
+}
+
+message UpdateProductVariantRequest {
+    int64 variant_id = 1;
+    optional int64 product_id = 2;
+    optional int64 size_id = 3;
+    optional int64 color_id = 4;
+    optional double additional_price = 5;
+}
+
+message DeleteProductVariantRequest {
+    int64 variant_id = 1;
+}
+
+message ProductVariantResponse {
+    int64 variant_id = 1;
+    int64 product_id = 2;
+    optional int64 size_id = 3;
+    optional int64 color_id = 4;
+    optional double additional_price = 5;
+}
+
+message ProductVariantsResponse {
+    repeated ProductVariantResponse items = 1;
+}
+
+// EventLogs
+
+message CreateEventLogRequest {
+    string event_type = 1;
+    string event_description = 2;
+    int64 user_id = 3;
+}
+
+message SearchEventLogRequest {
+    int64 log_id = 1;
+}
+
+message UpdateEventLogRequest {
+    int64 log_id = 1;
+    optional string event_type = 2;
+    optional string event_description = 3;
+    optional int64 user_id = 4;
+}
+
+message DeleteEventLogRequest {
+    int64 log_id = 1;
+}
+
+message EventLogResponse {
+    int64 log_id = 1;
+    string event_type = 2;
+    string event_description = 3;
+    int64 user_id = 4;
+    string event_time = 5;
+}
+
+message EventLogsResponse {
+    repeated EventLogResponse items = 1;
+}
+
+// UserActivity
+
+message CreateUserActivityRequest {
+    int64 user_id = 1;
+    string activity_type = 2;
+    string activity_details = 3;
+}
+
+message SearchUserActivityRequest {
+    int64 activity_id = 1;
+}
+
+message UpdateUserActivityRequest {
+    int64 activity_id = 1;
+    optional int64 user_id = 2;
+    optional string activity_type = 3;
+    optional string activity_details = 4;
+}
+
+message DeleteUserActivityRequest {
+    int64 activity_id = 1;
+}
+
+message UserActivityResponse {
+    int64 activity_id = 1;
+    int64 user_id = 2;
+    string activity_type = 3;
+    string activity_time = 4;
+    string activity_details = 5;
+}
+
+message UserActivitiesResponse {
+    repeated UserActivityResponse items = 1;
+}
+
+// InventoryLog
+
+message CreateInventoryLogRequest {
+    int64 product_id = 1;
+    int64 change_quantity = 2;
+    string reason = 3;
+}
+
+message SearchInventoryLogRequest {
+    int64 log_id = 1;
+}
+
+message UpdateInventoryLogRequest {
+    int64 log_id = 1;
+    optional int64 product_id = 2;
+    optional int64 change_quantity = 3;
+    optional string reason = 4;
+}
+
+message DeleteInventoryLogRequest {
+    int64 log_id = 1;
+}
+
+message InventoryLogResponse {
+    int64 log_id = 1;
+    int64 product_id = 2;
+    int64 change_quantity = 3;
+    string log_time = 4;
+    string reason = 5;
+}
+
+message InventoryLogsResponse {
+    repeated InventoryLogResponse items = 1;
+}
+
+// Promotions
+
+message CreatePromotionRequest {
+    string promotion_name = 1;
+    string start_date = 2;
+    string end_date = 3;
+    string details = 4;
+}
+
+message SearchPromotionRequest {
+    int64 promotion_id = 1;
+}
+
+message UpdatePromotionRequest {
+    int64 promotion_id = 1;
+    optional string promotion_name = 2;
+    optional string start_date = 3;
+    optional string end_date = 4;
+    optional string details = 5;
+}
+
+message DeletePromotionRequest {
+    int64 promotion_id = 1;
+}
+
+message PromotionResponse {
+    int64 promotion_id = 1;
+    string promotion_name = 2;
+    string start_date = 3;
+    string end_date = 4;
+    string details = 5;
+}
+
+message PromotionsResponse {
+    repeated PromotionResponse items = 1;
+}
+
+// ShippingZones
+
+message CreateShippingZoneRequest {
+    string zone_name = 1;
+    string description = 2;
+}
+
+message SearchShippingZoneRequest {
+    int64 zone_id = 1;
+}
+
+message UpdateShippingZoneRequest {
+    int64 zone_id = 1;
+    optional string zone_name = 2;
+    optional string description = 3;
+}
+
+message DeleteShippingZoneRequest {
+    int64 zone_id = 1;
+}
+
+message ShippingZoneResponse {
+    int64 zone_id = 1;
+    string zone_name = 2;
+    string description = 3;
+}
+
+message ShippingZonesResponse {
+    repeated ShippingZoneResponse items = 1;
+}
+
+// PaymentMethods
+
+message CreatePaymentMethodRequest {
+    string method_name = 1;
+    string details = 2;
+}
+
+message SearchPaymentMethodRequest {
+    int64 method_id = 1;
+}
+
+message UpdatePaymentMethodRequest {
+    int64 method_id = 1;
+    optional string method_name = 2;
+    optional string details = 3;
+}
+
+message DeletePaymentMethodRequest {
+    int64 method_id = 1;
+}
+
+message PaymentMethodResponse {
+    int64 method_id = 1;
+    string method_name = 2;
+    string details = 3;
+}
+
+message PaymentMethodsResponse {
+    repeated PaymentMethodResponse items = 1;
 }

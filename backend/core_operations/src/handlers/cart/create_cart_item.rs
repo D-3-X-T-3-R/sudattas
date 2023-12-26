@@ -11,18 +11,18 @@ pub async fn create_cart_item(
     let req = request.into_inner();
     let cart = cart::ActiveModel {
         cart_id: ActiveValue::NotSet,
-        user_id: ActiveValue::Set(Some(req.user_id)),
-        product_id: ActiveValue::Set(Some(req.product_id)),
-        quantity: ActiveValue::Set(Some(req.quantity)),
+        user_id: ActiveValue::Set(req.user_id),
+        product_id: ActiveValue::Set(req.product_id),
+        quantity: ActiveValue::Set(req.quantity),
     };
     match cart.insert(db).await {
         Ok(cart_model) => {
             let response = CartItemsResponse {
                 items: vec![CartItemResponse {
                     cart_id: cart_model.cart_id,
-                    product_id: cart_model.product_id.unwrap(),
-                    quantity: cart_model.quantity.unwrap(),
-                    user_id: cart_model.user_id.unwrap(),
+                    product_id: cart_model.product_id,
+                    quantity: cart_model.quantity,
+                    user_id: cart_model.user_id,
                 }],
             };
             Ok(Response::new(response))

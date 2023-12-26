@@ -1,16 +1,15 @@
-use std::num::ParseIntError;
-
 use proto::tonic::{self, Code as StatusCode, Status};
+use std::num::ParseIntError;
+use strum::Display;
 
 #[derive(Debug)]
 pub struct GqlError {
     pub code: Code,
     pub message: String,
 }
-#[derive(strum::Display, Debug)]
+
+#[derive(Display, Debug)]
 pub enum Code {
-    //NotFound,
-    //InternalError,
     Ok = 0,
     Cancelled = 1,
     Unknown = 2,
@@ -28,6 +27,15 @@ pub enum Code {
     Unavailable = 14,
     DataLoss = 15,
     Unauthenticated = 16,
+}
+
+impl GqlError {
+    pub fn new(message: &str, code: Code) -> GqlError {
+        GqlError {
+            code,
+            message: message.to_string(),
+        }
+    }
 }
 
 pub fn map_err(status: Status) -> GqlError {
@@ -49,6 +57,7 @@ pub fn map_err(status: Status) -> GqlError {
         StatusCode::Unavailable => Code::Unavailable,
         StatusCode::DataLoss => Code::DataLoss,
         StatusCode::Unauthenticated => Code::Unauthenticated,
+        _ => Code::Unknown,
     };
     GqlError {
         code,
@@ -70,18 +79,12 @@ impl From<tonic::Status> for GqlError {
 
 impl From<tonic::transport::Error> for GqlError {
     fn from(value: tonic::transport::Error) -> Self {
-        GqlError {
-            code: Code::Unavailable,
-            message: value.to_string(),
-        }
+        GqlError::new(&value.to_string(), Code::Unavailable)
     }
 }
 
 impl From<ParseIntError> for GqlError {
     fn from(value: ParseIntError) -> Self {
-        GqlError {
-            code: Code::InvalidArgument,
-            message: value.to_string(),
-        }
+        GqlError::new(&value.to_string(), Code::InvalidArgument)
     }
 }
