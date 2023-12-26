@@ -94,7 +94,7 @@ message CreateUserRequest {
     optional string phone = 6;
 }
 
-message GetUserRequest {
+message SearchUserRequest {
     int64 user_id = 1;
 }
 
@@ -132,8 +132,9 @@ message CreateCategoryRequest {
     string name = 1;
 }
 
-message GetCategoryRequest {
-    int64 category_id = 1;
+message SearchCategoryRequest {
+    optional int64 category_id = 1;
+    optional string name = 2;
 }
 
 message UpdateCategoryRequest {
@@ -163,7 +164,7 @@ message CreateOrderRequest {
     int64 status_id = 4;
 }
 
-message GetOrderRequest {
+message SearchOrderRequest {
     int64 order_id = 1;
 }
 
@@ -201,7 +202,7 @@ message CreateOrderDetailRequest {
     double price = 4;
 }
 
-message GetOrderDetailRequest {
+message SearchOrderDetailRequest {
     int64 order_detail_id = 1;
 }
 
@@ -238,7 +239,7 @@ message CreateReviewRequest {
     string comment = 4;
 }
 
-message GetReviewRequest {
+message SearchReviewRequest {
     int64 review_id = 1;
 }
 
@@ -274,7 +275,7 @@ message CreateProductImageRequest {
     string alt_text = 3;
 }
 
-message GetProductImageRequest {
+message SearchProductImageRequest {
     int64 image_id = 1;
 }
 
@@ -308,7 +309,7 @@ message CreateSupplierRequest {
     string address = 3;
 }
 
-message GetSupplierRequest {
+message SearchSupplierRequest {
     int64 supplier_id = 1;
 }
 
@@ -343,7 +344,7 @@ message CreateInventoryItemRequest {
     int64 supplier_id = 4;
 }
 
-message GetInventoryItemRequest {
+message SearchInventoryItemRequest {
     int64 inventory_id = 1;
 }
 
@@ -379,7 +380,7 @@ message CreateWishlistItemRequest {
     string date_added = 3;
 }
 
-message GetWishlistItemRequest {
+message SearchWishlistItemRequest {
     int64 wishlist_id = 1;
 }
 
@@ -413,7 +414,7 @@ message CreateProductAttributeRequest {
     string attribute_value = 3;
 }
 
-message GetProductAttributeRequest {
+message SearchProductAttributeRequest {
     int64 attribute_id = 1;
 }
 
@@ -448,7 +449,7 @@ message CreateDiscountRequest {
     string end_date = 4;
 }
 
-message GetDiscountRequest {
+message SearchDiscountRequest {
     int64 discount_id = 1;
 }
 
@@ -484,7 +485,7 @@ message CreateShippingMethodRequest {
     string estimated_delivery_time = 3;
 }
 
-message GetShippingMethodRequest {
+message SearchShippingMethodRequest {
     int64 method_id = 1;
 }
 
@@ -516,7 +517,7 @@ message CreateUserRoleRequest {
     string role_name = 1;
 }
 
-message GetUserRoleRequest {
+message SearchUserRoleRequest {
     int64 role_id = 1;
 }
 
@@ -538,37 +539,6 @@ message UserRolesResponse {
     repeated UserRoleResponse items = 1;
 }
 
-// UserRolesMapping
-
-message CreateUserRolesMappingRequest {
-    int64 user_id = 1;
-    int64 role_id = 2;
-}
-
-message GetUserRolesMappingRequest {
-    int64 id = 1;
-}
-
-message UpdateUserRolesMappingRequest {
-    int64 id = 1;
-    optional int64 user_id = 2;
-    optional int64 role_id = 3;
-}
-
-message DeleteUserRolesMappingRequest {
-    int64 id = 1;
-}
-
-message UserRolesMappingResponse {
-    int64 id = 1;
-    int64 user_id = 2;
-    int64 role_id = 3;
-}
-
-message UserRolesMappingsResponse {
-    repeated UserRolesMappingResponse items = 1;
-}
-
 // Transactions
 
 message CreateTransactionRequest {
@@ -577,7 +547,7 @@ message CreateTransactionRequest {
     string type = 3;
 }
 
-message GetTransactionRequest {
+message SearchTransactionRequest {
     int64 transaction_id = 1;
 }
 
@@ -610,7 +580,7 @@ message CreateNewsletterSubscriberRequest {
     string email = 1;
 }
 
-message GetNewsletterSubscriberRequest {
+message SearchNewsletterSubscriberRequest {
     int64 subscriber_id = 1;
 }
 
@@ -641,7 +611,7 @@ message CreateProductRatingRequest {
     int64 rating = 3;
 }
 
-message GetProductRatingRequest {
+message SearchProductRatingRequest {
     int64 rating_id = 1;
 }
 
@@ -673,7 +643,7 @@ message CreateSizeRequest {
     string size_name = 1;
 }
 
-message GetSizeRequest {
+message SearchSizeRequest {
     int64 size_id = 1;
 }
 
@@ -701,7 +671,7 @@ message CreateColorRequest {
     string color_name = 1;
 }
 
-message GetColorRequest {
+message SearchColorRequest {
     int64 color_id = 1;
 }
 
@@ -730,7 +700,7 @@ message CreateProductCategoryMappingRequest {
     int64 category_id = 2;
 }
 
-message GetProductCategoryMappingRequest {
+message SearchProductCategoryMappingRequest {
     int64 product_id = 1;
     int64 category_id = 2;
 }
@@ -756,7 +726,7 @@ message CreateProductAttributeMappingRequest {
     int64 attribute_id = 2;
 }
 
-message GetProductAttributeMappingRequest {
+message SearchProductAttributeMappingRequest {
     int64 product_id = 1;
     int64 attribute_id = 2;
 }
@@ -782,7 +752,7 @@ message CreateUserRoleMappingRequest {
     int64 role_id = 2;
 }
 
-message GetUserRoleMappingRequest {
+message SearchUserRoleMappingRequest {
     int64 user_id = 1;
     int64 role_id = 2;
 }
@@ -808,7 +778,7 @@ message CreateProductSizeMappingRequest {
     int64 size_id = 2;
 }
 
-message GetProductSizeMappingRequest {
+message SearchProductSizeMappingRequest {
     int64 product_id = 1;
     int64 size_id = 2;
 }
@@ -834,7 +804,7 @@ message CreateProductColorMappingRequest {
     int64 color_id = 2;
 }
 
-message GetProductColorMappingRequest {
+message SearchProductColorMappingRequest {
     int64 product_id = 1;
     int64 color_id = 2;
 }
@@ -862,7 +832,7 @@ message CreateProductVariantRequest {
     optional double additional_price = 4;
 }
 
-message GetProductVariantRequest {
+message SearchProductVariantRequest {
     int64 variant_id = 1;
 }
 
@@ -898,7 +868,7 @@ message CreateEventLogRequest {
     int64 user_id = 3;
 }
 
-message GetEventLogRequest {
+message SearchEventLogRequest {
     int64 log_id = 1;
 }
 
@@ -933,7 +903,7 @@ message CreateUserActivityRequest {
     string activity_details = 3;
 }
 
-message GetUserActivityRequest {
+message SearchUserActivityRequest {
     int64 activity_id = 1;
 }
 
@@ -968,7 +938,7 @@ message CreateInventoryLogRequest {
     string reason = 3;
 }
 
-message GetInventoryLogRequest {
+message SearchInventoryLogRequest {
     int64 log_id = 1;
 }
 
@@ -1004,7 +974,7 @@ message CreatePromotionRequest {
     string details = 4;
 }
 
-message GetPromotionRequest {
+message SearchPromotionRequest {
     int64 promotion_id = 1;
 }
 
@@ -1039,7 +1009,7 @@ message CreateShippingZoneRequest {
     string description = 2;
 }
 
-message GetShippingZoneRequest {
+message SearchShippingZoneRequest {
     int64 zone_id = 1;
 }
 
@@ -1070,7 +1040,7 @@ message CreatePaymentMethodRequest {
     string details = 2;
 }
 
-message GetPaymentMethodRequest {
+message SearchPaymentMethodRequest {
     int64 method_id = 1;
 }
 
