@@ -4,6 +4,10 @@ use crate::resolvers::{
         self,
         schema::{Cart, CartMutation, NewCart},
     },
+    category::{
+        self,
+        schema::{Category, CategoryMutation, NewCategory},
+    },
     product::{
         self,
         schema::{NewProduct, Product, ProductMutation},
@@ -55,6 +59,28 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn update_product(product: ProductMutation) -> FieldResult<Vec<Product>> {
         product::handlers::update_product(product)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Category
+    #[instrument(err, ret)]
+    async fn create_category(category: NewCategory) -> FieldResult<Vec<Category>> {
+        category::handlers::create_category(category)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_category(category_id: String) -> FieldResult<Vec<Category>> {
+        category::handlers::delete_category(category_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_category(category: CategoryMutation) -> FieldResult<Vec<Category>> {
+        category::handlers::update_category(category)
             .await
             .map_err(|e| e.into())
     }
