@@ -422,68 +422,64 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreateCategoryRequest>,
     ) -> Result<Response<CategoriesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::categories::create_category(self.db.as_ref().unwrap(), request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::categories::create_category(self.db.as_ref().unwrap(), request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_category(
         &self,
         request: Request<SearchCategoryRequest>,
     ) -> Result<Response<CategoriesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::categories::search_category(self.db.as_ref().unwrap(), request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::categories::search_category(self.db.as_ref().unwrap(), request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_category(
         &self,
         request: Request<UpdateCategoryRequest>,
     ) -> Result<Response<CategoriesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::categories::update_category(self.db.as_ref().unwrap(), request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::categories::update_category(self.db.as_ref().unwrap(), request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_category(
         &self,
         request: Request<DeleteCategoryRequest>,
     ) -> Result<Response<CategoriesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::categories::delete_category(self.db.as_ref().unwrap(), request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::categories::delete_category(self.db.as_ref().unwrap(), request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Order Services
