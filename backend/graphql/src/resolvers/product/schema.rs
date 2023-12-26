@@ -1,4 +1,6 @@
-use juniper::{graphql_object, GraphQLInputObject};
+use juniper::{graphql_object, FieldResult, GraphQLInputObject};
+
+use crate::resolvers::category::schema::{Category, SearchCategory};
 
 #[derive(Default, Debug, Clone)]
 pub struct Product {
@@ -35,6 +37,18 @@ impl Product {
 
     async fn category_id(&self) -> &Option<String> {
         &self.category_id
+    }
+
+    async fn category_details(&self) -> FieldResult<Vec<Category>> {
+        crate::resolvers::category::handlers::search_category(SearchCategory {
+            category_id: match &self.category_id {
+                Some(val) => Some(val.to_string()),
+                None => None,
+            },
+            name: None,
+        })
+        .await
+        .map_err(|e| e.into())
     }
 }
 
