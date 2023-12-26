@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "UserRoleMapping")]
 pub struct Model {
     #[sea_orm(column_name = "UserID", primary_key, auto_increment = false)]
-    pub user_id: i32,
+    pub user_id: i64,
     #[sea_orm(column_name = "RoleID", primary_key, auto_increment = false)]
-    pub role_id: i32,
+    pub role_id: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

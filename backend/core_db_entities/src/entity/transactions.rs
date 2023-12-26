@@ -7,19 +7,15 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "Transactions")]
 pub struct Model {
     #[sea_orm(column_name = "TransactionID", primary_key)]
-    pub transaction_id: i32,
+    pub transaction_id: i64,
     #[sea_orm(column_name = "UserID")]
-    pub user_id: Option<i32>,
-    #[sea_orm(
-        column_name = "Amount",
-        column_type = "Decimal(Some((10, 2)))",
-        nullable
-    )]
-    pub amount: Option<Decimal>,
+    pub user_id: i64,
+    #[sea_orm(column_name = "Amount", column_type = "Decimal(Some((10, 2)))")]
+    pub amount: Decimal,
     #[sea_orm(column_name = "TransactionDate")]
     pub transaction_date: DateTimeUtc,
     #[sea_orm(column_name = "Type")]
-    pub r#type: Option<String>,
+    pub r#type: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

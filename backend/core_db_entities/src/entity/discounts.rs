@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "Discounts")]
 pub struct Model {
     #[sea_orm(column_name = "DiscountID", primary_key)]
-    pub discount_id: i32,
+    pub discount_id: i64,
     #[sea_orm(column_name = "ProductID")]
-    pub product_id: Option<i32>,
+    pub product_id: Option<i64>,
     #[sea_orm(
         column_name = "DiscountPercentage",
         column_type = "Decimal(Some((5, 2)))",

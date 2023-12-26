@@ -1,13 +1,14 @@
+use crate::query_handler::Context;
 use dotenv::dotenv;
 use juniper::{EmptySubscription, RootNode};
 use reqwest::StatusCode;
-use resolvers::Context;
 use tracing::{debug, info, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 use warp::{http::Response, reply, Filter, Rejection, Reply};
 
 use crate::security::jwt_validator::{validate_token, Claims};
 
+mod query_handler;
 mod resolvers;
 mod security;
 
@@ -15,13 +16,17 @@ mod security;
 struct Unauthorized {}
 impl warp::reject::Reject for Unauthorized {}
 
-type Schema =
-    RootNode<'static, resolvers::QueryRoot, resolvers::MutationRoot, EmptySubscription<Context>>;
+type Schema = RootNode<
+    'static,
+    query_handler::query_root::QueryRoot,
+    query_handler::mutation_root::MutationRoot,
+    EmptySubscription<Context>,
+>;
 
 fn schema() -> Schema {
     RootNode::new(
-        resolvers::QueryRoot {},
-        resolvers::MutationRoot {},
+        query_handler::query_root::QueryRoot {},
+        query_handler::mutation_root::MutationRoot {},
         EmptySubscription::<Context>::new(),
     )
 }

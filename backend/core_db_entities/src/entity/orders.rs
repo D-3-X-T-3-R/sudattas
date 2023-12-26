@@ -7,19 +7,15 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "Orders")]
 pub struct Model {
     #[sea_orm(column_name = "OrderID", primary_key)]
-    pub order_id: i32,
+    pub order_id: i64,
     #[sea_orm(column_name = "UserID")]
-    pub user_id: Option<i32>,
+    pub user_id: i64,
     #[sea_orm(column_name = "OrderDate")]
     pub order_date: DateTimeUtc,
     #[sea_orm(column_name = "ShippingAddress", column_type = "Text", nullable)]
     pub shipping_address: Option<String>,
-    #[sea_orm(
-        column_name = "TotalAmount",
-        column_type = "Decimal(Some((10, 2)))",
-        nullable
-    )]
-    pub total_amount: Option<Decimal>,
+    #[sea_orm(column_name = "TotalAmount", column_type = "Decimal(Some((10, 2)))")]
+    pub total_amount: Decimal,
     #[sea_orm(column_name = "Status")]
     pub status: Option<String>,
 }
