@@ -1,11 +1,11 @@
 use core_db_entities::{get_db, CoreDatabaseConnection};
 use handlers::db_errors::map_db_error_to_status;
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, CartItemsResponse, CategoriesResponse, CategoryResponse,
-    ColorResponse, ColorsResponse, CreateCartItemRequest, CreateCategoryRequest,
-    CreateColorRequest, CreateDiscountRequest, CreateEventLogRequest, CreateInventoryItemRequest,
-    CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOrderDetailRequest,
-    CreateOrderRequest, CreatePaymentMethodRequest, CreateProductAttributeMappingRequest,
+    grpc_services_server::GrpcServices, CartItemsResponse, CategoriesResponse, ColorsResponse,
+    CreateCartItemRequest, CreateCategoryRequest, CreateColorRequest, CreateDiscountRequest,
+    CreateEventLogRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
+    CreateNewsletterSubscriberRequest, CreateOrderDetailRequest, CreateOrderRequest,
+    CreatePaymentMethodRequest, CreateProductAttributeMappingRequest,
     CreateProductAttributeRequest, CreateProductCategoryMappingRequest,
     CreateProductColorMappingRequest, CreateProductImageRequest, CreateProductRatingRequest,
     CreateProductRequest, CreateProductSizeMappingRequest, CreateProductVariantRequest,
@@ -22,17 +22,12 @@ use proto::proto::core::{
     DeletePromotionRequest, DeleteReviewRequest, DeleteShippingMethodRequest,
     DeleteShippingZoneRequest, DeleteSizeRequest, DeleteSupplierRequest, DeleteTransactionRequest,
     DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleMappingRequest,
-    DeleteUserRoleRequest, DeleteWishlistItemRequest, DiscountResponse, DiscountsResponse,
-    EventLogResponse, EventLogsResponse, GetCartItemsRequest, InventoryItemResponse,
-    InventoryItemsResponse, InventoryLogResponse, InventoryLogsResponse,
-    NewsletterSubscriberResponse, NewsletterSubscribersResponse, OrderDetailResponse,
-    OrderDetailsResponse, OrderResponse, OrdersResponse, PaymentMethodResponse,
-    PaymentMethodsResponse, ProductAttributeMappingResponse, ProductAttributeMappingsResponse,
-    ProductAttributeResponse, ProductAttributesResponse, ProductCategoryMappingResponse,
-    ProductCategoryMappingsResponse, ProductColorMappingResponse, ProductColorMappingsResponse,
-    ProductImageResponse, ProductImagesResponse, ProductRatingResponse, ProductRatingsResponse,
-    ProductSizeMappingResponse, ProductSizeMappingsResponse, ProductVariantResponse,
-    ProductVariantsResponse, ProductsResponse, PromotionResponse, PromotionsResponse,
+    DeleteUserRoleRequest, DeleteWishlistItemRequest, DiscountsResponse, EventLogsResponse,
+    GetCartItemsRequest, InventoryItemsResponse, InventoryLogsResponse,
+    NewsletterSubscribersResponse, OrderDetailsResponse, OrdersResponse, PaymentMethodsResponse,
+    ProductAttributeMappingsResponse, ProductAttributesResponse, ProductCategoryMappingsResponse,
+    ProductColorMappingsResponse, ProductImagesResponse, ProductRatingsResponse,
+    ProductSizeMappingsResponse, ProductVariantsResponse, ProductsResponse, PromotionsResponse,
     ReviewsResponse, SearchCategoryRequest, SearchColorRequest, SearchDiscountRequest,
     SearchEventLogRequest, SearchInventoryItemRequest, SearchInventoryLogRequest,
     SearchNewsletterSubscriberRequest, SearchOrderDetailRequest, SearchOrderRequest,
@@ -43,9 +38,8 @@ use proto::proto::core::{
     SearchPromotionRequest, SearchReviewRequest, SearchShippingMethodRequest,
     SearchShippingZoneRequest, SearchSizeRequest, SearchSupplierRequest, SearchTransactionRequest,
     SearchUserActivityRequest, SearchUserRequest, SearchUserRoleMappingRequest,
-    SearchUserRoleRequest, SearchWishlistItemRequest, ShippingMethodResponse,
-    ShippingMethodsResponse, ShippingZoneResponse, ShippingZonesResponse, SizeResponse,
-    SizesResponse, SupplierResponse, SuppliersResponse, TransactionResponse, TransactionsResponse,
+    SearchUserRoleRequest, SearchWishlistItemRequest, ShippingMethodsResponse,
+    ShippingZonesResponse, SizesResponse, SuppliersResponse, TransactionsResponse,
     UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateDiscountRequest,
     UpdateEventLogRequest, UpdateInventoryItemRequest, UpdateInventoryLogRequest,
     UpdateNewsletterSubscriberRequest, UpdateOrderDetailRequest, UpdateOrderRequest,
@@ -54,9 +48,8 @@ use proto::proto::core::{
     UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingMethodRequest,
     UpdateShippingZoneRequest, UpdateSizeRequest, UpdateSupplierRequest, UpdateTransactionRequest,
     UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UpdateWishlistItemRequest,
-    UserActivitiesResponse, UserActivityResponse, UserResponse, UserRoleMappingResponse,
-    UserRoleMappingsResponse, UserRoleResponse, UserRolesResponse, UsersResponse,
-    WishlistItemResponse, WishlistItemsResponse,
+    UserActivitiesResponse, UserRoleMappingsResponse, UserRolesResponse, UsersResponse,
+    WishlistItemsResponse,
 };
 
 use sea_orm::TransactionTrait;
@@ -152,7 +145,7 @@ impl GrpcServices for MyGRPCServices {
     // ProductColorMapping Services
     async fn create_product_color_mapping(
         &self,
-        request: Request<CreateProductColorMappingRequest>,
+        _request: Request<CreateProductColorMappingRequest>,
     ) -> Result<Response<ProductColorMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -175,7 +168,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_product_color_mapping(
         &self,
-        request: Request<SearchProductColorMappingRequest>,
+        _request: Request<SearchProductColorMappingRequest>,
     ) -> Result<Response<ProductColorMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -198,7 +191,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_product_color_mapping(
         &self,
-        request: Request<DeleteProductColorMappingRequest>,
+        _request: Request<DeleteProductColorMappingRequest>,
     ) -> Result<Response<ProductColorMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -287,7 +280,7 @@ impl GrpcServices for MyGRPCServices {
     // ProductSizeMapping Services
     async fn create_product_size_mapping(
         &self,
-        request: Request<CreateProductSizeMappingRequest>,
+        _request: Request<CreateProductSizeMappingRequest>,
     ) -> Result<Response<ProductSizeMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -308,7 +301,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_product_size_mapping(
         &self,
-        request: Request<SearchProductSizeMappingRequest>,
+        _request: Request<SearchProductSizeMappingRequest>,
     ) -> Result<Response<ProductSizeMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -329,7 +322,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_product_size_mapping(
         &self,
-        request: Request<DeleteProductSizeMappingRequest>,
+        _request: Request<DeleteProductSizeMappingRequest>,
     ) -> Result<Response<ProductSizeMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -351,7 +344,7 @@ impl GrpcServices for MyGRPCServices {
     // User Services
     async fn create_user(
         &self,
-        request: Request<CreateUserRequest>,
+        _request: Request<CreateUserRequest>,
     ) -> Result<Response<UsersResponse>, Status> {
         // let txn = self
         //     .db
@@ -368,7 +361,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_user(
         &self,
-        request: Request<SearchUserRequest>,
+        _request: Request<SearchUserRequest>,
     ) -> Result<Response<UsersResponse>, Status> {
         // let txn = self
         //     .db
@@ -385,7 +378,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_user(
         &self,
-        request: Request<UpdateUserRequest>,
+        _request: Request<UpdateUserRequest>,
     ) -> Result<Response<UsersResponse>, Status> {
         // let txn = self
         //     .db
@@ -402,7 +395,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_user(
         &self,
-        request: Request<DeleteUserRequest>,
+        _request: Request<DeleteUserRequest>,
     ) -> Result<Response<UsersResponse>, Status> {
         // let txn = self
         //     .db
@@ -483,10 +476,9 @@ impl GrpcServices for MyGRPCServices {
     }
 
     // Order Services
-    // Order Services
     async fn create_order(
         &self,
-        request: Request<CreateOrderRequest>,
+        _request: Request<CreateOrderRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
         /* let txn = self
             .db
@@ -503,7 +495,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_order(
         &self,
-        request: Request<SearchOrderRequest>,
+        _request: Request<SearchOrderRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
         /* let txn = self
             .db
@@ -520,7 +512,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_order(
         &self,
-        request: Request<UpdateOrderRequest>,
+        _request: Request<UpdateOrderRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
         /* let txn = self
             .db
@@ -537,7 +529,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_order(
         &self,
-        request: Request<DeleteOrderRequest>,
+        _request: Request<DeleteOrderRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
         /* let txn = self
             .db
@@ -555,7 +547,7 @@ impl GrpcServices for MyGRPCServices {
     // OrderDetails Services
     async fn create_order_detail(
         &self,
-        request: Request<CreateOrderDetailRequest>,
+        _request: Request<CreateOrderDetailRequest>,
     ) -> Result<Response<OrderDetailsResponse>, Status> {
         // let txn = self
         //     .db
@@ -573,7 +565,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_order_detail(
         &self,
-        request: Request<SearchOrderDetailRequest>,
+        _request: Request<SearchOrderDetailRequest>,
     ) -> Result<Response<OrderDetailsResponse>, Status> {
         // let txn = self
         //     .db
@@ -591,7 +583,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_order_detail(
         &self,
-        request: Request<UpdateOrderDetailRequest>,
+        _request: Request<UpdateOrderDetailRequest>,
     ) -> Result<Response<OrderDetailsResponse>, Status> {
         // let txn = self
         //     .db
@@ -609,7 +601,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_order_detail(
         &self,
-        request: Request<DeleteOrderDetailRequest>,
+        _request: Request<DeleteOrderDetailRequest>,
     ) -> Result<Response<OrderDetailsResponse>, Status> {
         // let txn = self
         //     .db
@@ -628,7 +620,7 @@ impl GrpcServices for MyGRPCServices {
     // Reviews Services
     async fn create_review(
         &self,
-        request: Request<CreateReviewRequest>,
+        _request: Request<CreateReviewRequest>,
     ) -> Result<Response<ReviewsResponse>, Status> {
         // let txn = self
         //     .db
@@ -645,7 +637,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_review(
         &self,
-        request: Request<SearchReviewRequest>,
+        _request: Request<SearchReviewRequest>,
     ) -> Result<Response<ReviewsResponse>, Status> {
         // let txn = self
         //     .db
@@ -662,7 +654,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_review(
         &self,
-        request: Request<UpdateReviewRequest>,
+        _request: Request<UpdateReviewRequest>,
     ) -> Result<Response<ReviewsResponse>, Status> {
         // let txn = self
         //     .db
@@ -679,7 +671,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_review(
         &self,
-        request: Request<DeleteReviewRequest>,
+        _request: Request<DeleteReviewRequest>,
     ) -> Result<Response<ReviewsResponse>, Status> {
         // let txn = self
         //     .db
@@ -697,7 +689,7 @@ impl GrpcServices for MyGRPCServices {
     // ProductImages Services
     async fn create_product_image(
         &self,
-        request: Request<CreateProductImageRequest>,
+        _request: Request<CreateProductImageRequest>,
     ) -> Result<Response<ProductImagesResponse>, Status> {
         // let txn = self
         //     .db
@@ -716,7 +708,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_product_image(
         &self,
-        request: Request<SearchProductImageRequest>,
+        _request: Request<SearchProductImageRequest>,
     ) -> Result<Response<ProductImagesResponse>, Status> {
         // let txn = self
         //     .db
@@ -735,7 +727,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_product_image(
         &self,
-        request: Request<UpdateProductImageRequest>,
+        _request: Request<UpdateProductImageRequest>,
     ) -> Result<Response<ProductImagesResponse>, Status> {
         // let txn = self
         //     .db
@@ -754,7 +746,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_product_image(
         &self,
-        request: Request<DeleteProductImageRequest>,
+        _request: Request<DeleteProductImageRequest>,
     ) -> Result<Response<ProductImagesResponse>, Status> {
         // let txn = self
         //     .db
@@ -774,7 +766,7 @@ impl GrpcServices for MyGRPCServices {
     // Suppliers Services
     async fn create_supplier(
         &self,
-        request: Request<CreateSupplierRequest>,
+        _request: Request<CreateSupplierRequest>,
     ) -> Result<Response<SuppliersResponse>, Status> {
         // let txn = self
         //     .db
@@ -791,7 +783,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_supplier(
         &self,
-        request: Request<SearchSupplierRequest>,
+        _request: Request<SearchSupplierRequest>,
     ) -> Result<Response<SuppliersResponse>, Status> {
         // let txn = self
         //     .db
@@ -808,7 +800,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_supplier(
         &self,
-        request: Request<UpdateSupplierRequest>,
+        _request: Request<UpdateSupplierRequest>,
     ) -> Result<Response<SuppliersResponse>, Status> {
         // let txn = self
         //     .db
@@ -825,7 +817,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_supplier(
         &self,
-        request: Request<DeleteSupplierRequest>,
+        _request: Request<DeleteSupplierRequest>,
     ) -> Result<Response<SuppliersResponse>, Status> {
         // let txn = self
         //     .db
@@ -843,7 +835,7 @@ impl GrpcServices for MyGRPCServices {
     // Inventory Services
     async fn create_inventory_item(
         &self,
-        request: Request<CreateInventoryItemRequest>,
+        _request: Request<CreateInventoryItemRequest>,
     ) -> Result<Response<InventoryItemsResponse>, Status> {
         // let txn = self
         //     .db
@@ -861,7 +853,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_inventory_item(
         &self,
-        request: Request<SearchInventoryItemRequest>,
+        _request: Request<SearchInventoryItemRequest>,
     ) -> Result<Response<InventoryItemsResponse>, Status> {
         // let txn = self
         //     .db
@@ -879,7 +871,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_inventory_item(
         &self,
-        request: Request<UpdateInventoryItemRequest>,
+        _request: Request<UpdateInventoryItemRequest>,
     ) -> Result<Response<InventoryItemsResponse>, Status> {
         // let txn = self
         //     .db
@@ -897,7 +889,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_inventory_item(
         &self,
-        request: Request<DeleteInventoryItemRequest>,
+        _request: Request<DeleteInventoryItemRequest>,
     ) -> Result<Response<InventoryItemsResponse>, Status> {
         // let txn = self
         //     .db
@@ -916,7 +908,7 @@ impl GrpcServices for MyGRPCServices {
     // Wishlist Services
     async fn create_wishlist_item(
         &self,
-        request: Request<CreateWishlistItemRequest>,
+        _request: Request<CreateWishlistItemRequest>,
     ) -> Result<Response<WishlistItemsResponse>, Status> {
         // let txn = self
         //     .db
@@ -934,7 +926,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_wishlist_item(
         &self,
-        request: Request<SearchWishlistItemRequest>,
+        _request: Request<SearchWishlistItemRequest>,
     ) -> Result<Response<WishlistItemsResponse>, Status> {
         // let txn = self
         //     .db
@@ -952,7 +944,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_wishlist_item(
         &self,
-        request: Request<UpdateWishlistItemRequest>,
+        _request: Request<UpdateWishlistItemRequest>,
     ) -> Result<Response<WishlistItemsResponse>, Status> {
         // let txn = self
         //     .db
@@ -970,7 +962,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_wishlist_item(
         &self,
-        request: Request<DeleteWishlistItemRequest>,
+        _request: Request<DeleteWishlistItemRequest>,
     ) -> Result<Response<WishlistItemsResponse>, Status> {
         // let txn = self
         //     .db
@@ -989,7 +981,7 @@ impl GrpcServices for MyGRPCServices {
     // ProductAttributes Services
     async fn create_product_attribute(
         &self,
-        request: Request<CreateProductAttributeRequest>,
+        _request: Request<CreateProductAttributeRequest>,
     ) -> Result<Response<ProductAttributesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1010,7 +1002,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_product_attribute(
         &self,
-        request: Request<SearchProductAttributeRequest>,
+        _request: Request<SearchProductAttributeRequest>,
     ) -> Result<Response<ProductAttributesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1031,7 +1023,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_product_attribute(
         &self,
-        request: Request<UpdateProductAttributeRequest>,
+        _request: Request<UpdateProductAttributeRequest>,
     ) -> Result<Response<ProductAttributesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1052,7 +1044,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_product_attribute(
         &self,
-        request: Request<DeleteProductAttributeRequest>,
+        _request: Request<DeleteProductAttributeRequest>,
     ) -> Result<Response<ProductAttributesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1074,7 +1066,7 @@ impl GrpcServices for MyGRPCServices {
     // Discounts Services
     async fn create_discount(
         &self,
-        request: Request<CreateDiscountRequest>,
+        _request: Request<CreateDiscountRequest>,
     ) -> Result<Response<DiscountsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1091,7 +1083,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_discount(
         &self,
-        request: Request<SearchDiscountRequest>,
+        _request: Request<SearchDiscountRequest>,
     ) -> Result<Response<DiscountsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1108,7 +1100,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_discount(
         &self,
-        request: Request<UpdateDiscountRequest>,
+        _request: Request<UpdateDiscountRequest>,
     ) -> Result<Response<DiscountsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1125,7 +1117,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_discount(
         &self,
-        request: Request<DeleteDiscountRequest>,
+        _request: Request<DeleteDiscountRequest>,
     ) -> Result<Response<DiscountsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1143,7 +1135,7 @@ impl GrpcServices for MyGRPCServices {
     // ShippingMethods Services
     async fn create_shipping_method(
         &self,
-        request: Request<CreateShippingMethodRequest>,
+        _request: Request<CreateShippingMethodRequest>,
     ) -> Result<Response<ShippingMethodsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1162,7 +1154,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_shipping_method(
         &self,
-        request: Request<SearchShippingMethodRequest>,
+        _request: Request<SearchShippingMethodRequest>,
     ) -> Result<Response<ShippingMethodsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1181,7 +1173,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_shipping_method(
         &self,
-        request: Request<UpdateShippingMethodRequest>,
+        _request: Request<UpdateShippingMethodRequest>,
     ) -> Result<Response<ShippingMethodsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1200,7 +1192,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_shipping_method(
         &self,
-        request: Request<DeleteShippingMethodRequest>,
+        _request: Request<DeleteShippingMethodRequest>,
     ) -> Result<Response<ShippingMethodsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1220,7 +1212,7 @@ impl GrpcServices for MyGRPCServices {
     // UserRole Services
     async fn create_user_role(
         &self,
-        request: Request<CreateUserRoleRequest>,
+        _request: Request<CreateUserRoleRequest>,
     ) -> Result<Response<UserRolesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1238,7 +1230,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_user_role(
         &self,
-        request: Request<SearchUserRoleRequest>,
+        _request: Request<SearchUserRoleRequest>,
     ) -> Result<Response<UserRolesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1256,7 +1248,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_user_role(
         &self,
-        request: Request<UpdateUserRoleRequest>,
+        _request: Request<UpdateUserRoleRequest>,
     ) -> Result<Response<UserRolesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1274,7 +1266,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_user_role(
         &self,
-        request: Request<DeleteUserRoleRequest>,
+        _request: Request<DeleteUserRoleRequest>,
     ) -> Result<Response<UserRolesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1293,7 +1285,7 @@ impl GrpcServices for MyGRPCServices {
     // Transactions Services
     async fn create_transaction(
         &self,
-        request: Request<CreateTransactionRequest>,
+        _request: Request<CreateTransactionRequest>,
     ) -> Result<Response<TransactionsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1311,7 +1303,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_transaction(
         &self,
-        request: Request<SearchTransactionRequest>,
+        _request: Request<SearchTransactionRequest>,
     ) -> Result<Response<TransactionsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1329,7 +1321,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_transaction(
         &self,
-        request: Request<UpdateTransactionRequest>,
+        _request: Request<UpdateTransactionRequest>,
     ) -> Result<Response<TransactionsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1347,7 +1339,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_transaction(
         &self,
-        request: Request<DeleteTransactionRequest>,
+        _request: Request<DeleteTransactionRequest>,
     ) -> Result<Response<TransactionsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1366,7 +1358,7 @@ impl GrpcServices for MyGRPCServices {
     // NewsletterSubscribers Services
     async fn create_newsletter_subscriber(
         &self,
-        request: Request<CreateNewsletterSubscriberRequest>,
+        _request: Request<CreateNewsletterSubscriberRequest>,
     ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
         // let txn = self
         //     .db
@@ -1387,7 +1379,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_newsletter_subscriber(
         &self,
-        request: Request<SearchNewsletterSubscriberRequest>,
+        _request: Request<SearchNewsletterSubscriberRequest>,
     ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
         // let txn = self
         //     .db
@@ -1408,7 +1400,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_newsletter_subscriber(
         &self,
-        request: Request<UpdateNewsletterSubscriberRequest>,
+        _request: Request<UpdateNewsletterSubscriberRequest>,
     ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
         // let txn = self
         //     .db
@@ -1429,7 +1421,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_newsletter_subscriber(
         &self,
-        request: Request<DeleteNewsletterSubscriberRequest>,
+        _request: Request<DeleteNewsletterSubscriberRequest>,
     ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
         // let txn = self
         //     .db
@@ -1451,7 +1443,7 @@ impl GrpcServices for MyGRPCServices {
     // ProductRatings Services
     async fn create_product_rating(
         &self,
-        request: Request<CreateProductRatingRequest>,
+        _request: Request<CreateProductRatingRequest>,
     ) -> Result<Response<ProductRatingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1470,7 +1462,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_product_rating(
         &self,
-        request: Request<SearchProductRatingRequest>,
+        _request: Request<SearchProductRatingRequest>,
     ) -> Result<Response<ProductRatingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1489,7 +1481,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_product_rating(
         &self,
-        request: Request<UpdateProductRatingRequest>,
+        _request: Request<UpdateProductRatingRequest>,
     ) -> Result<Response<ProductRatingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1508,7 +1500,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_product_rating(
         &self,
-        request: Request<DeleteProductRatingRequest>,
+        _request: Request<DeleteProductRatingRequest>,
     ) -> Result<Response<ProductRatingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1528,7 +1520,7 @@ impl GrpcServices for MyGRPCServices {
     // Sizes Services
     async fn create_size(
         &self,
-        request: Request<CreateSizeRequest>,
+        _request: Request<CreateSizeRequest>,
     ) -> Result<Response<SizesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1545,7 +1537,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_size(
         &self,
-        request: Request<SearchSizeRequest>,
+        _request: Request<SearchSizeRequest>,
     ) -> Result<Response<SizesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1562,7 +1554,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_size(
         &self,
-        request: Request<UpdateSizeRequest>,
+        _request: Request<UpdateSizeRequest>,
     ) -> Result<Response<SizesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1579,7 +1571,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_size(
         &self,
-        request: Request<DeleteSizeRequest>,
+        _request: Request<DeleteSizeRequest>,
     ) -> Result<Response<SizesResponse>, Status> {
         // let txn = self
         //     .db
@@ -1597,7 +1589,7 @@ impl GrpcServices for MyGRPCServices {
     // Colors Services
     async fn create_color(
         &self,
-        request: Request<CreateColorRequest>,
+        _request: Request<CreateColorRequest>,
     ) -> Result<Response<ColorsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1614,7 +1606,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_color(
         &self,
-        request: Request<SearchColorRequest>,
+        _request: Request<SearchColorRequest>,
     ) -> Result<Response<ColorsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1631,7 +1623,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_color(
         &self,
-        request: Request<UpdateColorRequest>,
+        _request: Request<UpdateColorRequest>,
     ) -> Result<Response<ColorsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1648,7 +1640,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_color(
         &self,
-        request: Request<DeleteColorRequest>,
+        _request: Request<DeleteColorRequest>,
     ) -> Result<Response<ColorsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1666,7 +1658,7 @@ impl GrpcServices for MyGRPCServices {
     // ProductCategoryMapping Services
     async fn create_product_category_mapping(
         &self,
-        request: Request<CreateProductCategoryMappingRequest>,
+        _request: Request<CreateProductCategoryMappingRequest>,
     ) -> Result<Response<ProductCategoryMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1687,7 +1679,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_product_category_mapping(
         &self,
-        request: Request<SearchProductCategoryMappingRequest>,
+        _request: Request<SearchProductCategoryMappingRequest>,
     ) -> Result<Response<ProductCategoryMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1708,7 +1700,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_product_category_mapping(
         &self,
-        request: Request<DeleteProductCategoryMappingRequest>,
+        _request: Request<DeleteProductCategoryMappingRequest>,
     ) -> Result<Response<ProductCategoryMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1730,7 +1722,7 @@ impl GrpcServices for MyGRPCServices {
     // ProductAttributeMapping Services
     async fn create_product_attribute_mapping(
         &self,
-        request: Request<CreateProductAttributeMappingRequest>,
+        _request: Request<CreateProductAttributeMappingRequest>,
     ) -> Result<Response<ProductAttributeMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1751,7 +1743,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_product_attribute_mapping(
         &self,
-        request: Request<SearchProductAttributeMappingRequest>,
+        _request: Request<SearchProductAttributeMappingRequest>,
     ) -> Result<Response<ProductAttributeMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1772,7 +1764,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_product_attribute_mapping(
         &self,
-        request: Request<DeleteProductAttributeMappingRequest>,
+        _request: Request<DeleteProductAttributeMappingRequest>,
     ) -> Result<Response<ProductAttributeMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1794,7 +1786,7 @@ impl GrpcServices for MyGRPCServices {
     // UserRoleMapping Services
     async fn create_user_role_mapping(
         &self,
-        request: Request<CreateUserRoleMappingRequest>,
+        _request: Request<CreateUserRoleMappingRequest>,
     ) -> Result<Response<UserRoleMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1815,7 +1807,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_user_role_mapping(
         &self,
-        request: Request<SearchUserRoleMappingRequest>,
+        _request: Request<SearchUserRoleMappingRequest>,
     ) -> Result<Response<UserRoleMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1836,7 +1828,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_user_role_mapping(
         &self,
-        request: Request<DeleteUserRoleMappingRequest>,
+        _request: Request<DeleteUserRoleMappingRequest>,
     ) -> Result<Response<UserRoleMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1858,7 +1850,7 @@ impl GrpcServices for MyGRPCServices {
     // ProductVariant Services
     async fn create_product_variant(
         &self,
-        request: Request<CreateProductVariantRequest>,
+        _request: Request<CreateProductVariantRequest>,
     ) -> Result<Response<ProductVariantsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1877,7 +1869,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_product_variant(
         &self,
-        request: Request<SearchProductVariantRequest>,
+        _request: Request<SearchProductVariantRequest>,
     ) -> Result<Response<ProductVariantsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1896,7 +1888,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_product_variant(
         &self,
-        request: Request<UpdateProductVariantRequest>,
+        _request: Request<UpdateProductVariantRequest>,
     ) -> Result<Response<ProductVariantsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1915,7 +1907,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_product_variant(
         &self,
-        request: Request<DeleteProductVariantRequest>,
+        _request: Request<DeleteProductVariantRequest>,
     ) -> Result<Response<ProductVariantsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1935,7 +1927,7 @@ impl GrpcServices for MyGRPCServices {
     // EventLogs Services
     async fn create_event_log(
         &self,
-        request: Request<CreateEventLogRequest>,
+        _request: Request<CreateEventLogRequest>,
     ) -> Result<Response<EventLogsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1953,7 +1945,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_event_log(
         &self,
-        request: Request<SearchEventLogRequest>,
+        _request: Request<SearchEventLogRequest>,
     ) -> Result<Response<EventLogsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1971,7 +1963,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_event_log(
         &self,
-        request: Request<UpdateEventLogRequest>,
+        _request: Request<UpdateEventLogRequest>,
     ) -> Result<Response<EventLogsResponse>, Status> {
         // let txn = self
         //     .db
@@ -1989,7 +1981,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_event_log(
         &self,
-        request: Request<DeleteEventLogRequest>,
+        _request: Request<DeleteEventLogRequest>,
     ) -> Result<Response<EventLogsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2008,7 +2000,7 @@ impl GrpcServices for MyGRPCServices {
     // UserActivity Services
     async fn create_user_activity(
         &self,
-        request: Request<CreateUserActivityRequest>,
+        _request: Request<CreateUserActivityRequest>,
     ) -> Result<Response<UserActivitiesResponse>, Status> {
         // let txn = self
         //     .db
@@ -2027,7 +2019,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_user_activity(
         &self,
-        request: Request<SearchUserActivityRequest>,
+        _request: Request<SearchUserActivityRequest>,
     ) -> Result<Response<UserActivitiesResponse>, Status> {
         // let txn = self
         //     .db
@@ -2046,7 +2038,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_user_activity(
         &self,
-        request: Request<UpdateUserActivityRequest>,
+        _request: Request<UpdateUserActivityRequest>,
     ) -> Result<Response<UserActivitiesResponse>, Status> {
         // let txn = self
         //     .db
@@ -2065,7 +2057,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_user_activity(
         &self,
-        request: Request<DeleteUserActivityRequest>,
+        _request: Request<DeleteUserActivityRequest>,
     ) -> Result<Response<UserActivitiesResponse>, Status> {
         // let txn = self
         //     .db
@@ -2085,7 +2077,7 @@ impl GrpcServices for MyGRPCServices {
     // InventoryLog Services
     async fn create_inventory_log(
         &self,
-        request: Request<CreateInventoryLogRequest>,
+        _request: Request<CreateInventoryLogRequest>,
     ) -> Result<Response<InventoryLogsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2104,7 +2096,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_inventory_log(
         &self,
-        request: Request<SearchInventoryLogRequest>,
+        _request: Request<SearchInventoryLogRequest>,
     ) -> Result<Response<InventoryLogsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2123,7 +2115,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_inventory_log(
         &self,
-        request: Request<UpdateInventoryLogRequest>,
+        _request: Request<UpdateInventoryLogRequest>,
     ) -> Result<Response<InventoryLogsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2142,7 +2134,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_inventory_log(
         &self,
-        request: Request<DeleteInventoryLogRequest>,
+        _request: Request<DeleteInventoryLogRequest>,
     ) -> Result<Response<InventoryLogsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2162,7 +2154,7 @@ impl GrpcServices for MyGRPCServices {
     // Promotions Services
     async fn create_promotion(
         &self,
-        request: Request<CreatePromotionRequest>,
+        _request: Request<CreatePromotionRequest>,
     ) -> Result<Response<PromotionsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2180,7 +2172,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_promotion(
         &self,
-        request: Request<SearchPromotionRequest>,
+        _request: Request<SearchPromotionRequest>,
     ) -> Result<Response<PromotionsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2198,7 +2190,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_promotion(
         &self,
-        request: Request<UpdatePromotionRequest>,
+        _request: Request<UpdatePromotionRequest>,
     ) -> Result<Response<PromotionsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2216,7 +2208,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_promotion(
         &self,
-        request: Request<DeletePromotionRequest>,
+        _request: Request<DeletePromotionRequest>,
     ) -> Result<Response<PromotionsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2235,7 +2227,7 @@ impl GrpcServices for MyGRPCServices {
     // ShippingZones Services
     async fn create_shipping_zone(
         &self,
-        request: Request<CreateShippingZoneRequest>,
+        _request: Request<CreateShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
         // let txn = self
         //     .db
@@ -2254,7 +2246,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_shipping_zone(
         &self,
-        request: Request<SearchShippingZoneRequest>,
+        _request: Request<SearchShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
         // let txn = self
         //     .db
@@ -2273,7 +2265,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_shipping_zone(
         &self,
-        request: Request<UpdateShippingZoneRequest>,
+        _request: Request<UpdateShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
         // let txn = self
         //     .db
@@ -2292,7 +2284,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_shipping_zone(
         &self,
-        request: Request<DeleteShippingZoneRequest>,
+        _request: Request<DeleteShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
         // let txn = self
         //     .db
@@ -2312,7 +2304,7 @@ impl GrpcServices for MyGRPCServices {
     // PaymentMethods Services
     async fn create_payment_method(
         &self,
-        request: Request<CreatePaymentMethodRequest>,
+        _request: Request<CreatePaymentMethodRequest>,
     ) -> Result<Response<PaymentMethodsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2331,7 +2323,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_payment_method(
         &self,
-        request: Request<SearchPaymentMethodRequest>,
+        _request: Request<SearchPaymentMethodRequest>,
     ) -> Result<Response<PaymentMethodsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2350,7 +2342,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_payment_method(
         &self,
-        request: Request<UpdatePaymentMethodRequest>,
+        _request: Request<UpdatePaymentMethodRequest>,
     ) -> Result<Response<PaymentMethodsResponse>, Status> {
         // let txn = self
         //     .db
@@ -2369,7 +2361,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_payment_method(
         &self,
-        request: Request<DeletePaymentMethodRequest>,
+        _request: Request<DeletePaymentMethodRequest>,
     ) -> Result<Response<PaymentMethodsResponse>, Status> {
         // let txn = self
         //     .db
