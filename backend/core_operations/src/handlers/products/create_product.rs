@@ -5,7 +5,7 @@ use rust_decimal::{
     prelude::{FromPrimitive, ToPrimitive},
     Decimal,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection, EntityTrait, QueryResult};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
 use tonic::{Request, Response, Status};
 
 pub async fn create_product(

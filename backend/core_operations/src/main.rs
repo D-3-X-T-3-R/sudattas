@@ -1,6 +1,6 @@
 use core_operations::{check_auth, MyGRPCServices};
 use dotenv::dotenv;
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::transport::Server;
 
 pub mod handlers;
 
