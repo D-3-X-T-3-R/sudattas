@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::cart;
 use proto::proto::core::{CartItemResponse, CartItemsResponse, CreateCartItemRequest};
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection, EntityTrait, QueryResult};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
 use tonic::{Request, Response, Status};
 
 pub async fn create_cart_item(
