@@ -3,7 +3,6 @@ use dotenv::dotenv;
 use juniper::{EmptySubscription, RootNode};
 use reqwest::StatusCode;
 use tracing::{debug, info, warn};
-use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 use warp::{http::Response, reply, Filter, Rejection, Reply};
 
 use crate::security::jwt_validator::{validate_token, Claims};
@@ -34,16 +33,6 @@ fn schema() -> Schema {
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-
-    tracing_subscriber::fmt()
-        .with_level(true)
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_file(true)
-        .with_line_number(true)
-        .with_thread_ids(true)
-        .with_target(false)
-        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-        .init();
 
     let jwks = security::jwks_loader::load_jwks()
         .await

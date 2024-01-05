@@ -22,8 +22,8 @@ sleep 30
 gql_container_name="sudattas-GraohQL-$(openssl rand -hex 6)"
 core_operations_container_name="sudattas-core_operations-$(openssl rand -hex 6)"
 
-docker build -t my-graphql-app --target graphql-runner . 
-docker build -t my-core-operations-app --target core-operations-runner .
+docker build -t graphql-app-local --target graphql-runner . 
+docker build -t core-operations-app-local --target core-operations-runner .
 
-docker run --rm --name $gql_container_name -p 8080:8080 my-graphql-app &
-docker run --rm --name $core_operations_container_name -p 50051:50051 my-core-operations-app &
+docker run --name $gql_container_name -p 8080:8080 my-graphql-app &
+docker run --name $core_operations_container_name -p 50051:50051 my-core-operations-app &

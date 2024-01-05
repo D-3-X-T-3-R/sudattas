@@ -5,7 +5,7 @@ use rust_decimal::{
     prelude::{FromPrimitive, ToPrimitive},
     Decimal,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
 use tonic::{Request, Response, Status};
 
 pub async fn update_product(
