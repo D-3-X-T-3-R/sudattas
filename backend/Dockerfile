@@ -1,5 +1,5 @@
 # Use the official Rust image as a base
-FROM rust:latest as builder
+FROM rust:slim as builder
 
 # Install protobuf compiler
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
@@ -8,7 +8,6 @@ RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/ap
 WORKDIR /usr/src/app
 
 # Copy the entire workspace definition files
-COPY ./Cargo.lock .
 COPY ./Cargo.toml .
 
 # Copy all workspace members
@@ -17,11 +16,10 @@ COPY ./core_operations ./core_operations
 COPY ./protos ./protos
 COPY ./graphql ./graphql
 
-# Build the graphql binary
-RUN cargo build --release --package graphql
-
-# Build the core_operations binary
-RUN cargo build --release --package core_operations
+# Build the graphql and core_operations binary
+RUN cargo build --release --package graphql & \
+    cargo build --release --package core_operations & \
+    wait
 
 # Start a new stage from a minimal Debian image to reduce the final size
 FROM debian:bookworm-slim as graphql-runner
