@@ -8,7 +8,7 @@ pub type CoreDatabaseConnection = sea_orm::DatabaseConnection;
 pub mod entity;
 
 pub async fn get_db() -> Result<DatabaseConnection, DbErr> {
-    let conn_str = "mysql://root:12345678@host.docker.internal:3306/SUDATTAS";
+    let conn_str = "mysql://root:12345678@172.31.32.193:3306/SUDATTAS";
 
     info!("Connecting to database: {conn_str}");
 
