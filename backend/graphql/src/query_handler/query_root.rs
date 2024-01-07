@@ -5,6 +5,10 @@ use crate::resolvers::{
         self,
         schema::{Category, SearchCategory},
     },
+    orders::{
+        self,
+        schema::{Order, SearchOrder},
+    },
     product::{
         self,
         schema::{Product, SearchProduct},
@@ -36,6 +40,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_category(search: SearchCategory) -> FieldResult<Vec<Category>> {
         category::handlers::search_category(search)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Order
+    #[instrument(err, ret)]
+    async fn search_order(search: SearchOrder) -> FieldResult<Vec<Order>> {
+        orders::handlers::search_order(search)
             .await
             .map_err(|e| e.into())
     }
