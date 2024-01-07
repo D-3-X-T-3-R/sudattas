@@ -1,6 +1,10 @@
+#!/bin/bash
+
+echo "Running cargo clean..."
+cargo clean 
 
 prefix="sudattas"
-
+echo "Searching for containers to delete..."
 containers_to_delete=$(docker ps -a --format "{{.Names}}" | grep "^$prefix" | xargs)
 
 if [ -z "$containers_to_delete" ]; then
@@ -10,20 +14,26 @@ else
     docker rm -f $containers_to_delete
 fi
 
+echo "Building the database..."
 cd database/
-
 database_container_name=$(./run_database.sh)
-
 cd -
 
-echo "Wainting for Db build to complete..."
-sleep 30
+echo "Waiting for the database to build..."
+for i in {1..120}; do echo -ne '\033[1;32m#\033[0m'; sleep 0.25; done; echo
 
-gql_container_name="sudattas-GraohQL-$(openssl rand -hex 6)"
+echo "Setting up application containers..."
+gql_container_name="sudattas-GraphQL-$(openssl rand -hex 6)"
 core_operations_container_name="sudattas-core_operations-$(openssl rand -hex 6)"
 
-docker build -t graphql-app-local --target graphql-runner . 
-docker build -t core-operations-app-local --target core-operations-runner .
+echo "Building GraphQL app with no cache..."
+docker build --no-cache -t graphql-app-local --target graphql-runner . 
 
-docker run --name $gql_container_name -p 8080:8080 my-graphql-app &
-docker run --name $core_operations_container_name -p 50051:50051 my-core-operations-app &
+echo "Building Core Operations app with no cache..."
+docker build --no-cache -t core-operations-app-local --target core-operations-runner .
+
+echo "Running GraphQL container: $gql_container_name"
+docker run --name "$gql_container_name" -p 8080:8080 graphql-app-local &
+
+echo "Running Core Operations container: $core_operations_container_name"
+docker run --name "$core_operations_container_name" -p 50051:50051 core-operations-app-local &

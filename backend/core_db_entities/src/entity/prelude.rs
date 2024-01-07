@@ -9,6 +9,7 @@ pub use super::inventory::Entity as Inventory;
 pub use super::inventory_log::Entity as InventoryLog;
 pub use super::newsletter_subscribers::Entity as NewsletterSubscribers;
 pub use super::order_details::Entity as OrderDetails;
+pub use super::order_status::Entity as OrderStatus;
 pub use super::orders::Entity as Orders;
 pub use super::payment_methods::Entity as PaymentMethods;
 pub use super::product_attribute_mapping::Entity as ProductAttributeMapping;

@@ -18,7 +18,8 @@ service GRPCServices {
     rpc SearchProduct(SearchProductRequest) returns (ProductsResponse);
     rpc UpdateProduct(UpdateProductRequest) returns (ProductsResponse);
     rpc DeleteProduct(DeleteProductRequest) returns (ProductsResponse);
-
+    rpc GetProductsById(GetProductsByIdRequest) returns (ProductsResponse);
+    
     // Users
     rpc CreateUser(CreateUserRequest) returns (UsersResponse);
     rpc SearchUser(SearchUserRequest) returns (UsersResponse);
@@ -36,12 +37,12 @@ service GRPCServices {
     rpc SearchOrder(SearchOrderRequest) returns (OrdersResponse);
     rpc UpdateOrder(UpdateOrderRequest) returns (OrdersResponse);
     rpc DeleteOrder(DeleteOrderRequest) returns (OrdersResponse);
+    rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
 
     // OrderDetails
-    rpc CreateOrderDetail(CreateOrderDetailRequest) returns (OrderDetailsResponse);
+    rpc CreateOrderDetails(CreateOrderDetailsRequest) returns (OrderDetailsResponse);
     rpc SearchOrderDetail(SearchOrderDetailRequest) returns (OrderDetailsResponse);
     rpc UpdateOrderDetail(UpdateOrderDetailRequest) returns (OrderDetailsResponse);
-    rpc DeleteOrderDetail(DeleteOrderDetailRequest) returns (OrderDetailsResponse);
 
     // Reviews
     rpc CreateReview(CreateReviewRequest) returns (ReviewsResponse);

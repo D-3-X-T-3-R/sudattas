@@ -9,3 +9,6 @@ pub use delete_product::*;
 
 pub mod update_product;
 pub use update_product::*;
+
+pub mod get_product_by_ids;
+pub use get_product_by_ids::*;
