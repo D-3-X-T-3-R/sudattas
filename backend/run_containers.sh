@@ -1,7 +1,6 @@
 #!/bin/bash
 
-echo "Running cargo clean..."
-cargo clean 
+start_time=$(date +%s)
 
 prefix="sudattas"
 echo "Searching for containers to delete..."
@@ -26,14 +25,20 @@ echo "Setting up application containers..."
 gql_container_name="sudattas-GraphQL-$(openssl rand -hex 6)"
 core_operations_container_name="sudattas-core_operations-$(openssl rand -hex 6)"
 
-echo "Building GraphQL app with no cache..."
-docker build --no-cache -t graphql-app-local --target graphql-runner . 
+# echo "Building GraphQL app with no cache..."
+sudo docker build --no-cache -t graphql-app-local --target graphql-runner . 
 
 echo "Building Core Operations app with no cache..."
-docker build --no-cache -t core-operations-app-local --target core-operations-runner .
+sudo docker build --no-cache -t core-operations-app-local --target core-operations-runner .
 
-echo "Running GraphQL container: $gql_container_name"
-docker run --name "$gql_container_name" -p 8080:8080 graphql-app-local &
+echo "Saving Images"
+docker save sudattas_local:latest > sudattas_local.tar
+docker save core-operations-app-local:latest > core-operations-app-local.tar
+docker save graphql-app-local:latest > graphql-app-local.tar
 
-echo "Running Core Operations container: $core_operations_container_name"
-docker run --name "$core_operations_container_name" -p 50051:50051 core-operations-app-local &
+scp -r -i sudattas.pem *.tar ubuntu@13.233.125.216:/home/ubuntu/backend
+
+end_time=$(date +%s)
+runtime=$(($end_time - $start_time))
+
+echo "Time taken to execute : $runtime seconds"

@@ -32,7 +32,7 @@ FROM debian:bookworm-slim as graphql-runner
 ENV OAUTH_DOMAIN=https://dev-sudattas.eu.auth0.com/ \
     OAUTH_AUDIANCE=https://dev-sudattas.eu.auth0.com/api/v2/ \
     RUST_LOG=info \
-    GRPC_URL=grpc://host.docker.internal:50051 
+    GRPC_URL=grpc://172.31.32.193:50051 
 
 # Copy the graphql binary from the builder stage
 COPY --from=builder /usr/src/app/target/release/graphql /usr/local/bin/graphql
