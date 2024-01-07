@@ -10,40 +10,42 @@ pub async fn delete_cart_item(
 ) -> Result<Response<CartItemsResponse>, Status> {
     let req = request.into_inner();
 
-    let cart_item = cart::Entity::find_by_id(req.cart_id).one(db).await;
+    let cart_item = cart::Entity::find()
+        .filter(cart::Column::UserId.eq(req.user_id))
+        .all(db)
+        .await;
 
     match cart_item {
-        Ok(Some(item)) => {
+        Ok(item) => {
             match cart::Entity::delete_many()
-                .filter(cart::Column::CartId.eq(req.cart_id))
+                .filter(cart::Column::UserId.eq(req.user_id))
                 .exec(db)
                 .await
             {
                 Ok(delete_result) => {
                     if delete_result.rows_affected > 0 {
                         let response = CartItemsResponse {
-                            items: vec![CartItemResponse {
-                                cart_id: item.cart_id,
-                                product_id: item.product_id,
-                                quantity: item.quantity,
-                                user_id: item.user_id,
-                            }],
+                            items: item
+                                .into_iter()
+                                .map(|model| CartItemResponse {
+                                    cart_id: model.cart_id,
+                                    product_id: model.product_id,
+                                    quantity: model.quantity,
+                                    user_id: model.user_id,
+                                })
+                                .collect(),
                         };
                         Ok(Response::new(response))
                     } else {
                         Err(Status::not_found(format!(
                             "Cart item with ID {} not found.",
-                            req.cart_id
+                            req.user_id
                         )))
                     }
                 }
                 Err(e) => Err(map_db_error_to_status(e)),
             }
         }
-        Ok(None) => Err(Status::not_found(format!(
-            "Cart item with ID {} not found.",
-            req.cart_id
-        ))),
         Err(e) => Err(map_db_error_to_status(e)),
     }
 }

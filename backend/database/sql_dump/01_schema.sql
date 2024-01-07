@@ -91,7 +91,7 @@ CREATE TABLE `Orders` (
     `OrderID` bigint NOT NULL AUTO_INCREMENT,
     `UserID` bigint NOT NULL,
     `OrderDate` timestamp NOT NULL,
-    `ShippingAddress` text,
+    `ShippingAddress` text NOT NULL,
     `TotalAmount` decimal(10,2) NOT NULL,
     `StatusID` bigint NOT NULL,
     PRIMARY KEY (`OrderID`),

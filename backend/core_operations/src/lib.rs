@@ -4,7 +4,7 @@ use proto::proto::core::{
     grpc_services_server::GrpcServices, CartItemsResponse, CategoriesResponse, ColorsResponse,
     CreateCartItemRequest, CreateCategoryRequest, CreateColorRequest, CreateDiscountRequest,
     CreateEventLogRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
-    CreateNewsletterSubscriberRequest, CreateOrderDetailRequest, CreateOrderRequest,
+    CreateNewsletterSubscriberRequest, CreateOrderDetailsRequest, CreateOrderRequest,
     CreatePaymentMethodRequest, CreateProductAttributeMappingRequest,
     CreateProductAttributeRequest, CreateProductCategoryMappingRequest,
     CreateProductColorMappingRequest, CreateProductImageRequest, CreateProductRatingRequest,
@@ -14,8 +14,8 @@ use proto::proto::core::{
     CreateUserActivityRequest, CreateUserRequest, CreateUserRoleMappingRequest,
     CreateUserRoleRequest, CreateWishlistItemRequest, DeleteCartItemRequest, DeleteCategoryRequest,
     DeleteColorRequest, DeleteDiscountRequest, DeleteEventLogRequest, DeleteInventoryItemRequest,
-    DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOrderDetailRequest,
-    DeleteOrderRequest, DeletePaymentMethodRequest, DeleteProductAttributeMappingRequest,
+    DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOrderRequest,
+    DeletePaymentMethodRequest, DeleteProductAttributeMappingRequest,
     DeleteProductAttributeRequest, DeleteProductCategoryMappingRequest,
     DeleteProductColorMappingRequest, DeleteProductImageRequest, DeleteProductRatingRequest,
     DeleteProductRequest, DeleteProductSizeMappingRequest, DeleteProductVariantRequest,
@@ -23,15 +23,15 @@ use proto::proto::core::{
     DeleteShippingZoneRequest, DeleteSizeRequest, DeleteSupplierRequest, DeleteTransactionRequest,
     DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleMappingRequest,
     DeleteUserRoleRequest, DeleteWishlistItemRequest, DiscountsResponse, EventLogsResponse,
-    GetCartItemsRequest, InventoryItemsResponse, InventoryLogsResponse,
+    GetCartItemsRequest, GetProductsByIdRequest, InventoryItemsResponse, InventoryLogsResponse,
     NewsletterSubscribersResponse, OrderDetailsResponse, OrdersResponse, PaymentMethodsResponse,
-    ProductAttributeMappingsResponse, ProductAttributesResponse, ProductCategoryMappingsResponse,
-    ProductColorMappingsResponse, ProductImagesResponse, ProductRatingsResponse,
-    ProductSizeMappingsResponse, ProductVariantsResponse, ProductsResponse, PromotionsResponse,
-    ReviewsResponse, SearchCategoryRequest, SearchColorRequest, SearchDiscountRequest,
-    SearchEventLogRequest, SearchInventoryItemRequest, SearchInventoryLogRequest,
-    SearchNewsletterSubscriberRequest, SearchOrderDetailRequest, SearchOrderRequest,
-    SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
+    PlaceOrderRequest, ProductAttributeMappingsResponse, ProductAttributesResponse,
+    ProductCategoryMappingsResponse, ProductColorMappingsResponse, ProductImagesResponse,
+    ProductRatingsResponse, ProductSizeMappingsResponse, ProductVariantsResponse, ProductsResponse,
+    PromotionsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
+    SearchDiscountRequest, SearchEventLogRequest, SearchInventoryItemRequest,
+    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOrderDetailRequest,
+    SearchOrderRequest, SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
     SearchProductAttributeRequest, SearchProductCategoryMappingRequest,
     SearchProductColorMappingRequest, SearchProductImageRequest, SearchProductRatingRequest,
     SearchProductRequest, SearchProductSizeMappingRequest, SearchProductVariantRequest,
@@ -56,6 +56,7 @@ use sea_orm::TransactionTrait;
 use tonic::{Request, Response, Status};
 
 mod handlers;
+mod procedures;
 
 #[derive(Default, Debug)]
 pub struct MyGRPCServices {
@@ -241,6 +242,23 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::products::search_product(self.db.as_ref().unwrap(), request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_products_by_id(
+        &self,
+        request: Request<GetProductsByIdRequest>,
+    ) -> Result<Response<ProductsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::products::get_products_by_id(self.db.as_ref().unwrap(), request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -478,9 +496,9 @@ impl GrpcServices for MyGRPCServices {
     // Order Services
     async fn create_order(
         &self,
-        _request: Request<CreateOrderRequest>,
+        request: Request<CreateOrderRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
-        /* let txn = self
+        let txn = self
             .db
             .as_ref()
             .unwrap()
@@ -489,15 +507,30 @@ impl GrpcServices for MyGRPCServices {
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::create_order(self.db.as_ref().unwrap(), request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res) */
-        todo!()
+        Ok(res)
+    }
+
+    async fn place_order(
+        &self,
+        request: Request<PlaceOrderRequest>,
+    ) -> Result<Response<OrdersResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = procedures::orders::place_order(self.db.as_ref().unwrap(), request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_order(
         &self,
-        _request: Request<SearchOrderRequest>,
+        request: Request<SearchOrderRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
-        /* let txn = self
+        let txn = self
             .db
             .as_ref()
             .unwrap()
@@ -506,15 +539,14 @@ impl GrpcServices for MyGRPCServices {
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::search_order(self.db.as_ref().unwrap(), request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res) */
-        todo!()
+        Ok(res)
     }
 
     async fn update_order(
         &self,
-        _request: Request<UpdateOrderRequest>,
+        request: Request<UpdateOrderRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
-        /* let txn = self
+        let txn = self
             .db
             .as_ref()
             .unwrap()
@@ -523,15 +555,14 @@ impl GrpcServices for MyGRPCServices {
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::update_order(self.db.as_ref().unwrap(), request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res) */
-        todo!()
+        Ok(res)
     }
 
     async fn delete_order(
         &self,
-        _request: Request<DeleteOrderRequest>,
+        request: Request<DeleteOrderRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
-        /* let txn = self
+        let txn = self
             .db
             .as_ref()
             .unwrap()
@@ -540,81 +571,59 @@ impl GrpcServices for MyGRPCServices {
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::delete_order(self.db.as_ref().unwrap(), request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res) */
-        todo!()
+        Ok(res)
     }
 
     // OrderDetails Services
-    async fn create_order_detail(
+    async fn create_order_details(
         &self,
-        _request: Request<CreateOrderDetailRequest>,
+        request: Request<CreateOrderDetailsRequest>,
     ) -> Result<Response<OrderDetailsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::order_details::create_order_detail(self.db.as_ref().unwrap(), request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::order_details::create_order_details(self.db.as_ref().unwrap(), request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_order_detail(
         &self,
-        _request: Request<SearchOrderDetailRequest>,
+        request: Request<SearchOrderDetailRequest>,
     ) -> Result<Response<OrderDetailsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::order_details::search_order_detail(self.db.as_ref().unwrap(), request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::order_details::search_order_detail(self.db.as_ref().unwrap(), request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_order_detail(
         &self,
-        _request: Request<UpdateOrderDetailRequest>,
+        request: Request<UpdateOrderDetailRequest>,
     ) -> Result<Response<OrderDetailsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::order_details::update_order_detail(self.db.as_ref().unwrap(), request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
-    }
-
-    async fn delete_order_detail(
-        &self,
-        _request: Request<DeleteOrderDetailRequest>,
-    ) -> Result<Response<OrderDetailsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::order_details::delete_order_detail(self.db.as_ref().unwrap(), request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::order_details::update_order_detail(self.db.as_ref().unwrap(), request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Reviews Services

@@ -12,18 +12,26 @@ pub struct Model {
     pub user_id: i64,
     #[sea_orm(column_name = "OrderDate")]
     pub order_date: DateTimeUtc,
-    #[sea_orm(column_name = "ShippingAddress", column_type = "Text", nullable)]
-    pub shipping_address: Option<String>,
+    #[sea_orm(column_name = "ShippingAddress", column_type = "Text")]
+    pub shipping_address: String,
     #[sea_orm(column_name = "TotalAmount", column_type = "Decimal(Some((10, 2)))")]
     pub total_amount: Decimal,
-    #[sea_orm(column_name = "Status")]
-    pub status: Option<String>,
+    #[sea_orm(column_name = "StatusID")]
+    pub status_id: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(has_many = "super::order_details::Entity")]
     OrderDetails,
+    #[sea_orm(
+        belongs_to = "super::order_status::Entity",
+        from = "Column::StatusId",
+        to = "super::order_status::Column::StatusId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    OrderStatus,
     #[sea_orm(
         belongs_to = "super::users::Entity",
         from = "Column::UserId",
@@ -37,6 +45,12 @@ pub enum Relation {
 impl Related<super::order_details::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::OrderDetails.def()
+    }
+}
+
+impl Related<super::order_status::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OrderStatus.def()
     }
 }
 

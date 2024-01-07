@@ -11,6 +11,7 @@ pub mod inventory;
 pub mod inventory_log;
 pub mod newsletter_subscribers;
 pub mod order_details;
+pub mod order_status;
 pub mod orders;
 pub mod payment_methods;
 pub mod product_attribute_mapping;

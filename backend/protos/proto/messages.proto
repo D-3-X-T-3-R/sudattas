@@ -23,7 +23,7 @@ message UpdateCartItemRequest {
 }
 
 message DeleteCartItemRequest {
-    int64 cart_id = 1;
+    int64 user_id = 1;
 }
 
 message CartItemResponse {
@@ -55,6 +55,10 @@ message SearchProductRequest {
     optional int64 category_id = 5;
     optional double ending_price = 6;
     optional int64 product_id = 7;
+}
+
+message GetProductsByIdRequest {
+    repeated int64 product_ids = 1;
 }
 
 message UpdateProductRequest {
@@ -157,23 +161,32 @@ message CategoriesResponse {
 
 // Orders
 
+message PlaceOrderRequest{
+    string shipping_address = 1;
+    int64 user_id = 2;
+
+}
 message CreateOrderRequest {
     int64 user_id = 1;
     string shipping_address = 2;
-    double total_amount = 3;
-    int64 status_id = 4;
+    int64 status_id = 3;
+    double total_amount = 4;
 }
 
 message SearchOrderRequest {
-    int64 order_id = 1;
+    optional int64 order_id = 1;
+    int64 user_id = 2;
+    optional int64 order_date_start = 3;
+    optional int64 order_date_end = 4;
+    optional int64 status_id = 5;
 }
 
 message UpdateOrderRequest {
     int64 order_id = 1;
-    optional int64 user_id = 2;
-    optional string shipping_address = 3;
-    optional double total_amount = 4;
-    optional int64 status_id = 5;
+    int64 user_id = 2;
+    string shipping_address = 3;
+    double total_amount = 4;
+    int64 status_id = 5;
 }
 
 message DeleteOrderRequest {
@@ -202,20 +215,25 @@ message CreateOrderDetailRequest {
     double price = 4;
 }
 
+message CreateOrderDetailsRequest {
+    repeated CreateOrderDetailRequest order_details = 1;
+}
+
 message SearchOrderDetailRequest {
-    int64 order_detail_id = 1;
+    optional int64 order_detail_id = 1;
+    optional int64 order_id = 2;
+    optional int64 product_id = 3;
+    optional int64 quantity = 4;
+    optional double price_start = 5;
+    optional double price_end = 6;
 }
 
 message UpdateOrderDetailRequest {
     int64 order_detail_id = 1;
-    optional int64 order_id = 2;
-    optional int64 product_id = 3;
-    optional int64 quantity = 4;
-    optional double price = 5;
-}
-
-message DeleteOrderDetailRequest {
-    int64 order_detail_id = 1;
+    int64 order_id = 2;
+    int64 product_id = 3;
+    int64 quantity = 4;
+    double price = 5;
 }
 
 message OrderDetailResponse {
