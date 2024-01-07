@@ -1,9 +1,6 @@
 use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 
-use crate::resolvers::{
-    category::schema::{Category, SearchCategory},
-    product::schema::{Product, SearchProduct},
-};
+use crate::resolvers::product::schema::{Product, SearchProduct};
 
 #[derive(Default, Debug, Clone)]
 pub struct OrderDetails {
