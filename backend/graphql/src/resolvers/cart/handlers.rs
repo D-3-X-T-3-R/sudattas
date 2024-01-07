@@ -74,15 +74,15 @@ pub(crate) async fn get_cart_items(user_id: String) -> Result<Vec<Cart>, GqlErro
         .collect())
 }
 
-pub(crate) async fn delete_cart_item(cart_id: String) -> Result<Vec<Cart>, GqlError> {
+pub(crate) async fn delete_cart_item(user_id: String) -> Result<Vec<Cart>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
-    let cart_id = cart_id
+    let user_id = user_id
         .parse::<i64>()
         .map_err(|_| GqlError::new("Failed to parse cart id", Code::InvalidArgument))?;
 
     let response = client
-        .delete_cart_item(DeleteCartItemRequest { cart_id })
+        .delete_cart_item(DeleteCartItemRequest { user_id })
         .await
         .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
 

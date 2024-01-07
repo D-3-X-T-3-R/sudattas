@@ -8,6 +8,10 @@ use crate::resolvers::{
         self,
         schema::{Category, CategoryMutation, NewCategory},
     },
+    orders::{
+        self,
+        schema::{NewOrder, Order, OrderMutation},
+    },
     product::{
         self,
         schema::{NewProduct, Product, ProductMutation},
@@ -28,8 +32,8 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn delete_cart_item(cart_id: String) -> FieldResult<Vec<Cart>> {
-        cart::handlers::delete_cart_item(cart_id)
+    async fn delete_cart_item(user_id: String) -> FieldResult<Vec<Cart>> {
+        cart::handlers::delete_cart_item(user_id)
             .await
             .map_err(|e| e.into())
     }
@@ -81,6 +85,28 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn update_category(category: CategoryMutation) -> FieldResult<Vec<Category>> {
         category::handlers::update_category(category)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Order
+    #[instrument(err, ret)]
+    async fn place_order(order: NewOrder) -> FieldResult<Vec<Order>> {
+        orders::handlers::place_order(order)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_order(order_id: String) -> FieldResult<Vec<Order>> {
+        orders::handlers::delete_order(order_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_order(order: OrderMutation) -> FieldResult<Vec<Order>> {
+        orders::handlers::update_order(order)
             .await
             .map_err(|e| e.into())
     }

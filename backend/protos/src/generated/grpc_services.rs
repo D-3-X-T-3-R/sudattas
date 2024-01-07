@@ -34,7 +34,7 @@ pub struct UpdateCartItemRequest {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeleteCartItemRequest {
     #[prost(int64, tag = "1")]
-    pub cart_id: i64,
+    pub user_id: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -89,6 +89,13 @@ pub struct SearchProductRequest {
     pub ending_price: ::core::option::Option<f64>,
     #[prost(int64, optional, tag = "7")]
     pub product_id: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetProductsByIdRequest {
+    #[prost(int64, repeated, tag = "1")]
+    pub product_ids: ::prost::alloc::vec::Vec<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -265,22 +272,39 @@ pub struct CategoriesResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PlaceOrderRequest {
+    #[prost(string, tag = "1")]
+    pub shipping_address: ::prost::alloc::string::String,
+    #[prost(int64, tag = "2")]
+    pub user_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateOrderRequest {
     #[prost(int64, tag = "1")]
     pub user_id: i64,
     #[prost(string, tag = "2")]
     pub shipping_address: ::prost::alloc::string::String,
-    #[prost(double, tag = "3")]
-    pub total_amount: f64,
-    #[prost(int64, tag = "4")]
+    #[prost(int64, tag = "3")]
     pub status_id: i64,
+    #[prost(double, tag = "4")]
+    pub total_amount: f64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SearchOrderRequest {
-    #[prost(int64, tag = "1")]
-    pub order_id: i64,
+    #[prost(int64, optional, tag = "1")]
+    pub order_id: ::core::option::Option<i64>,
+    #[prost(int64, tag = "2")]
+    pub user_id: i64,
+    #[prost(int64, optional, tag = "3")]
+    pub order_date_start: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "4")]
+    pub order_date_end: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "5")]
+    pub status_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -288,14 +312,14 @@ pub struct SearchOrderRequest {
 pub struct UpdateOrderRequest {
     #[prost(int64, tag = "1")]
     pub order_id: i64,
-    #[prost(int64, optional, tag = "2")]
-    pub user_id: ::core::option::Option<i64>,
-    #[prost(string, optional, tag = "3")]
-    pub shipping_address: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(double, optional, tag = "4")]
-    pub total_amount: ::core::option::Option<f64>,
-    #[prost(int64, optional, tag = "5")]
-    pub status_id: ::core::option::Option<i64>,
+    #[prost(int64, tag = "2")]
+    pub user_id: i64,
+    #[prost(string, tag = "3")]
+    pub shipping_address: ::prost::alloc::string::String,
+    #[prost(double, tag = "4")]
+    pub total_amount: f64,
+    #[prost(int64, tag = "5")]
+    pub status_id: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -344,16 +368,16 @@ pub struct CreateOrderDetailRequest {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SearchOrderDetailRequest {
-    #[prost(int64, tag = "1")]
-    pub order_detail_id: i64,
+pub struct CreateOrderDetailsRequest {
+    #[prost(message, repeated, tag = "1")]
+    pub order_details: ::prost::alloc::vec::Vec<CreateOrderDetailRequest>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateOrderDetailRequest {
-    #[prost(int64, tag = "1")]
-    pub order_detail_id: i64,
+pub struct SearchOrderDetailRequest {
+    #[prost(int64, optional, tag = "1")]
+    pub order_detail_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "2")]
     pub order_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "3")]
@@ -361,14 +385,24 @@ pub struct UpdateOrderDetailRequest {
     #[prost(int64, optional, tag = "4")]
     pub quantity: ::core::option::Option<i64>,
     #[prost(double, optional, tag = "5")]
-    pub price: ::core::option::Option<f64>,
+    pub price_start: ::core::option::Option<f64>,
+    #[prost(double, optional, tag = "6")]
+    pub price_end: ::core::option::Option<f64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct DeleteOrderDetailRequest {
+pub struct UpdateOrderDetailRequest {
     #[prost(int64, tag = "1")]
     pub order_detail_id: i64,
+    #[prost(int64, tag = "2")]
+    pub order_id: i64,
+    #[prost(int64, tag = "3")]
+    pub product_id: i64,
+    #[prost(int64, tag = "4")]
+    pub quantity: i64,
+    #[prost(double, tag = "5")]
+    pub price: f64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2092,6 +2126,33 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "DeleteProduct"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_products_by_id(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetProductsByIdRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ProductsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/GetProductsById",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "GetProductsById"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         /// Users
         pub async fn create_user(
             &mut self,
@@ -2371,10 +2432,32 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "DeleteOrder"));
             self.inner.unary(req, path, codec).await
         }
-        /// OrderDetails
-        pub async fn create_order_detail(
+        pub async fn place_order(
             &mut self,
-            request: impl tonic::IntoRequest<super::CreateOrderDetailRequest>,
+            request: impl tonic::IntoRequest<super::PlaceOrderRequest>,
+        ) -> std::result::Result<tonic::Response<super::OrdersResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/PlaceOrder",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "PlaceOrder"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// OrderDetails
+        pub async fn create_order_details(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CreateOrderDetailsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::OrderDetailsResponse>,
             tonic::Status,
@@ -2390,12 +2473,12 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/CreateOrderDetail",
+                "/grpc_services.GRPCServices/CreateOrderDetails",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new("grpc_services.GRPCServices", "CreateOrderDetail"),
+                    GrpcMethod::new("grpc_services.GRPCServices", "CreateOrderDetails"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -2450,33 +2533,6 @@ pub mod grpc_services_client {
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new("grpc_services.GRPCServices", "UpdateOrderDetail"),
-                );
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn delete_order_detail(
-            &mut self,
-            request: impl tonic::IntoRequest<super::DeleteOrderDetailRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::OrderDetailsResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/DeleteOrderDetail",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("grpc_services.GRPCServices", "DeleteOrderDetail"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -5235,6 +5291,13 @@ pub mod grpc_services_server {
             tonic::Response<super::ProductsResponse>,
             tonic::Status,
         >;
+        async fn get_products_by_id(
+            &self,
+            request: tonic::Request<super::GetProductsByIdRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ProductsResponse>,
+            tonic::Status,
+        >;
         /// Users
         async fn create_user(
             &self,
@@ -5298,10 +5361,14 @@ pub mod grpc_services_server {
             &self,
             request: tonic::Request<super::DeleteOrderRequest>,
         ) -> std::result::Result<tonic::Response<super::OrdersResponse>, tonic::Status>;
-        /// OrderDetails
-        async fn create_order_detail(
+        async fn place_order(
             &self,
-            request: tonic::Request<super::CreateOrderDetailRequest>,
+            request: tonic::Request<super::PlaceOrderRequest>,
+        ) -> std::result::Result<tonic::Response<super::OrdersResponse>, tonic::Status>;
+        /// OrderDetails
+        async fn create_order_details(
+            &self,
+            request: tonic::Request<super::CreateOrderDetailsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::OrderDetailsResponse>,
             tonic::Status,
@@ -5316,13 +5383,6 @@ pub mod grpc_services_server {
         async fn update_order_detail(
             &self,
             request: tonic::Request<super::UpdateOrderDetailRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::OrderDetailsResponse>,
-            tonic::Status,
-        >;
-        async fn delete_order_detail(
-            &self,
-            request: tonic::Request<super::DeleteOrderDetailRequest>,
         ) -> std::result::Result<
             tonic::Response<super::OrderDetailsResponse>,
             tonic::Status,
@@ -6458,6 +6518,53 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
+                "/grpc_services.GRPCServices/GetProductsById" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetProductsByIdSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::GetProductsByIdRequest>
+                    for GetProductsByIdSvc<T> {
+                        type Response = super::ProductsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetProductsByIdRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::get_products_by_id(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetProductsByIdSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/grpc_services.GRPCServices/CreateUser" => {
                     #[allow(non_camel_case_types)]
                     struct CreateUserSvc<T: GrpcServices>(pub Arc<T>);
@@ -7010,13 +7117,59 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/CreateOrderDetail" => {
+                "/grpc_services.GRPCServices/PlaceOrder" => {
                     #[allow(non_camel_case_types)]
-                    struct CreateOrderDetailSvc<T: GrpcServices>(pub Arc<T>);
+                    struct PlaceOrderSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<super::CreateOrderDetailRequest>
-                    for CreateOrderDetailSvc<T> {
+                    > tonic::server::UnaryService<super::PlaceOrderRequest>
+                    for PlaceOrderSvc<T> {
+                        type Response = super::OrdersResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::PlaceOrderRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::place_order(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = PlaceOrderSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/CreateOrderDetails" => {
+                    #[allow(non_camel_case_types)]
+                    struct CreateOrderDetailsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::CreateOrderDetailsRequest>
+                    for CreateOrderDetailsSvc<T> {
                         type Response = super::OrderDetailsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -7024,11 +7177,11 @@ pub mod grpc_services_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::CreateOrderDetailRequest>,
+                            request: tonic::Request<super::CreateOrderDetailsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::create_order_detail(&inner, request)
+                                <T as GrpcServices>::create_order_details(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -7041,7 +7194,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = CreateOrderDetailSvc(inner);
+                        let method = CreateOrderDetailsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -7136,53 +7289,6 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateOrderDetailSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/grpc_services.GRPCServices/DeleteOrderDetail" => {
-                    #[allow(non_camel_case_types)]
-                    struct DeleteOrderDetailSvc<T: GrpcServices>(pub Arc<T>);
-                    impl<
-                        T: GrpcServices,
-                    > tonic::server::UnaryService<super::DeleteOrderDetailRequest>
-                    for DeleteOrderDetailSvc<T> {
-                        type Response = super::OrderDetailsResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::DeleteOrderDetailRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as GrpcServices>::delete_order_detail(&inner, request)
-                                    .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = DeleteOrderDetailSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
