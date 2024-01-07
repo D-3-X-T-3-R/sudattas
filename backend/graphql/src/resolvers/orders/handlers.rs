@@ -7,7 +7,7 @@ use tracing::instrument;
 use super::schema::{NewOrder, Order, OrderMutation, SearchOrder};
 use crate::resolvers::{
     error::{Code, GqlError},
-    utils::{connect_grpc_client, to_f64, to_i64, to_option_f64, to_option_i64},
+    utils::{connect_grpc_client, to_f64, to_i64, to_option_i64},
 };
 
 #[instrument]

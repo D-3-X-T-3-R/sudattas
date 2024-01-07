@@ -1,18 +1,16 @@
 use crate::handlers::cart::delete_cart_item;
-use crate::handlers::db_errors::map_db_error_to_status;
+
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
     products::get_products_by_id,
 };
-use chrono::Utc;
-use core_db_entities::entity::orders;
+
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderRequest, DeleteCartItemRequest,
     GetCartItemsRequest, GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
 };
-use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
-use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
+
+use sea_orm::{ActiveModelTrait, DatabaseConnection};
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
