@@ -9,11 +9,11 @@ cd -
 
 echo "Setting up application containers..."
 
-# echo "Building GraphQL app with no cache..."
-sudo docker build --no-cache -t graphql-app-local --target graphql-runner . 
+echo "Building GraphQL app with no cache..."
+sudo docker build --no-cache -f Dockerfile.gq -t graphql-app-local --target graphql-runner . 
 
 echo "Building Core Operations app with no cache..."
-sudo docker build --no-cache -t core-operations-app-local --target core-operations-runner .
+sudo docker build --no-cache -f Dockerfile.core_ops -t core-operations-app-local --target core-operations-runner .
 
 echo "Saving Images"
 docker save sudattas-database-local:latest > sudattas-database-local.tar
