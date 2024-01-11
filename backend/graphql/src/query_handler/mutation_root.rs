@@ -2,7 +2,7 @@ use super::Context;
 use crate::resolvers::{
     cart::{
         self,
-        schema::{Cart, CartMutation, NewCart},
+        schema::{Cart, CartMutation, DeleteCartItem, NewCart},
     },
     category::{
         self,
@@ -15,6 +15,10 @@ use crate::resolvers::{
     product::{
         self,
         schema::{NewProduct, Product, ProductMutation},
+    },
+    wishlist::{
+        self,
+        schema::{DeleteWishlistItem, NewWishlistItem, WishlistItem},
     },
 };
 use juniper::FieldResult;
@@ -32,8 +36,8 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn delete_cart_item(user_id: String) -> FieldResult<Vec<Cart>> {
-        cart::handlers::delete_cart_item(user_id)
+    async fn delete_cart_item(delete: DeleteCartItem) -> FieldResult<Vec<Cart>> {
+        cart::handlers::delete_cart_item(delete)
             .await
             .map_err(|e| e.into())
     }
@@ -107,6 +111,21 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn update_order(order: OrderMutation) -> FieldResult<Vec<Order>> {
         orders::handlers::update_order(order)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Wishlist
+    #[instrument(err, ret)]
+    async fn add_wishlist_item(wishlist: NewWishlistItem) -> FieldResult<Vec<WishlistItem>> {
+        wishlist::handlers::add_wishlist_item(wishlist)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_wishlist_item(delete: DeleteWishlistItem) -> FieldResult<Vec<WishlistItem>> {
+        wishlist::handlers::delete_wishlist_item(delete)
             .await
             .map_err(|e| e.into())
     }
