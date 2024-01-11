@@ -10,18 +10,18 @@ use proto::proto::core::{
     GetCartItemsRequest, GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
 };
 
-use sea_orm::{ActiveModelTrait, DatabaseConnection};
+use sea_orm::{ActiveModelTrait, DatabaseTransaction};
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
 pub async fn place_order(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<PlaceOrderRequest>,
 ) -> Result<Response<OrdersResponse>, Status> {
     let req = request.into_inner();
 
     let cart_items = get_cart_items(
-        db,
+        txn,
         Request::new(GetCartItemsRequest {
             user_id: req.user_id,
         }),
@@ -36,7 +36,7 @@ pub async fn place_order(
         .unzip();
 
     let order_products =
-        get_products_by_id(db, Request::new(GetProductsByIdRequest { product_ids }))
+        get_products_by_id(txn, Request::new(GetProductsByIdRequest { product_ids }))
             .await?
             .into_inner()
             .items;
@@ -51,7 +51,7 @@ pub async fn place_order(
         .sum::<f64>();
 
     let create_order = create_order(
-        db,
+        txn,
         Request::new(CreateOrderRequest {
             shipping_address: req.shipping_address,
             status_id: 2, // Always start with order status is processing
@@ -81,7 +81,7 @@ pub async fn place_order(
     }
 
     let _ = create_order_details(
-        db,
+        txn,
         Request::new(CreateOrderDetailsRequest { order_details }),
     )
     .await?
@@ -89,9 +89,10 @@ pub async fn place_order(
     .items;
 
     let _ = delete_cart_item(
-        db,
+        txn,
         Request::new(DeleteCartItemRequest {
             user_id: req.user_id,
+            cart_id: None,
         }),
     )
     .await?

@@ -1,11 +1,11 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::categories;
 use proto::proto::core::{CategoriesResponse, CategoryResponse, CreateCategoryRequest};
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
 pub async fn create_category(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<CreateCategoryRequest>,
 ) -> Result<Response<CategoriesResponse>, Status> {
     let req = request.into_inner();
@@ -14,7 +14,7 @@ pub async fn create_category(
         name: ActiveValue::Set(req.name),
     };
 
-    match product.insert(db).await {
+    match product.insert(txn).await {
         Ok(model) => {
             let response = CategoriesResponse {
                 items: vec![CategoryResponse {

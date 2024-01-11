@@ -5,11 +5,11 @@ use rust_decimal::{
     prelude::{FromPrimitive, ToPrimitive},
     Decimal,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
 pub async fn create_product(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<CreateProductRequest>,
 ) -> Result<Response<ProductsResponse>, Status> {
     let req = request.into_inner();
@@ -21,7 +21,7 @@ pub async fn create_product(
         stock_quantity: ActiveValue::Set(req.stock_quantity),
         category_id: ActiveValue::Set(req.category_id),
     };
-    match product.insert(db).await {
+    match product.insert(txn).await {
         Ok(model) => {
             let response = ProductsResponse {
                 items: vec![ProductResponse {

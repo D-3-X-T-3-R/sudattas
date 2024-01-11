@@ -1,18 +1,18 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::cart;
 use proto::proto::core::{CartItemResponse, CartItemsResponse, GetCartItemsRequest};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn get_cart_items(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<GetCartItemsRequest>,
 ) -> Result<Response<CartItemsResponse>, Status> {
     let req = request.into_inner();
 
     match cart::Entity::find()
         .filter(cart::Column::UserId.eq(req.user_id))
-        .all(db)
+        .all(txn)
         .await
     {
         Ok(cart_models) => {

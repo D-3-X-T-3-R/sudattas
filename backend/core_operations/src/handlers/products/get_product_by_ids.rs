@@ -2,18 +2,18 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::products;
 use proto::proto::core::{GetProductsByIdRequest, ProductResponse, ProductsResponse};
 use rust_decimal::{prelude::ToPrimitive, Decimal};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn get_products_by_id(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<GetProductsByIdRequest>,
 ) -> Result<Response<ProductsResponse>, Status> {
     let req = request.into_inner();
 
     match products::Entity::find()
         .filter(products::Column::ProductId.is_in(req.product_ids))
-        .all(db)
+        .all(txn)
         .await
     {
         Ok(models) => {

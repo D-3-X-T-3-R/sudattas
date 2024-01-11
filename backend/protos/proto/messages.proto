@@ -24,6 +24,7 @@ message UpdateCartItemRequest {
 
 message DeleteCartItemRequest {
     int64 user_id = 1;
+    optional int64 cart_id = 2;
 }
 
 message CartItemResponse {
@@ -392,25 +393,21 @@ message InventoryItemsResponse {
 
 // Wishlist
 
-message CreateWishlistItemRequest {
+message AddWishlistItemRequest {
     int64 user_id = 1;
     int64 product_id = 2;
-    string date_added = 3;
 }
 
 message SearchWishlistItemRequest {
-    int64 wishlist_id = 1;
-}
-
-message UpdateWishlistItemRequest {
-    int64 wishlist_id = 1;
-    optional int64 user_id = 2;
+    optional int64 wishlist_id = 1;
+    int64 user_id = 2;
     optional int64 product_id = 3;
-    optional string date_added = 4;
+
 }
 
 message DeleteWishlistItemRequest {
     int64 wishlist_id = 1;
+    int64 user_id = 2;
 }
 
 message WishlistItemResponse {
