@@ -69,9 +69,8 @@ service GRPCServices {
     rpc DeleteInventoryItem(DeleteInventoryItemRequest) returns (InventoryItemsResponse);
 
     // Wishlist
-    rpc CreateWishlistItem(CreateWishlistItemRequest) returns (WishlistItemsResponse);
+    rpc AddWishlistItem(AddWishlistItemRequest) returns (WishlistItemsResponse);
     rpc SearchWishlistItem(SearchWishlistItemRequest) returns (WishlistItemsResponse);
-    rpc UpdateWishlistItem(UpdateWishlistItemRequest) returns (WishlistItemsResponse);
     rpc DeleteWishlistItem(DeleteWishlistItemRequest) returns (WishlistItemsResponse);
 
     // ProductAttributes

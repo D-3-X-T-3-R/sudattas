@@ -35,6 +35,8 @@ pub struct UpdateCartItemRequest {
 pub struct DeleteCartItemRequest {
     #[prost(int64, tag = "1")]
     pub user_id: i64,
+    #[prost(int64, optional, tag = "2")]
+    pub cart_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -673,33 +675,22 @@ pub struct InventoryItemsResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CreateWishlistItemRequest {
+pub struct AddWishlistItemRequest {
     #[prost(int64, tag = "1")]
     pub user_id: i64,
     #[prost(int64, tag = "2")]
     pub product_id: i64,
-    #[prost(string, tag = "3")]
-    pub date_added: ::prost::alloc::string::String,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SearchWishlistItemRequest {
-    #[prost(int64, tag = "1")]
-    pub wishlist_id: i64,
-}
-#[derive(serde::Serialize, serde::Deserialize)]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateWishlistItemRequest {
-    #[prost(int64, tag = "1")]
-    pub wishlist_id: i64,
-    #[prost(int64, optional, tag = "2")]
-    pub user_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "1")]
+    pub wishlist_id: ::core::option::Option<i64>,
+    #[prost(int64, tag = "2")]
+    pub user_id: i64,
     #[prost(int64, optional, tag = "3")]
     pub product_id: ::core::option::Option<i64>,
-    #[prost(string, optional, tag = "4")]
-    pub date_added: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -707,6 +698,8 @@ pub struct UpdateWishlistItemRequest {
 pub struct DeleteWishlistItemRequest {
     #[prost(int64, tag = "1")]
     pub wishlist_id: i64,
+    #[prost(int64, tag = "2")]
+    pub user_id: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2957,9 +2950,9 @@ pub mod grpc_services_client {
             self.inner.unary(req, path, codec).await
         }
         /// Wishlist
-        pub async fn create_wishlist_item(
+        pub async fn add_wishlist_item(
             &mut self,
-            request: impl tonic::IntoRequest<super::CreateWishlistItemRequest>,
+            request: impl tonic::IntoRequest<super::AddWishlistItemRequest>,
         ) -> std::result::Result<
             tonic::Response<super::WishlistItemsResponse>,
             tonic::Status,
@@ -2975,12 +2968,12 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/CreateWishlistItem",
+                "/grpc_services.GRPCServices/AddWishlistItem",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new("grpc_services.GRPCServices", "CreateWishlistItem"),
+                    GrpcMethod::new("grpc_services.GRPCServices", "AddWishlistItem"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -3008,33 +3001,6 @@ pub mod grpc_services_client {
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new("grpc_services.GRPCServices", "SearchWishlistItem"),
-                );
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn update_wishlist_item(
-            &mut self,
-            request: impl tonic::IntoRequest<super::UpdateWishlistItemRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::WishlistItemsResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/UpdateWishlistItem",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("grpc_services.GRPCServices", "UpdateWishlistItem"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -5492,9 +5458,9 @@ pub mod grpc_services_server {
             tonic::Status,
         >;
         /// Wishlist
-        async fn create_wishlist_item(
+        async fn add_wishlist_item(
             &self,
-            request: tonic::Request<super::CreateWishlistItemRequest>,
+            request: tonic::Request<super::AddWishlistItemRequest>,
         ) -> std::result::Result<
             tonic::Response<super::WishlistItemsResponse>,
             tonic::Status,
@@ -5502,13 +5468,6 @@ pub mod grpc_services_server {
         async fn search_wishlist_item(
             &self,
             request: tonic::Request<super::SearchWishlistItemRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::WishlistItemsResponse>,
-            tonic::Status,
-        >;
-        async fn update_wishlist_item(
-            &self,
-            request: tonic::Request<super::UpdateWishlistItemRequest>,
         ) -> std::result::Result<
             tonic::Response<super::WishlistItemsResponse>,
             tonic::Status,
@@ -8048,13 +8007,13 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/CreateWishlistItem" => {
+                "/grpc_services.GRPCServices/AddWishlistItem" => {
                     #[allow(non_camel_case_types)]
-                    struct CreateWishlistItemSvc<T: GrpcServices>(pub Arc<T>);
+                    struct AddWishlistItemSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<super::CreateWishlistItemRequest>
-                    for CreateWishlistItemSvc<T> {
+                    > tonic::server::UnaryService<super::AddWishlistItemRequest>
+                    for AddWishlistItemSvc<T> {
                         type Response = super::WishlistItemsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -8062,11 +8021,11 @@ pub mod grpc_services_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::CreateWishlistItemRequest>,
+                            request: tonic::Request<super::AddWishlistItemRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::create_wishlist_item(&inner, request)
+                                <T as GrpcServices>::add_wishlist_item(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -8079,7 +8038,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = CreateWishlistItemSvc(inner);
+                        let method = AddWishlistItemSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -8127,53 +8086,6 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = SearchWishlistItemSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/grpc_services.GRPCServices/UpdateWishlistItem" => {
-                    #[allow(non_camel_case_types)]
-                    struct UpdateWishlistItemSvc<T: GrpcServices>(pub Arc<T>);
-                    impl<
-                        T: GrpcServices,
-                    > tonic::server::UnaryService<super::UpdateWishlistItemRequest>
-                    for UpdateWishlistItemSvc<T> {
-                        type Response = super::WishlistItemsResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::UpdateWishlistItemRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as GrpcServices>::update_wishlist_item(&inner, request)
-                                    .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = UpdateWishlistItemSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

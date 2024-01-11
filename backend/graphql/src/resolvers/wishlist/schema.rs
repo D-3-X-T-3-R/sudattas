@@ -3,18 +3,18 @@ use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 use crate::resolvers::product::schema::{Product, SearchProduct};
 
 #[derive(Default, Debug, Clone)]
-pub struct Cart {
-    pub cart_id: String,
+pub struct WishlistItem {
+    pub wishlist_id: String,
     pub user_id: String,
     pub product_id: String,
-    pub quantity: String,
+    pub date_added: String,
 }
 
 #[graphql_object]
-#[graphql(description = "Cart Data")]
-impl Cart {
-    async fn cart_id(&self) -> &String {
-        &self.cart_id
+#[graphql(description = "WishlistItem Data")]
+impl WishlistItem {
+    async fn wishlist_id(&self) -> &String {
+        &self.wishlist_id
     }
 
     async fn user_id(&self) -> &String {
@@ -25,8 +25,8 @@ impl Cart {
         &self.product_id
     }
 
-    async fn quantity(&self) -> &String {
-        &self.quantity
+    async fn date_added(&self) -> &String {
+        &self.date_added
     }
 
     async fn product_details(&self) -> FieldResult<Vec<Product>> {
@@ -45,24 +45,30 @@ impl Cart {
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
-#[graphql(description = "New Cart Data")]
-pub struct NewCart {
+#[graphql(description = "New WishlistItem Data")]
+pub struct NewWishlistItem {
     pub user_id: String,
     pub product_id: String,
-    pub quantity: String,
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
-pub struct CartMutation {
-    pub cart_id: String,
+pub struct SearchWishlistItem {
+    pub wishlist_id: Option<String>,
     pub user_id: String,
-    pub product_id: String,
-    pub quantity: String,
+    pub product_id: Option<String>,
 }
 
+// #[derive(Default, Debug, Clone, GraphQLInputObject)]
+// pub struct WishlistItemMutation {
+//     pub wishlist_id: String,
+//     pub user_id: String,
+//     pub product_id: String,
+//     pub date_added: String,
+// }
+
 #[derive(GraphQLInputObject, Default, Debug)]
-#[graphql(description = "Delete Cart Data")]
-pub struct DeleteCartItem {
+#[graphql(description = "Delete WishlistItem Data")]
+pub struct DeleteWishlistItem {
     pub user_id: String,
-    pub cart_id: Option<String>,
+    pub wishlist_id: String,
 }

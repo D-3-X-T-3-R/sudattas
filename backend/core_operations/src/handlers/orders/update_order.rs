@@ -6,11 +6,11 @@ use rust_decimal::{
     prelude::{FromPrimitive, ToPrimitive},
     Decimal,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
 pub async fn update_order(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<UpdateOrderRequest>,
 ) -> Result<Response<OrdersResponse>, Status> {
     let req = request.into_inner();
@@ -23,7 +23,7 @@ pub async fn update_order(
         total_amount: ActiveValue::Set(Decimal::from_f64(req.total_amount).unwrap()),
         status_id: ActiveValue::Set(req.status_id),
     };
-    match orders.update(db).await {
+    match orders.update(txn).await {
         Ok(model) => {
             let response = OrdersResponse {
                 items: vec![OrderResponse {
