@@ -2,22 +2,22 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::orders;
 use proto::proto::core::{DeleteOrderRequest, OrderResponse, OrdersResponse};
 use rust_decimal::{prelude::ToPrimitive, Decimal};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn delete_order(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<DeleteOrderRequest>,
 ) -> Result<Response<OrdersResponse>, Status> {
     let req = request.into_inner();
 
-    let order = orders::Entity::find_by_id(req.order_id).one(db).await;
+    let order = orders::Entity::find_by_id(req.order_id).one(txn).await;
 
     match order {
         Ok(Some(model)) => {
             match orders::Entity::delete_many()
                 .filter(orders::Column::OrderId.eq(req.order_id))
-                .exec(db)
+                .exec(txn)
                 .await
             {
                 Ok(delete_result) => {
@@ -35,7 +35,7 @@ pub async fn delete_order(
                         Ok(Response::new(response))
                     } else {
                         Err(Status::not_found(format!(
-                            "Cart item with ID {} not found.",
+                            "Order with ID {} not found.",
                             req.order_id
                         )))
                     }
@@ -44,7 +44,7 @@ pub async fn delete_order(
             }
         }
         Ok(None) => Err(Status::not_found(format!(
-            "Cart item with ID {} not found.",
+            "Order with ID {} not found.",
             req.order_id
         ))),
         Err(e) => Err(map_db_error_to_status(e)),

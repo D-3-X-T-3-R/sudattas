@@ -1,19 +1,19 @@
 use core_db_entities::{get_db, CoreDatabaseConnection};
 use handlers::db_errors::map_db_error_to_status;
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, CartItemsResponse, CategoriesResponse, ColorsResponse,
-    CreateCartItemRequest, CreateCategoryRequest, CreateColorRequest, CreateDiscountRequest,
-    CreateEventLogRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
-    CreateNewsletterSubscriberRequest, CreateOrderDetailsRequest, CreateOrderRequest,
-    CreatePaymentMethodRequest, CreateProductAttributeMappingRequest,
+    grpc_services_server::GrpcServices, AddWishlistItemRequest, CartItemsResponse,
+    CategoriesResponse, ColorsResponse, CreateCartItemRequest, CreateCategoryRequest,
+    CreateColorRequest, CreateDiscountRequest, CreateEventLogRequest, CreateInventoryItemRequest,
+    CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOrderDetailsRequest,
+    CreateOrderRequest, CreatePaymentMethodRequest, CreateProductAttributeMappingRequest,
     CreateProductAttributeRequest, CreateProductCategoryMappingRequest,
     CreateProductColorMappingRequest, CreateProductImageRequest, CreateProductRatingRequest,
     CreateProductRequest, CreateProductSizeMappingRequest, CreateProductVariantRequest,
     CreatePromotionRequest, CreateReviewRequest, CreateShippingMethodRequest,
     CreateShippingZoneRequest, CreateSizeRequest, CreateSupplierRequest, CreateTransactionRequest,
     CreateUserActivityRequest, CreateUserRequest, CreateUserRoleMappingRequest,
-    CreateUserRoleRequest, CreateWishlistItemRequest, DeleteCartItemRequest, DeleteCategoryRequest,
-    DeleteColorRequest, DeleteDiscountRequest, DeleteEventLogRequest, DeleteInventoryItemRequest,
+    CreateUserRoleRequest, DeleteCartItemRequest, DeleteCategoryRequest, DeleteColorRequest,
+    DeleteDiscountRequest, DeleteEventLogRequest, DeleteInventoryItemRequest,
     DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOrderRequest,
     DeletePaymentMethodRequest, DeleteProductAttributeMappingRequest,
     DeleteProductAttributeRequest, DeleteProductCategoryMappingRequest,
@@ -47,9 +47,8 @@ use proto::proto::core::{
     UpdateProductRatingRequest, UpdateProductRequest, UpdateProductVariantRequest,
     UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingMethodRequest,
     UpdateShippingZoneRequest, UpdateSizeRequest, UpdateSupplierRequest, UpdateTransactionRequest,
-    UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UpdateWishlistItemRequest,
-    UserActivitiesResponse, UserRoleMappingsResponse, UserRolesResponse, UsersResponse,
-    WishlistItemsResponse,
+    UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UserActivitiesResponse,
+    UserRoleMappingsResponse, UserRolesResponse, UsersResponse, WishlistItemsResponse,
 };
 
 use sea_orm::TransactionTrait;
@@ -90,7 +89,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::cart::create_cart_item(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::cart::create_cart_item(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -106,7 +105,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::cart::get_cart_items(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::cart::get_cart_items(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -122,7 +121,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::cart::update_cart_item(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::cart::update_cart_item(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -138,7 +137,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::cart::delete_cart_item(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::cart::delete_cart_item(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -157,7 +156,7 @@ impl GrpcServices for MyGRPCServices {
         //     .map_err(map_db_error_to_status)?;
 
         // let res = handlers::product_color_mappings::create_product_color_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -180,7 +179,7 @@ impl GrpcServices for MyGRPCServices {
         //     .map_err(map_db_error_to_status)?;
 
         // let res = handlers::product_color_mappings::search_product_color_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -203,7 +202,7 @@ impl GrpcServices for MyGRPCServices {
         //     .map_err(map_db_error_to_status)?;
 
         // let res = handlers::product_color_mappings::delete_product_color_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -225,7 +224,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::products::create_product(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::products::create_product(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -241,7 +240,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::products::search_product(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::products::search_product(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -257,8 +256,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::products::get_products_by_id(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::products::get_products_by_id(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -274,7 +272,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::products::delete_product(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::products::delete_product(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -290,7 +288,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::products::update_product(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::products::update_product(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -308,7 +306,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_size_mappings::create_product_size_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -329,7 +327,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_size_mappings::search_product_size_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -350,7 +348,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_size_mappings::delete_product_size_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -371,7 +369,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::users::create_user(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::users::create_user(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -388,7 +386,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::users::search_user(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::users::search_user(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -405,7 +403,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::users::update_user(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::users::update_user(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -422,7 +420,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::users::delete_user(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::users::delete_user(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -440,7 +438,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::categories::create_category(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::categories::create_category(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -456,7 +454,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::categories::search_category(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::categories::search_category(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -472,7 +470,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::categories::update_category(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::categories::update_category(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -488,7 +486,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::categories::delete_category(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::categories::delete_category(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -505,7 +503,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::orders::create_order(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::orders::create_order(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -521,7 +519,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = procedures::orders::place_order(self.db.as_ref().unwrap(), request).await?;
+        let res = procedures::orders::place_order(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -537,7 +535,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::orders::search_order(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::orders::search_order(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -553,7 +551,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::orders::update_order(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::orders::update_order(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -569,7 +567,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::orders::delete_order(self.db.as_ref().unwrap(), request).await?;
+        let res = handlers::orders::delete_order(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -586,8 +584,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::order_details::create_order_details(self.db.as_ref().unwrap(), request)
-            .await?;
+        let res = handlers::order_details::create_order_details(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -603,8 +600,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::order_details::search_order_detail(self.db.as_ref().unwrap(), request)
-            .await?;
+        let res = handlers::order_details::search_order_detail(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -620,8 +616,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::order_details::update_order_detail(self.db.as_ref().unwrap(), request)
-            .await?;
+        let res = handlers::order_details::update_order_detail(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -638,7 +633,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::reviews::create_review(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::reviews::create_review(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -655,7 +650,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::reviews::search_review(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::reviews::search_review(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -672,7 +667,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::reviews::update_review(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::reviews::update_review(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -689,7 +684,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::reviews::delete_review(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::reviews::delete_review(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -708,7 +703,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_images::create_product_image(self.db.as_ref().unwrap(), request)
+        //     handlers::product_images::create_product_image(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -727,7 +722,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_images::search_product_image(self.db.as_ref().unwrap(), request)
+        //     handlers::product_images::search_product_image(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -746,7 +741,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_images::update_product_image(self.db.as_ref().unwrap(), request)
+        //     handlers::product_images::update_product_image(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -765,7 +760,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_images::delete_product_image(self.db.as_ref().unwrap(), request)
+        //     handlers::product_images::delete_product_image(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -784,7 +779,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::suppliers::create_supplier(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::suppliers::create_supplier(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -801,7 +796,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::suppliers::search_supplier(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::suppliers::search_supplier(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -818,7 +813,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::suppliers::update_supplier(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::suppliers::update_supplier(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -835,7 +830,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::suppliers::delete_supplier(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::suppliers::delete_supplier(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -854,7 +849,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::inventory::create_inventory_item(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::inventory::create_inventory_item(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -872,7 +867,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::inventory::search_inventory_item(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::inventory::search_inventory_item(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -890,7 +885,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::inventory::update_inventory_item(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::inventory::update_inventory_item(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -908,83 +903,59 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::inventory::delete_inventory_item(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::inventory::delete_inventory_item(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
     }
 
     // Wishlist Services
-    async fn create_wishlist_item(
+    async fn add_wishlist_item(
         &self,
-        _request: Request<CreateWishlistItemRequest>,
+        request: Request<AddWishlistItemRequest>,
     ) -> Result<Response<WishlistItemsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::wishlist::create_wishlist_item(self.db.as_ref().unwrap(), request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::wishlist::add_wishlist_item(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_wishlist_item(
         &self,
-        _request: Request<SearchWishlistItemRequest>,
+        request: Request<SearchWishlistItemRequest>,
     ) -> Result<Response<WishlistItemsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::wishlist::search_wishlist_item(self.db.as_ref().unwrap(), request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
-    }
-
-    async fn update_wishlist_item(
-        &self,
-        _request: Request<UpdateWishlistItemRequest>,
-    ) -> Result<Response<WishlistItemsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::wishlist::update_wishlist_item(self.db.as_ref().unwrap(), request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::wishlist::search_wishlist_item(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_wishlist_item(
         &self,
-        _request: Request<DeleteWishlistItemRequest>,
+        request: Request<DeleteWishlistItemRequest>,
     ) -> Result<Response<WishlistItemsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::wishlist::delete_wishlist_item(self.db.as_ref().unwrap(), request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::wishlist::delete_wishlist_item(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // ProductAttributes Services
@@ -1000,7 +971,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_attributes::create_product_attribute(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1021,7 +992,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_attributes::search_product_attribute(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1042,7 +1013,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_attributes::update_product_attribute(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1063,7 +1034,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_attributes::delete_product_attribute(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1084,7 +1055,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::discounts::create_discount(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::discounts::create_discount(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1101,7 +1072,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::discounts::search_discount(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::discounts::search_discount(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1118,7 +1089,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::discounts::update_discount(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::discounts::update_discount(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1135,7 +1106,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::discounts::delete_discount(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::discounts::delete_discount(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1154,7 +1125,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::shipping_methods::create_shipping_method(self.db.as_ref().unwrap(), request)
+        //     handlers::shipping_methods::create_shipping_method(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1173,7 +1144,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::shipping_methods::search_shipping_method(self.db.as_ref().unwrap(), request)
+        //     handlers::shipping_methods::search_shipping_method(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1192,7 +1163,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::shipping_methods::update_shipping_method(self.db.as_ref().unwrap(), request)
+        //     handlers::shipping_methods::update_shipping_method(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1211,7 +1182,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::shipping_methods::delete_shipping_method(self.db.as_ref().unwrap(), request)
+        //     handlers::shipping_methods::delete_shipping_method(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1231,7 +1202,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::user_roles::create_user_role(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::user_roles::create_user_role(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1249,7 +1220,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::user_roles::search_user_role(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::user_roles::search_user_role(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1267,7 +1238,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::user_roles::update_user_role(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::user_roles::update_user_role(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1285,7 +1256,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::user_roles::delete_user_role(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::user_roles::delete_user_role(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1304,7 +1275,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::transactions::create_transaction(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::transactions::create_transaction(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1322,7 +1293,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::transactions::search_transaction(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::transactions::search_transaction(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1340,7 +1311,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::transactions::update_transaction(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::transactions::update_transaction(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1358,7 +1329,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::transactions::delete_transaction(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::transactions::delete_transaction(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1377,7 +1348,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::newsletter_subscribers::create_newsletter_subscriber(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1398,7 +1369,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::newsletter_subscribers::search_newsletter_subscriber(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1419,7 +1390,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::newsletter_subscribers::update_newsletter_subscriber(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1440,7 +1411,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::newsletter_subscribers::delete_newsletter_subscriber(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1462,7 +1433,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_ratings::create_product_rating(self.db.as_ref().unwrap(), request)
+        //     handlers::product_ratings::create_product_rating(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1481,7 +1452,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_ratings::search_product_rating(self.db.as_ref().unwrap(), request)
+        //     handlers::product_ratings::search_product_rating(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1500,7 +1471,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_ratings::update_product_rating(self.db.as_ref().unwrap(), request)
+        //     handlers::product_ratings::update_product_rating(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1519,7 +1490,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_ratings::delete_product_rating(self.db.as_ref().unwrap(), request)
+        //     handlers::product_ratings::delete_product_rating(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1538,7 +1509,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::sizes::create_size(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::sizes::create_size(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1555,7 +1526,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::sizes::search_size(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::sizes::search_size(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1572,7 +1543,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::sizes::update_size(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::sizes::update_size(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1589,7 +1560,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::sizes::delete_size(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::sizes::delete_size(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1607,7 +1578,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::colors::create_color(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::colors::create_color(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1624,7 +1595,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::colors::search_color(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::colors::search_color(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1641,7 +1612,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::colors::update_color(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::colors::update_color(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1658,7 +1629,7 @@ impl GrpcServices for MyGRPCServices {
         //     .begin()
         //     .await
         //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::colors::delete_color(self.db.as_ref().unwrap(), request).await?;
+        // let res = handlers::colors::delete_color(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1677,7 +1648,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_category_mappings::create_product_category_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1698,7 +1669,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_category_mappings::search_product_category_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1719,7 +1690,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_category_mappings::delete_product_category_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1741,7 +1712,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_attribute_mappings::create_product_attribute_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1762,7 +1733,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_attribute_mappings::search_product_attribute_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1783,7 +1754,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::product_attribute_mappings::delete_product_attribute_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1805,7 +1776,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::user_role_mappings::create_user_role_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1826,7 +1797,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::user_role_mappings::search_user_role_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1847,7 +1818,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res = handlers::user_role_mappings::delete_user_role_mapping(
-        //     self.db.as_ref().unwrap(),
+        //     &txn,
         //     request,
         // )
         // .await?;
@@ -1869,7 +1840,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_variants::create_product_variant(self.db.as_ref().unwrap(), request)
+        //     handlers::product_variants::create_product_variant(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1888,7 +1859,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_variants::search_product_variant(self.db.as_ref().unwrap(), request)
+        //     handlers::product_variants::search_product_variant(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1907,7 +1878,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_variants::update_product_variant(self.db.as_ref().unwrap(), request)
+        //     handlers::product_variants::update_product_variant(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1926,7 +1897,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::product_variants::delete_product_variant(self.db.as_ref().unwrap(), request)
+        //     handlers::product_variants::delete_product_variant(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -1946,7 +1917,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::event_logs::create_event_log(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::event_logs::create_event_log(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1964,7 +1935,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::event_logs::search_event_log(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::event_logs::search_event_log(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -1982,7 +1953,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::event_logs::update_event_log(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::event_logs::update_event_log(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -2000,7 +1971,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::event_logs::delete_event_log(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::event_logs::delete_event_log(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -2019,7 +1990,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::user_activities::create_user_activity(self.db.as_ref().unwrap(), request)
+        //     handlers::user_activities::create_user_activity(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2038,7 +2009,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::user_activities::search_user_activity(self.db.as_ref().unwrap(), request)
+        //     handlers::user_activities::search_user_activity(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2057,7 +2028,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::user_activities::update_user_activity(self.db.as_ref().unwrap(), request)
+        //     handlers::user_activities::update_user_activity(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2076,7 +2047,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::user_activities::delete_user_activity(self.db.as_ref().unwrap(), request)
+        //     handlers::user_activities::delete_user_activity(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2096,7 +2067,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::inventory_logs::create_inventory_log(self.db.as_ref().unwrap(), request)
+        //     handlers::inventory_logs::create_inventory_log(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2115,7 +2086,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::inventory_logs::search_inventory_log(self.db.as_ref().unwrap(), request)
+        //     handlers::inventory_logs::search_inventory_log(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2134,7 +2105,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::inventory_logs::update_inventory_log(self.db.as_ref().unwrap(), request)
+        //     handlers::inventory_logs::update_inventory_log(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2153,7 +2124,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::inventory_logs::delete_inventory_log(self.db.as_ref().unwrap(), request)
+        //     handlers::inventory_logs::delete_inventory_log(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2173,7 +2144,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::promotions::create_promotion(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::promotions::create_promotion(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -2191,7 +2162,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::promotions::search_promotion(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::promotions::search_promotion(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -2209,7 +2180,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::promotions::update_promotion(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::promotions::update_promotion(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -2227,7 +2198,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::promotions::delete_promotion(self.db.as_ref().unwrap(), request).await?;
+        //     handlers::promotions::delete_promotion(&txn, request).await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
         todo!()
@@ -2246,7 +2217,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::shipping_zones::create_shipping_zone(self.db.as_ref().unwrap(), request)
+        //     handlers::shipping_zones::create_shipping_zone(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2265,7 +2236,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::shipping_zones::search_shipping_zone(self.db.as_ref().unwrap(), request)
+        //     handlers::shipping_zones::search_shipping_zone(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2284,7 +2255,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::shipping_zones::update_shipping_zone(self.db.as_ref().unwrap(), request)
+        //     handlers::shipping_zones::update_shipping_zone(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2303,7 +2274,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::shipping_zones::delete_shipping_zone(self.db.as_ref().unwrap(), request)
+        //     handlers::shipping_zones::delete_shipping_zone(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2323,7 +2294,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::payment_methods::create_payment_method(self.db.as_ref().unwrap(), request)
+        //     handlers::payment_methods::create_payment_method(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2342,7 +2313,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::payment_methods::search_payment_method(self.db.as_ref().unwrap(), request)
+        //     handlers::payment_methods::search_payment_method(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2361,7 +2332,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::payment_methods::update_payment_method(self.db.as_ref().unwrap(), request)
+        //     handlers::payment_methods::update_payment_method(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)
@@ -2380,7 +2351,7 @@ impl GrpcServices for MyGRPCServices {
         //     .await
         //     .map_err(map_db_error_to_status)?;
         // let res =
-        //     handlers::payment_methods::delete_payment_method(self.db.as_ref().unwrap(), request)
+        //     handlers::payment_methods::delete_payment_method(&txn, request)
         //         .await?;
         // txn.commit().await.map_err(map_db_error_to_status)?;
         // Ok(res)

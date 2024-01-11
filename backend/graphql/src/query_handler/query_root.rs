@@ -13,6 +13,10 @@ use crate::resolvers::{
         self,
         schema::{Product, SearchProduct},
     },
+    wishlist::{
+        self,
+        schema::{SearchWishlistItem, WishlistItem},
+    },
 };
 use juniper::FieldResult;
 
@@ -48,6 +52,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_order(search: SearchOrder) -> FieldResult<Vec<Order>> {
         orders::handlers::search_order(search)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Wishlist
+    #[instrument(err, ret)]
+    async fn search_wishlist_item(search: SearchWishlistItem) -> FieldResult<Vec<WishlistItem>> {
+        wishlist::handlers::search_wishlist_item(search)
             .await
             .map_err(|e| e.into())
     }

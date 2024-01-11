@@ -1,11 +1,11 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::cart;
 use proto::proto::core::{CartItemResponse, CartItemsResponse, CreateCartItemRequest};
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
 pub async fn create_cart_item(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<CreateCartItemRequest>,
 ) -> Result<Response<CartItemsResponse>, Status> {
     let req = request.into_inner();
@@ -15,7 +15,7 @@ pub async fn create_cart_item(
         product_id: ActiveValue::Set(req.product_id),
         quantity: ActiveValue::Set(req.quantity),
     };
-    match cart.insert(db).await {
+    match cart.insert(txn).await {
         Ok(cart_model) => {
             let response = CartItemsResponse {
                 items: vec![CartItemResponse {

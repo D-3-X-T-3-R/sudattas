@@ -3,11 +3,11 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::orders;
 use proto::proto::core::{OrderResponse, OrdersResponse, SearchOrderRequest};
 use rust_decimal::prelude::ToPrimitive;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
 use tonic::{Request, Response, Status};
 
 pub async fn search_order(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<SearchOrderRequest>,
 ) -> Result<Response<OrdersResponse>, Status> {
     let req = request.into_inner();
@@ -26,7 +26,7 @@ pub async fn search_order(
         .apply_if(req.status_id, |query, _| {
             query.filter(orders::Column::StatusId.eq(req.status_id))
         })
-        .all(db)
+        .all(txn)
         .await
     {
         Ok(models) => {

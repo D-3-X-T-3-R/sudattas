@@ -4,11 +4,11 @@ use core_db_entities::entity::order_details;
 use proto::proto::core::{CreateOrderDetailsRequest, OrderDetailResponse, OrderDetailsResponse};
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
 pub async fn create_order_details(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<CreateOrderDetailsRequest>,
 ) -> Result<Response<OrderDetailsResponse>, Status> {
     let req = request.into_inner().order_details;
@@ -25,7 +25,7 @@ pub async fn create_order_details(
             price: ActiveValue::Set(Decimal::from_f64(details.price).unwrap()),
         };
 
-        match create_order_detail.insert(db).await {
+        match create_order_detail.insert(txn).await {
             Ok(model) => {
                 response.push(OrderDetailResponse {
                     order_detail_id: model.order_detail_id,

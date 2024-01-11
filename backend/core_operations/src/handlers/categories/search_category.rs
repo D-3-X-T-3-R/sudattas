@@ -1,11 +1,11 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::categories;
 use proto::proto::core::{CategoriesResponse, CategoryResponse, SearchCategoryRequest};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
 use tonic::{Request, Response, Status};
 
 pub async fn search_category(
-    db: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     request: Request<SearchCategoryRequest>,
 ) -> Result<Response<CategoriesResponse>, Status> {
     let req = request.into_inner();
@@ -17,7 +17,7 @@ pub async fn search_category(
         .apply_if(req.name, |query, v| {
             query.filter(categories::Column::Name.contains(v))
         })
-        .all(db)
+        .all(txn)
         .await
     {
         Ok(models) => {
