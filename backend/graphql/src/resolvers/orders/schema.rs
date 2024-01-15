@@ -6,7 +6,7 @@ use crate::resolvers::order_details::schema::{OrderDetails, SearchOrderDetails};
 pub struct Order {
     pub user_id: String,
     pub order_date: String,
-    pub shipping_address: String,
+    pub shipping_address_id: String,
     pub total_amount: String,
     pub status_id: String,
     pub order_id: String,
@@ -23,8 +23,8 @@ impl Order {
         &self.order_date
     }
 
-    async fn shipping_address(&self) -> &String {
-        &self.shipping_address
+    async fn shipping_address_id(&self) -> &String {
+        &self.shipping_address_id
     }
 
     async fn total_amount(&self) -> &String {
@@ -57,7 +57,7 @@ impl Order {
 #[graphql(description = "New Order Data")]
 pub struct NewOrder {
     pub user_id: String,
-    pub shipping_address: String,
+    pub shipping_address_id: String,
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
@@ -73,7 +73,7 @@ pub struct SearchOrder {
 pub struct OrderMutation {
     pub user_id: String,
     pub order_date: String,
-    pub shipping_address: String,
+    pub shipping_address_id: String,
     pub total_amount: String,
     pub status_id: String,
     pub order_id: String,

@@ -29,7 +29,7 @@ pub async fn delete_order(
                                 order_date: model.order_date.to_string(),
                                 total_amount: Decimal::to_f64(&model.total_amount).unwrap(),
                                 status_id: model.status_id,
-                                shipping_address: model.shipping_address,
+                                shipping_address_id: model.shipping_address_id,
                             }],
                         };
                         Ok(Response::new(response))
