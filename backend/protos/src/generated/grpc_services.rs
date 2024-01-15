@@ -275,8 +275,8 @@ pub struct CategoriesResponse {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PlaceOrderRequest {
-    #[prost(string, tag = "1")]
-    pub shipping_address: ::prost::alloc::string::String,
+    #[prost(int64, tag = "1")]
+    pub shipping_address_id: i64,
     #[prost(int64, tag = "2")]
     pub user_id: i64,
 }
@@ -286,8 +286,8 @@ pub struct PlaceOrderRequest {
 pub struct CreateOrderRequest {
     #[prost(int64, tag = "1")]
     pub user_id: i64,
-    #[prost(string, tag = "2")]
-    pub shipping_address: ::prost::alloc::string::String,
+    #[prost(int64, tag = "2")]
+    pub shipping_address_id: i64,
     #[prost(int64, tag = "3")]
     pub status_id: i64,
     #[prost(double, tag = "4")]
@@ -316,8 +316,8 @@ pub struct UpdateOrderRequest {
     pub order_id: i64,
     #[prost(int64, tag = "2")]
     pub user_id: i64,
-    #[prost(string, tag = "3")]
-    pub shipping_address: ::prost::alloc::string::String,
+    #[prost(int64, tag = "3")]
+    pub shipping_address_id: i64,
     #[prost(double, tag = "4")]
     pub total_amount: f64,
     #[prost(int64, tag = "5")]
@@ -340,8 +340,8 @@ pub struct OrderResponse {
     pub user_id: i64,
     #[prost(string, tag = "3")]
     pub order_date: ::prost::alloc::string::String,
-    #[prost(string, tag = "4")]
-    pub shipping_address: ::prost::alloc::string::String,
+    #[prost(int64, tag = "4")]
+    pub shipping_address_id: i64,
     #[prost(double, tag = "5")]
     pub total_amount: f64,
     #[prost(int64, tag = "6")]

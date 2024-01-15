@@ -17,7 +17,7 @@ pub(crate) async fn place_order(order: NewOrder) -> Result<Vec<Order>, GqlError>
     let response = client
         .place_order(PlaceOrderRequest {
             user_id: to_i64(order.user_id),
-            shipping_address: order.shipping_address,
+            shipping_address_id: to_i64(order.shipping_address_id),
         })
         .await
         .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
@@ -28,7 +28,7 @@ pub(crate) async fn place_order(order: NewOrder) -> Result<Vec<Order>, GqlError>
         .into_iter()
         .map(|order| Order {
             user_id: order.user_id.to_string(),
-            shipping_address: order.shipping_address,
+            shipping_address_id: order.shipping_address_id.to_string(),
             total_amount: order.total_amount.to_string(),
             status_id: order.status_id.to_string(),
             order_date: order.order_date,
@@ -58,7 +58,7 @@ pub(crate) async fn search_order(search: SearchOrder) -> Result<Vec<Order>, GqlE
         .into_iter()
         .map(|order| Order {
             user_id: order.user_id.to_string(),
-            shipping_address: order.shipping_address,
+            shipping_address_id: order.shipping_address_id.to_string(),
             total_amount: order.total_amount.to_string(),
             status_id: order.status_id.to_string(),
             order_date: order.order_date,
@@ -71,12 +71,8 @@ pub(crate) async fn search_order(search: SearchOrder) -> Result<Vec<Order>, GqlE
 pub(crate) async fn delete_order(order_id: String) -> Result<Vec<Order>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
-    let order_id = order_id
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse cart id", Code::InvalidArgument))?;
-
     let response = client
-        .delete_order(DeleteOrderRequest { order_id })
+        .delete_order(DeleteOrderRequest { order_id:to_i64(order_id) })
         .await
         .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
 
@@ -86,7 +82,7 @@ pub(crate) async fn delete_order(order_id: String) -> Result<Vec<Order>, GqlErro
         .into_iter()
         .map(|order| Order {
             user_id: order.user_id.to_string(),
-            shipping_address: order.shipping_address,
+            shipping_address_id: order.shipping_address_id.to_string(),
             total_amount: order.total_amount.to_string(),
             status_id: order.status_id.to_string(),
             order_date: order.order_date,
@@ -104,7 +100,7 @@ pub(crate) async fn update_order(order: OrderMutation) -> Result<Vec<Order>, Gql
             order_id: to_i64(order.order_id),
             user_id: to_i64(order.user_id),
             status_id: to_i64(order.status_id),
-            shipping_address: order.shipping_address,
+            shipping_address_id: to_i64(order.shipping_address_id),
             total_amount: to_f64(order.total_amount),
         })
         .await
@@ -116,7 +112,7 @@ pub(crate) async fn update_order(order: OrderMutation) -> Result<Vec<Order>, Gql
         .into_iter()
         .map(|order| Order {
             user_id: order.user_id.to_string(),
-            shipping_address: order.shipping_address,
+            shipping_address_id: order.shipping_address_id.to_string(),
             total_amount: order.total_amount.to_string(),
             status_id: order.status_id.to_string(),
             order_date: order.order_date,

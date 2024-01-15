@@ -163,13 +163,13 @@ message CategoriesResponse {
 // Orders
 
 message PlaceOrderRequest{
-    string shipping_address = 1;
+    int64 shipping_address_id = 1;
     int64 user_id = 2;
 
 }
 message CreateOrderRequest {
     int64 user_id = 1;
-    string shipping_address = 2;
+    int64 shipping_address_id = 2;
     int64 status_id = 3;
     double total_amount = 4;
 }
@@ -185,7 +185,7 @@ message SearchOrderRequest {
 message UpdateOrderRequest {
     int64 order_id = 1;
     int64 user_id = 2;
-    string shipping_address = 3;
+    int64 shipping_address_id = 3;
     double total_amount = 4;
     int64 status_id = 5;
 }
@@ -198,7 +198,7 @@ message OrderResponse {
     int64 order_id = 1;
     int64 user_id = 2;
     string order_date = 3;
-    string shipping_address = 4;
+    int64 shipping_address_id = 4;
     double total_amount = 5;
     int64 status_id = 6;
 }

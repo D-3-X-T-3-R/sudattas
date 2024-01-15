@@ -36,7 +36,7 @@ pub async fn search_order(
                     order_id: model.order_id,
                     user_id: model.user_id,
                     order_date: model.order_date.to_string(),
-                    shipping_address: model.shipping_address,
+                    shipping_address_id: model.shipping_address_id,
                     total_amount: model.total_amount.to_f64().unwrap(),
                     status_id: model.status_id,
                 })
