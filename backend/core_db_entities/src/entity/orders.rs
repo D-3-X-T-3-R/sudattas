@@ -12,8 +12,8 @@ pub struct Model {
     pub user_id: i64,
     #[sea_orm(column_name = "OrderDate")]
     pub order_date: DateTimeUtc,
-    #[sea_orm(column_name = "ShippingAddress", column_type = "Text")]
-    pub shipping_address: String,
+    #[sea_orm(column_name = "ShippingAddressID")]
+    pub shipping_address_id: i64,
     #[sea_orm(column_name = "TotalAmount", column_type = "Decimal(Some((10, 2)))")]
     pub total_amount: Decimal,
     #[sea_orm(column_name = "StatusID")]
@@ -33,6 +33,14 @@ pub enum Relation {
     )]
     OrderStatus,
     #[sea_orm(
+        belongs_to = "super::shipping_addresses::Entity",
+        from = "Column::ShippingAddressId",
+        to = "super::shipping_addresses::Column::ShippingAddressId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    ShippingAddresses,
+    #[sea_orm(
         belongs_to = "super::users::Entity",
         from = "Column::UserId",
         to = "super::users::Column::UserId",
@@ -51,6 +59,12 @@ impl Related<super::order_details::Entity> for Entity {
 impl Related<super::order_status::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::OrderStatus.def()
+    }
+}
+
+impl Related<super::shipping_addresses::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ShippingAddresses.def()
     }
 }
 

@@ -19,7 +19,7 @@ pub async fn update_order(
         order_id: ActiveValue::Set(req.order_id),
         user_id: ActiveValue::Set(req.user_id),
         order_date: ActiveValue::Set(Utc::now()),
-        shipping_address: ActiveValue::Set(req.shipping_address),
+        shipping_address_id: ActiveValue::Set(req.shipping_address_id),
         total_amount: ActiveValue::Set(Decimal::from_f64(req.total_amount).unwrap()),
         status_id: ActiveValue::Set(req.status_id),
     };
@@ -30,7 +30,7 @@ pub async fn update_order(
                     order_id: model.order_id,
                     user_id: model.user_id,
                     order_date: model.order_date.to_string(),
-                    shipping_address: model.shipping_address,
+                    shipping_address_id: model.shipping_address_id,
                     total_amount: Decimal::to_f64(&model.total_amount).unwrap(),
                     status_id: model.status_id,
                 }],

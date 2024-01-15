@@ -2,7 +2,10 @@
 
 pub use super::cart::Entity as Cart;
 pub use super::categories::Entity as Categories;
+pub use super::cities::Entity as Cities;
 pub use super::colors::Entity as Colors;
+pub use super::countries::Entity as Countries;
+pub use super::country_state_mapping::Entity as CountryStateMapping;
 pub use super::discounts::Entity as Discounts;
 pub use super::event_logs::Entity as EventLogs;
 pub use super::inventory::Entity as Inventory;
@@ -23,9 +26,12 @@ pub use super::product_variants::Entity as ProductVariants;
 pub use super::products::Entity as Products;
 pub use super::promotions::Entity as Promotions;
 pub use super::reviews::Entity as Reviews;
+pub use super::shipping_addresses::Entity as ShippingAddresses;
 pub use super::shipping_methods::Entity as ShippingMethods;
 pub use super::shipping_zones::Entity as ShippingZones;
 pub use super::sizes::Entity as Sizes;
+pub use super::state_city_mapping::Entity as StateCityMapping;
+pub use super::states::Entity as States;
 pub use super::suppliers::Entity as Suppliers;
 pub use super::transactions::Entity as Transactions;
 pub use super::user_activity::Entity as UserActivity;

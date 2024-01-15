@@ -53,7 +53,7 @@ pub async fn place_order(
     let create_order = create_order(
         txn,
         Request::new(CreateOrderRequest {
-            shipping_address: req.shipping_address,
+            shipping_address_id: req.shipping_address_id,
             status_id: 2, // Always start with order status is processing
             user_id: req.user_id,
             total_amount: total_amount,
