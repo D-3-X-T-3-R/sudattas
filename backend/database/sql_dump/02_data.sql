@@ -99,11 +99,116 @@ VALUES
 ('Novel Book', 'A compelling new novel by a bestselling author.', 19.99, 100, 2),
 ('T-Shirt', 'Comfortable cotton t-shirt.', 9.99, 150, 3);
 
+-- Inserting data into `Countries`
+INSERT INTO `Countries` (`CountryName`) VALUES ('India');
+
+-- Inserting data into `States`
+INSERT INTO `States` (`StateName`) VALUES 
+-- ('Uttar Pradesh'), 
+-- ('Maharashtra'), 
+-- ('Bihar'), 
+('West Bengal');
+-- ('Madhya Pradesh'),
+-- ('Tamil Nadu'), 
+-- ('Rajasthan'), 
+-- ('Karnataka'), 
+-- ('Gujarat'), 
+-- ('Andhra Pradesh'), 
+-- ('Odisha'), 
+-- ('Telangana'), 
+-- ('Kerala'), 
+-- ('Jharkhand'), 
+-- ('Assam'), 
+-- ('Punjab'), 
+-- ('Chhattisgarh'), 
+-- ('Haryana'), 
+-- ('Uttarakhand'), 
+-- ('Himachal Pradesh');
+
+-- Inserting data into `CountryStateMapping`
+INSERT INTO `CountryStateMapping` (`CountryID`, `StateID`) VALUES 
+-- (1, 1), 
+-- (1, 2), 
+-- (1, 3), 
+(1, 1);
+-- (1, 5), 
+-- (1, 6), 
+-- (1, 7), 
+-- (1, 8), 
+-- (1, 9), 
+-- (1, 10),
+-- (1, 11),
+-- (1, 12),
+-- (1, 13),
+-- (1, 14),
+-- (1, 15),
+-- (1, 16),
+-- (1, 17),
+-- (1, 18),
+-- (1, 19),
+-- (1, 20);
+
+-- Inserting data into `Cities`
+INSERT INTO `Cities` (`CityName`) VALUES 
+('Kolkata'), 
+('Asansol'), 
+('Siliguri'), 
+('Durgapur'), 
+('Bardhaman');
+
+-- ('Lucknow'), 
+-- ('Kanpur'), 
+-- ('Ghaziabad'), 
+-- ('Agra'), 
+-- ('Varanasi'),
+
+-- ('Mumbai'), 
+-- ('Pune'), 
+-- ('Nagpur'), 
+-- ('Thane'), 
+-- ('Nashik'),
+
+-- ('Patna'), 
+-- ('Gaya'), 
+-- ('Bhagalpur'), 
+-- ('Muzaffarpur'), 
+-- ('Purnia'),
+
+-- Inserting data into `StateCityMapping`
+INSERT INTO `StateCityMapping` (`StateID`, `CityID`) VALUES 
+(1, 1),
+(1, 2),
+(1, 3),
+(1, 4),
+(1, 5);
+
+-- Inserting data into `ShippingAddresses`
+INSERT INTO `ShippingAddresses` (`CountryID`, `StateID`, `CityID`, `Road`, `ApartmentNoOrName`) VALUES 
+-- Address in Kolkata (CityID = 1)
+(1, 1, 1, 'Park Street', 'Apartment 42'),
+(1, 1, 1, 'Ballygunge Circular Road', 'Bungalow 19'),
+
+-- Address in Asansol (CityID = 2)
+(1, 1, 2, 'Burnpur Road', 'Flat 7A'),
+(1, 1, 2, 'Rabindra Bhavan', 'House 233'),
+
+-- Address in Siliguri (CityID = 3)
+(1, 1, 3, 'Sevoke Road', 'Villa 5'),
+(1, 1, 3, 'Hill Cart Road', 'Greenview Apartment 3B'),
+
+-- Address in Durgapur (CityID = 4)
+(1, 1, 4, 'City Center', 'Duplex 16'),
+(1, 1, 4, 'A-Zone', 'Tower 9, Floor 2'),
+
+-- Address in Bardhaman (CityID = 5)
+(1, 1, 5, 'Kuruvilla Street', 'Lotus Enclave, Flat 21'),
+(1, 1, 5, 'Sarat Chandra Avenue', 'Sunrise Villa');
+
 -- Inserting data into `Orders`
-INSERT INTO `Orders` (`UserID`, `OrderDate`, `ShippingAddress`, `TotalAmount`, `StatusID`)
+INSERT INTO `Orders` (`UserID`, `OrderDate`, `ShippingAddressID`, `TotalAmount`, `StatusID`)
 VALUES
-(1, CURRENT_TIMESTAMP, '123 Maple Street', 829.98, 2),
-(2, CURRENT_TIMESTAMP, '456 Oak Avenue', 29.98, 3);
+(1, CURRENT_TIMESTAMP, 1, 829.98, 2),
+(2, CURRENT_TIMESTAMP, 1, 29.98, 3);
 
 -- Inserting data into `OrderDetails`
 INSERT INTO `OrderDetails` (`OrderID`, `ProductID`, `Quantity`, `Price`)

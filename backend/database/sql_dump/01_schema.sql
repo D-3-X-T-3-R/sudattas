@@ -86,16 +86,72 @@ CREATE TABLE `OrderStatus` (
     PRIMARY KEY (`StatusID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Create the Countries table
+CREATE TABLE `Countries` (
+    `CountryID` BIGINT NOT NULL AUTO_INCREMENT,
+    `CountryName` VARCHAR(100),
+    PRIMARY KEY (`CountryID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Create the States table
+CREATE TABLE `States` (
+    `StateID` BIGINT NOT NULL AUTO_INCREMENT,
+    `StateName` VARCHAR(100),
+    PRIMARY KEY (`StateID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Create the Cities table
+CREATE TABLE `Cities` (
+    `CityID` BIGINT NOT NULL AUTO_INCREMENT,
+    `CityName` VARCHAR(100),
+    PRIMARY KEY (`CityID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Create the CountryStateMapping table
+CREATE TABLE `CountryStateMapping` (
+    `ID` BIGINT NOT NULL AUTO_INCREMENT,
+    `CountryID` BIGINT NOT NULL,
+    `StateID` BIGINT NOT NULL,
+    PRIMARY KEY (`ID`),
+    FOREIGN KEY (`CountryID`) REFERENCES `Countries`(`CountryID`),
+    FOREIGN KEY (`StateID`) REFERENCES `States`(`StateID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Create the StateCityMapping table
+CREATE TABLE `StateCityMapping` (
+    `ID` BIGINT NOT NULL AUTO_INCREMENT,
+    `StateID` BIGINT NOT NULL,
+    `CityID` BIGINT NOT NULL,
+    PRIMARY KEY (`ID`),
+    FOREIGN KEY (`StateID`) REFERENCES `States`(`StateID`),
+    FOREIGN KEY (`CityID`) REFERENCES `Cities`(`CityID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Create the ShippingAddresses table
+CREATE TABLE `ShippingAddresses` (
+    `ShippingAddressID` BIGINT NOT NULL AUTO_INCREMENT,
+    `CountryID` BIGINT NOT NULL,
+    `StateID` BIGINT NOT NULL,
+    `CityID` BIGINT NOT NULL,
+    `Road` VARCHAR(255),
+    `ApartmentNoOrName` VARCHAR(255),
+    PRIMARY KEY (`ShippingAddressID`),
+    FOREIGN KEY (`CountryID`) REFERENCES `Countries`(`CountryID`),
+    FOREIGN KEY (`StateID`) REFERENCES `States`(`StateID`),
+    FOREIGN KEY (`CityID`) REFERENCES `Cities`(`CityID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- Table structure for table `Orders`
 CREATE TABLE `Orders` (
-    `OrderID` bigint NOT NULL AUTO_INCREMENT,
-    `UserID` bigint NOT NULL,
-    `OrderDate` timestamp NOT NULL,
-    `ShippingAddress` text NOT NULL,
-    `TotalAmount` decimal(10,2) NOT NULL,
-    `StatusID` bigint NOT NULL,
+    `OrderID` BIGINT NOT NULL AUTO_INCREMENT,
+    `UserID` BIGINT NOT NULL,
+    `OrderDate` TIMESTAMP NOT NULL,
+    `ShippingAddressID` BIGINT NOT NULL,
+    `TotalAmount` DECIMAL(10,2) NOT NULL,
+    `StatusID` BIGINT NOT NULL,
     PRIMARY KEY (`OrderID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
+    FOREIGN KEY (`ShippingAddressID`) REFERENCES `ShippingAddresses`(`ShippingAddressID`),
     FOREIGN KEY (`StatusID`) REFERENCES `OrderStatus`(`StatusID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
