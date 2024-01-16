@@ -95,7 +95,7 @@ pub struct CountryResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CountriesResponse {
     #[prost(message, repeated, tag = "1")]
-    pub countries: ::prost::alloc::vec::Vec<CountryResponse>,
+    pub items: ::prost::alloc::vec::Vec<CountryResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -134,7 +134,7 @@ pub struct StateResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StatesResponse {
     #[prost(message, repeated, tag = "1")]
-    pub states: ::prost::alloc::vec::Vec<StateResponse>,
+    pub items: ::prost::alloc::vec::Vec<StateResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -173,7 +173,7 @@ pub struct CityResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CitiesResponse {
     #[prost(message, repeated, tag = "1")]
-    pub cities: ::prost::alloc::vec::Vec<CityResponse>,
+    pub items: ::prost::alloc::vec::Vec<CityResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -229,7 +229,7 @@ pub struct StateCityMappingResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StateCityMappingsResponse {
     #[prost(message, repeated, tag = "1")]
-    pub mappings: ::prost::alloc::vec::Vec<StateCityMappingResponse>,
+    pub items: ::prost::alloc::vec::Vec<StateCityMappingResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -285,7 +285,7 @@ pub struct CountryStateMappingResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CountryStateMappingsResponse {
     #[prost(message, repeated, tag = "1")]
-    pub mappings: ::prost::alloc::vec::Vec<CountryStateMappingResponse>,
+    pub items: ::prost::alloc::vec::Vec<CountryStateMappingResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -352,7 +352,7 @@ pub struct ShippingAddressResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ShippingAddressesResponse {
     #[prost(message, repeated, tag = "1")]
-    pub addresses: ::prost::alloc::vec::Vec<ShippingAddressResponse>,
+    pub items: ::prost::alloc::vec::Vec<ShippingAddressResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

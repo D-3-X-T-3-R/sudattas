@@ -59,7 +59,7 @@ message CountryResponse {
 }
 
 message CountriesResponse {
-    repeated CountryResponse countries = 1;
+    repeated CountryResponse items = 1;
 }
 
 // State
@@ -83,7 +83,7 @@ message StateResponse {
 }
 
 message StatesResponse {
-    repeated StateResponse states = 1;
+    repeated StateResponse items = 1;
 }
 
 // City
@@ -107,7 +107,7 @@ message CityResponse {
 }
 
 message CitiesResponse {
-    repeated CityResponse cities = 1;
+    repeated CityResponse items = 1;
 }
 
 // StateCityMapping
@@ -140,7 +140,7 @@ message StateCityMappingResponse {
 }
 
 message StateCityMappingsResponse {
-    repeated StateCityMappingResponse mappings = 1;
+    repeated StateCityMappingResponse items = 1;
 }
 
 // CountryStateMapping
@@ -173,7 +173,7 @@ message CountryStateMappingResponse {
 }
 
 message CountryStateMappingsResponse {
-    repeated CountryStateMappingResponse mappings = 1;
+    repeated CountryStateMappingResponse items = 1;
 }
 
 // ShippingAddress
@@ -211,7 +211,7 @@ message ShippingAddressResponse {
 }
 
 message ShippingAddressesResponse {
-    repeated ShippingAddressResponse addresses = 1;
+    repeated ShippingAddressResponse items = 1;
 }
 
 // Products
