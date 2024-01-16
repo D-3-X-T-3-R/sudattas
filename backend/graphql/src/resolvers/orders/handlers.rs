@@ -72,7 +72,9 @@ pub(crate) async fn delete_order(order_id: String) -> Result<Vec<Order>, GqlErro
     let mut client = connect_grpc_client().await?;
 
     let response = client
-        .delete_order(DeleteOrderRequest { order_id:to_i64(order_id) })
+        .delete_order(DeleteOrderRequest {
+            order_id: to_i64(order_id),
+        })
         .await
         .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
 
