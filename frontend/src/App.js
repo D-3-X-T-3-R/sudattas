@@ -5,12 +5,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Navbar from '../src/common/Navbar';
 import Newsletter from '../src/common/Newsletter';
 import Footer from '../src/common/Footer';
-import Copyright from '../src/common/Copyright';
 
 //Pages
 import Layout from './layout/Layout';
 import Home from './pages/Home';
-import Category from './pages/Category';
 import ProductDetail from './pages/ProductDetail';
 import Cart from './pages/Cart';
 
