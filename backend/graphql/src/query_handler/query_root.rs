@@ -5,6 +5,10 @@ use crate::resolvers::{
         self,
         schema::{Category, SearchCategory},
     },
+    country::{
+        self,
+        schema::{Country, SearchCountry},
+    },
     orders::{
         self,
         schema::{Order, SearchOrder},
@@ -12,6 +16,10 @@ use crate::resolvers::{
     product::{
         self,
         schema::{Product, SearchProduct},
+    },
+    state::{
+        self,
+        schema::{SearchState, State},
     },
     wishlist::{
         self,
@@ -60,6 +68,22 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_wishlist_item(search: SearchWishlistItem) -> FieldResult<Vec<WishlistItem>> {
         wishlist::handlers::search_wishlist_item(search)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Country
+    #[instrument(err, ret)]
+    async fn search_country(search: SearchCountry) -> FieldResult<Vec<Country>> {
+        country::handlers::search_country(search)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // State
+    #[instrument(err, ret)]
+    async fn search_state(search: SearchState) -> FieldResult<Vec<State>> {
+        state::handlers::search_state(search)
             .await
             .map_err(|e| e.into())
     }

@@ -93,7 +93,7 @@ pub(crate) async fn delete_product(product_id: String) -> Result<Vec<Product>, G
 
     let product_id = product_id
         .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse cart id", Code::InvalidArgument))?;
+        .map_err(|_| GqlError::new("Failed to parse product id", Code::InvalidArgument))?;
 
     let response = client
         .delete_product(DeleteProductRequest { product_id })
