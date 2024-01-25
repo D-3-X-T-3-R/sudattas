@@ -8,6 +8,10 @@ use crate::resolvers::{
         self,
         schema::{Category, CategoryMutation, NewCategory},
     },
+    country::{
+        self,
+        schema::{Country, NewCountry},
+    },
     orders::{
         self,
         schema::{NewOrder, Order, OrderMutation},
@@ -15,6 +19,10 @@ use crate::resolvers::{
     product::{
         self,
         schema::{NewProduct, Product, ProductMutation},
+    },
+    state::{
+        self,
+        schema::{NewState, State},
     },
     wishlist::{
         self,
@@ -126,6 +134,36 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_wishlist_item(delete: DeleteWishlistItem) -> FieldResult<Vec<WishlistItem>> {
         wishlist::handlers::delete_wishlist_item(delete)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Country
+    #[instrument(err, ret)]
+    async fn create_country(country: NewCountry) -> FieldResult<Vec<Country>> {
+        country::handlers::create_country(country)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_country(country_id: String) -> FieldResult<Vec<Country>> {
+        country::handlers::delete_country(country_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // State
+    #[instrument(err, ret)]
+    async fn create_state(state: NewState) -> FieldResult<Vec<State>> {
+        state::handlers::create_state(state)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_state(state_id: String) -> FieldResult<Vec<State>> {
+        state::handlers::delete_state(state_id)
             .await
             .map_err(|e| e.into())
     }
