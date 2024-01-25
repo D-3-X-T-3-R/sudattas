@@ -61,7 +61,7 @@ pub(crate) async fn delete_category(category_id: String) -> Result<Vec<Category>
 
     let category_id = category_id
         .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse cart id", Code::InvalidArgument))?;
+        .map_err(|_| GqlError::new("Failed to parse category id", Code::InvalidArgument))?;
 
     let response = client
         .delete_category(DeleteCategoryRequest { category_id })

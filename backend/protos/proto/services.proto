@@ -7,6 +7,40 @@ package grpc_services;
 import "proto/messages.proto";
 
 service GRPCServices {
+
+    // Country
+    rpc CreateCountry(CreateCountryRequest) returns (CountriesResponse);
+    rpc SearchCountry(SearchCountryRequest) returns (CountriesResponse);
+    rpc DeleteCountry(DeleteCountryRequest) returns (CountriesResponse);
+
+    // State
+    rpc CreateState(CreateStateRequest) returns (StatesResponse);
+    rpc SearchState(SearchStateRequest) returns (StatesResponse);
+    rpc DeleteState(DeleteStateRequest) returns (StatesResponse);
+
+    // City
+    rpc CreateCity(CreateCityRequest) returns (CitiesResponse);
+    rpc SearchCity(SearchCityRequest) returns (CitiesResponse);
+    rpc DeleteCity(DeleteCityRequest) returns (CitiesResponse);
+
+    // StateCityMapping
+    rpc CreateStateCityMapping(CreateStateCityMappingRequest) returns (StateCityMappingsResponse);
+    rpc UpdateStateCityMapping(UpdateStateCityMappingRequest) returns (StateCityMappingsResponse);
+    rpc DeleteStateCityMapping(DeleteStateCityMappingRequest) returns (StateCityMappingsResponse);
+    rpc SearchStateCityMapping(SearchStateCityMappingRequest) returns (StateCityMappingsResponse);
+
+    // CountryState
+    rpc CreateCountryStateMapping(CreateCountryStateMappingRequest) returns (CountryStateMappingsResponse);
+    rpc UpdateCountryStateMapping(UpdateCountryStateMappingRequest) returns (CountryStateMappingsResponse);
+    rpc DeleteCountryStateMapping(DeleteCountryStateMappingRequest) returns (CountryStateMappingsResponse);
+    rpc SearchCountryStateMapping(SearchCountryStateMappingRequest) returns (CountryStateMappingsResponse);
+
+    // ShippingAddress
+    rpc CreateShippingAddress(CreateShippingAddressRequest) returns (ShippingAddressesResponse);
+    rpc UpdateShippingAddress(UpdateShippingAddressRequest) returns (ShippingAddressesResponse);
+    rpc DeleteShippingAddress(DeleteShippingAddressRequest) returns (ShippingAddressesResponse);
+    rpc GetShippingAddress(GetShippingAddressRequest) returns (ShippingAddressesResponse);
+
     // Cart
     rpc CreateCartItem(CreateCartItemRequest) returns (CartItemsResponse);
     rpc GetCartItems(GetCartItemsRequest) returns (CartItemsResponse);

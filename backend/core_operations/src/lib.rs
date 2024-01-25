@@ -2,33 +2,40 @@ use core_db_entities::{get_db, CoreDatabaseConnection};
 use handlers::db_errors::map_db_error_to_status;
 use proto::proto::core::{
     grpc_services_server::GrpcServices, AddWishlistItemRequest, CartItemsResponse,
-    CategoriesResponse, ColorsResponse, CreateCartItemRequest, CreateCategoryRequest,
-    CreateColorRequest, CreateDiscountRequest, CreateEventLogRequest, CreateInventoryItemRequest,
+    CategoriesResponse, CitiesResponse, ColorsResponse, CountriesResponse,
+    CountryStateMappingsResponse, CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest,
+    CreateColorRequest, CreateCountryRequest, CreateCountryStateMappingRequest,
+    CreateDiscountRequest, CreateEventLogRequest, CreateInventoryItemRequest,
     CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOrderDetailsRequest,
     CreateOrderRequest, CreatePaymentMethodRequest, CreateProductAttributeMappingRequest,
     CreateProductAttributeRequest, CreateProductCategoryMappingRequest,
     CreateProductColorMappingRequest, CreateProductImageRequest, CreateProductRatingRequest,
     CreateProductRequest, CreateProductSizeMappingRequest, CreateProductVariantRequest,
-    CreatePromotionRequest, CreateReviewRequest, CreateShippingMethodRequest,
-    CreateShippingZoneRequest, CreateSizeRequest, CreateSupplierRequest, CreateTransactionRequest,
-    CreateUserActivityRequest, CreateUserRequest, CreateUserRoleMappingRequest,
-    CreateUserRoleRequest, DeleteCartItemRequest, DeleteCategoryRequest, DeleteColorRequest,
-    DeleteDiscountRequest, DeleteEventLogRequest, DeleteInventoryItemRequest,
-    DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOrderRequest,
-    DeletePaymentMethodRequest, DeleteProductAttributeMappingRequest,
+    CreatePromotionRequest, CreateReviewRequest, CreateShippingAddressRequest,
+    CreateShippingMethodRequest, CreateShippingZoneRequest, CreateSizeRequest,
+    CreateStateCityMappingRequest, CreateStateRequest, CreateSupplierRequest,
+    CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest,
+    CreateUserRoleMappingRequest, CreateUserRoleRequest, DeleteCartItemRequest,
+    DeleteCategoryRequest, DeleteCityRequest, DeleteColorRequest, DeleteCountryRequest,
+    DeleteCountryStateMappingRequest, DeleteDiscountRequest, DeleteEventLogRequest,
+    DeleteInventoryItemRequest, DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest,
+    DeleteOrderRequest, DeletePaymentMethodRequest, DeleteProductAttributeMappingRequest,
     DeleteProductAttributeRequest, DeleteProductCategoryMappingRequest,
     DeleteProductColorMappingRequest, DeleteProductImageRequest, DeleteProductRatingRequest,
     DeleteProductRequest, DeleteProductSizeMappingRequest, DeleteProductVariantRequest,
-    DeletePromotionRequest, DeleteReviewRequest, DeleteShippingMethodRequest,
-    DeleteShippingZoneRequest, DeleteSizeRequest, DeleteSupplierRequest, DeleteTransactionRequest,
-    DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleMappingRequest,
-    DeleteUserRoleRequest, DeleteWishlistItemRequest, DiscountsResponse, EventLogsResponse,
-    GetCartItemsRequest, GetProductsByIdRequest, InventoryItemsResponse, InventoryLogsResponse,
+    DeletePromotionRequest, DeleteReviewRequest, DeleteShippingAddressRequest,
+    DeleteShippingMethodRequest, DeleteShippingZoneRequest, DeleteSizeRequest,
+    DeleteStateCityMappingRequest, DeleteStateRequest, DeleteSupplierRequest,
+    DeleteTransactionRequest, DeleteUserActivityRequest, DeleteUserRequest,
+    DeleteUserRoleMappingRequest, DeleteUserRoleRequest, DeleteWishlistItemRequest,
+    DiscountsResponse, EventLogsResponse, GetCartItemsRequest, GetProductsByIdRequest,
+    GetShippingAddressRequest, InventoryItemsResponse, InventoryLogsResponse,
     NewsletterSubscribersResponse, OrderDetailsResponse, OrdersResponse, PaymentMethodsResponse,
     PlaceOrderRequest, ProductAttributeMappingsResponse, ProductAttributesResponse,
     ProductCategoryMappingsResponse, ProductColorMappingsResponse, ProductImagesResponse,
     ProductRatingsResponse, ProductSizeMappingsResponse, ProductVariantsResponse, ProductsResponse,
-    PromotionsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
+    PromotionsResponse, ReviewsResponse, SearchCategoryRequest, SearchCityRequest,
+    SearchColorRequest, SearchCountryRequest, SearchCountryStateMappingRequest,
     SearchDiscountRequest, SearchEventLogRequest, SearchInventoryItemRequest,
     SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOrderDetailRequest,
     SearchOrderRequest, SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
@@ -36,17 +43,20 @@ use proto::proto::core::{
     SearchProductColorMappingRequest, SearchProductImageRequest, SearchProductRatingRequest,
     SearchProductRequest, SearchProductSizeMappingRequest, SearchProductVariantRequest,
     SearchPromotionRequest, SearchReviewRequest, SearchShippingMethodRequest,
-    SearchShippingZoneRequest, SearchSizeRequest, SearchSupplierRequest, SearchTransactionRequest,
-    SearchUserActivityRequest, SearchUserRequest, SearchUserRoleMappingRequest,
-    SearchUserRoleRequest, SearchWishlistItemRequest, ShippingMethodsResponse,
-    ShippingZonesResponse, SizesResponse, SuppliersResponse, TransactionsResponse,
-    UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateDiscountRequest,
+    SearchShippingZoneRequest, SearchSizeRequest, SearchStateCityMappingRequest,
+    SearchStateRequest, SearchSupplierRequest, SearchTransactionRequest, SearchUserActivityRequest,
+    SearchUserRequest, SearchUserRoleMappingRequest, SearchUserRoleRequest,
+    SearchWishlistItemRequest, ShippingAddressesResponse, ShippingMethodsResponse,
+    ShippingZonesResponse, SizesResponse, StateCityMappingsResponse, StatesResponse,
+    SuppliersResponse, TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest,
+    UpdateColorRequest, UpdateCountryStateMappingRequest, UpdateDiscountRequest,
     UpdateEventLogRequest, UpdateInventoryItemRequest, UpdateInventoryLogRequest,
     UpdateNewsletterSubscriberRequest, UpdateOrderDetailRequest, UpdateOrderRequest,
     UpdatePaymentMethodRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
     UpdateProductRatingRequest, UpdateProductRequest, UpdateProductVariantRequest,
-    UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingMethodRequest,
-    UpdateShippingZoneRequest, UpdateSizeRequest, UpdateSupplierRequest, UpdateTransactionRequest,
+    UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingAddressRequest,
+    UpdateShippingMethodRequest, UpdateShippingZoneRequest, UpdateSizeRequest,
+    UpdateStateCityMappingRequest, UpdateSupplierRequest, UpdateTransactionRequest,
     UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UserActivitiesResponse,
     UserRoleMappingsResponse, UserRolesResponse, UsersResponse, WishlistItemsResponse,
 };
@@ -77,6 +87,378 @@ impl MyGRPCServices {
 
 #[tonic::async_trait]
 impl GrpcServices for MyGRPCServices {
+    // Country Services
+    async fn create_country(
+        &self,
+        request: Request<CreateCountryRequest>,
+    ) -> Result<Response<CountriesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::country::create_country(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_country(
+        &self,
+        request: Request<SearchCountryRequest>,
+    ) -> Result<Response<CountriesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::country::search_country(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn delete_country(
+        &self,
+        request: Request<DeleteCountryRequest>,
+    ) -> Result<Response<CountriesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::country::delete_country(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    // State Service
+    async fn create_state(
+        &self,
+        request: Request<CreateStateRequest>,
+    ) -> Result<Response<StatesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::state::create_state(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_state(
+        &self,
+        request: Request<SearchStateRequest>,
+    ) -> Result<Response<StatesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::state::search_state(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn delete_state(
+        &self,
+        request: Request<DeleteStateRequest>,
+    ) -> Result<Response<StatesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::state::delete_state(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    // City Service
+    async fn create_city(
+        &self,
+        request: Request<CreateCityRequest>,
+    ) -> Result<Response<CitiesResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::city::create_city(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn search_city(
+        &self,
+        request: Request<SearchCityRequest>,
+    ) -> Result<Response<CitiesResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::city::search_city(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn delete_city(
+        &self,
+        request: Request<DeleteCityRequest>,
+    ) -> Result<Response<CitiesResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::city::delete_city(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    // CityState Mapping Service
+    async fn create_state_city_mapping(
+        &self,
+        request: Request<CreateStateCityMappingRequest>,
+    ) -> Result<Response<StateCityMappingsResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::state_city_mapping::create_state_city_mapping(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn update_state_city_mapping(
+        &self,
+        request: Request<UpdateStateCityMappingRequest>,
+    ) -> Result<Response<StateCityMappingsResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::state_city_mapping::update_state_city_mapping(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn delete_state_city_mapping(
+        &self,
+        request: Request<DeleteStateCityMappingRequest>,
+    ) -> Result<Response<StateCityMappingsResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::state_city_mapping::delete_state_city_mapping(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn search_state_city_mapping(
+        &self,
+        request: Request<SearchStateCityMappingRequest>,
+    ) -> Result<Response<StateCityMappingsResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::state_city_mapping::search_state_city_mapping(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    // CountryState Mapping
+    async fn create_country_state_mapping(
+        &self,
+        request: Request<CreateCountryStateMappingRequest>,
+    ) -> Result<Response<CountryStateMappingsResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::country_state_mapping::create_country_state_mapping(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn update_country_state_mapping(
+        &self,
+        request: Request<UpdateCountryStateMappingRequest>,
+    ) -> Result<Response<CountryStateMappingsResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::country_state_mapping::update_country_state_mapping(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn delete_country_state_mapping(
+        &self,
+        request: Request<DeleteCountryStateMappingRequest>,
+    ) -> Result<Response<CountryStateMappingsResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::country_state_mapping::delete_country_state_mapping(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn search_country_state_mapping(
+        &self,
+        request: Request<SearchCountryStateMappingRequest>,
+    ) -> Result<Response<CountryStateMappingsResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::country_state_mapping::search_country_state_mapping(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    // Shipping Address Service
+    async fn create_shipping_address(
+        &self,
+        request: Request<CreateShippingAddressRequest>,
+    ) -> Result<Response<ShippingAddressesResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::shipping_address::create_shipping_address(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn update_shipping_address(
+        &self,
+        request: Request<UpdateShippingAddressRequest>,
+    ) -> Result<Response<ShippingAddressesResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::shipping_address::update_shipping_address(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn delete_shipping_address(
+        &self,
+        request: Request<DeleteShippingAddressRequest>,
+    ) -> Result<Response<ShippingAddressesResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::shipping_address::delete_shipping_address(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
+    async fn get_shipping_address(
+        &self,
+        request: Request<GetShippingAddressRequest>,
+    ) -> Result<Response<ShippingAddressesResponse>, Status> {
+        // let txn = self
+        //     .db
+        //     .as_ref()
+        //     .unwrap()
+        //     .begin()
+        //     .await
+        //     .map_err(map_db_error_to_status)?;
+        // let res = handlers::shipping_address::get_shipping_address(&txn, request)
+        //     .await?;
+        // txn.commit().await.map_err(map_db_error_to_status)?;
+        // Ok(res)
+        todo!()
+    }
+
     // Cart Services
     async fn create_cart_item(
         &self,

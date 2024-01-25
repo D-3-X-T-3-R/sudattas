@@ -38,6 +38,182 @@ message CartItemsResponse {
     repeated CartItemResponse items = 1;
 }
 
+// Country
+
+message CreateCountryRequest {
+    string country_name = 1;
+}
+
+message DeleteCountryRequest {
+    int64 country_id = 1;
+}
+
+message SearchCountryRequest {
+    optional int64 country_id = 1;
+    optional string country_name = 2;
+}
+
+message CountryResponse {
+    int64 country_id = 1;
+    string country_name = 2;
+}
+
+message CountriesResponse {
+    repeated CountryResponse items = 1;
+}
+
+// State
+
+message CreateStateRequest {
+    string state_name = 1;
+}
+
+message DeleteStateRequest {
+    int64 state_id = 1;
+}
+
+message SearchStateRequest {
+    optional int64 state_id = 1;
+    optional string state_name = 2;
+}
+
+message StateResponse {
+    int64 state_id = 1;
+    string state_name = 2;
+}
+
+message StatesResponse {
+    repeated StateResponse items = 1;
+}
+
+// City
+
+message CreateCityRequest {
+    string city_name = 1;
+}
+
+message DeleteCityRequest {
+    int64 city_id = 1;
+}
+    
+message SearchCityRequest {
+    optional int64 city_id = 1;
+    optional string city_name = 2;
+}
+
+message CityResponse {
+    int64 city_id = 1;
+    string city_name = 2;
+}
+
+message CitiesResponse {
+    repeated CityResponse items = 1;
+}
+
+// StateCityMapping
+
+message CreateStateCityMappingRequest {
+    int64 state_id = 1;
+    int64 city_id = 2;
+}
+
+message UpdateStateCityMappingRequest {
+    int64 id = 1;
+    int64 state_id = 2;
+    int64 city_id = 3;
+}
+
+message DeleteStateCityMappingRequest {
+    int64 id = 1;
+}
+
+message SearchStateCityMappingRequest {
+    optional int64 id = 1;
+    optional int64 state_id = 2;
+    optional int64 city_id = 3;
+}
+
+message StateCityMappingResponse {
+    int64 id = 1;
+    int64 state_id = 2;
+    int64 city_id = 3;
+}
+
+message StateCityMappingsResponse {
+    repeated StateCityMappingResponse items = 1;
+}
+
+// CountryStateMapping
+
+message CreateCountryStateMappingRequest {
+    int64 country_id = 1;
+    int64 state_id = 2;
+}
+
+message UpdateCountryStateMappingRequest {
+    int64 id = 1;
+    optional int64 country_id = 2;
+    optional int64 state_id = 3;
+}
+
+message DeleteCountryStateMappingRequest {
+    int64 id = 1;
+}
+
+message SearchCountryStateMappingRequest {
+    optional int64 id = 1;
+    optional int64 country_id = 2;
+    optional int64 state_id = 3;
+}
+
+message CountryStateMappingResponse {
+    int64 id = 1;
+    int64 country_id = 2;
+    int64 state_id = 3;
+}
+
+message CountryStateMappingsResponse {
+    repeated CountryStateMappingResponse items = 1;
+}
+
+// ShippingAddress
+
+message CreateShippingAddressRequest {
+    int64 country_id = 1;
+    int64 state_id = 2;
+    int64 city_id = 3;
+    string road = 4;
+    string apartment_no_or_name = 5;
+}
+
+message UpdateShippingAddressRequest {
+    int64 shipping_address_id = 1;
+    int64 country_id = 2;
+    int64 state_id = 3;
+    int64 city_id = 4;
+    string road = 5;
+    string apartment_no_or_name = 6;
+}
+
+message DeleteShippingAddressRequest {
+    int64 shipping_address_id = 1;
+}
+
+message GetShippingAddressRequest { }
+
+message ShippingAddressResponse {
+    int64 shipping_address_id = 1;
+    int64 country_id = 2;
+    int64 state_id = 3;
+    int64 city_id = 4;
+    string road = 5;
+    string apartment_no_or_name = 6;
+}
+
+message ShippingAddressesResponse {
+    repeated ShippingAddressResponse items = 1;
+}
+
 // Products
 
 message CreateProductRequest {
