@@ -1,21 +1,20 @@
 use core_db_entities::{get_db, CoreDatabaseConnection};
 use handlers::db_errors::map_db_error_to_status;
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, AddWishlistItemRequest, CartItemsResponse,
-    CategoriesResponse, CitiesResponse, ColorsResponse, CountriesResponse,
+    grpc_services_server::GrpcServices, AddProductImageRequest, AddWishlistItemRequest,
+    CartItemsResponse, CategoriesResponse, CitiesResponse, ColorsResponse, CountriesResponse,
     CountryStateMappingsResponse, CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest,
     CreateColorRequest, CreateCountryRequest, CreateCountryStateMappingRequest,
     CreateDiscountRequest, CreateEventLogRequest, CreateInventoryItemRequest,
     CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOrderDetailsRequest,
     CreateOrderRequest, CreatePaymentMethodRequest, CreateProductAttributeMappingRequest,
     CreateProductAttributeRequest, CreateProductCategoryMappingRequest,
-    CreateProductColorMappingRequest, CreateProductImageRequest, CreateProductRatingRequest,
-    CreateProductRequest, CreateProductSizeMappingRequest, CreateProductVariantRequest,
-    CreatePromotionRequest, CreateReviewRequest, CreateShippingAddressRequest,
-    CreateShippingMethodRequest, CreateShippingZoneRequest, CreateSizeRequest,
-    CreateStateCityMappingRequest, CreateStateRequest, CreateSupplierRequest,
-    CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest,
-    CreateUserRoleMappingRequest, CreateUserRoleRequest, DeleteCartItemRequest,
+    CreateProductColorMappingRequest, CreateProductRatingRequest, CreateProductRequest,
+    CreateProductSizeMappingRequest, CreateProductVariantRequest, CreatePromotionRequest,
+    CreateReviewRequest, CreateShippingAddressRequest, CreateShippingMethodRequest,
+    CreateShippingZoneRequest, CreateSizeRequest, CreateStateCityMappingRequest,
+    CreateStateRequest, CreateSupplierRequest, CreateTransactionRequest, CreateUserActivityRequest,
+    CreateUserRequest, CreateUserRoleMappingRequest, CreateUserRoleRequest, DeleteCartItemRequest,
     DeleteCategoryRequest, DeleteCityRequest, DeleteColorRequest, DeleteCountryRequest,
     DeleteCountryStateMappingRequest, DeleteDiscountRequest, DeleteEventLogRequest,
     DeleteInventoryItemRequest, DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest,
@@ -1073,80 +1072,68 @@ impl GrpcServices for MyGRPCServices {
     }
 
     // ProductImages Services
-    async fn create_product_image(
+    async fn add_product_image(
         &self,
-        _request: Request<CreateProductImageRequest>,
+        request: Request<AddProductImageRequest>,
     ) -> Result<Response<ProductImagesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_images::create_product_image(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_images::add_product_image(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_product_image(
         &self,
-        _request: Request<SearchProductImageRequest>,
+        request: Request<SearchProductImageRequest>,
     ) -> Result<Response<ProductImagesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_images::search_product_image(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_images::search_product_image(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_product_image(
         &self,
-        _request: Request<UpdateProductImageRequest>,
+        request: Request<UpdateProductImageRequest>,
     ) -> Result<Response<ProductImagesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_images::update_product_image(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_images::update_product_image(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_product_image(
         &self,
-        _request: Request<DeleteProductImageRequest>,
+        request: Request<DeleteProductImageRequest>,
     ) -> Result<Response<ProductImagesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_images::delete_product_image(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_images::delete_product_image(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Suppliers Services
