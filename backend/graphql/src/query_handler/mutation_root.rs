@@ -20,6 +20,10 @@ use crate::resolvers::{
         self,
         schema::{NewProduct, Product, ProductMutation},
     },
+    product_images::{
+        self,
+        schema::{NewProductImage, ProductImage, ProductImageMutation},
+    },
     state::{
         self,
         schema::{NewState, State},
@@ -164,6 +168,30 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_state(state_id: String) -> FieldResult<Vec<State>> {
         state::handlers::delete_state(state_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // ProductImage
+    #[instrument(err, ret)]
+    async fn add_product_image(product_image: NewProductImage) -> FieldResult<Vec<ProductImage>> {
+        product_images::handlers::add_product_image(product_image)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_product_image(image_id: String) -> FieldResult<Vec<ProductImage>> {
+        product_images::handlers::delete_product_image(image_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_product_image(
+        product_image: ProductImageMutation,
+    ) -> FieldResult<Vec<ProductImage>> {
+        product_images::handlers::update_product_image(product_image)
             .await
             .map_err(|e| e.into())
     }

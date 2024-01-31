@@ -5,6 +5,7 @@ pub mod error;
 pub mod order_details;
 pub mod orders;
 pub mod product;
+pub mod product_images;
 pub mod state;
 pub mod utils;
 pub mod wishlist;
