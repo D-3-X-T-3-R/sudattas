@@ -235,10 +235,10 @@ VALUES
 (2, 3, CURRENT_TIMESTAMP);
 
 -- Inserting data into `ProductImages`
-INSERT INTO `ProductImages` (`ProductID`, `ImageURL`, `AltText`)
-VALUES
-(1, 'http://example.com/images/smartphone.jpg', 'Smartphone Image'),
-(2, 'http://example.com/images/novel.jpg', 'Novel Book Image');
+-- INSERT INTO `ProductImages` (`ProductID`, `ImageBase64`, `AltText`)
+-- VALUES
+-- (1, 'http://example.com/images/smartphone.jpg', 'Smartphone Image'),
+-- (2, 'http://example.com/images/novel.jpg', 'Novel Book Image');
 
 -- Inserting data into `Inventory`
 INSERT INTO `Inventory` (`ProductID`, `QuantityAvailable`, `ReorderLevel`, `SupplierID`)

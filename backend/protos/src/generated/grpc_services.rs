@@ -791,20 +791,31 @@ pub struct ReviewsResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CreateProductImageRequest {
+pub struct ProductImageRequest {
+    #[prost(string, tag = "2")]
+    pub image_base64: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub alt_text: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddProductImageRequest {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
-    #[prost(string, tag = "2")]
-    pub image_url: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub alt_text: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "2")]
+    pub product_images: ::prost::alloc::vec::Vec<ProductImageRequest>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SearchProductImageRequest {
-    #[prost(int64, tag = "1")]
-    pub image_id: i64,
+    #[prost(int64, optional, tag = "1")]
+    pub image_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "2")]
+    pub product_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "3")]
+    pub alt_text: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -812,10 +823,10 @@ pub struct SearchProductImageRequest {
 pub struct UpdateProductImageRequest {
     #[prost(int64, tag = "1")]
     pub image_id: i64,
-    #[prost(int64, optional, tag = "2")]
-    pub product_id: ::core::option::Option<i64>,
-    #[prost(string, optional, tag = "3")]
-    pub image_url: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, tag = "2")]
+    pub product_id: i64,
+    #[prost(string, tag = "3")]
+    pub image_base64: ::prost::alloc::string::String,
     #[prost(string, optional, tag = "4")]
     pub alt_text: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -835,9 +846,9 @@ pub struct ProductImageResponse {
     #[prost(int64, tag = "2")]
     pub product_id: i64,
     #[prost(string, tag = "3")]
-    pub image_url: ::prost::alloc::string::String,
-    #[prost(string, tag = "4")]
-    pub alt_text: ::prost::alloc::string::String,
+    pub image_base64: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "4")]
+    pub alt_text: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -3497,9 +3508,9 @@ pub mod grpc_services_client {
             self.inner.unary(req, path, codec).await
         }
         /// ProductImages
-        pub async fn create_product_image(
+        pub async fn add_product_image(
             &mut self,
-            request: impl tonic::IntoRequest<super::CreateProductImageRequest>,
+            request: impl tonic::IntoRequest<super::AddProductImageRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ProductImagesResponse>,
             tonic::Status,
@@ -3515,12 +3526,12 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/CreateProductImage",
+                "/grpc_services.GRPCServices/AddProductImage",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new("grpc_services.GRPCServices", "CreateProductImage"),
+                    GrpcMethod::new("grpc_services.GRPCServices", "AddProductImage"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -6372,9 +6383,9 @@ pub mod grpc_services_server {
             request: tonic::Request<super::DeleteReviewRequest>,
         ) -> std::result::Result<tonic::Response<super::ReviewsResponse>, tonic::Status>;
         /// ProductImages
-        async fn create_product_image(
+        async fn add_product_image(
             &self,
-            request: tonic::Request<super::CreateProductImageRequest>,
+            request: tonic::Request<super::AddProductImageRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ProductImagesResponse>,
             tonic::Status,
@@ -9471,13 +9482,13 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/CreateProductImage" => {
+                "/grpc_services.GRPCServices/AddProductImage" => {
                     #[allow(non_camel_case_types)]
-                    struct CreateProductImageSvc<T: GrpcServices>(pub Arc<T>);
+                    struct AddProductImageSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<super::CreateProductImageRequest>
-                    for CreateProductImageSvc<T> {
+                    > tonic::server::UnaryService<super::AddProductImageRequest>
+                    for AddProductImageSvc<T> {
                         type Response = super::ProductImagesResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -9485,11 +9496,11 @@ pub mod grpc_services_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::CreateProductImageRequest>,
+                            request: tonic::Request<super::AddProductImageRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::create_product_image(&inner, request)
+                                <T as GrpcServices>::add_product_image(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -9502,7 +9513,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = CreateProductImageSvc(inner);
+                        let method = AddProductImageSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -4,6 +4,7 @@ pub mod country;
 pub mod db_errors;
 pub mod order_details;
 pub mod orders;
+pub mod product_images;
 pub mod products;
 pub mod state;
 pub mod wishlist;

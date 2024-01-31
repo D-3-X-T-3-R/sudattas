@@ -1,6 +1,9 @@
 use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 
-use crate::resolvers::category::schema::{Category, SearchCategory};
+use crate::resolvers::{
+    category::schema::{Category, SearchCategory},
+    product_images::schema::{ProductImage, SearchProductImage},
+};
 
 #[derive(Default, Debug, Clone)]
 pub struct Product {
@@ -46,6 +49,16 @@ impl Product {
                 None => None,
             },
             name: None,
+        })
+        .await
+        .map_err(|e| e.into())
+    }
+
+    async fn images(&self) -> FieldResult<Vec<ProductImage>> {
+        crate::resolvers::product_images::handlers::search_product_image(SearchProductImage {
+            product_id: Some(self.product_id.to_string()),
+            image_id: None,
+            alt_text: None,
         })
         .await
         .map_err(|e| e.into())

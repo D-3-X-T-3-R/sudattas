@@ -85,7 +85,7 @@ service GRPCServices {
     rpc DeleteReview(DeleteReviewRequest) returns (ReviewsResponse);
 
     // ProductImages
-    rpc CreateProductImage(CreateProductImageRequest) returns (ProductImagesResponse);
+    rpc AddProductImage(AddProductImageRequest) returns (ProductImagesResponse);
     rpc SearchProductImage(SearchProductImageRequest) returns (ProductImagesResponse);
     rpc UpdateProductImage(UpdateProductImageRequest) returns (ProductImagesResponse);
     rpc DeleteProductImage(DeleteProductImageRequest) returns (ProductImagesResponse);
