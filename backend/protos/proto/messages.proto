@@ -464,20 +464,25 @@ message ReviewsResponse {
 
 // ProductImages
 
-message CreateProductImageRequest {
-    int64 product_id = 1;
-    string image_url = 2;
-    string alt_text = 3;
+message ProductImageRequest {
+    string image_base64 = 2;
+    optional string alt_text = 3;
 }
 
+message AddProductImageRequest {
+    int64 product_id = 1;
+    repeated ProductImageRequest product_images = 2;
+}
 message SearchProductImageRequest {
-    int64 image_id = 1;
+    optional int64 image_id = 1;
+    optional int64 product_id = 2;
+    optional string alt_text = 3;
 }
 
 message UpdateProductImageRequest {
     int64 image_id = 1;
-    optional int64 product_id = 2;
-    optional string image_url = 3;
+    int64 product_id = 2;
+    string image_base64 = 3;
     optional string alt_text = 4;
 }
 
@@ -488,8 +493,8 @@ message DeleteProductImageRequest {
 message ProductImageResponse {
     int64 image_id = 1;
     int64 product_id = 2;
-    string image_url = 3;
-    string alt_text = 4;
+    string image_base64 = 3;
+    optional string alt_text = 4;
 }
 
 message ProductImagesResponse {

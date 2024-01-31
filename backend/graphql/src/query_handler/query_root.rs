@@ -17,6 +17,10 @@ use crate::resolvers::{
         self,
         schema::{Product, SearchProduct},
     },
+    product_images::{
+        self,
+        schema::{ProductImage, SearchProductImage},
+    },
     state::{
         self,
         schema::{SearchState, State},
@@ -44,6 +48,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_product(search: SearchProduct) -> FieldResult<Vec<Product>> {
         product::handlers::search_product(search)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // ProductImages
+    #[instrument(err, ret)]
+    async fn search_product_image(search: SearchProductImage) -> FieldResult<Vec<ProductImage>> {
+        product_images::handlers::search_product_image(search)
             .await
             .map_err(|e| e.into())
     }

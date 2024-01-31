@@ -204,8 +204,8 @@ CREATE TABLE `Wishlist` (
 -- Table structure for table `ProductImages`
 CREATE TABLE `ProductImages` (
     `ImageID` bigint NOT NULL AUTO_INCREMENT,
-    `ProductID` bigint DEFAULT NULL,
-    `ImageURL` varchar(255) DEFAULT NULL,
+    `ProductID` bigint NOT NULL,
+    `ImageBase64` MEDIUMTEXT NOT NULL,
     `AltText` varchar(255) DEFAULT NULL,
     PRIMARY KEY (`ImageID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
