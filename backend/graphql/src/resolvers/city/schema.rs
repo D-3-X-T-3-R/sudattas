@@ -1,7 +1,5 @@
 use juniper::{graphql_object, GraphQLInputObject};
 
-
-
 #[derive(Default, Debug, Clone)]
 pub struct City {
     pub city_id: String,

@@ -7,7 +7,6 @@ pub type CoreDatabaseConnection = sea_orm::DatabaseConnection;
 pub mod entity;
 
 pub async fn get_db() -> Result<DatabaseConnection, DbErr> {
-
     let db_user = std::env::var("DB_USER").expect("DB_USER must be set");
     let db_password = std::env::var("DB_PASSWORD").expect("DB_PASSWORD must be set");
     let db_host = std::env::var("DB_HOST").expect("DB_HOST must be set");

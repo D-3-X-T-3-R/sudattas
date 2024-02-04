@@ -25,6 +25,10 @@ use crate::resolvers::{
         self,
         schema::{ProductImage, SearchProductImage},
     },
+    shipping_zone::{
+        self,
+        schema::{SearchShippingZone, ShippingZone},
+    },
     state::{
         self,
         schema::{SearchState, State},
@@ -108,6 +112,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_city(search: SearchCity) -> FieldResult<Vec<City>> {
         city::handlers::search_city(search)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // ShippingZone
+    #[instrument(err, ret)]
+    async fn search_shipping_zone(search: SearchShippingZone) -> FieldResult<Vec<ShippingZone>> {
+        shipping_zone::handlers::search_shipping_zone(search)
             .await
             .map_err(|e| e.into())
     }

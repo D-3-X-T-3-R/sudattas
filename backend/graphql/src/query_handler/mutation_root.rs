@@ -28,6 +28,10 @@ use crate::resolvers::{
         self,
         schema::{NewProductImage, ProductImage, ProductImageMutation},
     },
+    shipping_zone::{
+        self,
+        schema::{NewShippingZone, ShippingZone, ShippingZoneMutation},
+    },
     state::{
         self,
         schema::{NewState, State},
@@ -211,6 +215,32 @@ impl MutationRoot {
         product_image: ProductImageMutation,
     ) -> FieldResult<Vec<ProductImage>> {
         product_images::handlers::update_product_image(product_image)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // ShippingZone
+    #[instrument(err, ret)]
+    async fn create_shipping_zone(
+        shipping_zone: NewShippingZone,
+    ) -> FieldResult<Vec<ShippingZone>> {
+        shipping_zone::handlers::create_shipping_zone(shipping_zone)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_shipping_zone(zone_id: String) -> FieldResult<Vec<ShippingZone>> {
+        shipping_zone::handlers::delete_shipping_zone(zone_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_shipping_zone(
+        shipping_zone: ShippingZoneMutation,
+    ) -> FieldResult<Vec<ShippingZone>> {
+        shipping_zone::handlers::update_shipping_zone(shipping_zone)
             .await
             .map_err(|e| e.into())
     }

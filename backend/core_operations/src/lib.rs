@@ -2570,78 +2570,66 @@ impl GrpcServices for MyGRPCServices {
     // ShippingZones Services
     async fn create_shipping_zone(
         &self,
-        _request: Request<CreateShippingZoneRequest>,
+        request: Request<CreateShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_zones::create_shipping_zone(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::shipping_zones::create_shipping_zone(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_shipping_zone(
         &self,
-        _request: Request<SearchShippingZoneRequest>,
+        request: Request<SearchShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_zones::search_shipping_zone(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::shipping_zones::search_shipping_zone(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_shipping_zone(
         &self,
-        _request: Request<UpdateShippingZoneRequest>,
+        request: Request<UpdateShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_zones::update_shipping_zone(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::shipping_zones::update_shipping_zone(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_shipping_zone(
         &self,
-        _request: Request<DeleteShippingZoneRequest>,
+        request: Request<DeleteShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_zones::delete_shipping_zone(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::shipping_zones::delete_shipping_zone(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // PaymentMethods Services

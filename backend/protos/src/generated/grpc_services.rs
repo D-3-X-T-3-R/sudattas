@@ -2039,17 +2039,19 @@ pub struct PromotionsResponse {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateShippingZoneRequest {
-    #[prost(string, tag = "1")]
-    pub zone_name: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub description: ::prost::alloc::string::String,
+    #[prost(int32, tag = "1")]
+    pub zip_code: i32,
+    #[prost(string, optional, tag = "2")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SearchShippingZoneRequest {
-    #[prost(int64, tag = "1")]
-    pub zone_id: i64,
+    #[prost(int64, optional, tag = "1")]
+    pub zone_id: ::core::option::Option<i64>,
+    #[prost(int32, optional, tag = "2")]
+    pub zip_code: ::core::option::Option<i32>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2057,8 +2059,8 @@ pub struct SearchShippingZoneRequest {
 pub struct UpdateShippingZoneRequest {
     #[prost(int64, tag = "1")]
     pub zone_id: i64,
-    #[prost(string, optional, tag = "2")]
-    pub zone_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int32, tag = "2")]
+    pub zip_code: i32,
     #[prost(string, optional, tag = "3")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -2075,10 +2077,10 @@ pub struct DeleteShippingZoneRequest {
 pub struct ShippingZoneResponse {
     #[prost(int64, tag = "1")]
     pub zone_id: i64,
-    #[prost(string, tag = "2")]
-    pub zone_name: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub description: ::prost::alloc::string::String,
+    #[prost(int32, tag = "2")]
+    pub zip_code: i32,
+    #[prost(string, optional, tag = "3")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

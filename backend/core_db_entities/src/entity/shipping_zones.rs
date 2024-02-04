@@ -8,13 +8,22 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(column_name = "ZoneID", primary_key)]
     pub zone_id: i64,
-    #[sea_orm(column_name = "ZoneName")]
-    pub zone_name: String,
+    #[sea_orm(column_name = "ZipCode")]
+    pub zip_code: i32,
     #[sea_orm(column_name = "Description", column_type = "Text", nullable)]
     pub description: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(has_many = "super::shipping_addresses::Entity")]
+    ShippingAddresses,
+}
+
+impl Related<super::shipping_addresses::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ShippingAddresses.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}

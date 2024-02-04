@@ -14,6 +14,8 @@ pub struct Model {
     pub state_id: i64,
     #[sea_orm(column_name = "CityID")]
     pub city_id: i64,
+    #[sea_orm(column_name = "ZipCodeID")]
+    pub zip_code_id: i64,
     #[sea_orm(column_name = "Road")]
     pub road: Option<String>,
     #[sea_orm(column_name = "ApartmentNoOrName")]
@@ -41,6 +43,14 @@ pub enum Relation {
     #[sea_orm(has_many = "super::orders::Entity")]
     Orders,
     #[sea_orm(
+        belongs_to = "super::shipping_zones::Entity",
+        from = "Column::ZipCodeId",
+        to = "super::shipping_zones::Column::ZoneId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    ShippingZones,
+    #[sea_orm(
         belongs_to = "super::states::Entity",
         from = "Column::StateId",
         to = "super::states::Column::StateId",
@@ -65,6 +75,12 @@ impl Related<super::countries::Entity> for Entity {
 impl Related<super::orders::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Orders.def()
+    }
+}
+
+impl Related<super::shipping_zones::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ShippingZones.def()
     }
 }
 
