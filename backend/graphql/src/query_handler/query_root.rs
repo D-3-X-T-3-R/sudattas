@@ -5,6 +5,10 @@ use crate::resolvers::{
         self,
         schema::{Category, SearchCategory},
     },
+    city::{
+        self,
+        schema::{City, SearchCity},
+    },
     country::{
         self,
         schema::{Country, SearchCountry},
@@ -96,6 +100,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_state(search: SearchState) -> FieldResult<Vec<State>> {
         state::handlers::search_state(search)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // City
+    #[instrument(err, ret)]
+    async fn search_city(search: SearchCity) -> FieldResult<Vec<City>> {
+        city::handlers::search_city(search)
             .await
             .map_err(|e| e.into())
     }

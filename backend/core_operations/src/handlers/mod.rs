@@ -1,5 +1,6 @@
 pub mod cart;
 pub mod categories;
+pub mod city;
 pub mod country;
 pub mod db_errors;
 pub mod order_details;

@@ -8,6 +8,10 @@ use crate::resolvers::{
         self,
         schema::{Category, CategoryMutation, NewCategory},
     },
+    city::{
+        self,
+        schema::{City, NewCity},
+    },
     country::{
         self,
         schema::{Country, NewCountry},
@@ -168,6 +172,21 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_state(state_id: String) -> FieldResult<Vec<State>> {
         state::handlers::delete_state(state_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // City
+    #[instrument(err, ret)]
+    async fn create_city(city: NewCity) -> FieldResult<Vec<City>> {
+        city::handlers::create_city(city)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_city(city_id: String) -> FieldResult<Vec<City>> {
+        city::handlers::delete_city(city_id)
             .await
             .map_err(|e| e.into())
     }
