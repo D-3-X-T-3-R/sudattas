@@ -127,19 +127,29 @@ CREATE TABLE `StateCityMapping` (
     FOREIGN KEY (`CityID`) REFERENCES `Cities`(`CityID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+CREATE TABLE `ShippingZones` (
+    `ZoneID` bigint NOT NULL AUTO_INCREMENT,
+    `ZipCode` int NOT NULL, -- Changed from ZoneName and type changed to int
+    `Description` text,
+    PRIMARY KEY (`ZoneID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- Create the ShippingAddresses table
 CREATE TABLE `ShippingAddresses` (
     `ShippingAddressID` BIGINT NOT NULL AUTO_INCREMENT,
     `CountryID` BIGINT NOT NULL,
     `StateID` BIGINT NOT NULL,
     `CityID` BIGINT NOT NULL,
+    `ZipCodeID` BIGINT NOT NULL,
     `Road` VARCHAR(255),
     `ApartmentNoOrName` VARCHAR(255),
     PRIMARY KEY (`ShippingAddressID`),
     FOREIGN KEY (`CountryID`) REFERENCES `Countries`(`CountryID`),
     FOREIGN KEY (`StateID`) REFERENCES `States`(`StateID`),
-    FOREIGN KEY (`CityID`) REFERENCES `Cities`(`CityID`)
+    FOREIGN KEY (`CityID`) REFERENCES `Cities`(`CityID`),
+    FOREIGN KEY (`ZipCodeID`) REFERENCES `ShippingZones`(`ZoneID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 
 -- Table structure for table `Orders`
 CREATE TABLE `Orders` (
@@ -372,8 +382,6 @@ CREATE TABLE `ProductColorMapping` (
     FOREIGN KEY (`ColorID`) REFERENCES `Colors`(`ColorID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- ===========================================================================================
-
 CREATE TABLE `ProductVariants` (
     `VariantID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint NOT NULL,
@@ -423,13 +431,6 @@ CREATE TABLE `Promotions` (
     `EndDate` datetime NOT NULL,
     `Details` text,
     PRIMARY KEY (`PromotionID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE TABLE `ShippingZones` (
-    `ZoneID` bigint NOT NULL AUTO_INCREMENT,
-    `ZoneName` varchar(255) NOT NULL,
-    `Description` text,
-    PRIMARY KEY (`ZoneID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `PaymentMethods` (

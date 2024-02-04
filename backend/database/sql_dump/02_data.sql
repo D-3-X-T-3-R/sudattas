@@ -45,11 +45,6 @@ VALUES
 ('subscriber@example.com', CURRENT_TIMESTAMP),
 ('user@example.com', CURRENT_TIMESTAMP);
 
--- Inserting data into `ShippingZones`
-INSERT INTO `ShippingZones` (`ZoneName`, `Description`)
-VALUES
-('Zone 1', 'Local zone'),
-('Zone 2', 'International zone');
 
 -- Inserting data into `PaymentMethods`
 INSERT INTO `PaymentMethods` (`MethodName`, `Details`)
@@ -182,27 +177,33 @@ INSERT INTO `StateCityMapping` (`StateID`, `CityID`) VALUES
 (1, 4),
 (1, 5);
 
+-- Inserting data into `ShippingZones`
+INSERT INTO `ShippingZones` (`ZipCode`, `Description`)
+VALUES
+(10001, 'Local zone'),      -- Example ZipCode for a local zone
+(20002, 'International zone'); -- Example ZipCode for an international zone
+
 -- Inserting data into `ShippingAddresses`
-INSERT INTO `ShippingAddresses` (`CountryID`, `StateID`, `CityID`, `Road`, `ApartmentNoOrName`) VALUES 
--- Address in Kolkata (CityID = 1)
-(1, 1, 1, 'Park Street', 'Apartment 42'),
-(1, 1, 1, 'Ballygunge Circular Road', 'Bungalow 19'),
+INSERT INTO `ShippingAddresses` (`CountryID`, `StateID`, `CityID`, `ZipCodeID`, `Road`, `ApartmentNoOrName`) VALUES 
+-- Assuming ZipCodeID 1 corresponds to a valid ID from ShippingZones
+(1, 1, 1, 1, 'Park Street', 'Apartment 42'),
+(1, 1, 1, 1, 'Ballygunge Circular Road', 'Bungalow 19'),
 
 -- Address in Asansol (CityID = 2)
-(1, 1, 2, 'Burnpur Road', 'Flat 7A'),
-(1, 1, 2, 'Rabindra Bhavan', 'House 233'),
+(1, 1, 2, 1, 'Burnpur Road', 'Flat 7A'),
+(1, 1, 2, 1, 'Rabindra Bhavan', 'House 233'),
 
 -- Address in Siliguri (CityID = 3)
-(1, 1, 3, 'Sevoke Road', 'Villa 5'),
-(1, 1, 3, 'Hill Cart Road', 'Greenview Apartment 3B'),
+(1, 1, 3, 1, 'Sevoke Road', 'Villa 5'),
+(1, 1, 3, 1, 'Hill Cart Road', 'Greenview Apartment 3B'),
 
 -- Address in Durgapur (CityID = 4)
-(1, 1, 4, 'City Center', 'Duplex 16'),
-(1, 1, 4, 'A-Zone', 'Tower 9, Floor 2'),
+(1, 1, 4, 1, 'City Center', 'Duplex 16'),
+(1, 1, 4, 1, 'A-Zone', 'Tower 9, Floor 2'),
 
 -- Address in Bardhaman (CityID = 5)
-(1, 1, 5, 'Kuruvilla Street', 'Lotus Enclave, Flat 21'),
-(1, 1, 5, 'Sarat Chandra Avenue', 'Sunrise Villa');
+(1, 1, 5, 1, 'Kuruvilla Street', 'Lotus Enclave, Flat 21'),
+(1, 1, 5, 1, 'Sarat Chandra Avenue', 'Sunrise Villa');
 
 -- Inserting data into `Orders`
 INSERT INTO `Orders` (`UserID`, `OrderDate`, `ShippingAddressID`, `TotalAmount`, `StatusID`)
