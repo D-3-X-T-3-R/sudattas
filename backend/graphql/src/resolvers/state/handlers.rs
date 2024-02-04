@@ -2,10 +2,10 @@ use proto::proto::core::{CreateStateRequest, DeleteStateRequest, SearchStateRequ
 
 use tracing::instrument;
 
-use super::schema::{NewState, SearchState, State, StateMutation};
+use super::schema::{NewState, SearchState, State};
 use crate::resolvers::{
     error::{Code, GqlError},
-    utils::{connect_grpc_client, to_f64, to_i64, to_option_f64, to_option_i64},
+    utils::{connect_grpc_client, to_option_i64},
 };
 
 #[instrument]

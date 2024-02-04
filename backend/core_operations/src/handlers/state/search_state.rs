@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::states;
 use proto::proto::core::{SearchStateRequest, StateResponse, StatesResponse};
-use rust_decimal::{prelude::ToPrimitive, Decimal};
+
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
 use tonic::{Request, Response, Status};
 

@@ -1,6 +1,6 @@
-use juniper::{graphql_object, FieldResult, GraphQLInputObject};
+use juniper::{graphql_object, GraphQLInputObject};
 
-use crate::resolvers::category::schema::{Category, SearchCategory};
+
 
 #[derive(Default, Debug, Clone)]
 pub struct State {

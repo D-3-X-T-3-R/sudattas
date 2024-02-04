@@ -2,10 +2,7 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use chrono::Utc;
 use core_db_entities::entity::wishlist;
 use proto::proto::core::{AddWishlistItemRequest, WishlistItemResponse, WishlistItemsResponse};
-use rust_decimal::{
-    prelude::{FromPrimitive, ToPrimitive},
-    Decimal,
-};
+
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 

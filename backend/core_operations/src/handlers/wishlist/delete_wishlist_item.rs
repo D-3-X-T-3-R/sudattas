@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::wishlist;
 use proto::proto::core::{DeleteWishlistItemRequest, WishlistItemResponse, WishlistItemsResponse};
-use rust_decimal::{prelude::ToPrimitive, Decimal};
+
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 

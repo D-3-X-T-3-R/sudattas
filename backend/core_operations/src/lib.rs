@@ -236,7 +236,7 @@ impl GrpcServices for MyGRPCServices {
     // CityState Mapping Service
     async fn create_state_city_mapping(
         &self,
-        request: Request<CreateStateCityMappingRequest>,
+        _request: Request<CreateStateCityMappingRequest>,
     ) -> Result<Response<StateCityMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -254,7 +254,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_state_city_mapping(
         &self,
-        request: Request<UpdateStateCityMappingRequest>,
+        _request: Request<UpdateStateCityMappingRequest>,
     ) -> Result<Response<StateCityMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -272,7 +272,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_state_city_mapping(
         &self,
-        request: Request<DeleteStateCityMappingRequest>,
+        _request: Request<DeleteStateCityMappingRequest>,
     ) -> Result<Response<StateCityMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -290,7 +290,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_state_city_mapping(
         &self,
-        request: Request<SearchStateCityMappingRequest>,
+        _request: Request<SearchStateCityMappingRequest>,
     ) -> Result<Response<StateCityMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -309,7 +309,7 @@ impl GrpcServices for MyGRPCServices {
     // CountryState Mapping
     async fn create_country_state_mapping(
         &self,
-        request: Request<CreateCountryStateMappingRequest>,
+        _request: Request<CreateCountryStateMappingRequest>,
     ) -> Result<Response<CountryStateMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -327,7 +327,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_country_state_mapping(
         &self,
-        request: Request<UpdateCountryStateMappingRequest>,
+        _request: Request<UpdateCountryStateMappingRequest>,
     ) -> Result<Response<CountryStateMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -345,7 +345,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_country_state_mapping(
         &self,
-        request: Request<DeleteCountryStateMappingRequest>,
+        _request: Request<DeleteCountryStateMappingRequest>,
     ) -> Result<Response<CountryStateMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -363,7 +363,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn search_country_state_mapping(
         &self,
-        request: Request<SearchCountryStateMappingRequest>,
+        _request: Request<SearchCountryStateMappingRequest>,
     ) -> Result<Response<CountryStateMappingsResponse>, Status> {
         // let txn = self
         //     .db
@@ -382,7 +382,7 @@ impl GrpcServices for MyGRPCServices {
     // Shipping Address Service
     async fn create_shipping_address(
         &self,
-        request: Request<CreateShippingAddressRequest>,
+        _request: Request<CreateShippingAddressRequest>,
     ) -> Result<Response<ShippingAddressesResponse>, Status> {
         // let txn = self
         //     .db
@@ -400,7 +400,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn update_shipping_address(
         &self,
-        request: Request<UpdateShippingAddressRequest>,
+        _request: Request<UpdateShippingAddressRequest>,
     ) -> Result<Response<ShippingAddressesResponse>, Status> {
         // let txn = self
         //     .db
@@ -418,7 +418,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn delete_shipping_address(
         &self,
-        request: Request<DeleteShippingAddressRequest>,
+        _request: Request<DeleteShippingAddressRequest>,
     ) -> Result<Response<ShippingAddressesResponse>, Status> {
         // let txn = self
         //     .db
@@ -436,7 +436,7 @@ impl GrpcServices for MyGRPCServices {
 
     async fn get_shipping_address(
         &self,
-        request: Request<GetShippingAddressRequest>,
+        _request: Request<GetShippingAddressRequest>,
     ) -> Result<Response<ShippingAddressesResponse>, Status> {
         // let txn = self
         //     .db
