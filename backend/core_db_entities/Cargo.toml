@@ -14,3 +14,4 @@ sqlx-core = { version = "0.7" }
 tracing = { version = "0.1", features = ["log"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
+# dotenv = "0.15"
