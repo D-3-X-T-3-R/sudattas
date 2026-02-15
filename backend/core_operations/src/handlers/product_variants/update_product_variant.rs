@@ -3,8 +3,8 @@ use core_db_entities::entity::product_variants;
 use proto::proto::core::{
     ProductVariantResponse, ProductVariantsResponse, UpdateProductVariantRequest,
 };
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 

@@ -28,13 +28,19 @@ pub async fn delete_city(
                             }],
                         }))
                     } else {
-                        Err(Status::not_found(format!("City with ID {} not found", req.city_id)))
+                        Err(Status::not_found(format!(
+                            "City with ID {} not found",
+                            req.city_id
+                        )))
                     }
                 }
                 Err(e) => Err(map_db_error_to_status(e)),
             }
         }
-        Ok(None) => Err(Status::not_found(format!("City with ID {} not found", req.city_id))),
+        Ok(None) => Err(Status::not_found(format!(
+            "City with ID {} not found",
+            req.city_id
+        ))),
         Err(e) => Err(map_db_error_to_status(e)),
     }
 }

@@ -1,8 +1,8 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::discounts;
 use proto::proto::core::{DiscountResponse, DiscountsResponse, UpdateDiscountRequest};
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 

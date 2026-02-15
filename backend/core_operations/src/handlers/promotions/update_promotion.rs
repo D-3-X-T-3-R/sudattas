@@ -29,10 +29,7 @@ pub async fn update_promotion(
         .await
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| {
-            Status::not_found(format!(
-                "Promotion with ID {} not found",
-                req.promotion_id
-            ))
+            Status::not_found(format!("Promotion with ID {} not found", req.promotion_id))
         })?;
 
     let start = req

@@ -1,8 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::inventory_log;
-use proto::proto::core::{
-    InventoryLogResponse, InventoryLogsResponse, SearchInventoryLogRequest,
-};
+use proto::proto::core::{InventoryLogResponse, InventoryLogsResponse, SearchInventoryLogRequest};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
 use tonic::{Request, Response, Status};
 

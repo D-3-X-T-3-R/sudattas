@@ -13,18 +13,19 @@ pub async fn delete_size(
     let found = sizes::Entity::find_by_id(req.size_id).one(txn).await;
 
     match found {
-        Ok(Some(model)) => {
-            match sizes::Entity::delete_by_id(req.size_id).exec(txn).await {
-                Ok(_) => Ok(Response::new(SizesResponse {
-                    items: vec![SizeResponse {
-                        size_id: model.size_id,
-                        size_name: model.size_name,
-                    }],
-                })),
-                Err(e) => Err(map_db_error_to_status(e)),
-            }
-        }
-        Ok(None) => Err(Status::not_found(format!("Size with ID {} not found", req.size_id))),
+        Ok(Some(model)) => match sizes::Entity::delete_by_id(req.size_id).exec(txn).await {
+            Ok(_) => Ok(Response::new(SizesResponse {
+                items: vec![SizeResponse {
+                    size_id: model.size_id,
+                    size_name: model.size_name,
+                }],
+            })),
+            Err(e) => Err(map_db_error_to_status(e)),
+        },
+        Ok(None) => Err(Status::not_found(format!(
+            "Size with ID {} not found",
+            req.size_id
+        ))),
         Err(e) => Err(map_db_error_to_status(e)),
     }
 }

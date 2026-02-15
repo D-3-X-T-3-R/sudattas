@@ -26,7 +26,9 @@ pub async fn update_inventory_item(
     let model = inventory::ActiveModel {
         inventory_id: ActiveValue::Set(existing.inventory_id),
         product_id: ActiveValue::Set(req.product_id.or(existing.product_id)),
-        quantity_available: ActiveValue::Set(req.quantity_available.or(existing.quantity_available)),
+        quantity_available: ActiveValue::Set(
+            req.quantity_available.or(existing.quantity_available),
+        ),
         reorder_level: ActiveValue::Set(req.reorder_level.or(existing.reorder_level)),
         supplier_id: ActiveValue::Set(req.supplier_id.or(existing.supplier_id)),
     };

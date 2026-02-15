@@ -39,5 +39,9 @@ base64 = "0.21.7"
 core_db_entities = {path = "../core_db_entities/"}
 proto = {path = "../protos/"}
 
+[dev-dependencies]
+# Test dependencies
+tokio-test = "0.4"
+
 [build-dependencies]
 tonic-build = "0.10.2"

@@ -1,8 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::user_activity;
-use proto::proto::core::{
-    SearchUserActivityRequest, UserActivityResponse, UserActivitiesResponse,
-};
+use proto::proto::core::{SearchUserActivityRequest, UserActivitiesResponse, UserActivityResponse};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
 use tonic::{Request, Response, Status};
 

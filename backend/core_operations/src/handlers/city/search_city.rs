@@ -11,7 +11,9 @@ pub async fn search_city(
     let req = request.into_inner();
 
     match cities::Entity::find()
-        .apply_if(req.city_id, |query, v| query.filter(cities::Column::CityId.eq(v)))
+        .apply_if(req.city_id, |query, v| {
+            query.filter(cities::Column::CityId.eq(v))
+        })
         .apply_if(req.city_name, |query, v| {
             query.filter(cities::Column::CityName.contains(v))
         })

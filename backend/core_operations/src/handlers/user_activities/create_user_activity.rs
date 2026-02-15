@@ -1,9 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use chrono::Utc;
 use core_db_entities::entity::user_activity;
-use proto::proto::core::{
-    CreateUserActivityRequest, UserActivityResponse, UserActivitiesResponse,
-};
+use proto::proto::core::{CreateUserActivityRequest, UserActivitiesResponse, UserActivityResponse};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 

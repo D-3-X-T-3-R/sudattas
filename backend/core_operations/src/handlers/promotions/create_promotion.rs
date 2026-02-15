@@ -23,8 +23,10 @@ pub async fn create_promotion(
     request: Request<CreatePromotionRequest>,
 ) -> Result<Response<PromotionsResponse>, Status> {
     let req = request.into_inner();
-    let start = parse_datetime(&req.start_date).ok_or_else(|| Status::invalid_argument("Invalid start_date format"))?;
-    let end = parse_datetime(&req.end_date).ok_or_else(|| Status::invalid_argument("Invalid end_date format"))?;
+    let start = parse_datetime(&req.start_date)
+        .ok_or_else(|| Status::invalid_argument("Invalid start_date format"))?;
+    let end = parse_datetime(&req.end_date)
+        .ok_or_else(|| Status::invalid_argument("Invalid end_date format"))?;
     let model = promotions::ActiveModel {
         promotion_id: ActiveValue::NotSet,
         promotion_name: ActiveValue::Set(req.promotion_name),

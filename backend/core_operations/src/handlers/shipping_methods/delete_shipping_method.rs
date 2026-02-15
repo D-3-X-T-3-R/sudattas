@@ -27,7 +27,11 @@ pub async fn delete_shipping_method(
                     items: vec![ShippingMethodResponse {
                         method_id: model.method_id,
                         method_name: model.method_name.unwrap_or_default(),
-                        cost: model.cost.as_ref().and_then(ToPrimitive::to_f64).unwrap_or(0.0),
+                        cost: model
+                            .cost
+                            .as_ref()
+                            .and_then(ToPrimitive::to_f64)
+                            .unwrap_or(0.0),
                         estimated_delivery_time: model.estimated_delivery_time.unwrap_or_default(),
                     }],
                 })),

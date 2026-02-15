@@ -1,6 +1,8 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::shipping_addresses;
-use proto::proto::core::{GetShippingAddressRequest, ShippingAddressResponse, ShippingAddressesResponse};
+use proto::proto::core::{
+    GetShippingAddressRequest, ShippingAddressResponse, ShippingAddressesResponse,
+};
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 

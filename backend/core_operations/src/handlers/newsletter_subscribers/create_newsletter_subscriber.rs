@@ -2,8 +2,7 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use chrono::Utc;
 use core_db_entities::entity::newsletter_subscribers;
 use proto::proto::core::{
-    CreateNewsletterSubscriberRequest, NewsletterSubscriberResponse,
-    NewsletterSubscribersResponse,
+    CreateNewsletterSubscriberRequest, NewsletterSubscriberResponse, NewsletterSubscribersResponse,
 };
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};

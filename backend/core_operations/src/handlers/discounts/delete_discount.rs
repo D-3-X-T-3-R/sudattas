@@ -22,7 +22,10 @@ pub async fn delete_discount(
 
     match found {
         Ok(Some(model)) => {
-            match discounts::Entity::delete_by_id(req.discount_id).exec(txn).await {
+            match discounts::Entity::delete_by_id(req.discount_id)
+                .exec(txn)
+                .await
+            {
                 Ok(_) => Ok(Response::new(DiscountsResponse {
                     items: vec![DiscountResponse {
                         discount_id: model.discount_id,

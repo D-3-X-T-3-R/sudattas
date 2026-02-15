@@ -1,8 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::newsletter_subscribers;
 use proto::proto::core::{
-    DeleteNewsletterSubscriberRequest, NewsletterSubscriberResponse,
-    NewsletterSubscribersResponse,
+    DeleteNewsletterSubscriberRequest, NewsletterSubscriberResponse, NewsletterSubscribersResponse,
 };
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};

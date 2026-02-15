@@ -1,8 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::product_color_mapping;
 use proto::proto::core::{
-    CreateProductColorMappingRequest, ProductColorMappingResponse,
-    ProductColorMappingsResponse,
+    CreateProductColorMappingRequest, ProductColorMappingResponse, ProductColorMappingsResponse,
 };
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
