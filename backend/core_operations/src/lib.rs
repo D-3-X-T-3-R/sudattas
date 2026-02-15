@@ -189,54 +189,51 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreateCityRequest>,
     ) -> Result<Response<CitiesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::city::create_city(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::city::create_city(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_city(
         &self,
         request: Request<SearchCityRequest>,
     ) -> Result<Response<CitiesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::city::search_city(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::city::search_city(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_city(
         &self,
         request: Request<DeleteCityRequest>,
     ) -> Result<Response<CitiesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::city::delete_city(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::city::delete_city(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // CityState Mapping Service
@@ -244,72 +241,68 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreateStateCityMappingRequest>,
     ) -> Result<Response<StateCityMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::state_city_mapping::create_state_city_mapping(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::state_city_mapping::create_state_city_mapping(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_state_city_mapping(
         &self,
         request: Request<UpdateStateCityMappingRequest>,
     ) -> Result<Response<StateCityMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::state_city_mapping::update_state_city_mapping(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::state_city_mapping::update_state_city_mapping(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_state_city_mapping(
         &self,
         request: Request<DeleteStateCityMappingRequest>,
     ) -> Result<Response<StateCityMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::state_city_mapping::delete_state_city_mapping(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::state_city_mapping::delete_state_city_mapping(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_state_city_mapping(
         &self,
         request: Request<SearchStateCityMappingRequest>,
     ) -> Result<Response<StateCityMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::state_city_mapping::search_state_city_mapping(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::state_city_mapping::search_state_city_mapping(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // CountryState Mapping
@@ -317,72 +310,68 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreateCountryStateMappingRequest>,
     ) -> Result<Response<CountryStateMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::country_state_mapping::create_country_state_mapping(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::country_state_mapping::create_country_state_mapping(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_country_state_mapping(
         &self,
         request: Request<UpdateCountryStateMappingRequest>,
     ) -> Result<Response<CountryStateMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::country_state_mapping::update_country_state_mapping(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::country_state_mapping::update_country_state_mapping(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_country_state_mapping(
         &self,
         request: Request<DeleteCountryStateMappingRequest>,
     ) -> Result<Response<CountryStateMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::country_state_mapping::delete_country_state_mapping(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::country_state_mapping::delete_country_state_mapping(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_country_state_mapping(
         &self,
         request: Request<SearchCountryStateMappingRequest>,
     ) -> Result<Response<CountryStateMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::country_state_mapping::search_country_state_mapping(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::country_state_mapping::search_country_state_mapping(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Shipping Address Service
@@ -390,72 +379,68 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreateShippingAddressRequest>,
     ) -> Result<Response<ShippingAddressesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::shipping_address::create_shipping_address(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::shipping_address::create_shipping_address(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_shipping_address(
         &self,
         request: Request<UpdateShippingAddressRequest>,
     ) -> Result<Response<ShippingAddressesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::shipping_address::update_shipping_address(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::shipping_address::update_shipping_address(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_shipping_address(
         &self,
         request: Request<DeleteShippingAddressRequest>,
     ) -> Result<Response<ShippingAddressesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::shipping_address::delete_shipping_address(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::shipping_address::delete_shipping_address(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn get_shipping_address(
         &self,
         request: Request<GetShippingAddressRequest>,
     ) -> Result<Response<ShippingAddressesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::shipping_address::get_shipping_address(&txn, request)
-        //     .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::shipping_address::get_shipping_address(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Cart Services
@@ -526,71 +511,68 @@ impl GrpcServices for MyGRPCServices {
     // ProductColorMapping Services
     async fn create_product_color_mapping(
         &self,
-        _request: Request<CreateProductColorMappingRequest>,
+        request: Request<CreateProductColorMappingRequest>,
     ) -> Result<Response<ProductColorMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
 
-        // let res = handlers::product_color_mappings::create_product_color_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
+        let res = handlers::product_color_mappings::create_product_color_mapping(
+            &txn,
+            request,
+        )
+        .await?;
 
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_product_color_mapping(
         &self,
-        _request: Request<SearchProductColorMappingRequest>,
+        request: Request<SearchProductColorMappingRequest>,
     ) -> Result<Response<ProductColorMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
 
-        // let res = handlers::product_color_mappings::search_product_color_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
+        let res = handlers::product_color_mappings::search_product_color_mapping(
+            &txn,
+            request,
+        )
+        .await?;
 
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_product_color_mapping(
         &self,
-        _request: Request<DeleteProductColorMappingRequest>,
+        request: Request<DeleteProductColorMappingRequest>,
     ) -> Result<Response<ProductColorMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
 
-        // let res = handlers::product_color_mappings::delete_product_color_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
+        let res = handlers::product_color_mappings::delete_product_color_mapping(
+            &txn,
+            request,
+        )
+        .await?;
 
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Product Services
@@ -677,134 +659,127 @@ impl GrpcServices for MyGRPCServices {
     // ProductSizeMapping Services
     async fn create_product_size_mapping(
         &self,
-        _request: Request<CreateProductSizeMappingRequest>,
+        request: Request<CreateProductSizeMappingRequest>,
     ) -> Result<Response<ProductSizeMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_size_mappings::create_product_size_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_size_mappings::create_product_size_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_product_size_mapping(
         &self,
-        _request: Request<SearchProductSizeMappingRequest>,
+        request: Request<SearchProductSizeMappingRequest>,
     ) -> Result<Response<ProductSizeMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_size_mappings::search_product_size_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_size_mappings::search_product_size_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_product_size_mapping(
         &self,
-        _request: Request<DeleteProductSizeMappingRequest>,
+        request: Request<DeleteProductSizeMappingRequest>,
     ) -> Result<Response<ProductSizeMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_size_mappings::delete_product_size_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_size_mappings::delete_product_size_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // User Services
     async fn create_user(
         &self,
-        _request: Request<CreateUserRequest>,
+        request: Request<CreateUserRequest>,
     ) -> Result<Response<UsersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::users::create_user(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::users::create_user(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_user(
         &self,
-        _request: Request<SearchUserRequest>,
+        request: Request<SearchUserRequest>,
     ) -> Result<Response<UsersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::users::search_user(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::users::search_user(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_user(
         &self,
-        _request: Request<UpdateUserRequest>,
+        request: Request<UpdateUserRequest>,
     ) -> Result<Response<UsersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::users::update_user(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::users::update_user(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_user(
         &self,
-        _request: Request<DeleteUserRequest>,
+        request: Request<DeleteUserRequest>,
     ) -> Result<Response<UsersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::users::delete_user(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::users::delete_user(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Category Services
@@ -1005,70 +980,66 @@ impl GrpcServices for MyGRPCServices {
     // Reviews Services
     async fn create_review(
         &self,
-        _request: Request<CreateReviewRequest>,
+        request: Request<CreateReviewRequest>,
     ) -> Result<Response<ReviewsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::reviews::create_review(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::reviews::create_review(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_review(
         &self,
-        _request: Request<SearchReviewRequest>,
+        request: Request<SearchReviewRequest>,
     ) -> Result<Response<ReviewsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::reviews::search_review(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::reviews::search_review(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_review(
         &self,
-        _request: Request<UpdateReviewRequest>,
+        request: Request<UpdateReviewRequest>,
     ) -> Result<Response<ReviewsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::reviews::update_review(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::reviews::update_review(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_review(
         &self,
-        _request: Request<DeleteReviewRequest>,
+        request: Request<DeleteReviewRequest>,
     ) -> Result<Response<ReviewsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::reviews::delete_review(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::reviews::delete_review(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // ProductImages Services
@@ -1139,143 +1110,135 @@ impl GrpcServices for MyGRPCServices {
     // Suppliers Services
     async fn create_supplier(
         &self,
-        _request: Request<CreateSupplierRequest>,
+        request: Request<CreateSupplierRequest>,
     ) -> Result<Response<SuppliersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::suppliers::create_supplier(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::suppliers::create_supplier(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_supplier(
         &self,
-        _request: Request<SearchSupplierRequest>,
+        request: Request<SearchSupplierRequest>,
     ) -> Result<Response<SuppliersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::suppliers::search_supplier(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::suppliers::search_supplier(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_supplier(
         &self,
-        _request: Request<UpdateSupplierRequest>,
+        request: Request<UpdateSupplierRequest>,
     ) -> Result<Response<SuppliersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::suppliers::update_supplier(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::suppliers::update_supplier(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_supplier(
         &self,
-        _request: Request<DeleteSupplierRequest>,
+        request: Request<DeleteSupplierRequest>,
     ) -> Result<Response<SuppliersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::suppliers::delete_supplier(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::suppliers::delete_supplier(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Inventory Services
     async fn create_inventory_item(
         &self,
-        _request: Request<CreateInventoryItemRequest>,
+        request: Request<CreateInventoryItemRequest>,
     ) -> Result<Response<InventoryItemsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::inventory::create_inventory_item(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::inventory::create_inventory_item(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_inventory_item(
         &self,
-        _request: Request<SearchInventoryItemRequest>,
+        request: Request<SearchInventoryItemRequest>,
     ) -> Result<Response<InventoryItemsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::inventory::search_inventory_item(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::inventory::search_inventory_item(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_inventory_item(
         &self,
-        _request: Request<UpdateInventoryItemRequest>,
+        request: Request<UpdateInventoryItemRequest>,
     ) -> Result<Response<InventoryItemsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::inventory::update_inventory_item(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::inventory::update_inventory_item(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_inventory_item(
         &self,
-        _request: Request<DeleteInventoryItemRequest>,
+        request: Request<DeleteInventoryItemRequest>,
     ) -> Result<Response<InventoryItemsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::inventory::delete_inventory_item(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::inventory::delete_inventory_item(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Wishlist Services
@@ -1330,1400 +1293,1327 @@ impl GrpcServices for MyGRPCServices {
     // ProductAttributes Services
     async fn create_product_attribute(
         &self,
-        _request: Request<CreateProductAttributeRequest>,
+        request: Request<CreateProductAttributeRequest>,
     ) -> Result<Response<ProductAttributesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_attributes::create_product_attribute(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_attributes::create_product_attribute(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_product_attribute(
         &self,
-        _request: Request<SearchProductAttributeRequest>,
+        request: Request<SearchProductAttributeRequest>,
     ) -> Result<Response<ProductAttributesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_attributes::search_product_attribute(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_attributes::search_product_attribute(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_product_attribute(
         &self,
-        _request: Request<UpdateProductAttributeRequest>,
+        request: Request<UpdateProductAttributeRequest>,
     ) -> Result<Response<ProductAttributesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_attributes::update_product_attribute(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_attributes::update_product_attribute(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_product_attribute(
         &self,
-        _request: Request<DeleteProductAttributeRequest>,
+        request: Request<DeleteProductAttributeRequest>,
     ) -> Result<Response<ProductAttributesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_attributes::delete_product_attribute(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_attributes::delete_product_attribute(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Discounts Services
     async fn create_discount(
         &self,
-        _request: Request<CreateDiscountRequest>,
+        request: Request<CreateDiscountRequest>,
     ) -> Result<Response<DiscountsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::discounts::create_discount(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::discounts::create_discount(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_discount(
         &self,
-        _request: Request<SearchDiscountRequest>,
+        request: Request<SearchDiscountRequest>,
     ) -> Result<Response<DiscountsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::discounts::search_discount(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::discounts::search_discount(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_discount(
         &self,
-        _request: Request<UpdateDiscountRequest>,
+        request: Request<UpdateDiscountRequest>,
     ) -> Result<Response<DiscountsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::discounts::update_discount(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::discounts::update_discount(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_discount(
         &self,
-        _request: Request<DeleteDiscountRequest>,
+        request: Request<DeleteDiscountRequest>,
     ) -> Result<Response<DiscountsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::discounts::delete_discount(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::discounts::delete_discount(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // ShippingMethods Services
     async fn create_shipping_method(
         &self,
-        _request: Request<CreateShippingMethodRequest>,
+        request: Request<CreateShippingMethodRequest>,
     ) -> Result<Response<ShippingMethodsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_methods::create_shipping_method(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::shipping_methods::create_shipping_method(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_shipping_method(
         &self,
-        _request: Request<SearchShippingMethodRequest>,
+        request: Request<SearchShippingMethodRequest>,
     ) -> Result<Response<ShippingMethodsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_methods::search_shipping_method(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::shipping_methods::search_shipping_method(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_shipping_method(
         &self,
-        _request: Request<UpdateShippingMethodRequest>,
+        request: Request<UpdateShippingMethodRequest>,
     ) -> Result<Response<ShippingMethodsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_methods::update_shipping_method(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::shipping_methods::update_shipping_method(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_shipping_method(
         &self,
-        _request: Request<DeleteShippingMethodRequest>,
+        request: Request<DeleteShippingMethodRequest>,
     ) -> Result<Response<ShippingMethodsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_methods::delete_shipping_method(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::shipping_methods::delete_shipping_method(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // UserRole Services
     async fn create_user_role(
         &self,
-        _request: Request<CreateUserRoleRequest>,
+        request: Request<CreateUserRoleRequest>,
     ) -> Result<Response<UserRolesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::user_roles::create_user_role(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::user_roles::create_user_role(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_user_role(
         &self,
-        _request: Request<SearchUserRoleRequest>,
+        request: Request<SearchUserRoleRequest>,
     ) -> Result<Response<UserRolesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::user_roles::search_user_role(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::user_roles::search_user_role(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_user_role(
         &self,
-        _request: Request<UpdateUserRoleRequest>,
+        request: Request<UpdateUserRoleRequest>,
     ) -> Result<Response<UserRolesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::user_roles::update_user_role(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::user_roles::update_user_role(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_user_role(
         &self,
-        _request: Request<DeleteUserRoleRequest>,
+        request: Request<DeleteUserRoleRequest>,
     ) -> Result<Response<UserRolesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::user_roles::delete_user_role(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::user_roles::delete_user_role(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Transactions Services
     async fn create_transaction(
         &self,
-        _request: Request<CreateTransactionRequest>,
+        request: Request<CreateTransactionRequest>,
     ) -> Result<Response<TransactionsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::transactions::create_transaction(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::transactions::create_transaction(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_transaction(
         &self,
-        _request: Request<SearchTransactionRequest>,
+        request: Request<SearchTransactionRequest>,
     ) -> Result<Response<TransactionsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::transactions::search_transaction(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::transactions::search_transaction(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_transaction(
         &self,
-        _request: Request<UpdateTransactionRequest>,
+        request: Request<UpdateTransactionRequest>,
     ) -> Result<Response<TransactionsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::transactions::update_transaction(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::transactions::update_transaction(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_transaction(
         &self,
-        _request: Request<DeleteTransactionRequest>,
+        request: Request<DeleteTransactionRequest>,
     ) -> Result<Response<TransactionsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::transactions::delete_transaction(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::transactions::delete_transaction(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // NewsletterSubscribers Services
     async fn create_newsletter_subscriber(
         &self,
-        _request: Request<CreateNewsletterSubscriberRequest>,
+        request: Request<CreateNewsletterSubscriberRequest>,
     ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::newsletter_subscribers::create_newsletter_subscriber(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::newsletter_subscribers::create_newsletter_subscriber(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_newsletter_subscriber(
         &self,
-        _request: Request<SearchNewsletterSubscriberRequest>,
+        request: Request<SearchNewsletterSubscriberRequest>,
     ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::newsletter_subscribers::search_newsletter_subscriber(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::newsletter_subscribers::search_newsletter_subscriber(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_newsletter_subscriber(
         &self,
-        _request: Request<UpdateNewsletterSubscriberRequest>,
+        request: Request<UpdateNewsletterSubscriberRequest>,
     ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::newsletter_subscribers::update_newsletter_subscriber(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::newsletter_subscribers::update_newsletter_subscriber(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_newsletter_subscriber(
         &self,
-        _request: Request<DeleteNewsletterSubscriberRequest>,
+        request: Request<DeleteNewsletterSubscriberRequest>,
     ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::newsletter_subscribers::delete_newsletter_subscriber(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::newsletter_subscribers::delete_newsletter_subscriber(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // ProductRatings Services
     async fn create_product_rating(
         &self,
-        _request: Request<CreateProductRatingRequest>,
+        request: Request<CreateProductRatingRequest>,
     ) -> Result<Response<ProductRatingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_ratings::create_product_rating(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::product_ratings::create_product_rating(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_product_rating(
         &self,
-        _request: Request<SearchProductRatingRequest>,
+        request: Request<SearchProductRatingRequest>,
     ) -> Result<Response<ProductRatingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_ratings::search_product_rating(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::product_ratings::search_product_rating(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_product_rating(
         &self,
-        _request: Request<UpdateProductRatingRequest>,
+        request: Request<UpdateProductRatingRequest>,
     ) -> Result<Response<ProductRatingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_ratings::update_product_rating(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::product_ratings::update_product_rating(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_product_rating(
         &self,
-        _request: Request<DeleteProductRatingRequest>,
+        request: Request<DeleteProductRatingRequest>,
     ) -> Result<Response<ProductRatingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_ratings::delete_product_rating(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::product_ratings::delete_product_rating(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Sizes Services
     async fn create_size(
         &self,
-        _request: Request<CreateSizeRequest>,
+        request: Request<CreateSizeRequest>,
     ) -> Result<Response<SizesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::sizes::create_size(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::sizes::create_size(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_size(
         &self,
-        _request: Request<SearchSizeRequest>,
+        request: Request<SearchSizeRequest>,
     ) -> Result<Response<SizesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::sizes::search_size(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::sizes::search_size(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_size(
         &self,
-        _request: Request<UpdateSizeRequest>,
+        request: Request<UpdateSizeRequest>,
     ) -> Result<Response<SizesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::sizes::update_size(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::sizes::update_size(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_size(
         &self,
-        _request: Request<DeleteSizeRequest>,
+        request: Request<DeleteSizeRequest>,
     ) -> Result<Response<SizesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::sizes::delete_size(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::sizes::delete_size(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Colors Services
     async fn create_color(
         &self,
-        _request: Request<CreateColorRequest>,
+        request: Request<CreateColorRequest>,
     ) -> Result<Response<ColorsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::colors::create_color(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::colors::create_color(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_color(
         &self,
-        _request: Request<SearchColorRequest>,
+        request: Request<SearchColorRequest>,
     ) -> Result<Response<ColorsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::colors::search_color(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::colors::search_color(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_color(
         &self,
-        _request: Request<UpdateColorRequest>,
+        request: Request<UpdateColorRequest>,
     ) -> Result<Response<ColorsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::colors::update_color(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::colors::update_color(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_color(
         &self,
-        _request: Request<DeleteColorRequest>,
+        request: Request<DeleteColorRequest>,
     ) -> Result<Response<ColorsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::colors::delete_color(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::colors::delete_color(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // ProductCategoryMapping Services
     async fn create_product_category_mapping(
         &self,
-        _request: Request<CreateProductCategoryMappingRequest>,
+        request: Request<CreateProductCategoryMappingRequest>,
     ) -> Result<Response<ProductCategoryMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_category_mappings::create_product_category_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_category_mappings::create_product_category_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_product_category_mapping(
         &self,
-        _request: Request<SearchProductCategoryMappingRequest>,
+        request: Request<SearchProductCategoryMappingRequest>,
     ) -> Result<Response<ProductCategoryMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_category_mappings::search_product_category_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_category_mappings::search_product_category_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_product_category_mapping(
         &self,
-        _request: Request<DeleteProductCategoryMappingRequest>,
+        request: Request<DeleteProductCategoryMappingRequest>,
     ) -> Result<Response<ProductCategoryMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_category_mappings::delete_product_category_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_category_mappings::delete_product_category_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // ProductAttributeMapping Services
     async fn create_product_attribute_mapping(
         &self,
-        _request: Request<CreateProductAttributeMappingRequest>,
+        request: Request<CreateProductAttributeMappingRequest>,
     ) -> Result<Response<ProductAttributeMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_attribute_mappings::create_product_attribute_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_attribute_mappings::create_product_attribute_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_product_attribute_mapping(
         &self,
-        _request: Request<SearchProductAttributeMappingRequest>,
+        request: Request<SearchProductAttributeMappingRequest>,
     ) -> Result<Response<ProductAttributeMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_attribute_mappings::search_product_attribute_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_attribute_mappings::search_product_attribute_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_product_attribute_mapping(
         &self,
-        _request: Request<DeleteProductAttributeMappingRequest>,
+        request: Request<DeleteProductAttributeMappingRequest>,
     ) -> Result<Response<ProductAttributeMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::product_attribute_mappings::delete_product_attribute_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_attribute_mappings::delete_product_attribute_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // UserRoleMapping Services
     async fn create_user_role_mapping(
         &self,
-        _request: Request<CreateUserRoleMappingRequest>,
+        request: Request<CreateUserRoleMappingRequest>,
     ) -> Result<Response<UserRoleMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::user_role_mappings::create_user_role_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::user_role_mappings::create_user_role_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_user_role_mapping(
         &self,
-        _request: Request<SearchUserRoleMappingRequest>,
+        request: Request<SearchUserRoleMappingRequest>,
     ) -> Result<Response<UserRoleMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::user_role_mappings::search_user_role_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::user_role_mappings::search_user_role_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_user_role_mapping(
         &self,
-        _request: Request<DeleteUserRoleMappingRequest>,
+        request: Request<DeleteUserRoleMappingRequest>,
     ) -> Result<Response<UserRoleMappingsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res = handlers::user_role_mappings::delete_user_role_mapping(
-        //     &txn,
-        //     request,
-        // )
-        // .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::user_role_mappings::delete_user_role_mapping(
+            &txn,
+            request,
+        )
+        .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // ProductVariant Services
     async fn create_product_variant(
         &self,
-        _request: Request<CreateProductVariantRequest>,
+        request: Request<CreateProductVariantRequest>,
     ) -> Result<Response<ProductVariantsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_variants::create_product_variant(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::product_variants::create_product_variant(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_product_variant(
         &self,
-        _request: Request<SearchProductVariantRequest>,
+        request: Request<SearchProductVariantRequest>,
     ) -> Result<Response<ProductVariantsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_variants::search_product_variant(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::product_variants::search_product_variant(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_product_variant(
         &self,
-        _request: Request<UpdateProductVariantRequest>,
+        request: Request<UpdateProductVariantRequest>,
     ) -> Result<Response<ProductVariantsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_variants::update_product_variant(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::product_variants::update_product_variant(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_product_variant(
         &self,
-        _request: Request<DeleteProductVariantRequest>,
+        request: Request<DeleteProductVariantRequest>,
     ) -> Result<Response<ProductVariantsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::product_variants::delete_product_variant(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::product_variants::delete_product_variant(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // EventLogs Services
     async fn create_event_log(
         &self,
-        _request: Request<CreateEventLogRequest>,
+        request: Request<CreateEventLogRequest>,
     ) -> Result<Response<EventLogsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::event_logs::create_event_log(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::event_logs::create_event_log(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_event_log(
         &self,
-        _request: Request<SearchEventLogRequest>,
+        request: Request<SearchEventLogRequest>,
     ) -> Result<Response<EventLogsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::event_logs::search_event_log(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::event_logs::search_event_log(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_event_log(
         &self,
-        _request: Request<UpdateEventLogRequest>,
+        request: Request<UpdateEventLogRequest>,
     ) -> Result<Response<EventLogsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::event_logs::update_event_log(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::event_logs::update_event_log(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_event_log(
         &self,
-        _request: Request<DeleteEventLogRequest>,
+        request: Request<DeleteEventLogRequest>,
     ) -> Result<Response<EventLogsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::event_logs::delete_event_log(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::event_logs::delete_event_log(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // UserActivity Services
     async fn create_user_activity(
         &self,
-        _request: Request<CreateUserActivityRequest>,
+        request: Request<CreateUserActivityRequest>,
     ) -> Result<Response<UserActivitiesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::user_activities::create_user_activity(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::user_activities::create_user_activity(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_user_activity(
         &self,
-        _request: Request<SearchUserActivityRequest>,
+        request: Request<SearchUserActivityRequest>,
     ) -> Result<Response<UserActivitiesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::user_activities::search_user_activity(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::user_activities::search_user_activity(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_user_activity(
         &self,
-        _request: Request<UpdateUserActivityRequest>,
+        request: Request<UpdateUserActivityRequest>,
     ) -> Result<Response<UserActivitiesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::user_activities::update_user_activity(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::user_activities::update_user_activity(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_user_activity(
         &self,
-        _request: Request<DeleteUserActivityRequest>,
+        request: Request<DeleteUserActivityRequest>,
     ) -> Result<Response<UserActivitiesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::user_activities::delete_user_activity(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::user_activities::delete_user_activity(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // InventoryLog Services
     async fn create_inventory_log(
         &self,
-        _request: Request<CreateInventoryLogRequest>,
+        request: Request<CreateInventoryLogRequest>,
     ) -> Result<Response<InventoryLogsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::inventory_logs::create_inventory_log(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::inventory_logs::create_inventory_log(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_inventory_log(
         &self,
-        _request: Request<SearchInventoryLogRequest>,
+        request: Request<SearchInventoryLogRequest>,
     ) -> Result<Response<InventoryLogsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::inventory_logs::search_inventory_log(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::inventory_logs::search_inventory_log(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_inventory_log(
         &self,
-        _request: Request<UpdateInventoryLogRequest>,
+        request: Request<UpdateInventoryLogRequest>,
     ) -> Result<Response<InventoryLogsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::inventory_logs::update_inventory_log(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::inventory_logs::update_inventory_log(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_inventory_log(
         &self,
-        _request: Request<DeleteInventoryLogRequest>,
+        request: Request<DeleteInventoryLogRequest>,
     ) -> Result<Response<InventoryLogsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::inventory_logs::delete_inventory_log(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::inventory_logs::delete_inventory_log(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // Promotions Services
     async fn create_promotion(
         &self,
-        _request: Request<CreatePromotionRequest>,
+        request: Request<CreatePromotionRequest>,
     ) -> Result<Response<PromotionsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::promotions::create_promotion(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::promotions::create_promotion(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_promotion(
         &self,
-        _request: Request<SearchPromotionRequest>,
+        request: Request<SearchPromotionRequest>,
     ) -> Result<Response<PromotionsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::promotions::search_promotion(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::promotions::search_promotion(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_promotion(
         &self,
-        _request: Request<UpdatePromotionRequest>,
+        request: Request<UpdatePromotionRequest>,
     ) -> Result<Response<PromotionsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::promotions::update_promotion(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::promotions::update_promotion(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_promotion(
         &self,
-        _request: Request<DeletePromotionRequest>,
+        request: Request<DeletePromotionRequest>,
     ) -> Result<Response<PromotionsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::promotions::delete_promotion(&txn, request).await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::promotions::delete_promotion(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // ShippingZones Services
     async fn create_shipping_zone(
         &self,
-        _request: Request<CreateShippingZoneRequest>,
+        request: Request<CreateShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_zones::create_shipping_zone(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::shipping_zones::create_shipping_zone(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_shipping_zone(
         &self,
-        _request: Request<SearchShippingZoneRequest>,
+        request: Request<SearchShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_zones::search_shipping_zone(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::shipping_zones::search_shipping_zone(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_shipping_zone(
         &self,
-        _request: Request<UpdateShippingZoneRequest>,
+        request: Request<UpdateShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_zones::update_shipping_zone(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::shipping_zones::update_shipping_zone(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_shipping_zone(
         &self,
-        _request: Request<DeleteShippingZoneRequest>,
+        request: Request<DeleteShippingZoneRequest>,
     ) -> Result<Response<ShippingZonesResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::shipping_zones::delete_shipping_zone(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::shipping_zones::delete_shipping_zone(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     // PaymentMethods Services
     async fn create_payment_method(
         &self,
-        _request: Request<CreatePaymentMethodRequest>,
+        request: Request<CreatePaymentMethodRequest>,
     ) -> Result<Response<PaymentMethodsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::payment_methods::create_payment_method(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::payment_methods::create_payment_method(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn search_payment_method(
         &self,
-        _request: Request<SearchPaymentMethodRequest>,
+        request: Request<SearchPaymentMethodRequest>,
     ) -> Result<Response<PaymentMethodsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::payment_methods::search_payment_method(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::payment_methods::search_payment_method(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn update_payment_method(
         &self,
-        _request: Request<UpdatePaymentMethodRequest>,
+        request: Request<UpdatePaymentMethodRequest>,
     ) -> Result<Response<PaymentMethodsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::payment_methods::update_payment_method(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::payment_methods::update_payment_method(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 
     async fn delete_payment_method(
         &self,
-        _request: Request<DeletePaymentMethodRequest>,
+        request: Request<DeletePaymentMethodRequest>,
     ) -> Result<Response<PaymentMethodsResponse>, Status> {
-        // let txn = self
-        //     .db
-        //     .as_ref()
-        //     .unwrap()
-        //     .begin()
-        //     .await
-        //     .map_err(map_db_error_to_status)?;
-        // let res =
-        //     handlers::payment_methods::delete_payment_method(&txn, request)
-        //         .await?;
-        // txn.commit().await.map_err(map_db_error_to_status)?;
-        // Ok(res)
-        todo!()
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res =
+            handlers::payment_methods::delete_payment_method(&txn, request)
+                .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
     }
 }
