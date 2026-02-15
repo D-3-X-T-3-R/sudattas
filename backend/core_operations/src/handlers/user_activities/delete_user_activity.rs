@@ -1,8 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::user_activity;
-use proto::proto::core::{
-    DeleteUserActivityRequest, UserActivityResponse, UserActivitiesResponse,
-};
+use proto::proto::core::{DeleteUserActivityRequest, UserActivitiesResponse, UserActivityResponse};
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 

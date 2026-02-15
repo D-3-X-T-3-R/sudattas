@@ -17,10 +17,7 @@ pub async fn update_product_rating(
         .await
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| {
-            Status::not_found(format!(
-                "ProductRating with ID {} not found",
-                req.rating_id
-            ))
+            Status::not_found(format!("ProductRating with ID {} not found", req.rating_id))
         })?;
 
     let model = product_ratings::ActiveModel {

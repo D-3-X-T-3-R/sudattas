@@ -27,10 +27,7 @@ pub async fn search_product_variant(
                     product_id: m.product_id,
                     size_id: m.size_id,
                     color_id: m.color_id,
-                    additional_price: m
-                        .additional_price
-                        .as_ref()
-                        .and_then(ToPrimitive::to_f64),
+                    additional_price: m.additional_price.as_ref().and_then(ToPrimitive::to_f64),
                 })
                 .collect();
             Ok(Response::new(ProductVariantsResponse { items }))

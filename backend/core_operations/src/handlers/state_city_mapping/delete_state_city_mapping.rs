@@ -18,7 +18,10 @@ pub async fn delete_state_city_mapping(
 
     match found {
         Ok(Some(model)) => {
-            match state_city_mapping::Entity::delete_by_id(req.id).exec(txn).await {
+            match state_city_mapping::Entity::delete_by_id(req.id)
+                .exec(txn)
+                .await
+            {
                 Ok(_) => Ok(Response::new(StateCityMappingsResponse {
                     items: vec![StateCityMappingResponse {
                         id: model.id,

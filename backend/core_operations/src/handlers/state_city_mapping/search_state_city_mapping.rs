@@ -13,7 +13,9 @@ pub async fn search_state_city_mapping(
     let req = request.into_inner();
 
     match state_city_mapping::Entity::find()
-        .apply_if(req.id, |query, v| query.filter(state_city_mapping::Column::Id.eq(v)))
+        .apply_if(req.id, |query, v| {
+            query.filter(state_city_mapping::Column::Id.eq(v))
+        })
         .apply_if(req.state_id, |query, v| {
             query.filter(state_city_mapping::Column::StateId.eq(v))
         })

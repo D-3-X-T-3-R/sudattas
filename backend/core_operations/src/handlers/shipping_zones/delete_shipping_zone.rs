@@ -1,8 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::shipping_zones;
-use proto::proto::core::{
-    DeleteShippingZoneRequest, ShippingZoneResponse, ShippingZonesResponse,
-};
+use proto::proto::core::{DeleteShippingZoneRequest, ShippingZoneResponse, ShippingZonesResponse};
 use sea_orm::{ActiveModelTrait, DatabaseTransaction, EntityTrait, IntoActiveModel};
 use tonic::{Request, Response, Status};
 

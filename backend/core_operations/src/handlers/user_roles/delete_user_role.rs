@@ -14,7 +14,10 @@ pub async fn delete_user_role(
 
     match found {
         Ok(Some(model)) => {
-            match user_roles::Entity::delete_by_id(req.role_id).exec(txn).await {
+            match user_roles::Entity::delete_by_id(req.role_id)
+                .exec(txn)
+                .await
+            {
                 Ok(_) => Ok(Response::new(UserRolesResponse {
                     items: vec![UserRoleResponse {
                         role_id: model.role_id,

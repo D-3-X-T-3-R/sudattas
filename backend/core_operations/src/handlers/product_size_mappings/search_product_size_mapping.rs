@@ -1,8 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::product_size_mapping;
 use proto::proto::core::{
-    ProductSizeMappingResponse, ProductSizeMappingsResponse,
-    SearchProductSizeMappingRequest,
+    ProductSizeMappingResponse, ProductSizeMappingsResponse, SearchProductSizeMappingRequest,
 };
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
 use tonic::{Request, Response, Status};

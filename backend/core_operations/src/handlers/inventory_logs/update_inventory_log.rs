@@ -1,8 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::inventory_log;
-use proto::proto::core::{
-    InventoryLogResponse, InventoryLogsResponse, UpdateInventoryLogRequest,
-};
+use proto::proto::core::{InventoryLogResponse, InventoryLogsResponse, UpdateInventoryLogRequest};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
@@ -17,10 +15,7 @@ pub async fn update_inventory_log(
         .await
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| {
-            Status::not_found(format!(
-                "InventoryLog with ID {} not found",
-                req.log_id
-            ))
+            Status::not_found(format!("InventoryLog with ID {} not found", req.log_id))
         })?;
 
     let model = inventory_log::ActiveModel {

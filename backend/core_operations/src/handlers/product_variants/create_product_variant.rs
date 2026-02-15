@@ -3,8 +3,8 @@ use core_db_entities::entity::product_variants;
 use proto::proto::core::{
     CreateProductVariantRequest, ProductVariantResponse, ProductVariantsResponse,
 };
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
@@ -13,9 +13,7 @@ pub async fn create_product_variant(
     request: Request<CreateProductVariantRequest>,
 ) -> Result<Response<ProductVariantsResponse>, Status> {
     let req = request.into_inner();
-    let additional_price = req
-        .additional_price
-        .and_then(Decimal::from_f64_retain);
+    let additional_price = req.additional_price.and_then(Decimal::from_f64_retain);
     let model = product_variants::ActiveModel {
         variant_id: ActiveValue::NotSet,
         product_id: ActiveValue::Set(req.product_id),

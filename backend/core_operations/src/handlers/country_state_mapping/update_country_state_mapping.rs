@@ -1,8 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::country_state_mapping;
 use proto::proto::core::{
-    CountryStateMappingResponse, CountryStateMappingsResponse,
-    UpdateCountryStateMappingRequest,
+    CountryStateMappingResponse, CountryStateMappingsResponse, UpdateCountryStateMappingRequest,
 };
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
@@ -19,10 +18,7 @@ pub async fn update_country_state_mapping(
         .map_err(map_db_error_to_status)?;
 
     let existing = existing.ok_or_else(|| {
-        Status::not_found(format!(
-            "CountryStateMapping with ID {} not found",
-            req.id
-        ))
+        Status::not_found(format!("CountryStateMapping with ID {} not found", req.id))
     })?;
 
     let country_id = req.country_id.unwrap_or(existing.country_id);

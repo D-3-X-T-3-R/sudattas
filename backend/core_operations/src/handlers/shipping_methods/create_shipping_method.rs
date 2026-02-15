@@ -3,8 +3,8 @@ use core_db_entities::entity::shipping_methods;
 use proto::proto::core::{
     CreateShippingMethodRequest, ShippingMethodResponse, ShippingMethodsResponse,
 };
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
@@ -26,7 +26,11 @@ pub async fn create_shipping_method(
             items: vec![ShippingMethodResponse {
                 method_id: inserted.method_id,
                 method_name: inserted.method_name.unwrap_or_default(),
-                cost: inserted.cost.as_ref().and_then(ToPrimitive::to_f64).unwrap_or(0.0),
+                cost: inserted
+                    .cost
+                    .as_ref()
+                    .and_then(ToPrimitive::to_f64)
+                    .unwrap_or(0.0),
                 estimated_delivery_time: inserted.estimated_delivery_time.unwrap_or_default(),
             }],
         })),

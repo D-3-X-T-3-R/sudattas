@@ -1,8 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::newsletter_subscribers;
 use proto::proto::core::{
-    NewsletterSubscriberResponse, NewsletterSubscribersResponse,
-    SearchNewsletterSubscriberRequest,
+    NewsletterSubscriberResponse, NewsletterSubscribersResponse, SearchNewsletterSubscriberRequest,
 };
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
 use tonic::{Request, Response, Status};

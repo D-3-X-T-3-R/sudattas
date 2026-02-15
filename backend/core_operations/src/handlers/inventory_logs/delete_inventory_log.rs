@@ -1,8 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::inventory_log;
-use proto::proto::core::{
-    DeleteInventoryLogRequest, InventoryLogResponse, InventoryLogsResponse,
-};
+use proto::proto::core::{DeleteInventoryLogRequest, InventoryLogResponse, InventoryLogsResponse};
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
@@ -16,7 +14,10 @@ pub async fn delete_inventory_log(
 
     match found {
         Ok(Some(model)) => {
-            match inventory_log::Entity::delete_by_id(req.log_id).exec(txn).await {
+            match inventory_log::Entity::delete_by_id(req.log_id)
+                .exec(txn)
+                .await
+            {
                 Ok(_) => Ok(Response::new(InventoryLogsResponse {
                     items: vec![InventoryLogResponse {
                         log_id: model.log_id,

@@ -16,7 +16,10 @@ pub async fn delete_supplier(
 
     match found {
         Ok(Some(model)) => {
-            match suppliers::Entity::delete_by_id(req.supplier_id).exec(txn).await {
+            match suppliers::Entity::delete_by_id(req.supplier_id)
+                .exec(txn)
+                .await
+            {
                 Ok(_) => Ok(Response::new(SuppliersResponse {
                     items: vec![SupplierResponse {
                         supplier_id: model.supplier_id,

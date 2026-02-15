@@ -1,8 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::country_state_mapping;
 use proto::proto::core::{
-    CountryStateMappingResponse, CountryStateMappingsResponse,
-    DeleteCountryStateMappingRequest,
+    CountryStateMappingResponse, CountryStateMappingsResponse, DeleteCountryStateMappingRequest,
 };
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
@@ -19,7 +18,10 @@ pub async fn delete_country_state_mapping(
 
     match found {
         Ok(Some(model)) => {
-            match country_state_mapping::Entity::delete_by_id(req.id).exec(txn).await {
+            match country_state_mapping::Entity::delete_by_id(req.id)
+                .exec(txn)
+                .await
+            {
                 Ok(_) => Ok(Response::new(CountryStateMappingsResponse {
                     items: vec![CountryStateMappingResponse {
                         id: model.id,

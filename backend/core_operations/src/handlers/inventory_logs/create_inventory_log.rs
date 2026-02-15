@@ -1,9 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use chrono::Utc;
 use core_db_entities::entity::inventory_log;
-use proto::proto::core::{
-    CreateInventoryLogRequest, InventoryLogResponse, InventoryLogsResponse,
-};
+use proto::proto::core::{CreateInventoryLogRequest, InventoryLogResponse, InventoryLogsResponse};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 

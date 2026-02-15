@@ -1,10 +1,10 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::discounts;
 use proto::proto::core::{CreateDiscountRequest, DiscountResponse, DiscountsResponse};
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
+use rust_decimal::Decimal;
 use sea_orm::entity::prelude::Date;
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
 fn parse_date(s: &str) -> Option<Date> {
@@ -38,7 +38,11 @@ pub async fn create_discount(
             items: vec![DiscountResponse {
                 discount_id: inserted.discount_id,
                 product_id: inserted.product_id.unwrap_or(0),
-                discount_percentage: inserted.discount_percentage.as_ref().and_then(ToPrimitive::to_f64).unwrap_or(0.0),
+                discount_percentage: inserted
+                    .discount_percentage
+                    .as_ref()
+                    .and_then(ToPrimitive::to_f64)
+                    .unwrap_or(0.0),
                 start_date: date_to_string(inserted.start_date),
                 end_date: date_to_string(inserted.end_date),
             }],

@@ -13,23 +13,24 @@ pub async fn delete_user(
     let found = users::Entity::find_by_id(req.user_id).one(txn).await;
 
     match found {
-        Ok(Some(model)) => {
-            match users::Entity::delete_by_id(req.user_id).exec(txn).await {
-                Ok(_) => Ok(Response::new(UsersResponse {
-                    items: vec![UserResponse {
-                        user_id: model.user_id,
-                        username: model.username,
-                        email: model.email,
-                        full_name: model.full_name,
-                        address: model.address,
-                        phone: model.phone,
-                        create_date: model.create_date.to_rfc3339(),
-                    }],
-                })),
-                Err(e) => Err(map_db_error_to_status(e)),
-            }
-        }
-        Ok(None) => Err(Status::not_found(format!("User with ID {} not found", req.user_id))),
+        Ok(Some(model)) => match users::Entity::delete_by_id(req.user_id).exec(txn).await {
+            Ok(_) => Ok(Response::new(UsersResponse {
+                items: vec![UserResponse {
+                    user_id: model.user_id,
+                    username: model.username,
+                    email: model.email,
+                    full_name: model.full_name,
+                    address: model.address,
+                    phone: model.phone,
+                    create_date: model.create_date.to_rfc3339(),
+                }],
+            })),
+            Err(e) => Err(map_db_error_to_status(e)),
+        },
+        Ok(None) => Err(Status::not_found(format!(
+            "User with ID {} not found",
+            req.user_id
+        ))),
         Err(e) => Err(map_db_error_to_status(e)),
     }
 }

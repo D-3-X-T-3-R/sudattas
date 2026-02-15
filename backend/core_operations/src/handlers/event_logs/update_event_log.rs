@@ -14,9 +14,7 @@ pub async fn update_event_log(
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
-        .ok_or_else(|| {
-            Status::not_found(format!("EventLog with ID {} not found", req.log_id))
-        })?;
+        .ok_or_else(|| Status::not_found(format!("EventLog with ID {} not found", req.log_id)))?;
 
     let model = event_logs::ActiveModel {
         log_id: ActiveValue::Set(existing.log_id),

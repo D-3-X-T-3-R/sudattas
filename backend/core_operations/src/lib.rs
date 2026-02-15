@@ -196,8 +196,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::city::create_city(&txn, request)
-            .await?;
+        let res = handlers::city::create_city(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -213,8 +212,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::city::search_city(&txn, request)
-            .await?;
+        let res = handlers::city::search_city(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -230,8 +228,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::city::delete_city(&txn, request)
-            .await?;
+        let res = handlers::city::delete_city(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -248,8 +245,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::state_city_mapping::create_state_city_mapping(&txn, request)
-            .await?;
+        let res = handlers::state_city_mapping::create_state_city_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -265,8 +261,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::state_city_mapping::update_state_city_mapping(&txn, request)
-            .await?;
+        let res = handlers::state_city_mapping::update_state_city_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -282,8 +277,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::state_city_mapping::delete_state_city_mapping(&txn, request)
-            .await?;
+        let res = handlers::state_city_mapping::delete_state_city_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -299,8 +293,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::state_city_mapping::search_state_city_mapping(&txn, request)
-            .await?;
+        let res = handlers::state_city_mapping::search_state_city_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -317,8 +310,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::country_state_mapping::create_country_state_mapping(&txn, request)
-            .await?;
+        let res =
+            handlers::country_state_mapping::create_country_state_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -334,8 +327,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::country_state_mapping::update_country_state_mapping(&txn, request)
-            .await?;
+        let res =
+            handlers::country_state_mapping::update_country_state_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -351,8 +344,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::country_state_mapping::delete_country_state_mapping(&txn, request)
-            .await?;
+        let res =
+            handlers::country_state_mapping::delete_country_state_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -368,8 +361,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::country_state_mapping::search_country_state_mapping(&txn, request)
-            .await?;
+        let res =
+            handlers::country_state_mapping::search_country_state_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -386,8 +379,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::shipping_address::create_shipping_address(&txn, request)
-            .await?;
+        let res = handlers::shipping_address::create_shipping_address(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -403,8 +395,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::shipping_address::update_shipping_address(&txn, request)
-            .await?;
+        let res = handlers::shipping_address::update_shipping_address(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -420,8 +411,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::shipping_address::delete_shipping_address(&txn, request)
-            .await?;
+        let res = handlers::shipping_address::delete_shipping_address(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -437,8 +427,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::shipping_address::get_shipping_address(&txn, request)
-            .await?;
+        let res = handlers::shipping_address::get_shipping_address(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -521,11 +510,8 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
 
-        let res = handlers::product_color_mappings::create_product_color_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_color_mappings::create_product_color_mapping(&txn, request).await?;
 
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -543,11 +529,8 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
 
-        let res = handlers::product_color_mappings::search_product_color_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_color_mappings::search_product_color_mapping(&txn, request).await?;
 
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -565,11 +548,8 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
 
-        let res = handlers::product_color_mappings::delete_product_color_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_color_mappings::delete_product_color_mapping(&txn, request).await?;
 
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -668,11 +648,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_size_mappings::create_product_size_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_size_mappings::create_product_size_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -688,11 +665,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_size_mappings::search_product_size_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_size_mappings::search_product_size_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -708,11 +682,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_size_mappings::delete_product_size_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_size_mappings::delete_product_size_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1184,8 +1155,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::inventory::create_inventory_item(&txn, request).await?;
+        let res = handlers::inventory::create_inventory_item(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1201,8 +1171,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::inventory::search_inventory_item(&txn, request).await?;
+        let res = handlers::inventory::search_inventory_item(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1218,8 +1187,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::inventory::update_inventory_item(&txn, request).await?;
+        let res = handlers::inventory::update_inventory_item(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1235,8 +1203,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::inventory::delete_inventory_item(&txn, request).await?;
+        let res = handlers::inventory::delete_inventory_item(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1302,11 +1269,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attributes::create_product_attribute(
-            &txn,
-            request,
-        )
-        .await?;
+        let res = handlers::product_attributes::create_product_attribute(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1322,11 +1285,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attributes::search_product_attribute(
-            &txn,
-            request,
-        )
-        .await?;
+        let res = handlers::product_attributes::search_product_attribute(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1342,11 +1301,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attributes::update_product_attribute(
-            &txn,
-            request,
-        )
-        .await?;
+        let res = handlers::product_attributes::update_product_attribute(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1362,11 +1317,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attributes::delete_product_attribute(
-            &txn,
-            request,
-        )
-        .await?;
+        let res = handlers::product_attributes::delete_product_attribute(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1448,9 +1399,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::shipping_methods::create_shipping_method(&txn, request)
-                .await?;
+        let res = handlers::shipping_methods::create_shipping_method(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1466,9 +1415,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::shipping_methods::search_shipping_method(&txn, request)
-                .await?;
+        let res = handlers::shipping_methods::search_shipping_method(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1484,9 +1431,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::shipping_methods::update_shipping_method(&txn, request)
-                .await?;
+        let res = handlers::shipping_methods::update_shipping_method(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1502,9 +1447,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::shipping_methods::delete_shipping_method(&txn, request)
-                .await?;
+        let res = handlers::shipping_methods::delete_shipping_method(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1521,8 +1464,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::user_roles::create_user_role(&txn, request).await?;
+        let res = handlers::user_roles::create_user_role(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1538,8 +1480,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::user_roles::search_user_role(&txn, request).await?;
+        let res = handlers::user_roles::search_user_role(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1555,8 +1496,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::user_roles::update_user_role(&txn, request).await?;
+        let res = handlers::user_roles::update_user_role(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1572,8 +1512,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::user_roles::delete_user_role(&txn, request).await?;
+        let res = handlers::user_roles::delete_user_role(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1590,8 +1529,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::transactions::create_transaction(&txn, request).await?;
+        let res = handlers::transactions::create_transaction(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1607,8 +1545,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::transactions::search_transaction(&txn, request).await?;
+        let res = handlers::transactions::search_transaction(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1624,8 +1561,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::transactions::update_transaction(&txn, request).await?;
+        let res = handlers::transactions::update_transaction(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1641,8 +1577,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::transactions::delete_transaction(&txn, request).await?;
+        let res = handlers::transactions::delete_transaction(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1659,11 +1594,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::newsletter_subscribers::create_newsletter_subscriber(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::newsletter_subscribers::create_newsletter_subscriber(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1679,11 +1611,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::newsletter_subscribers::search_newsletter_subscriber(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::newsletter_subscribers::search_newsletter_subscriber(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1699,11 +1628,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::newsletter_subscribers::update_newsletter_subscriber(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::newsletter_subscribers::update_newsletter_subscriber(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1719,11 +1645,8 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::newsletter_subscribers::delete_newsletter_subscriber(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::newsletter_subscribers::delete_newsletter_subscriber(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1740,9 +1663,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_ratings::create_product_rating(&txn, request)
-                .await?;
+        let res = handlers::product_ratings::create_product_rating(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1758,9 +1679,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_ratings::search_product_rating(&txn, request)
-                .await?;
+        let res = handlers::product_ratings::search_product_rating(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1776,9 +1695,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_ratings::update_product_rating(&txn, request)
-                .await?;
+        let res = handlers::product_ratings::update_product_rating(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1794,9 +1711,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_ratings::delete_product_rating(&txn, request)
-                .await?;
+        let res = handlers::product_ratings::delete_product_rating(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1943,11 +1858,9 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_category_mappings::create_product_category_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_category_mappings::create_product_category_mapping(&txn, request)
+                .await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1963,11 +1876,9 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_category_mappings::search_product_category_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_category_mappings::search_product_category_mapping(&txn, request)
+                .await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1983,11 +1894,9 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_category_mappings::delete_product_category_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_category_mappings::delete_product_category_mapping(&txn, request)
+                .await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2004,11 +1913,9 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attribute_mappings::create_product_attribute_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_attribute_mappings::create_product_attribute_mapping(&txn, request)
+                .await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2024,11 +1931,9 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attribute_mappings::search_product_attribute_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_attribute_mappings::search_product_attribute_mapping(&txn, request)
+                .await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2044,11 +1949,9 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attribute_mappings::delete_product_attribute_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res =
+            handlers::product_attribute_mappings::delete_product_attribute_mapping(&txn, request)
+                .await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2065,11 +1968,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::user_role_mappings::create_user_role_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res = handlers::user_role_mappings::create_user_role_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2085,11 +1984,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::user_role_mappings::search_user_role_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res = handlers::user_role_mappings::search_user_role_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2105,11 +2000,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::user_role_mappings::delete_user_role_mapping(
-            &txn,
-            request,
-        )
-        .await?;
+        let res = handlers::user_role_mappings::delete_user_role_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2126,9 +2017,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_variants::create_product_variant(&txn, request)
-                .await?;
+        let res = handlers::product_variants::create_product_variant(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2144,9 +2033,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_variants::search_product_variant(&txn, request)
-                .await?;
+        let res = handlers::product_variants::search_product_variant(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2162,9 +2049,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_variants::update_product_variant(&txn, request)
-                .await?;
+        let res = handlers::product_variants::update_product_variant(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2180,9 +2065,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_variants::delete_product_variant(&txn, request)
-                .await?;
+        let res = handlers::product_variants::delete_product_variant(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2199,8 +2082,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::event_logs::create_event_log(&txn, request).await?;
+        let res = handlers::event_logs::create_event_log(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2216,8 +2098,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::event_logs::search_event_log(&txn, request).await?;
+        let res = handlers::event_logs::search_event_log(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2233,8 +2114,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::event_logs::update_event_log(&txn, request).await?;
+        let res = handlers::event_logs::update_event_log(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2250,8 +2130,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::event_logs::delete_event_log(&txn, request).await?;
+        let res = handlers::event_logs::delete_event_log(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2268,9 +2147,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::user_activities::create_user_activity(&txn, request)
-                .await?;
+        let res = handlers::user_activities::create_user_activity(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2286,9 +2163,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::user_activities::search_user_activity(&txn, request)
-                .await?;
+        let res = handlers::user_activities::search_user_activity(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2304,9 +2179,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::user_activities::update_user_activity(&txn, request)
-                .await?;
+        let res = handlers::user_activities::update_user_activity(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2322,9 +2195,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::user_activities::delete_user_activity(&txn, request)
-                .await?;
+        let res = handlers::user_activities::delete_user_activity(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2341,9 +2212,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::inventory_logs::create_inventory_log(&txn, request)
-                .await?;
+        let res = handlers::inventory_logs::create_inventory_log(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2359,9 +2228,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::inventory_logs::search_inventory_log(&txn, request)
-                .await?;
+        let res = handlers::inventory_logs::search_inventory_log(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2377,9 +2244,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::inventory_logs::update_inventory_log(&txn, request)
-                .await?;
+        let res = handlers::inventory_logs::update_inventory_log(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2395,9 +2260,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::inventory_logs::delete_inventory_log(&txn, request)
-                .await?;
+        let res = handlers::inventory_logs::delete_inventory_log(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2414,8 +2277,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::promotions::create_promotion(&txn, request).await?;
+        let res = handlers::promotions::create_promotion(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2431,8 +2293,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::promotions::search_promotion(&txn, request).await?;
+        let res = handlers::promotions::search_promotion(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2448,8 +2309,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::promotions::update_promotion(&txn, request).await?;
+        let res = handlers::promotions::update_promotion(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2465,8 +2325,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::promotions::delete_promotion(&txn, request).await?;
+        let res = handlers::promotions::delete_promotion(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2483,9 +2342,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::shipping_zones::create_shipping_zone(&txn, request)
-                .await?;
+        let res = handlers::shipping_zones::create_shipping_zone(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2501,9 +2358,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::shipping_zones::search_shipping_zone(&txn, request)
-                .await?;
+        let res = handlers::shipping_zones::search_shipping_zone(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2519,9 +2374,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::shipping_zones::update_shipping_zone(&txn, request)
-                .await?;
+        let res = handlers::shipping_zones::update_shipping_zone(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2537,9 +2390,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::shipping_zones::delete_shipping_zone(&txn, request)
-                .await?;
+        let res = handlers::shipping_zones::delete_shipping_zone(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2556,9 +2407,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::payment_methods::create_payment_method(&txn, request)
-                .await?;
+        let res = handlers::payment_methods::create_payment_method(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2574,9 +2423,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::payment_methods::search_payment_method(&txn, request)
-                .await?;
+        let res = handlers::payment_methods::search_payment_method(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2592,9 +2439,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::payment_methods::update_payment_method(&txn, request)
-                .await?;
+        let res = handlers::payment_methods::update_payment_method(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2610,9 +2455,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::payment_methods::delete_payment_method(&txn, request)
-                .await?;
+        let res = handlers::payment_methods::delete_payment_method(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

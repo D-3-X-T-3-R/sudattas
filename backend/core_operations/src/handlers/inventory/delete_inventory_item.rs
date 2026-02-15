@@ -18,7 +18,10 @@ pub async fn delete_inventory_item(
 
     match found {
         Ok(Some(model)) => {
-            match inventory::Entity::delete_by_id(req.inventory_id).exec(txn).await {
+            match inventory::Entity::delete_by_id(req.inventory_id)
+                .exec(txn)
+                .await
+            {
                 Ok(_) => Ok(Response::new(InventoryItemsResponse {
                     items: vec![InventoryItemResponse {
                         inventory_id: model.inventory_id,
