@@ -10,6 +10,7 @@ use warp::{http::Response, reply, Filter, Rejection, Reply};
 mod query_handler;
 mod resolvers;
 mod security;
+mod webhooks;
 
 #[derive(Debug)]
 struct Unauthorized {}
@@ -91,11 +92,26 @@ async fn main() {
 
     let options_routes = warp::options().map(warp::reply).with(cors);
 
+    let webhook_route = warp::post()
+        .and(warp::path("webhook"))
+        .and(warp::path::param::<String>()) // provider: e.g. "razorpay"
+        .and(warp::header::optional::<String>("x-razorpay-signature"))
+        .and(warp::body::bytes())
+        .and_then(|provider: String, sig: Option<String>, body: warp::hyper::body::Bytes| async move {
+            webhooks::handle_webhook(provider, sig, body)
+                .await
+                .map_err(|e| {
+                    warn!("Webhook handler error: {:?}", e);
+                    warp::reject::reject()
+                })
+        });
+
     info!("Listening on 0.0.0.0:8080");
 
     warp::serve(
         load_balancer_health_check
             .or(graphql_copy)
+            .or(webhook_route)
             .or(options_routes),
     )
     .run(([0, 0, 0, 0], 8080))

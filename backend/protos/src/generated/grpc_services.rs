@@ -2341,6 +2341,47 @@ pub struct PaymentMethodsResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct IngestWebhookRequest {
+    #[prost(string, tag = "1")]
+    pub provider: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub event_type: ::prost::alloc::string::String,
+    /// idempotency key (e.g. provider:payment_id)
+    #[prost(string, tag = "3")]
+    pub webhook_id: ::prost::alloc::string::String,
+    /// raw JSON payload string
+    #[prost(string, tag = "4")]
+    pub payload_json: ::prost::alloc::string::String,
+    #[prost(bool, tag = "5")]
+    pub signature_verified: bool,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WebhookEventResponse {
+    #[prost(int64, tag = "1")]
+    pub event_id: i64,
+    #[prost(string, tag = "2")]
+    pub provider: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub event_type: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub webhook_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub received_at: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WebhookEventsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<WebhookEventResponse>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateOrderEventRequest {
     #[prost(int64, tag = "1")]
     pub order_id: i64,
@@ -6450,6 +6491,32 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "ApplyCoupon"));
             self.inner.unary(req, path, codec).await
         }
+        /// Webhooks
+        pub async fn ingest_webhook(
+            &mut self,
+            request: impl tonic::IntoRequest<super::IngestWebhookRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WebhookEventsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/IngestWebhook",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "IngestWebhook"));
+            self.inner.unary(req, path, codec).await
+        }
         /// OrderEvents
         pub async fn create_order_event(
             &mut self,
@@ -7584,6 +7651,14 @@ pub mod grpc_services_server {
             &self,
             request: tonic::Request<super::ApplyCouponRequest>,
         ) -> std::result::Result<tonic::Response<super::CouponsResponse>, tonic::Status>;
+        /// Webhooks
+        async fn ingest_webhook(
+            &self,
+            request: tonic::Request<super::IngestWebhookRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WebhookEventsResponse>,
+            tonic::Status,
+        >;
         /// OrderEvents
         async fn create_order_event(
             &self,
@@ -14783,6 +14858,52 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ApplyCouponSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/IngestWebhook" => {
+                    #[allow(non_camel_case_types)]
+                    struct IngestWebhookSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::IngestWebhookRequest>
+                    for IngestWebhookSvc<T> {
+                        type Response = super::WebhookEventsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::IngestWebhookRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::ingest_webhook(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = IngestWebhookSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

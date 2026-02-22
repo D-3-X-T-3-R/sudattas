@@ -23,6 +23,10 @@ warp = "0.3"
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 proto = {path = "../protos/"}
+hmac = "0.12.1"
+sha2 = "0.10.9"
+hex = "0.4.3"
+bytes = "1.11.1"
 
 [build-dependencies]
 tonic-build = "0.10.2"
