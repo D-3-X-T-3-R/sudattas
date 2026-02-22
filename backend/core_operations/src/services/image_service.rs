@@ -125,17 +125,19 @@ impl ImageService {
     }
     
     /// Generate a presigned URL for uploading
-    /// 
-    /// Example:
-    /// ```
+    ///
+    /// Example (requires R2 config; `no_run` so doctest compiles without calling AWS):
+    /// ```no_run
+    /// use std::time::Duration;
+    /// # use core_operations::services::image_service::{ImageService, ImageError};
+    /// # async fn example(image_service: &ImageService) -> Result<(), ImageError> {
     /// let upload_url = image_service.generate_presigned_upload_url(
     ///     "products/saree-123/hero.webp",
     ///     "image/webp",
-    ///     Duration::from_secs(300) // 5 minutes
+    ///     Duration::from_secs(300), // 5 minutes
     /// ).await?;
-    /// 
-    /// // Return this URL to frontend
-    /// // Frontend does: PUT {upload_url} with image binary
+    /// # Ok::<(), ImageError>(())
+    /// # }
     /// ```
     pub async fn generate_presigned_upload_url(
         &self,

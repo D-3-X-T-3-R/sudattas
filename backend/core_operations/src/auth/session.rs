@@ -56,11 +56,14 @@ pub struct SessionManager {
 
 impl SessionManager {
     /// Create a new session manager
-    /// 
-    /// Example:
-    /// ```
-    /// let redis_url = std::env::var("REDIS_URL").unwrap_or("redis://127.0.0.1".to_string());
+    ///
+    /// Example (requires Redis; use `no_run` so doctest compiles without connecting):
+    /// ```no_run
+    /// use core_operations::auth::session::SessionManager;
+    /// use std::time::Duration;
+    /// let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1".to_string());
     /// let session_manager = SessionManager::new(&redis_url, Duration::from_secs(86400))?;
+    /// # Ok::<(), core_operations::auth::session::SessionError>(())
     /// ```
     pub fn new(redis_url: &str, ttl: Duration) -> Result<Self, SessionError> {
         let redis = RedisClient::open(redis_url)?;
@@ -146,35 +149,34 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
+    /// Requires Redis running. Run with: `cargo test -p core_operations --lib -- --ignored`
     #[tokio::test]
+    #[ignore = "requires Redis; run with --ignored"]
     async fn test_session_lifecycle() {
-        // Requires Redis running
-        let redis_url = std::env::var("REDIS_URL").unwrap_or("redis://127.0.0.1".to_string());
-        
-        if let Ok(manager) = SessionManager::new(&redis_url, Duration::from_secs(60)) {
-            // Create session
-            let data = SessionData::default();
-            let session_id = manager.create_session(data).await.unwrap();
-            assert!(!session_id.is_empty());
-            
-            // Get session
-            let retrieved = manager.get_session(&session_id).await.unwrap();
-            assert_eq!(retrieved.user_id, None);
-            
-            // Login
-            manager.login_session(&session_id, 123, "test@example.com".to_string()).await.unwrap();
-            let logged_in = manager.get_session(&session_id).await.unwrap();
-            assert_eq!(logged_in.user_id, Some(123));
-            
-            // Logout
-            manager.logout_session(&session_id).await.unwrap();
-            let logged_out = manager.get_session(&session_id).await.unwrap();
-            assert_eq!(logged_out.user_id, None);
-            
-            // Delete
-            manager.delete_session(&session_id).await.unwrap();
-            assert!(manager.get_session(&session_id).await.is_err());
-        }
+        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1".to_string());
+
+        let manager = SessionManager::new(&redis_url, Duration::from_secs(60))
+            .expect("SessionManager::new");
+        let data = SessionData::default();
+        let session_id = manager.create_session(data).await.expect("create_session");
+        assert!(!session_id.is_empty());
+
+        let retrieved = manager.get_session(&session_id).await.expect("get_session");
+        assert_eq!(retrieved.user_id, None);
+
+        manager
+            .login_session(&session_id, 123, "test@example.com".to_string())
+            .await
+            .expect("login_session");
+        let logged_in = manager.get_session(&session_id).await.expect("get_session");
+        assert_eq!(logged_in.user_id, Some(123));
+
+        manager.logout_session(&session_id).await.expect("logout_session");
+        let logged_out = manager.get_session(&session_id).await.expect("get_session");
+        assert_eq!(logged_out.user_id, None);
+
+        manager.delete_session(&session_id).await.expect("delete_session");
+        assert!(manager.get_session(&session_id).await.is_err());
     }
 }

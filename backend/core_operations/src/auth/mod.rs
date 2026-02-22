@@ -35,11 +35,12 @@ pub enum AuthError {
 }
 
 /// Hash a password using Argon2id
-/// 
+///
 /// Example:
 /// ```
+/// use core_operations::auth::hash_password;
 /// let password = "my_secure_password";
-/// let hash = hash_password(password)?;
+/// let hash = hash_password(password).unwrap();
 /// // Store `hash` in database (Users.password_hash column)
 /// ```
 pub fn hash_password(password: &str) -> Result<String, AuthError> {
@@ -53,13 +54,13 @@ pub fn hash_password(password: &str) -> Result<String, AuthError> {
 }
 
 /// Verify a password against a stored hash
-/// 
+///
 /// Example:
 /// ```
+/// use core_operations::auth::{hash_password, verify_password};
 /// let password = "user_input_password";
-/// let stored_hash = user.password_hash; // From database
-/// 
-/// if verify_password(password, &stored_hash)? {
+/// let stored_hash = hash_password(password).unwrap(); // or from DB: user.password_hash
+/// if verify_password(password, &stored_hash).unwrap() {
 ///     // Password correct
 /// } else {
 ///     // Password incorrect
