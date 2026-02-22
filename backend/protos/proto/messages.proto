@@ -1234,6 +1234,43 @@ message ShippingZonesResponse {
     repeated ShippingZoneResponse items = 1;
 }
 
+// Shipments
+
+message CreateShipmentRequest {
+    int64 order_id = 1;
+    optional string shiprocket_order_id = 2;
+    optional string awb_code = 3;
+    optional string carrier = 4;
+}
+
+message UpdateShipmentRequest {
+    int64 shipment_id = 1;
+    optional string shiprocket_order_id = 2;
+    optional string awb_code = 3;
+    optional string carrier = 4;
+    optional string status = 5;  // pending | processed | failed
+}
+
+message GetShipmentRequest {
+    optional int64 shipment_id = 1;
+    optional int64 order_id = 2;
+}
+
+message ShipmentResponse {
+    int64 shipment_id = 1;
+    int64 order_id = 2;
+    optional string shiprocket_order_id = 3;
+    optional string awb_code = 4;
+    optional string carrier = 5;
+    string status = 6;
+    string created_at = 7;
+    optional string delivered_at = 8;
+}
+
+message ShipmentsResponse {
+    repeated ShipmentResponse items = 1;
+}
+
 // PaymentIntents
 
 message CreatePaymentIntentRequest {

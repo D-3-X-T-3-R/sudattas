@@ -2,6 +2,7 @@ pub mod cart;
 pub mod category;
 pub mod convert;
 pub mod payment_intents;
+pub mod shipments;
 pub mod country;
 pub mod error;
 pub mod order_details;

@@ -8,6 +8,10 @@ use crate::resolvers::{
         self,
         schema::{CapturePayment, NewPaymentIntent, PaymentIntent},
     },
+    shipments::{
+        self,
+        schema::{NewShipment, Shipment, UpdateShipment},
+    },
     category::{
         self,
         schema::{Category, CategoryMutation, NewCategory},
@@ -226,6 +230,21 @@ impl MutationRoot {
         product_image: ProductImageMutation,
     ) -> FieldResult<Vec<ProductImage>> {
         product_images::handlers::update_product_image(product_image)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Shipments
+    #[instrument(err, ret)]
+    async fn create_shipment(input: NewShipment) -> FieldResult<Vec<Shipment>> {
+        shipments::handlers::create_shipment(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_shipment(input: UpdateShipment) -> FieldResult<Vec<Shipment>> {
+        shipments::handlers::update_shipment(input)
             .await
             .map_err(|e| e.into())
     }

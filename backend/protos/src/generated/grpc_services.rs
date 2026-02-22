@@ -2104,6 +2104,72 @@ pub struct ShippingZonesResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreateShipmentRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+    #[prost(string, optional, tag = "2")]
+    pub shiprocket_order_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub awb_code: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub carrier: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateShipmentRequest {
+    #[prost(int64, tag = "1")]
+    pub shipment_id: i64,
+    #[prost(string, optional, tag = "2")]
+    pub shiprocket_order_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub awb_code: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub carrier: ::core::option::Option<::prost::alloc::string::String>,
+    /// pending | processed | failed
+    #[prost(string, optional, tag = "5")]
+    pub status: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetShipmentRequest {
+    #[prost(int64, optional, tag = "1")]
+    pub shipment_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "2")]
+    pub order_id: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShipmentResponse {
+    #[prost(int64, tag = "1")]
+    pub shipment_id: i64,
+    #[prost(int64, tag = "2")]
+    pub order_id: i64,
+    #[prost(string, optional, tag = "3")]
+    pub shiprocket_order_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub awb_code: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "5")]
+    pub carrier: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, tag = "6")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub created_at: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "8")]
+    pub delivered_at: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShipmentsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<ShipmentResponse>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreatePaymentIntentRequest {
     #[prost(int64, tag = "1")]
     pub order_id: i64,
@@ -6229,6 +6295,82 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /// Shipments
+        pub async fn create_shipment(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CreateShipmentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ShipmentsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/CreateShipment",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "CreateShipment"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn update_shipment(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdateShipmentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ShipmentsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/UpdateShipment",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "UpdateShipment"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_shipment(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetShipmentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ShipmentsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/GetShipment",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "GetShipment"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -7223,6 +7365,28 @@ pub mod grpc_services_server {
             request: tonic::Request<super::GetPaymentIntentRequest>,
         ) -> std::result::Result<
             tonic::Response<super::PaymentIntentsResponse>,
+            tonic::Status,
+        >;
+        /// Shipments
+        async fn create_shipment(
+            &self,
+            request: tonic::Request<super::CreateShipmentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ShipmentsResponse>,
+            tonic::Status,
+        >;
+        async fn update_shipment(
+            &self,
+            request: tonic::Request<super::UpdateShipmentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ShipmentsResponse>,
+            tonic::Status,
+        >;
+        async fn get_shipment(
+            &self,
+            request: tonic::Request<super::GetShipmentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ShipmentsResponse>,
             tonic::Status,
         >;
     }
@@ -14295,6 +14459,144 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetPaymentIntentSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/CreateShipment" => {
+                    #[allow(non_camel_case_types)]
+                    struct CreateShipmentSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::CreateShipmentRequest>
+                    for CreateShipmentSvc<T> {
+                        type Response = super::ShipmentsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::CreateShipmentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::create_shipment(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = CreateShipmentSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/UpdateShipment" => {
+                    #[allow(non_camel_case_types)]
+                    struct UpdateShipmentSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::UpdateShipmentRequest>
+                    for UpdateShipmentSvc<T> {
+                        type Response = super::ShipmentsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::UpdateShipmentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::update_shipment(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = UpdateShipmentSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/GetShipment" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetShipmentSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::GetShipmentRequest>
+                    for GetShipmentSvc<T> {
+                        type Response = super::ShipmentsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetShipmentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::get_shipment(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetShipmentSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
