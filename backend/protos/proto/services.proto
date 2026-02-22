@@ -85,7 +85,7 @@ service GRPCServices {
     rpc DeleteReview(DeleteReviewRequest) returns (ReviewsResponse);
 
     // ProductImages
-    rpc AddProductImage(AddProductImageRequest) returns (ProductImagesResponse);
+    // AddProductImage removed — use GetPresignedUploadUrl + ConfirmImageUpload instead
     rpc SearchProductImage(SearchProductImageRequest) returns (ProductImagesResponse);
     rpc UpdateProductImage(UpdateProductImageRequest) returns (ProductImagesResponse);
     rpc DeleteProductImage(DeleteProductImageRequest) returns (ProductImagesResponse);
@@ -232,6 +232,10 @@ service GRPCServices {
     rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (PaymentIntentsResponse);
     rpc CapturePayment(CapturePaymentRequest) returns (PaymentIntentsResponse);
     rpc GetPaymentIntent(GetPaymentIntentRequest) returns (PaymentIntentsResponse);
+
+    // ProductImages (R2)
+    rpc GetPresignedUploadUrl(GetPresignedUploadUrlRequest) returns (PresignedUploadUrlResponse);
+    rpc ConfirmImageUpload(ConfirmImageUploadRequest) returns (ProductImagesResponse);
 
     // Coupons
     rpc ValidateCoupon(ValidateCouponRequest) returns (CouponsResponse);

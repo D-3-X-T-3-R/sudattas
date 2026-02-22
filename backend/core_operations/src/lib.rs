@@ -7,7 +7,7 @@ pub mod auth;
 pub mod services;
 
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, AddProductImageRequest, AddWishlistItemRequest,
+    grpc_services_server::GrpcServices, AddWishlistItemRequest,
     CartItemsResponse, CategoriesResponse, CitiesResponse, ColorsResponse, CountriesResponse,
     CountryStateMappingsResponse, CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest,
     CreateColorRequest, CreateCountryRequest, CreateCountryStateMappingRequest,
@@ -63,6 +63,8 @@ use proto::proto::core::{
     ValidateCouponRequest, ApplyCouponRequest, CouponsResponse,
     CreateOrderEventRequest, GetOrderEventsRequest, OrderEventsResponse,
     IngestWebhookRequest, WebhookEventsResponse,
+    GetPresignedUploadUrlRequest, PresignedUploadUrlResponse,
+    ConfirmImageUploadRequest,
     UpdatePaymentMethodRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
     UpdateProductRatingRequest, UpdateProductRequest, UpdateProductVariantRequest,
     UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingAddressRequest,
@@ -1055,22 +1057,6 @@ impl GrpcServices for MyGRPCServices {
     }
 
     // ProductImages Services
-    async fn add_product_image(
-        &self,
-        request: Request<AddProductImageRequest>,
-    ) -> Result<Response<ProductImagesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::product_images::add_product_image(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
     async fn search_product_image(
         &self,
         request: Request<SearchProductImageRequest>,
@@ -2625,6 +2611,23 @@ impl GrpcServices for MyGRPCServices {
     ) -> Result<Response<WebhookEventsResponse>, Status> {
         let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
         let res = handlers::webhooks::ingest_webhook(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_presigned_upload_url(
+        &self,
+        request: Request<GetPresignedUploadUrlRequest>,
+    ) -> Result<Response<PresignedUploadUrlResponse>, Status> {
+        handlers::product_images::get_presigned_upload_url(request).await
+    }
+
+    async fn confirm_image_upload(
+        &self,
+        request: Request<ConfirmImageUploadRequest>,
+    ) -> Result<Response<ProductImagesResponse>, Status> {
+        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::product_images::confirm_image_upload(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

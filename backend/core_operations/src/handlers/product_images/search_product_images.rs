@@ -31,6 +31,9 @@ pub async fn search_product_image(
                     product_id: model.product_id,
                     image_base64: model.image_base64.unwrap_or_default(),
                     alt_text: model.alt_text,
+                    url: model.url,
+                    cdn_path: model.cdn_path,
+                    thumbnail_url: model.thumbnail_url,
                 })
                 .collect();
 

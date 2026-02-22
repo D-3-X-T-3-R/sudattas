@@ -63,7 +63,7 @@ use crate::resolvers::{
     },
     product_images::{
         self,
-        schema::{NewProductImage, ProductImage, ProductImageMutation},
+        schema::{ConfirmImageUpload, ProductImage, ProductImageMutation},
     },
     state::{
         self,
@@ -243,13 +243,6 @@ impl MutationRoot {
     }
 
     // ProductImage
-    #[instrument(err, ret)]
-    async fn add_product_image(product_image: NewProductImage) -> FieldResult<Vec<ProductImage>> {
-        product_images::handlers::add_product_image(product_image)
-            .await
-            .map_err(|e| e.into())
-    }
-
     #[instrument(err, ret)]
     async fn delete_product_image(image_id: String) -> FieldResult<Vec<ProductImage>> {
         product_images::handlers::delete_product_image(image_id)
@@ -435,6 +428,14 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn create_order_event(input: NewOrderEvent) -> FieldResult<Vec<OrderEvent>> {
         order_events::handlers::create_order_event(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Product Images — R2 confirm upload
+    #[instrument(err, ret)]
+    async fn confirm_image_upload(input: ConfirmImageUpload) -> FieldResult<Vec<ProductImage>> {
+        product_images::handlers::confirm_image_upload(input)
             .await
             .map_err(|e| e.into())
     }

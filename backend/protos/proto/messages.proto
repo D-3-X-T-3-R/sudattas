@@ -469,15 +469,6 @@ message ReviewsResponse {
 
 // ProductImages
 
-message ProductImageRequest {
-    string image_base64 = 2;
-    optional string alt_text = 3;
-}
-
-message AddProductImageRequest {
-    int64 product_id = 1;
-    repeated ProductImageRequest product_images = 2;
-}
 message SearchProductImageRequest {
     optional int64 image_id = 1;
     optional int64 product_id = 2;
@@ -498,12 +489,34 @@ message DeleteProductImageRequest {
 message ProductImageResponse {
     int64 image_id = 1;
     int64 product_id = 2;
-    string image_base64 = 3;
+    string image_base64 = 3;    // legacy; empty for R2-backed images
     optional string alt_text = 4;
+    optional string url = 5;    // full CDN URL
+    optional string cdn_path = 6;
+    optional string thumbnail_url = 7;
 }
 
 message ProductImagesResponse {
     repeated ProductImageResponse items = 1;
+}
+
+message GetPresignedUploadUrlRequest {
+    int64 product_id = 1;
+    string filename = 2;
+    string content_type = 3;
+}
+
+message PresignedUploadUrlResponse {
+    string upload_url = 1;  // PUT this URL directly from the client
+    string key = 2;         // R2 object key — pass back to ConfirmImageUpload
+    string cdn_url = 3;     // final public URL after upload
+}
+
+message ConfirmImageUploadRequest {
+    int64 product_id = 1;
+    string key = 2;
+    optional string alt_text = 3;
+    optional int32 display_order = 4;
 }
 
 // Suppliers

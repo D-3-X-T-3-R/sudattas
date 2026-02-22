@@ -29,7 +29,7 @@ use crate::resolvers::{
     },
     product_images::{
         self,
-        schema::{ProductImage, SearchProductImage},
+        schema::{GetPresignedUploadUrl, PresignedUploadUrl, ProductImage, SearchProductImage},
     },
     state::{
         self,
@@ -149,6 +149,16 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_inventory_item(input: SearchInventoryItem) -> FieldResult<Vec<InventoryItem>> {
         inventory::handlers::search_inventory_item(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Product Images — R2 presigned upload
+    #[instrument(err, ret)]
+    async fn get_presigned_upload_url(
+        input: GetPresignedUploadUrl,
+    ) -> FieldResult<Vec<PresignedUploadUrl>> {
+        product_images::handlers::get_presigned_upload_url(input)
             .await
             .map_err(|e| e.into())
     }
