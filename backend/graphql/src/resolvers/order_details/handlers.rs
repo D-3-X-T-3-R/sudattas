@@ -7,6 +7,7 @@ use tracing::instrument;
 
 use super::schema::{NewOrderDetails, OrderDetails, OrderDetailsMutation, SearchOrderDetails};
 use crate::resolvers::{
+    convert,
     error::GqlError,
     utils::{connect_grpc_client, to_f64, to_i64, to_option_f64, to_option_i64},
 };
@@ -35,13 +36,7 @@ pub(crate) async fn create_order_detail(
         .into_inner()
         .items
         .into_iter()
-        .map(|order_detail| OrderDetails {
-            order_detail_id: order_detail.order_detail_id.to_string(),
-            order_id: order_detail.order_id.to_string(),
-            product_id: order_detail.product_id.to_string(),
-            quantity: order_detail.quantity.to_string(),
-            price: order_detail.price.to_string(),
-        })
+        .map(convert::order_detail_response_to_gql)
         .collect())
 }
 
@@ -66,13 +61,7 @@ pub(crate) async fn search_order_detail(
         .into_inner()
         .items
         .into_iter()
-        .map(|order_detail| OrderDetails {
-            order_detail_id: order_detail.order_detail_id.to_string(),
-            order_id: order_detail.order_id.to_string(),
-            product_id: order_detail.product_id.to_string(),
-            quantity: order_detail.quantity.to_string(),
-            price: order_detail.price.to_string(),
-        })
+        .map(convert::order_detail_response_to_gql)
         .collect())
 }
 
@@ -96,12 +85,6 @@ pub(crate) async fn update_order_detail(
         .into_inner()
         .items
         .into_iter()
-        .map(|order_detail| OrderDetails {
-            order_detail_id: order_detail.order_detail_id.to_string(),
-            order_id: order_detail.order_id.to_string(),
-            product_id: order_detail.product_id.to_string(),
-            quantity: order_detail.quantity.to_string(),
-            price: order_detail.price.to_string(),
-        })
+        .map(convert::order_detail_response_to_gql)
         .collect())
 }

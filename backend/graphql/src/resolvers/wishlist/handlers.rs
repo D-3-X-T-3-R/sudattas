@@ -6,6 +6,7 @@ use tracing::instrument;
 
 use super::schema::{DeleteWishlistItem, NewWishlistItem, SearchWishlistItem, WishlistItem};
 use crate::resolvers::{
+    convert,
     error::GqlError,
     utils::{connect_grpc_client, to_i64, to_option_i64},
 };
@@ -27,12 +28,7 @@ pub(crate) async fn add_wishlist_item(
         .into_inner()
         .items
         .into_iter()
-        .map(|wishlist_item| WishlistItem {
-            wishlist_id: wishlist_item.wishlist_id.to_string(),
-            user_id: wishlist_item.user_id.to_string(),
-            product_id: wishlist_item.product_id.to_string(),
-            date_added: wishlist_item.date_added.to_string(),
-        })
+        .map(convert::wishlist_item_response_to_gql)
         .collect())
 }
 
@@ -54,12 +50,7 @@ pub(crate) async fn search_wishlist_item(
         .into_inner()
         .items
         .into_iter()
-        .map(|wishlist_item| WishlistItem {
-            wishlist_id: wishlist_item.wishlist_id.to_string(),
-            user_id: wishlist_item.user_id.to_string(),
-            product_id: wishlist_item.product_id.to_string(),
-            date_added: wishlist_item.date_added.to_string(),
-        })
+        .map(convert::wishlist_item_response_to_gql)
         .collect())
 }
 
@@ -80,11 +71,6 @@ pub(crate) async fn delete_wishlist_item(
         .into_inner()
         .items
         .into_iter()
-        .map(|wishlist_item| WishlistItem {
-            wishlist_id: wishlist_item.wishlist_id.to_string(),
-            user_id: wishlist_item.user_id.to_string(),
-            product_id: wishlist_item.product_id.to_string(),
-            date_added: wishlist_item.date_added.to_string(),
-        })
+        .map(convert::wishlist_item_response_to_gql)
         .collect())
 }

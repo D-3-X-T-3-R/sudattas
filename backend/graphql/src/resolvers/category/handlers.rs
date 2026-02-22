@@ -6,6 +6,7 @@ use tracing::instrument;
 
 use super::schema::{Category, CategoryMutation, NewCategory, SearchCategory};
 use crate::resolvers::{
+    convert,
     error::{Code, GqlError},
     utils::{connect_grpc_client, to_i64, to_option_i64},
 };
@@ -24,10 +25,7 @@ pub(crate) async fn create_category(category: NewCategory) -> Result<Vec<Categor
         .into_inner()
         .items
         .into_iter()
-        .map(|category| Category {
-            name: category.name,
-            category_id: category.category_id.to_string(),
-        })
+        .map(convert::category_response_to_gql)
         .collect())
 }
 
@@ -46,10 +44,7 @@ pub(crate) async fn search_category(search: SearchCategory) -> Result<Vec<Catego
         .into_inner()
         .items
         .into_iter()
-        .map(|category| Category {
-            name: category.name,
-            category_id: category.category_id.to_string(),
-        })
+        .map(convert::category_response_to_gql)
         .collect())
 }
 
@@ -69,10 +64,7 @@ pub(crate) async fn delete_category(category_id: String) -> Result<Vec<Category>
         .into_inner()
         .items
         .into_iter()
-        .map(|category| Category {
-            name: category.name,
-            category_id: category.category_id.to_string(),
-        })
+        .map(convert::category_response_to_gql)
         .collect())
 }
 
@@ -91,9 +83,6 @@ pub(crate) async fn update_category(category: CategoryMutation) -> Result<Vec<Ca
         .into_inner()
         .items
         .into_iter()
-        .map(|category| Category {
-            name: category.name,
-            category_id: category.category_id.to_string(),
-        })
+        .map(convert::category_response_to_gql)
         .collect())
 }

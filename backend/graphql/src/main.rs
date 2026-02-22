@@ -105,6 +105,8 @@ async fn main() {
 async fn handle_auth_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
     if err.is_not_found() {
         Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
+    } else if err.find::<Unauthorized>().is_some() {
+        Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED))
     } else if let Some(_e) = err.find::<warp::filters::body::BodyDeserializeError>() {
         Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST))
     } else {

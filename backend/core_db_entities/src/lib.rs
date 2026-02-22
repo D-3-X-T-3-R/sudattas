@@ -8,9 +8,10 @@ pub type CoreDatabaseConnection = sea_orm::DatabaseConnection;
 pub mod entity;
 
 pub async fn get_db() -> Result<DatabaseConnection, DbErr> {
-    let conn_str = "mysql://root:12345678@172.31.32.193:3306/SUDATTAS";
+    let conn_str = std::env::var("DATABASE_URL")
+        .map_err(|_| DbErr::Custom("DATABASE_URL not set".to_string()))?;
 
-    info!("Connecting to database: {conn_str}");
+    info!("Connecting to database");
 
-    Database::connect(conn_str).await
+    Database::connect(&conn_str).await
 }
