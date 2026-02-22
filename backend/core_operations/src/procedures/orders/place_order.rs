@@ -99,7 +99,7 @@ pub async fn place_order(
             shipping_address_id: req.shipping_address_id,
             status_id: 2, // Always start with order status is processing
             user_id: req.user_id,
-            total_amount: total_amount,
+            total_amount,
         }),
     )
     .await?

@@ -34,10 +34,7 @@ async fn e2e_health_then_api_version() {
         "health check should return 200"
     );
     let body = health.text().await.expect("health body");
-    assert!(
-        body.contains("OK") || body.is_empty() || body.len() > 0,
-        "health body"
-    );
+    assert!(body.contains("OK") || !body.is_empty(), "health body");
 
     let gql = client
         .post(format!("{}/v2", base))

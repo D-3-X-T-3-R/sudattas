@@ -44,10 +44,7 @@ impl Product {
 
     async fn category_details(&self) -> FieldResult<Vec<Category>> {
         crate::resolvers::category::handlers::search_category(SearchCategory {
-            category_id: match &self.category_id {
-                Some(val) => Some(val.to_string()),
-                None => None,
-            },
+            category_id: self.category_id.as_ref().map(|val| val.to_string()),
             name: None,
         })
         .await

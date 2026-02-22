@@ -80,7 +80,7 @@ impl SessionManager {
         let serialized = serde_json::to_string(&data)
             .map_err(|e| SessionError::SerializationError(e.to_string()))?;
 
-        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs() as u64)
+        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs())
             .await?;
 
         Ok(session_id)
@@ -121,7 +121,7 @@ impl SessionManager {
         let serialized = serde_json::to_string(&data)
             .map_err(|e| SessionError::SerializationError(e.to_string()))?;
 
-        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs() as u64)
+        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs())
             .await?;
 
         Ok(())

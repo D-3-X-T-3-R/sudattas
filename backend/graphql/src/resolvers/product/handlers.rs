@@ -25,9 +25,9 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
 
     let response = client
         .create_product(CreateProductRequest {
-            name: name,
+            name,
             description: Some(description),
-            price: price,
+            price,
             stock_quantity: Some(stock_quantity),
             category_id: Some(category_id),
         })
