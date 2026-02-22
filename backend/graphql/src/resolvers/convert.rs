@@ -76,6 +76,9 @@ pub fn product_image_response_to_gql(p: ProductImageResponse) -> ProductImage {
         product_id: p.product_id.to_string(),
         image_base64: p.image_base64,
         alt_text: p.alt_text,
+        url: p.url,
+        cdn_path: p.cdn_path,
+        thumbnail_url: p.thumbnail_url,
     }
 }
 

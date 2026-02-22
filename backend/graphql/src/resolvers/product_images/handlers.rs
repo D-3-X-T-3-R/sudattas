@@ -1,44 +1,19 @@
 use proto::proto::core::{
-    AddProductImageRequest, DeleteProductImageRequest, ProductImageRequest,
+    ConfirmImageUploadRequest, DeleteProductImageRequest, GetPresignedUploadUrlRequest,
     SearchProductImageRequest, UpdateProductImageRequest,
 };
 
 use tracing::instrument;
 
-use super::schema::{NewProductImage, ProductImage, ProductImageMutation, SearchProductImage};
+use super::schema::{
+    ConfirmImageUpload, GetPresignedUploadUrl, PresignedUploadUrl, ProductImage,
+    ProductImageMutation, SearchProductImage,
+};
 use crate::resolvers::{
     convert,
     error::GqlError,
-    utils::{connect_grpc_client, to_i64, to_option_i64},
+    utils::{connect_grpc_client, parse_i64, to_i64, to_option_i64},
 };
-
-#[instrument]
-pub(crate) async fn add_product_image(
-    product_image: NewProductImage,
-) -> Result<Vec<ProductImage>, GqlError> {
-    let mut client = connect_grpc_client().await?;
-
-    let response = client
-        .add_product_image(AddProductImageRequest {
-            product_id: to_i64(product_image.product_id),
-            product_images: product_image
-                .product_images
-                .into_iter()
-                .map(|pi| ProductImageRequest {
-                    image_base64: pi.image_base64,
-                    alt_text: pi.alt_text,
-                })
-                .collect(),
-        })
-        .await?;
-
-    Ok(response
-        .into_inner()
-        .items
-        .into_iter()
-        .map(convert::product_image_response_to_gql)
-        .collect())
-}
 
 #[instrument]
 pub(crate) async fn search_product_image(
@@ -95,6 +70,47 @@ pub(crate) async fn update_product_image(
         })
         .await?;
 
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::product_image_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn get_presigned_upload_url(
+    input: GetPresignedUploadUrl,
+) -> Result<Vec<PresignedUploadUrl>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .get_presigned_upload_url(GetPresignedUploadUrlRequest {
+            product_id: parse_i64(&input.product_id, "product id")?,
+            filename: input.filename,
+            content_type: input.content_type,
+        })
+        .await?;
+    let r = response.into_inner();
+    Ok(vec![PresignedUploadUrl {
+        upload_url: r.upload_url,
+        key: r.key,
+        cdn_url: r.cdn_url,
+    }])
+}
+
+#[instrument]
+pub(crate) async fn confirm_image_upload(
+    input: ConfirmImageUpload,
+) -> Result<Vec<ProductImage>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .confirm_image_upload(ConfirmImageUploadRequest {
+            product_id: parse_i64(&input.product_id, "product id")?,
+            key: input.key,
+            alt_text: input.alt_text,
+            display_order: input.display_order,
+        })
+        .await?;
     Ok(response
         .into_inner()
         .items
