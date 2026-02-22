@@ -1,12 +1,13 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::handlers::order_events::create_order_event;
 use chrono::Utc;
 use core_db_entities::entity::orders;
-use proto::proto::core::{OrderResponse, OrdersResponse, UpdateOrderRequest};
+use proto::proto::core::{CreateOrderEventRequest, OrderResponse, OrdersResponse, UpdateOrderRequest};
 use rust_decimal::{
     prelude::{FromPrimitive, ToPrimitive},
     Decimal,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
 pub async fn update_order(
@@ -14,6 +15,13 @@ pub async fn update_order(
     request: Request<UpdateOrderRequest>,
 ) -> Result<Response<OrdersResponse>, Status> {
     let req = request.into_inner();
+
+    // Fetch existing order to capture previous status for audit event.
+    let existing = orders::Entity::find_by_id(req.order_id)
+        .one(txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+    let prev_status_id = existing.as_ref().map(|o| o.status_id);
 
     let orders = orders::ActiveModel {
         order_id: ActiveValue::Set(req.order_id),
@@ -27,8 +35,28 @@ pub async fn update_order(
         currency: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };
+
     match orders.update(txn).await {
         Ok(model) => {
+            // Emit a status-change event if status_id changed.
+            if prev_status_id.map(|p| p != model.status_id).unwrap_or(true) {
+                let _ = create_order_event(
+                    txn,
+                    tonic::Request::new(CreateOrderEventRequest {
+                        order_id: model.order_id,
+                        event_type: "status_changed".to_string(),
+                        from_status: prev_status_id.map(|s| s.to_string()),
+                        to_status: Some(model.status_id.to_string()),
+                        actor_type: "system".to_string(),
+                        message: Some(format!(
+                            "Order {} status changed to {}",
+                            model.order_id, model.status_id
+                        )),
+                    }),
+                )
+                .await;
+            }
+
             let response = OrdersResponse {
                 items: vec![OrderResponse {
                     order_id: model.order_id,

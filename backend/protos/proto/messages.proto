@@ -1366,3 +1366,33 @@ message PaymentMethodResponse {
 message PaymentMethodsResponse {
     repeated PaymentMethodResponse items = 1;
 }
+
+// OrderEvents
+
+message CreateOrderEventRequest {
+    int64 order_id = 1;
+    string event_type = 2;
+    optional string from_status = 3;
+    optional string to_status = 4;
+    string actor_type = 5;  // customer | admin | system
+    optional string message = 6;
+}
+
+message GetOrderEventsRequest {
+    int64 order_id = 1;
+}
+
+message OrderEventResponse {
+    int64 event_id = 1;
+    int64 order_id = 2;
+    string event_type = 3;
+    string from_status = 4;
+    string to_status = 5;
+    string actor_type = 6;
+    string message = 7;
+    string created_at = 8;
+}
+
+message OrderEventsResponse {
+    repeated OrderEventResponse items = 1;
+}

@@ -16,6 +16,10 @@ use crate::resolvers::{
         self,
         schema::{ApplyCoupon, Coupon},
     },
+    order_events::{
+        self,
+        schema::{NewOrderEvent, OrderEvent},
+    },
     discounts::{
         self,
         schema::{Discount, DiscountMutation, NewDiscount},
@@ -423,6 +427,14 @@ impl MutationRoot {
         shipping_address_id: String,
     ) -> FieldResult<Vec<ShippingAddress>> {
         shipping_addresses::handlers::delete_shipping_address(shipping_address_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Order Events
+    #[instrument(err, ret)]
+    async fn create_order_event(input: NewOrderEvent) -> FieldResult<Vec<OrderEvent>> {
+        order_events::handlers::create_order_event(input)
             .await
             .map_err(|e| e.into())
     }

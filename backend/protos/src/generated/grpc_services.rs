@@ -2338,6 +2338,59 @@ pub struct PaymentMethodsResponse {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<PaymentMethodResponse>,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreateOrderEventRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+    #[prost(string, tag = "2")]
+    pub event_type: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub from_status: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub to_status: ::core::option::Option<::prost::alloc::string::String>,
+    /// customer | admin | system
+    #[prost(string, tag = "5")]
+    pub actor_type: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "6")]
+    pub message: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetOrderEventsRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OrderEventResponse {
+    #[prost(int64, tag = "1")]
+    pub event_id: i64,
+    #[prost(int64, tag = "2")]
+    pub order_id: i64,
+    #[prost(string, tag = "3")]
+    pub event_type: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub from_status: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub to_status: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub actor_type: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub message: ::prost::alloc::string::String,
+    #[prost(string, tag = "8")]
+    pub created_at: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OrderEventsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<OrderEventResponse>,
+}
 /// Generated client implementations.
 pub mod grpc_services_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
@@ -6397,6 +6450,59 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "ApplyCoupon"));
             self.inner.unary(req, path, codec).await
         }
+        /// OrderEvents
+        pub async fn create_order_event(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CreateOrderEventRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::OrderEventsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/CreateOrderEvent",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "CreateOrderEvent"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_order_events(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetOrderEventsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::OrderEventsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/GetOrderEvents",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "GetOrderEvents"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Shipments
         pub async fn create_shipment(
             &mut self,
@@ -7478,6 +7584,21 @@ pub mod grpc_services_server {
             &self,
             request: tonic::Request<super::ApplyCouponRequest>,
         ) -> std::result::Result<tonic::Response<super::CouponsResponse>, tonic::Status>;
+        /// OrderEvents
+        async fn create_order_event(
+            &self,
+            request: tonic::Request<super::CreateOrderEventRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::OrderEventsResponse>,
+            tonic::Status,
+        >;
+        async fn get_order_events(
+            &self,
+            request: tonic::Request<super::GetOrderEventsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::OrderEventsResponse>,
+            tonic::Status,
+        >;
         /// Shipments
         async fn create_shipment(
             &self,
@@ -14662,6 +14783,99 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ApplyCouponSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/CreateOrderEvent" => {
+                    #[allow(non_camel_case_types)]
+                    struct CreateOrderEventSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::CreateOrderEventRequest>
+                    for CreateOrderEventSvc<T> {
+                        type Response = super::OrderEventsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::CreateOrderEventRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::create_order_event(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = CreateOrderEventSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/GetOrderEvents" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetOrderEventsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::GetOrderEventsRequest>
+                    for GetOrderEventsSvc<T> {
+                        type Response = super::OrderEventsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetOrderEventsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::get_order_events(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetOrderEventsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

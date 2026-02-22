@@ -237,6 +237,10 @@ service GRPCServices {
     rpc ValidateCoupon(ValidateCouponRequest) returns (CouponsResponse);
     rpc ApplyCoupon(ApplyCouponRequest) returns (CouponsResponse);
 
+    // OrderEvents
+    rpc CreateOrderEvent(CreateOrderEventRequest) returns (OrderEventsResponse);
+    rpc GetOrderEvents(GetOrderEventsRequest) returns (OrderEventsResponse);
+
     // Shipments
     rpc CreateShipment(CreateShipmentRequest) returns (ShipmentsResponse);
     rpc UpdateShipment(UpdateShipmentRequest) returns (ShipmentsResponse);
