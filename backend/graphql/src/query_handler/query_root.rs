@@ -3,6 +3,7 @@ use crate::resolvers::{
     cart::{self, schema::Cart},
     coupons::{self, schema::{Coupon, ValidateCoupon}},
     discounts::{self, schema::{Discount, SearchDiscount}},
+    order_events::{self, schema::OrderEvent},
     inventory::{self, schema::{InventoryItem, SearchInventoryItem}},
     reviews::{self, schema::{Review, SearchReview}},
     shipping_addresses::{self, schema::ShippingAddress},
@@ -148,6 +149,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_inventory_item(input: SearchInventoryItem) -> FieldResult<Vec<InventoryItem>> {
         inventory::handlers::search_inventory_item(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Order Events
+    #[instrument(err, ret)]
+    async fn get_order_events(order_id: String) -> FieldResult<Vec<OrderEvent>> {
+        order_events::handlers::get_order_events(order_id)
             .await
             .map_err(|e| e.into())
     }

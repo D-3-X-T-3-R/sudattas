@@ -61,6 +61,7 @@ use proto::proto::core::{
     PaymentIntentsResponse,
     CreateShipmentRequest, UpdateShipmentRequest, GetShipmentRequest, ShipmentsResponse,
     ValidateCouponRequest, ApplyCouponRequest, CouponsResponse,
+    CreateOrderEventRequest, GetOrderEventsRequest, OrderEventsResponse,
     UpdatePaymentMethodRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
     UpdateProductRatingRequest, UpdateProductRequest, UpdateProductVariantRequest,
     UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingAddressRequest,
@@ -2593,6 +2594,26 @@ impl GrpcServices for MyGRPCServices {
     ) -> Result<Response<CouponsResponse>, Status> {
         let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
         let res = handlers::coupons::apply_coupon(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn create_order_event(
+        &self,
+        request: Request<CreateOrderEventRequest>,
+    ) -> Result<Response<OrderEventsResponse>, Status> {
+        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::order_events::create_order_event(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_order_events(
+        &self,
+        request: Request<GetOrderEventsRequest>,
+    ) -> Result<Response<OrderEventsResponse>, Status> {
+        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::order_events::get_order_events(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

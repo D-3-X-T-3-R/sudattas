@@ -4,6 +4,7 @@ pub mod convert;
 pub mod coupons;
 pub mod discounts;
 pub mod inventory;
+pub mod order_events;
 pub mod payment_intents;
 pub mod reviews;
 pub mod shipments;

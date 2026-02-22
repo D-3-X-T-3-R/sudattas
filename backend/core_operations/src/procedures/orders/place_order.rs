@@ -1,5 +1,6 @@
 use crate::handlers::cart::delete_cart_item;
 use crate::handlers::coupons::validate_coupon::check_coupon;
+use crate::handlers::order_events::create_order_event;
 
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
@@ -8,7 +9,7 @@ use crate::handlers::{
 
 use core_db_entities::entity::inventory;
 use proto::proto::core::{
-    CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderRequest,
+    CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest, CreateOrderRequest,
     CreatePaymentIntentRequest, DeleteCartItemRequest, GetCartItemsRequest, GetProductsByIdRequest,
     OrdersResponse, PlaceOrderRequest,
 };
@@ -158,6 +159,20 @@ pub async fn place_order(
             e
         );
     }
+
+    // Emit audit event: order placed
+    let _ = create_order_event(
+        txn,
+        tonic::Request::new(CreateOrderEventRequest {
+            order_id: create_order.order_id,
+            event_type: "order_placed".to_string(),
+            from_status: None,
+            to_status: Some("processing".to_string()),
+            actor_type: "customer".to_string(),
+            message: Some(format!("Order {} placed successfully", create_order.order_id)),
+        }),
+    )
+    .await;
 
     let _ = delete_cart_item(
         txn,
