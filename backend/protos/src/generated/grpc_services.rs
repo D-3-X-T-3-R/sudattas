@@ -398,6 +398,10 @@ pub struct SearchProductRequest {
     pub ending_price: ::core::option::Option<f64>,
     #[prost(int64, optional, tag = "7")]
     pub product_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "8")]
+    pub limit: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "9")]
+    pub offset: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -619,6 +623,10 @@ pub struct SearchOrderRequest {
     pub order_date_end: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "5")]
     pub status_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "6")]
+    pub limit: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "7")]
+    pub offset: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -759,6 +767,14 @@ pub struct CreateReviewRequest {
 pub struct SearchReviewRequest {
     #[prost(int64, tag = "1")]
     pub review_id: i64,
+    #[prost(int64, optional, tag = "2")]
+    pub product_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "3")]
+    pub user_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "4")]
+    pub limit: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "5")]
+    pub offset: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

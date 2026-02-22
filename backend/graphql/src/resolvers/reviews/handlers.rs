@@ -7,7 +7,7 @@ use tracing::instrument;
 use super::schema::{NewReview, Review, ReviewMutation, SearchReview};
 use crate::resolvers::{
     error::GqlError,
-    utils::{connect_grpc_client, parse_i64},
+    utils::{connect_grpc_client, parse_i64, to_option_i64},
 };
 
 fn review_response_to_gql(r: ReviewResponse) -> Review {
@@ -49,7 +49,13 @@ pub(crate) async fn search_review(input: SearchReview) -> Result<Vec<Review>, Gq
         .transpose()?
         .unwrap_or(0);
     let response = client
-        .search_review(SearchReviewRequest { review_id })
+        .search_review(SearchReviewRequest {
+            review_id,
+            product_id: to_option_i64(input.product_id),
+            user_id: to_option_i64(input.user_id),
+            limit: to_option_i64(input.limit),
+            offset: to_option_i64(input.offset),
+        })
         .await?;
     Ok(response
         .into_inner()

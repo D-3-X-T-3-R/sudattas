@@ -84,6 +84,10 @@ pub struct SearchProduct {
     pub ending_price: Option<String>,
     pub stock_quantity: Option<String>,
     pub category_id: Option<String>,
+    /// Maximum number of results to return (default: all)
+    pub limit: Option<String>,
+    /// Number of results to skip for pagination
+    pub offset: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]

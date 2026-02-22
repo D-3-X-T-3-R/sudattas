@@ -1,3 +1,4 @@
+use juniper::IntoFieldError;
 use super::Context;
 use crate::resolvers::{
     cart::{self, schema::Cart},
@@ -46,6 +47,18 @@ pub struct QueryRoot;
 
 #[juniper::graphql_object(Context = Context)]
 impl QueryRoot {
+    /// Returns the current API version string.
+    ///
+    /// Versioning strategy:
+    /// - The GraphQL endpoint is versioned at the URL level (`/v2`).
+    /// - Breaking schema changes increment the URL path (→ `/v3`).
+    /// - Non-breaking additions (new fields, optional args) are done in-place.
+    /// - The gRPC proto package is `proto.core`; breaking proto changes bump the package name.
+    /// - Deprecated fields carry `@deprecated` before removal.
+    fn api_version() -> &'static str {
+        "2.0.0"
+    }
+
     // Cart
     #[instrument(err, ret)]
     async fn get_cart_items(
@@ -54,7 +67,7 @@ impl QueryRoot {
     ) -> FieldResult<Vec<Cart>> {
         cart::handlers::get_cart_items(user_id, session_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Product
@@ -62,7 +75,7 @@ impl QueryRoot {
     async fn search_product(search: SearchProduct) -> FieldResult<Vec<Product>> {
         product::handlers::search_product(search)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // ProductImages
@@ -70,7 +83,7 @@ impl QueryRoot {
     async fn search_product_image(search: SearchProductImage) -> FieldResult<Vec<ProductImage>> {
         product_images::handlers::search_product_image(search)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Category
@@ -78,7 +91,7 @@ impl QueryRoot {
     async fn search_category(search: SearchCategory) -> FieldResult<Vec<Category>> {
         category::handlers::search_category(search)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Order
@@ -86,7 +99,7 @@ impl QueryRoot {
     async fn search_order(search: SearchOrder) -> FieldResult<Vec<Order>> {
         orders::handlers::search_order(search)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Wishlist
@@ -94,7 +107,7 @@ impl QueryRoot {
     async fn search_wishlist_item(search: SearchWishlistItem) -> FieldResult<Vec<WishlistItem>> {
         wishlist::handlers::search_wishlist_item(search)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Country
@@ -102,7 +115,7 @@ impl QueryRoot {
     async fn search_country(search: SearchCountry) -> FieldResult<Vec<Country>> {
         country::handlers::search_country(search)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // State
@@ -110,7 +123,7 @@ impl QueryRoot {
     async fn search_state(search: SearchState) -> FieldResult<Vec<State>> {
         state::handlers::search_state(search)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // PaymentIntents
@@ -118,7 +131,7 @@ impl QueryRoot {
     async fn get_payment_intent(input: GetPaymentIntent) -> FieldResult<Vec<PaymentIntent>> {
         payment_intents::handlers::get_payment_intent(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Shipments
@@ -126,7 +139,7 @@ impl QueryRoot {
     async fn get_shipment(input: GetShipment) -> FieldResult<Vec<Shipment>> {
         shipments::handlers::get_shipment(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Coupons
@@ -134,7 +147,7 @@ impl QueryRoot {
     async fn validate_coupon(input: ValidateCoupon) -> FieldResult<Vec<Coupon>> {
         coupons::handlers::validate_coupon(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Reviews
@@ -142,7 +155,7 @@ impl QueryRoot {
     async fn search_review(input: SearchReview) -> FieldResult<Vec<Review>> {
         reviews::handlers::search_review(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Inventory
@@ -150,7 +163,7 @@ impl QueryRoot {
     async fn search_inventory_item(input: SearchInventoryItem) -> FieldResult<Vec<InventoryItem>> {
         inventory::handlers::search_inventory_item(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Product Images — R2 presigned upload
@@ -160,7 +173,7 @@ impl QueryRoot {
     ) -> FieldResult<Vec<PresignedUploadUrl>> {
         product_images::handlers::get_presigned_upload_url(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Order Events
@@ -168,7 +181,7 @@ impl QueryRoot {
     async fn get_order_events(order_id: String) -> FieldResult<Vec<OrderEvent>> {
         order_events::handlers::get_order_events(order_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Discounts
@@ -176,7 +189,7 @@ impl QueryRoot {
     async fn search_discount(input: SearchDiscount) -> FieldResult<Vec<Discount>> {
         discounts::handlers::search_discount(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Shipping methods
@@ -184,7 +197,7 @@ impl QueryRoot {
     async fn search_shipping_method(input: SearchShippingMethod) -> FieldResult<Vec<ShippingMethod>> {
         shipping_methods::handlers::search_shipping_method(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Shipping zones
@@ -192,7 +205,7 @@ impl QueryRoot {
     async fn search_shipping_zone(input: SearchShippingZone) -> FieldResult<Vec<ShippingZone>> {
         shipping_zones::handlers::search_shipping_zone(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Shipping addresses
@@ -200,6 +213,6 @@ impl QueryRoot {
     async fn get_shipping_addresses() -> FieldResult<Vec<ShippingAddress>> {
         shipping_addresses::handlers::get_shipping_addresses()
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 }

@@ -1,3 +1,4 @@
+use juniper::IntoFieldError;
 use super::Context;
 use crate::resolvers::{
     cart::{
@@ -85,21 +86,21 @@ impl MutationRoot {
     async fn add_cart_item(cart_item: NewCart) -> FieldResult<Vec<Cart>> {
         cart::handlers::add_cart_item(cart_item)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_cart_item(delete: DeleteCartItem) -> FieldResult<Vec<Cart>> {
         cart::handlers::delete_cart_item(delete)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn update_cart_item(cart_item: CartMutation) -> FieldResult<Vec<Cart>> {
         cart::handlers::update_cart_item(cart_item)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Product
@@ -107,21 +108,21 @@ impl MutationRoot {
     async fn create_product(product: NewProduct) -> FieldResult<Vec<Product>> {
         product::handlers::create_product(product)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_product(product_id: String) -> FieldResult<Vec<Product>> {
         product::handlers::delete_product(product_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn update_product(product: ProductMutation) -> FieldResult<Vec<Product>> {
         product::handlers::update_product(product)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Category
@@ -129,21 +130,21 @@ impl MutationRoot {
     async fn create_category(category: NewCategory) -> FieldResult<Vec<Category>> {
         category::handlers::create_category(category)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_category(category_id: String) -> FieldResult<Vec<Category>> {
         category::handlers::delete_category(category_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn update_category(category: CategoryMutation) -> FieldResult<Vec<Category>> {
         category::handlers::update_category(category)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Order
@@ -163,35 +164,35 @@ impl MutationRoot {
 
         orders::handlers::place_order(order, user_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn create_order_details(order_details: NewOrderDetails) -> FieldResult<Vec<OrderDetails>> {
         order_details::handlers::create_order_detail(order_details)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn update_order_detail(order_detail: OrderDetailsMutation) -> FieldResult<Vec<OrderDetails>> {
         order_details::handlers::update_order_detail(order_detail)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_order(order_id: String) -> FieldResult<Vec<Order>> {
         orders::handlers::delete_order(order_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn update_order(order: OrderMutation) -> FieldResult<Vec<Order>> {
         orders::handlers::update_order(order)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Wishlist
@@ -199,14 +200,14 @@ impl MutationRoot {
     async fn add_wishlist_item(wishlist: NewWishlistItem) -> FieldResult<Vec<WishlistItem>> {
         wishlist::handlers::add_wishlist_item(wishlist)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_wishlist_item(delete: DeleteWishlistItem) -> FieldResult<Vec<WishlistItem>> {
         wishlist::handlers::delete_wishlist_item(delete)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Country
@@ -214,14 +215,14 @@ impl MutationRoot {
     async fn create_country(country: NewCountry) -> FieldResult<Vec<Country>> {
         country::handlers::create_country(country)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_country(country_id: String) -> FieldResult<Vec<Country>> {
         country::handlers::delete_country(country_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // State
@@ -229,14 +230,14 @@ impl MutationRoot {
     async fn create_state(state: NewState) -> FieldResult<Vec<State>> {
         state::handlers::create_state(state)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_state(state_id: String) -> FieldResult<Vec<State>> {
         state::handlers::delete_state(state_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // PaymentIntents
@@ -244,14 +245,14 @@ impl MutationRoot {
     async fn create_payment_intent(input: NewPaymentIntent) -> FieldResult<Vec<PaymentIntent>> {
         payment_intents::handlers::create_payment_intent(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn capture_payment(input: CapturePayment) -> FieldResult<Vec<PaymentIntent>> {
         payment_intents::handlers::capture_payment(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // ProductImage
@@ -259,7 +260,7 @@ impl MutationRoot {
     async fn delete_product_image(image_id: String) -> FieldResult<Vec<ProductImage>> {
         product_images::handlers::delete_product_image(image_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
@@ -268,7 +269,7 @@ impl MutationRoot {
     ) -> FieldResult<Vec<ProductImage>> {
         product_images::handlers::update_product_image(product_image)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Shipments
@@ -276,14 +277,14 @@ impl MutationRoot {
     async fn create_shipment(input: NewShipment) -> FieldResult<Vec<Shipment>> {
         shipments::handlers::create_shipment(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn update_shipment(input: UpdateShipment) -> FieldResult<Vec<Shipment>> {
         shipments::handlers::update_shipment(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Coupons
@@ -291,7 +292,7 @@ impl MutationRoot {
     async fn apply_coupon(input: ApplyCoupon) -> FieldResult<Vec<Coupon>> {
         coupons::handlers::apply_coupon(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Reviews
@@ -299,21 +300,21 @@ impl MutationRoot {
     async fn create_review(input: NewReview) -> FieldResult<Vec<Review>> {
         reviews::handlers::create_review(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn update_review(input: ReviewMutation) -> FieldResult<Vec<Review>> {
         reviews::handlers::update_review(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_review(review_id: String) -> FieldResult<Vec<Review>> {
         reviews::handlers::delete_review(review_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Inventory
@@ -321,7 +322,7 @@ impl MutationRoot {
     async fn create_inventory_item(input: NewInventoryItem) -> FieldResult<Vec<InventoryItem>> {
         inventory::handlers::create_inventory_item(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
@@ -330,14 +331,14 @@ impl MutationRoot {
     ) -> FieldResult<Vec<InventoryItem>> {
         inventory::handlers::update_inventory_item(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_inventory_item(inventory_id: String) -> FieldResult<Vec<InventoryItem>> {
         inventory::handlers::delete_inventory_item(inventory_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Discounts
@@ -345,21 +346,21 @@ impl MutationRoot {
     async fn create_discount(input: NewDiscount) -> FieldResult<Vec<Discount>> {
         discounts::handlers::create_discount(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn update_discount(input: DiscountMutation) -> FieldResult<Vec<Discount>> {
         discounts::handlers::update_discount(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_discount(discount_id: String) -> FieldResult<Vec<Discount>> {
         discounts::handlers::delete_discount(discount_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Shipping methods
@@ -367,7 +368,7 @@ impl MutationRoot {
     async fn create_shipping_method(input: NewShippingMethod) -> FieldResult<Vec<ShippingMethod>> {
         shipping_methods::handlers::create_shipping_method(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
@@ -376,14 +377,14 @@ impl MutationRoot {
     ) -> FieldResult<Vec<ShippingMethod>> {
         shipping_methods::handlers::update_shipping_method(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_shipping_method(method_id: String) -> FieldResult<Vec<ShippingMethod>> {
         shipping_methods::handlers::delete_shipping_method(method_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Shipping zones
@@ -391,21 +392,21 @@ impl MutationRoot {
     async fn create_shipping_zone(input: NewShippingZone) -> FieldResult<Vec<ShippingZone>> {
         shipping_zones::handlers::create_shipping_zone(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn update_shipping_zone(input: ShippingZoneMutation) -> FieldResult<Vec<ShippingZone>> {
         shipping_zones::handlers::update_shipping_zone(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
     async fn delete_shipping_zone(zone_id: String) -> FieldResult<Vec<ShippingZone>> {
         shipping_zones::handlers::delete_shipping_zone(zone_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Shipping addresses
@@ -415,7 +416,7 @@ impl MutationRoot {
     ) -> FieldResult<Vec<ShippingAddress>> {
         shipping_addresses::handlers::create_shipping_address(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
@@ -424,7 +425,7 @@ impl MutationRoot {
     ) -> FieldResult<Vec<ShippingAddress>> {
         shipping_addresses::handlers::update_shipping_address(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
@@ -433,7 +434,7 @@ impl MutationRoot {
     ) -> FieldResult<Vec<ShippingAddress>> {
         shipping_addresses::handlers::delete_shipping_address(shipping_address_id)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Order Events
@@ -441,7 +442,7 @@ impl MutationRoot {
     async fn create_order_event(input: NewOrderEvent) -> FieldResult<Vec<OrderEvent>> {
         order_events::handlers::create_order_event(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 
     // Product Images — R2 confirm upload
@@ -449,6 +450,6 @@ impl MutationRoot {
     async fn confirm_image_upload(input: ConfirmImageUpload) -> FieldResult<Vec<ProductImage>> {
         product_images::handlers::confirm_image_upload(input)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| e.into_field_error())
     }
 }

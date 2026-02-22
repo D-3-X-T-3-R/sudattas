@@ -70,6 +70,10 @@ pub struct SearchOrder {
     pub order_date_end: Option<String>,
     pub status_id: Option<String>,
     pub order_id: Option<String>,
+    /// Maximum number of results to return
+    pub limit: Option<String>,
+    /// Number of results to skip for pagination
+    pub offset: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]

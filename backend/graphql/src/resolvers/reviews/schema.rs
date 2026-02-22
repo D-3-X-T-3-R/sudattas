@@ -51,6 +51,14 @@ pub struct ReviewMutation {
 #[derive(GraphQLInputObject, Default, Debug)]
 #[graphql(description = "Search reviews")]
 pub struct SearchReview {
-    /// Pass 0 or omit to return all reviews
+    /// Filter by specific review ID; omit to return all
     pub review_id: Option<String>,
+    /// Filter by product ID
+    pub product_id: Option<String>,
+    /// Filter by user ID
+    pub user_id: Option<String>,
+    /// Maximum number of results to return
+    pub limit: Option<String>,
+    /// Number of results to skip for pagination
+    pub offset: Option<String>,
 }
