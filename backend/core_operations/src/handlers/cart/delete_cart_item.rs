@@ -34,7 +34,7 @@ pub async fn delete_cart_item(
                                     cart_id: model.cart_id,
                                     product_id: model.product_id,
                                     quantity: model.quantity,
-                                    user_id: model.user_id,
+                                    user_id: model.user_id.unwrap_or(0),
                                 })
                                 .collect(),
                         };

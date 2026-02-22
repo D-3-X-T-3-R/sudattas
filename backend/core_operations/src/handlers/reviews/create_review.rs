@@ -15,6 +15,9 @@ pub async fn create_review(
         user_id: ActiveValue::Set(Some(req.user_id)),
         rating: ActiveValue::Set(Some(req.rating)),
         comment: ActiveValue::Set(Some(req.comment)),
+        status: ActiveValue::NotSet,
+        is_verified_purchase: ActiveValue::NotSet,
+        created_at: ActiveValue::NotSet,
     };
 
     match model.insert(txn).await {

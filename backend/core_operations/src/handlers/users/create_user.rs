@@ -19,6 +19,12 @@ pub async fn create_user(
         address: ActiveValue::Set(req.address),
         phone: ActiveValue::Set(req.phone),
         create_date: ActiveValue::Set(Utc::now()),
+        password_hash: ActiveValue::NotSet,
+        email_verified: ActiveValue::NotSet,
+        email_verified_at: ActiveValue::NotSet,
+        status: ActiveValue::NotSet,
+        last_login_at: ActiveValue::NotSet,
+        updated_at: ActiveValue::NotSet,
     };
 
     match model.insert(txn).await {

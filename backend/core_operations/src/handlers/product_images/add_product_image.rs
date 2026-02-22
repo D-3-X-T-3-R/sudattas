@@ -21,8 +21,14 @@ pub async fn add_product_image(
         let product_image = product_images::ActiveModel {
             image_id: ActiveValue::NotSet,
             product_id: ActiveValue::Set(req.product_id),
-            image_base64: ActiveValue::Set(images.image_base64),
+            image_base64: ActiveValue::Set(Some(images.image_base64)),
             alt_text: ActiveValue::Set(images.alt_text),
+            url: ActiveValue::NotSet,
+            cdn_path: ActiveValue::NotSet,
+            thumbnail_url: ActiveValue::NotSet,
+            file_size_bytes: ActiveValue::NotSet,
+            display_order: ActiveValue::NotSet,
+            created_at: ActiveValue::NotSet,
         }
         .insert(txn)
         .await;
@@ -32,7 +38,7 @@ pub async fn add_product_image(
                 images_response.push(ProductImageResponse {
                     image_id: product_image.image_id,
                     product_id: product_image.product_id,
-                    image_base64: product_image.image_base64,
+                    image_base64: product_image.image_base64.unwrap_or_default(),
                     alt_text: product_image.alt_text,
                 });
             }

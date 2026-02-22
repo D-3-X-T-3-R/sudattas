@@ -17,8 +17,14 @@ pub async fn update_product_image(
     let product_images = product_images::ActiveModel {
         image_id: ActiveValue::Set(req.image_id),
         product_id: ActiveValue::Set(req.product_id),
-        image_base64: ActiveValue::Set(req.image_base64),
+        image_base64: ActiveValue::Set(Some(req.image_base64)),
         alt_text: ActiveValue::Set(req.alt_text),
+        url: ActiveValue::NotSet,
+        cdn_path: ActiveValue::NotSet,
+        thumbnail_url: ActiveValue::NotSet,
+        file_size_bytes: ActiveValue::NotSet,
+        display_order: ActiveValue::NotSet,
+        created_at: ActiveValue::NotSet,
     };
     match product_images.update(txn).await {
         Ok(model) => {
@@ -26,7 +32,7 @@ pub async fn update_product_image(
                 items: vec![ProductImageResponse {
                     image_id: model.image_id,
                     product_id: model.product_id,
-                    image_base64: model.image_base64,
+                    image_base64: model.image_base64.unwrap_or_default(),
                     alt_text: model.alt_text,
                 }],
             };

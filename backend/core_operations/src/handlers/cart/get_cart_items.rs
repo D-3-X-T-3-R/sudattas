@@ -20,7 +20,7 @@ pub async fn get_cart_items(
                 .into_iter()
                 .map(|model| CartItemResponse {
                     cart_id: model.cart_id,
-                    user_id: model.user_id,
+                    user_id: model.user_id.unwrap_or(0),
                     product_id: model.product_id,
                     quantity: model.quantity,
                 })

@@ -1,12 +1,17 @@
 SET character_set_client = utf8mb4;
 
-CREATE DATABASE `SUDATTAS`;
+CREATE DATABASE IF NOT EXISTS `SUDATTAS`;
 USE `SUDATTAS`;
 
 -- Dropping existing tables if they exist;
-
 -- Dropping tables with dependencies first
 
+DROP TABLE IF EXISTS `order_events`;
+DROP TABLE IF EXISTS `webhook_events`;
+DROP TABLE IF EXISTS `shipments`;
+DROP TABLE IF EXISTS `payment_intents`;
+DROP TABLE IF EXISTS `sessions`;
+DROP TABLE IF EXISTS `coupons`;
 DROP TABLE IF EXISTS `OrderDetails`;
 DROP TABLE IF EXISTS `Cart`;
 DROP TABLE IF EXISTS `Wishlist`;
@@ -39,47 +44,81 @@ DROP TABLE IF EXISTS `Colors`;
 DROP TABLE IF EXISTS `ShippingZones`;
 DROP TABLE IF EXISTS `Promotions`;
 DROP TABLE IF EXISTS `PaymentMethods`;
+DROP TABLE IF EXISTS `ShippingAddresses`;
+DROP TABLE IF EXISTS `StateCityMapping`;
+DROP TABLE IF EXISTS `CountryStateMapping`;
+DROP TABLE IF EXISTS `Cities`;
+DROP TABLE IF EXISTS `States`;
+DROP TABLE IF EXISTS `Countries`;
+DROP TABLE IF EXISTS `OrderStatus`;
 DROP TABLE IF EXISTS `Users`;
 
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 
--- Table structure for table `Users`
+-- ============================================================================
+-- CORE TABLES (Production-Ready)
+-- ============================================================================
+
+-- Table structure for table `Users` (Enhanced with auth & security)
 CREATE TABLE `Users` (
     `UserID` bigint NOT NULL AUTO_INCREMENT,
     `Username` varchar(255) NOT NULL,
-    `Password` varchar(255) NOT NULL,
+    `Password` varchar(255) NOT NULL COMMENT 'Legacy field, use password_hash instead',
+    `password_hash` varchar(255) DEFAULT NULL COMMENT 'Argon2id hash',
     `Email` varchar(255) NOT NULL UNIQUE,
+    `email_verified` BOOLEAN DEFAULT FALSE,
+    `email_verified_at` TIMESTAMP NULL,
     `FullName` varchar(255) DEFAULT NULL,
     `Address` text,
     `Phone` varchar(20) DEFAULT NULL,
-    `CreateDate` timestamp NOT NULL ,
-    PRIMARY KEY (`UserID`)
+    `status` ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
+    `last_login_at` TIMESTAMP NULL,
+    `CreateDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`UserID`),
+    INDEX `idx_email_status` (`Email`, `status`),
+    INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Categories`
-
 CREATE TABLE `Categories` (
     `CategoryID` bigint NOT NULL AUTO_INCREMENT,
     `Name` varchar(255) NOT NULL,
     PRIMARY KEY (`CategoryID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `Products`
-
+-- Table structure for table `Products` (Enhanced for saree e-commerce)
 CREATE TABLE `Products` (
     `ProductID` bigint NOT NULL AUTO_INCREMENT,
+    `sku` VARCHAR(100) UNIQUE,
     `Name` varchar(255) NOT NULL,
+    `slug` VARCHAR(255) UNIQUE,
     `Description` text,
-    `Price` decimal(10,2) NOT NULL,
+    `Price` decimal(10,2) NOT NULL COMMENT 'Legacy field, use price_paise instead',
+    `price_paise` INT DEFAULT NULL COMMENT 'Price in paise (₹499.00 = 49900)',
     `StockQuantity` bigint DEFAULT NULL,
     `CategoryID` bigint DEFAULT NULL,
+    -- Saree-specific fields
+    `fabric` VARCHAR(100),
+    `weave` VARCHAR(100),
+    `occasion` VARCHAR(100),
+    `length_meters` DECIMAL(3,1) DEFAULT 5.5,
+    `has_blouse_piece` BOOLEAN DEFAULT TRUE,
+    `care_instructions` TEXT,
+    -- Product management
+    `status` ENUM('draft', 'active', 'archived') DEFAULT 'active',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`ProductID`),
-    FOREIGN KEY (`CategoryID`) REFERENCES `Categories`(`CategoryID`)
+    FOREIGN KEY (`CategoryID`) REFERENCES `Categories`(`CategoryID`),
+    INDEX `idx_sku` (`sku`),
+    INDEX `idx_slug` (`slug`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_fabric` (`fabric`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `OrderStatus`
-
 CREATE TABLE `OrderStatus` (
     `StatusID` bigint NOT NULL AUTO_INCREMENT,
     `StatusName` varchar(50) NOT NULL,
@@ -141,18 +180,24 @@ CREATE TABLE `ShippingAddresses` (
     FOREIGN KEY (`CityID`) REFERENCES `Cities`(`CityID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `Orders`
+-- Table structure for table `Orders` (Enhanced with payment tracking)
 CREATE TABLE `Orders` (
     `OrderID` BIGINT NOT NULL AUTO_INCREMENT,
+    `order_number` VARCHAR(50) UNIQUE COMMENT 'SUD-2024-00001',
     `UserID` BIGINT NOT NULL,
-    `OrderDate` TIMESTAMP NOT NULL,
+    `OrderDate` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `ShippingAddressID` BIGINT NOT NULL,
-    `TotalAmount` DECIMAL(10,2) NOT NULL,
+    `TotalAmount` DECIMAL(10,2) NOT NULL COMMENT 'Legacy field, use total_paise instead',
     `StatusID` BIGINT NOT NULL,
+    `payment_status` ENUM('pending', 'authorized', 'captured', 'failed') DEFAULT 'pending',
+    `currency` VARCHAR(3) DEFAULT 'INR',
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`OrderID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
     FOREIGN KEY (`ShippingAddressID`) REFERENCES `ShippingAddresses`(`ShippingAddressID`),
-    FOREIGN KEY (`StatusID`) REFERENCES `OrderStatus`(`StatusID`)
+    FOREIGN KEY (`StatusID`) REFERENCES `OrderStatus`(`StatusID`),
+    INDEX `idx_order_number` (`order_number`),
+    INDEX `idx_payment_status` (`payment_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `OrderDetails`
@@ -167,27 +212,35 @@ CREATE TABLE `OrderDetails` (
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `Reviews`
+-- Table structure for table `Reviews` (Enhanced with moderation)
 CREATE TABLE `Reviews` (
     `ReviewID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint DEFAULT NULL,
     `UserID` bigint DEFAULT NULL,
     `Rating` bigint DEFAULT NULL,
     `Comment` text,
+    `status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    `is_verified_purchase` BOOLEAN DEFAULT FALSE,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`ReviewID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
+    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
+    INDEX `idx_product_status` (`ProductID`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `Cart`
+-- Table structure for table `Cart` (Enhanced with session support)
 CREATE TABLE `Cart` (
     `CartID` bigint NOT NULL AUTO_INCREMENT,
-    `UserID` bigint NOT NULL,
+    `UserID` bigint NULL COMMENT 'NULL for guest carts',
+    `session_id` VARCHAR(255) NULL COMMENT 'For guest checkout',
     `ProductID` bigint NOT NULL,
     `Quantity` bigint NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`CartID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
+    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
+    INDEX `idx_session` (`session_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Wishlist`
@@ -195,20 +248,27 @@ CREATE TABLE `Wishlist` (
     `WishlistID` bigint NOT NULL AUTO_INCREMENT,
     `UserID` bigint DEFAULT NULL,
     `ProductID` bigint DEFAULT NULL,
-    `DateAdded` timestamp NOT NULL ,
+    `DateAdded` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`WishlistID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `ProductImages`
+-- Table structure for table `ProductImages` (Enhanced for CDN)
 CREATE TABLE `ProductImages` (
     `ImageID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint NOT NULL,
-    `ImageBase64` MEDIUMTEXT NOT NULL,
+    `ImageBase64` MEDIUMTEXT NULL COMMENT 'Legacy field, use url instead',
+    `url` VARCHAR(500) COMMENT 'CDN URL: https://cdn.sudattas.com/products/...',
+    `cdn_path` VARCHAR(500) COMMENT 'Path in R2: products/saree-123/hero.webp',
+    `thumbnail_url` VARCHAR(500),
+    `file_size_bytes` INT,
     `AltText` varchar(255) DEFAULT NULL,
+    `display_order` INT DEFAULT 0,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`ImageID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
+    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
+    INDEX `idx_product_order` (`ProductID`, `display_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Suppliers`
@@ -220,13 +280,15 @@ CREATE TABLE `Suppliers` (
     PRIMARY KEY (`SupplierID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `Inventory`
+-- Table structure for table `Inventory` (Enhanced with reserved stock)
 CREATE TABLE `Inventory` (
     `InventoryID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint DEFAULT NULL,
     `QuantityAvailable` bigint DEFAULT NULL,
+    `quantity_reserved` INT DEFAULT 0 COMMENT 'Reserved for pending orders',
     `ReorderLevel` bigint DEFAULT NULL,
     `SupplierID` bigint DEFAULT NULL,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`InventoryID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
     FOREIGN KEY (`SupplierID`) REFERENCES `Suppliers`(`SupplierID`)
@@ -284,7 +346,7 @@ CREATE TABLE `Transactions` (
     `TransactionID` bigint NOT NULL AUTO_INCREMENT,
     `UserID` bigint NOT NULL,
     `Amount` decimal(10,2) NOT NULL,
-    `TransactionDate` timestamp NOT NULL ,
+    `TransactionDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `Type` varchar(50) NOT NULL,
     PRIMARY KEY (`TransactionID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
@@ -294,7 +356,7 @@ CREATE TABLE `Transactions` (
 CREATE TABLE `NewsletterSubscribers` (
     `SubscriberID` bigint NOT NULL AUTO_INCREMENT,
     `Email` varchar(255) NOT NULL UNIQUE,
-    `SubscriptionDate` timestamp NOT NULL ,
+    `SubscriptionDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`SubscriberID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -308,10 +370,6 @@ CREATE TABLE `ProductRatings` (
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- ============================================================================================
-
-;
 
 -- Table structure for table `ProductCategoryMapping`
 CREATE TABLE `ProductCategoryMapping` (
@@ -372,8 +430,7 @@ CREATE TABLE `ProductColorMapping` (
     FOREIGN KEY (`ColorID`) REFERENCES `Colors`(`ColorID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- ===========================================================================================
-
+-- Table structure for table `ProductVariants`
 CREATE TABLE `ProductVariants` (
     `VariantID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint NOT NULL,
@@ -386,36 +443,40 @@ CREATE TABLE `ProductVariants` (
     FOREIGN KEY (`ColorID`) REFERENCES `Colors`(`ColorID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Table structure for table `EventLogs`
 CREATE TABLE `EventLogs` (
     `LogID` bigint NOT NULL AUTO_INCREMENT,
     `EventType` varchar(255) NOT NULL,
     `EventDescription` text,
     `UserID` bigint DEFAULT NULL,
-    `EventTime` timestamp NOT NULL ,
+    `EventTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`LogID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Table structure for table `UserActivity`
 CREATE TABLE `UserActivity` (
     `ActivityID` bigint NOT NULL AUTO_INCREMENT,
     `UserID` bigint DEFAULT NULL,
     `ActivityType` varchar(255) NOT NULL,
-    `ActivityTime` timestamp NOT NULL ,
+    `ActivityTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `ActivityDetails` text,
     PRIMARY KEY (`ActivityID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Table structure for table `InventoryLog`
 CREATE TABLE `InventoryLog` (
     `LogID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint NOT NULL,
     `ChangeQuantity` bigint NOT NULL,
-    `LogTime` timestamp NOT NULL ,
+    `LogTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `Reason` varchar(255) DEFAULT NULL,
     PRIMARY KEY (`LogID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Table structure for table `Promotions`
 CREATE TABLE `Promotions` (
     `PromotionID` bigint NOT NULL AUTO_INCREMENT,
     `PromotionName` varchar(255) NOT NULL,
@@ -425,6 +486,7 @@ CREATE TABLE `Promotions` (
     PRIMARY KEY (`PromotionID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Table structure for table `ShippingZones`
 CREATE TABLE `ShippingZones` (
     `ZoneID` bigint NOT NULL AUTO_INCREMENT,
     `ZoneName` varchar(255) NOT NULL,
@@ -432,6 +494,7 @@ CREATE TABLE `ShippingZones` (
     PRIMARY KEY (`ZoneID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Table structure for table `PaymentMethods`
 CREATE TABLE `PaymentMethods` (
     `MethodID` bigint NOT NULL AUTO_INCREMENT,
     `MethodName` varchar(255) NOT NULL,
@@ -439,4 +502,113 @@ CREATE TABLE `PaymentMethods` (
     PRIMARY KEY (`MethodID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-;
+-- ============================================================================
+-- PHASE 1: PRODUCTION TABLES (Sessions, Payments, Shipping)
+-- ============================================================================
+
+-- Sessions table for Redis-backed session management
+CREATE TABLE `sessions` (
+    `session_id` VARCHAR(128) PRIMARY KEY,
+    `user_id` BIGINT NULL,
+    `data` JSON NOT NULL,
+    `ip_address` VARCHAR(45),
+    `last_activity` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `expires_at` TIMESTAMP NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`) ON DELETE CASCADE,
+    INDEX `idx_user` (`user_id`),
+    INDEX `idx_expires` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Payment intents for Razorpay order tracking
+CREATE TABLE `payment_intents` (
+    `intent_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `razorpay_order_id` VARCHAR(100) UNIQUE NOT NULL,
+    `order_id` BIGINT NULL,
+    `user_id` BIGINT NULL,
+    `amount_paise` INT NOT NULL,
+    `currency` VARCHAR(3) DEFAULT 'INR',
+    `status` ENUM('created', 'attempted', 'paid', 'failed') DEFAULT 'created',
+    `razorpay_payment_id` VARCHAR(100),
+    `metadata` JSON,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `expires_at` TIMESTAMP NOT NULL,
+    FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
+    FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`),
+    INDEX `idx_razorpay_order` (`razorpay_order_id`),
+    INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Shipments for Shiprocket tracking
+CREATE TABLE `shipments` (
+    `shipment_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `order_id` BIGINT NOT NULL,
+    `shiprocket_order_id` VARCHAR(100),
+    `awb_code` VARCHAR(100),
+    `carrier` VARCHAR(100),
+    `status` ENUM('pending', 'picked_up', 'in_transit', 'delivered', 'failed') DEFAULT 'pending',
+    `tracking_events` JSON,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `delivered_at` TIMESTAMP NULL,
+    FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
+    INDEX `idx_order` (`order_id`),
+    INDEX `idx_awb` (`awb_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Coupons for discount codes
+CREATE TABLE `coupons` (
+    `coupon_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `code` VARCHAR(50) UNIQUE NOT NULL,
+    `discount_type` ENUM('percentage', 'fixed_amount') NOT NULL,
+    `discount_value` INT NOT NULL,
+    `min_order_value_paise` INT DEFAULT 0,
+    `usage_limit` INT NULL,
+    `usage_count` INT DEFAULT 0,
+    `status` ENUM('active', 'inactive') DEFAULT 'active',
+    `starts_at` TIMESTAMP NOT NULL,
+    `ends_at` TIMESTAMP NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_code` (`code`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Order events for state machine audit trail
+CREATE TABLE `order_events` (
+    `event_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `order_id` BIGINT NOT NULL,
+    `event_type` VARCHAR(50) NOT NULL,
+    `from_status` VARCHAR(50),
+    `to_status` VARCHAR(50),
+    `actor_type` ENUM('customer', 'admin', 'system') NOT NULL,
+    `message` TEXT,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
+    INDEX `idx_order` (`order_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Webhook events for idempotent webhook processing
+CREATE TABLE `webhook_events` (
+    `event_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `provider` VARCHAR(50) NOT NULL,
+    `event_type` VARCHAR(100) NOT NULL,
+    `webhook_id` VARCHAR(255) UNIQUE NOT NULL,
+    `payload` JSON NOT NULL,
+    `status` ENUM('pending', 'processed', 'failed') DEFAULT 'pending',
+    `received_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_webhook_id` (`webhook_id`),
+    INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ============================================================================
+-- DEFAULT DATA
+-- ============================================================================
+
+-- Insert default order statuses
+INSERT INTO `OrderStatus` (`StatusName`) VALUES
+('pending'),
+('confirmed'),
+('processing'),
+('shipped'),
+('delivered'),
+('cancelled'),
+('refunded')
+ON DUPLICATE KEY UPDATE StatusName = VALUES(StatusName);

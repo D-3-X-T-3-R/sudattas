@@ -22,6 +22,9 @@ pub async fn update_review(
         user_id: ActiveValue::Set(req.user_id.or(existing.user_id)),
         rating: ActiveValue::Set(req.rating.or(existing.rating)),
         comment: ActiveValue::Set(req.comment.or(existing.comment)),
+        status: ActiveValue::Set(existing.status),
+        is_verified_purchase: ActiveValue::Set(existing.is_verified_purchase),
+        created_at: ActiveValue::Set(existing.created_at),
     };
 
     match model.update(txn).await {

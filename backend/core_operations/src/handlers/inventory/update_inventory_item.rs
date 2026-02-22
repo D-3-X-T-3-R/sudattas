@@ -31,6 +31,8 @@ pub async fn update_inventory_item(
         ),
         reorder_level: ActiveValue::Set(req.reorder_level.or(existing.reorder_level)),
         supplier_id: ActiveValue::Set(req.supplier_id.or(existing.supplier_id)),
+        quantity_reserved: ActiveValue::Set(existing.quantity_reserved),
+        updated_at: ActiveValue::NotSet,
     };
 
     match model.update(txn).await {

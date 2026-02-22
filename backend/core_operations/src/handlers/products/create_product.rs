@@ -20,6 +20,18 @@ pub async fn create_product(
         price: ActiveValue::Set(Decimal::from_f64(req.price).unwrap()),
         stock_quantity: ActiveValue::Set(req.stock_quantity),
         category_id: ActiveValue::Set(req.category_id),
+        sku: ActiveValue::NotSet,
+        slug: ActiveValue::NotSet,
+        price_paise: ActiveValue::NotSet,
+        fabric: ActiveValue::NotSet,
+        weave: ActiveValue::NotSet,
+        occasion: ActiveValue::NotSet,
+        length_meters: ActiveValue::NotSet,
+        has_blouse_piece: ActiveValue::NotSet,
+        care_instructions: ActiveValue::NotSet,
+        status: ActiveValue::NotSet,
+        created_at: ActiveValue::NotSet,
+        updated_at: ActiveValue::NotSet,
     };
     match product.insert(txn).await {
         Ok(model) => {

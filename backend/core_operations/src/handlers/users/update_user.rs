@@ -25,6 +25,12 @@ pub async fn update_user(
         address: ActiveValue::Set(req.address.or(existing.address)),
         phone: ActiveValue::Set(req.phone.or(existing.phone)),
         create_date: ActiveValue::Set(existing.create_date),
+        password_hash: ActiveValue::Set(existing.password_hash),
+        email_verified: ActiveValue::Set(existing.email_verified),
+        email_verified_at: ActiveValue::Set(existing.email_verified_at),
+        status: ActiveValue::Set(existing.status),
+        last_login_at: ActiveValue::Set(existing.last_login_at),
+        updated_at: ActiveValue::NotSet,
     };
 
     match model.update(txn).await {
