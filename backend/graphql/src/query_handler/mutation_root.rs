@@ -16,6 +16,10 @@ use crate::resolvers::{
         self,
         schema::{ApplyCoupon, Coupon},
     },
+    inventory::{
+        self,
+        schema::{InventoryItem, InventoryItemMutation, NewInventoryItem},
+    },
     reviews::{
         self,
         schema::{NewReview, Review, ReviewMutation},
@@ -283,6 +287,30 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_review(review_id: String) -> FieldResult<Vec<Review>> {
         reviews::handlers::delete_review(review_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Inventory
+    #[instrument(err, ret)]
+    async fn create_inventory_item(input: NewInventoryItem) -> FieldResult<Vec<InventoryItem>> {
+        inventory::handlers::create_inventory_item(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_inventory_item(
+        input: InventoryItemMutation,
+    ) -> FieldResult<Vec<InventoryItem>> {
+        inventory::handlers::update_inventory_item(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_inventory_item(inventory_id: String) -> FieldResult<Vec<InventoryItem>> {
+        inventory::handlers::delete_inventory_item(inventory_id)
             .await
             .map_err(|e| e.into())
     }

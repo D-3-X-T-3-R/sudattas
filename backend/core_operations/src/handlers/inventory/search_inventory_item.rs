@@ -16,6 +16,9 @@ pub async fn search_inventory_item(
     if req.inventory_id != 0 {
         query = query.filter(inventory::Column::InventoryId.eq(req.inventory_id));
     }
+    if let Some(product_id) = req.product_id {
+        query = query.filter(inventory::Column::ProductId.eq(product_id));
+    }
 
     match query.all(txn).await {
         Ok(models) => {

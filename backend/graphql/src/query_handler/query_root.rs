@@ -2,6 +2,7 @@ use super::Context;
 use crate::resolvers::{
     cart::{self, schema::Cart},
     coupons::{self, schema::{Coupon, ValidateCoupon}},
+    inventory::{self, schema::{InventoryItem, SearchInventoryItem}},
     reviews::{self, schema::{Review, SearchReview}},
     payment_intents::{self, schema::{GetPaymentIntent, PaymentIntent}},
     shipments::{self, schema::{GetShipment, Shipment}},
@@ -135,6 +136,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_review(input: SearchReview) -> FieldResult<Vec<Review>> {
         reviews::handlers::search_review(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Inventory
+    #[instrument(err, ret)]
+    async fn search_inventory_item(input: SearchInventoryItem) -> FieldResult<Vec<InventoryItem>> {
+        inventory::handlers::search_inventory_item(input)
             .await
             .map_err(|e| e.into())
     }

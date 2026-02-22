@@ -2,6 +2,7 @@ pub mod cart;
 pub mod category;
 pub mod convert;
 pub mod coupons;
+pub mod inventory;
 pub mod payment_intents;
 pub mod reviews;
 pub mod shipments;
