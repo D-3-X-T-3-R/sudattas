@@ -4,6 +4,7 @@ use tracing::instrument;
 
 use super::schema::{Country, NewCountry, SearchCountry};
 use crate::resolvers::{
+    convert,
     error::{Code, GqlError},
     utils::{connect_grpc_client, to_option_i64},
 };
@@ -22,10 +23,7 @@ pub(crate) async fn create_country(country: NewCountry) -> Result<Vec<Country>, 
         .into_inner()
         .items
         .into_iter()
-        .map(|country| Country {
-            country_name: country.country_name,
-            country_id: country.country_id.to_string(),
-        })
+        .map(convert::country_response_to_gql)
         .collect())
 }
 
@@ -44,10 +42,7 @@ pub(crate) async fn search_country(search: SearchCountry) -> Result<Vec<Country>
         .into_inner()
         .items
         .into_iter()
-        .map(|country| Country {
-            country_name: country.country_name,
-            country_id: country.country_id.to_string(),
-        })
+        .map(convert::country_response_to_gql)
         .collect())
 }
 
@@ -67,9 +62,6 @@ pub(crate) async fn delete_country(country_id: String) -> Result<Vec<Country>, G
         .into_inner()
         .items
         .into_iter()
-        .map(|country| Country {
-            country_name: country.country_name,
-            country_id: country.country_id.to_string(),
-        })
+        .map(convert::country_response_to_gql)
         .collect())
 }

@@ -4,6 +4,7 @@ use tracing::instrument;
 
 use super::schema::{NewState, SearchState, State};
 use crate::resolvers::{
+    convert,
     error::{Code, GqlError},
     utils::{connect_grpc_client, to_option_i64},
 };
@@ -22,10 +23,7 @@ pub(crate) async fn create_state(state: NewState) -> Result<Vec<State>, GqlError
         .into_inner()
         .items
         .into_iter()
-        .map(|state| State {
-            state_name: state.state_name,
-            state_id: state.state_id.to_string(),
-        })
+        .map(convert::state_response_to_gql)
         .collect())
 }
 
@@ -44,10 +42,7 @@ pub(crate) async fn search_state(search: SearchState) -> Result<Vec<State>, GqlE
         .into_inner()
         .items
         .into_iter()
-        .map(|state| State {
-            state_name: state.state_name,
-            state_id: state.state_id.to_string(),
-        })
+        .map(convert::state_response_to_gql)
         .collect())
 }
 
@@ -67,9 +62,6 @@ pub(crate) async fn delete_state(state_id: String) -> Result<Vec<State>, GqlErro
         .into_inner()
         .items
         .into_iter()
-        .map(|state| State {
-            state_name: state.state_name,
-            state_id: state.state_id.to_string(),
-        })
+        .map(convert::state_response_to_gql)
         .collect())
 }

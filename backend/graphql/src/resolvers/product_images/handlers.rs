@@ -7,6 +7,7 @@ use tracing::instrument;
 
 use super::schema::{NewProductImage, ProductImage, ProductImageMutation, SearchProductImage};
 use crate::resolvers::{
+    convert,
     error::GqlError,
     utils::{connect_grpc_client, to_i64, to_option_i64},
 };
@@ -35,12 +36,7 @@ pub(crate) async fn add_product_image(
         .into_inner()
         .items
         .into_iter()
-        .map(|product_image| ProductImage {
-            image_id: product_image.image_id.to_string(),
-            product_id: product_image.product_id.to_string(),
-            image_base64: product_image.image_base64.to_string(),
-            alt_text: product_image.alt_text,
-        })
+        .map(convert::product_image_response_to_gql)
         .collect())
 }
 
@@ -62,12 +58,7 @@ pub(crate) async fn search_product_image(
         .into_inner()
         .items
         .into_iter()
-        .map(|product_image| ProductImage {
-            image_id: product_image.image_id.to_string(),
-            product_id: product_image.product_id.to_string(),
-            image_base64: product_image.image_base64.to_string(),
-            alt_text: product_image.alt_text,
-        })
+        .map(convert::product_image_response_to_gql)
         .collect())
 }
 
@@ -85,12 +76,7 @@ pub(crate) async fn delete_product_image(image_id: String) -> Result<Vec<Product
         .into_inner()
         .items
         .into_iter()
-        .map(|product_image| ProductImage {
-            image_id: product_image.image_id.to_string(),
-            product_id: product_image.product_id.to_string(),
-            image_base64: product_image.image_base64.to_string(),
-            alt_text: product_image.alt_text,
-        })
+        .map(convert::product_image_response_to_gql)
         .collect())
 }
 
@@ -113,11 +99,6 @@ pub(crate) async fn update_product_image(
         .into_inner()
         .items
         .into_iter()
-        .map(|product_image| ProductImage {
-            image_id: product_image.image_id.to_string(),
-            product_id: product_image.product_id.to_string(),
-            image_base64: product_image.image_base64.to_string(),
-            alt_text: product_image.alt_text,
-        })
+        .map(convert::product_image_response_to_gql)
         .collect())
 }

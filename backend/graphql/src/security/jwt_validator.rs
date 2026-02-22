@@ -43,8 +43,10 @@ pub fn validate_token(b64_token: &str, jwks: &JWKSet) -> Result<Claims, TokenPar
     validation.iss =
         Some(hashset! {std::env::var("OAUTH_DOMAIN").expect("OAUTH_DOMAIN env var not set")});
 
-    validation.aud =
-        Some(hashset! {std::env::var("OAUTH_AUDIANCE").expect("OAUTH_AUDIANCE env var not set")});
+    let aud = std::env::var("OAUTH_AUDIENCE")
+        .or_else(|_| std::env::var("OAUTH_AUDIANCE"))
+        .expect("OAUTH_AUDIENCE or OAUTH_AUDIANCE env var not set");
+    validation.aud = Some(hashset! { aud });
 
     for jwk in &jwks.keys {
         let key = jsonwebtoken::DecodingKey::from_rsa_components(&jwk.n, &jwk.e).map_err(|_e| {
