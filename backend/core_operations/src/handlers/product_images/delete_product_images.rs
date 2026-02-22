@@ -1,7 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::product_images;
 use proto::proto::core::{DeleteProductImageRequest, ProductImageResponse, ProductImagesResponse};
-use rust_decimal::{prelude::ToPrimitive, Decimal};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 

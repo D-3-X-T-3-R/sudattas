@@ -3,7 +3,7 @@ use core_db_entities::entity::inventory;
 use proto::proto::core::{
     InventoryItemResponse, InventoryItemsResponse, SearchInventoryItemRequest,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn search_inventory_item(

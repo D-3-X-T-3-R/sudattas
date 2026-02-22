@@ -1,5 +1,5 @@
 use crate::query_handler::Context;
-use crate::security::jwt_validator::{validate_token, Claims};
+use crate::security::jwt_validator::validate_token;
 use dotenv::dotenv;
 use juniper::{EmptySubscription, RootNode};
 use reqwest::StatusCode;
@@ -63,32 +63,25 @@ async fn main() {
             .header("content-type", "text/plain")
             .body("OK")
     });
-    let context_extractor = warp::any().and(warp::header::<String>("authorization").map(
-        move |token: String| match validate_token(&token, &jwks.clone()) {
-            Ok(claims) => {
-                debug!("Validated token with claims: {:#?}", claims);
-                Ok(claims)
+    let context_extractor = warp::header::<String>("authorization")
+        .and(state.clone())
+        .and_then(|token: String, ctx: Context| async move {
+            match validate_token(&token, ctx.jwks()) {
+                Ok(claims) => {
+                    debug!("Validated token with claims: {:#?}", claims);
+                    Ok(claims)
+                }
+                Err(e) => {
+                    warn!("Token failed validation: {e:#?}");
+                    Err(warp::reject::custom(Unauthorized {}))
+                }
             }
-            Err(e) => {
-                warn!("Token failed validation: {e:#?}");
-                Err(warp::reject::custom(Unauthorized {}))
-            }
-        },
-    ));
+        });
 
     let graphql_copy = warp::post()
         .and(warp::path("v2"))
         .and(
             context_extractor
-                .and_then(|ctx| async move {
-                    match ctx {
-                        Ok(claims) => Ok(claims),
-                        Err(e) => {
-                            warn!("Rejecting request: {e:#?}");
-                            Err::<Claims, Rejection>(warp::reject::custom(Unauthorized {}))
-                        }
-                    }
-                })
                 .and(juniper_warp::make_graphql_filter(schema(), state.boxed()))
                 .map(|_claims, response| response),
         )

@@ -4,7 +4,7 @@ use proto::proto::core::{
     SearchShippingMethodRequest, ShippingMethodResponse, ShippingMethodsResponse,
 };
 use rust_decimal::prelude::ToPrimitive;
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn search_shipping_method(

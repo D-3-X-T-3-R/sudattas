@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::promotions;
 use proto::proto::core::{PromotionResponse, PromotionsResponse, SearchPromotionRequest};
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 fn format_datetime(d: sea_orm::entity::prelude::DateTime) -> String {

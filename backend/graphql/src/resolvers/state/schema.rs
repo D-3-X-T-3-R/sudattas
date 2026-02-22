@@ -1,6 +1,4 @@
-use juniper::{graphql_object, FieldResult, GraphQLInputObject};
-
-use crate::resolvers::category::schema::{Category, SearchCategory};
+use juniper::{graphql_object, GraphQLInputObject};
 
 #[derive(Default, Debug, Clone)]
 pub struct State {
@@ -30,10 +28,4 @@ pub struct NewState {
 pub struct SearchState {
     pub state_id: Option<String>,
     pub state_name: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, GraphQLInputObject)]
-pub struct StateMutation {
-    pub state_id: String,
-    pub state_name: String,
 }

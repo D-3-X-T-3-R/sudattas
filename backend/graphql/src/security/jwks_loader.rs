@@ -30,6 +30,16 @@ pub enum JWKSLoaderError {
     Configuration(String),
 }
 
+impl std::fmt::Display for JWKSLoaderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JWKSLoaderError::Fetch(msg) => write!(f, "JWKS fetch error: {}", msg),
+            JWKSLoaderError::Parse(msg) => write!(f, "JWKS parse error: {}", msg),
+            JWKSLoaderError::Configuration(msg) => write!(f, "JWKS configuration error: {}", msg),
+        }
+    }
+}
+
 #[instrument]
 pub async fn load_jwks() -> Result<JWKSet, JWKSLoaderError> {
     info!("Loading JWKS");

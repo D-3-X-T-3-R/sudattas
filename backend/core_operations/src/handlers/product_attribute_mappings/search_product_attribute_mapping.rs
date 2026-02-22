@@ -4,7 +4,7 @@ use proto::proto::core::{
     ProductAttributeMappingResponse, ProductAttributeMappingsResponse,
     SearchProductAttributeMappingRequest,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn search_product_attribute_mapping(

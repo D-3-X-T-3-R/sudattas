@@ -4,7 +4,7 @@ use proto::proto::core::{
     ProductVariantResponse, ProductVariantsResponse, SearchProductVariantRequest,
 };
 use rust_decimal::prelude::ToPrimitive;
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn search_product_variant(

@@ -3,7 +3,7 @@ use core_db_entities::entity::newsletter_subscribers;
 use proto::proto::core::{
     NewsletterSubscriberResponse, NewsletterSubscribersResponse, SearchNewsletterSubscriberRequest,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn search_newsletter_subscriber(

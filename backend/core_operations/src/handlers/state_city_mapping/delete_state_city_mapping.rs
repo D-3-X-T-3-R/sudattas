@@ -3,7 +3,7 @@ use core_db_entities::entity::state_city_mapping;
 use proto::proto::core::{
     DeleteStateCityMappingRequest, StateCityMappingResponse, StateCityMappingsResponse,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
+use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
 pub async fn delete_state_city_mapping(

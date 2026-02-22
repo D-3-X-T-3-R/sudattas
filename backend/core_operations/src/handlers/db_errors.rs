@@ -27,6 +27,5 @@ pub fn map_db_error_to_status(db_error: DbErr) -> Status {
         DbErr::Migration(err) => Status::internal(format!("Migration error: {}", err)),
         DbErr::RecordNotInserted => Status::failed_precondition("None of the records are inserted"),
         DbErr::RecordNotUpdated => Status::failed_precondition("None of the records are updated"),
-        _ => Status::unknown("Unknown database error"),
     }
 }

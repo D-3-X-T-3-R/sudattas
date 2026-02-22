@@ -3,7 +3,7 @@ use core_db_entities::entity::payment_methods;
 use proto::proto::core::{
     PaymentMethodResponse, PaymentMethodsResponse, SearchPaymentMethodRequest,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn search_payment_method(

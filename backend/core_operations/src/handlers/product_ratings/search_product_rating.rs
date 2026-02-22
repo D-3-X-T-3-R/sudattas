@@ -3,7 +3,7 @@ use core_db_entities::entity::product_ratings;
 use proto::proto::core::{
     ProductRatingResponse, ProductRatingsResponse, SearchProductRatingRequest,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn search_product_rating(
