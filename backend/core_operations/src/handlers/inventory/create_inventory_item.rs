@@ -17,6 +17,8 @@ pub async fn create_inventory_item(
         quantity_available: ActiveValue::Set(Some(req.quantity_available)),
         reorder_level: ActiveValue::Set(Some(req.reorder_level)),
         supplier_id: ActiveValue::Set(Some(req.supplier_id)),
+        quantity_reserved: ActiveValue::NotSet,
+        updated_at: ActiveValue::NotSet,
     };
 
     match model.insert(txn).await {

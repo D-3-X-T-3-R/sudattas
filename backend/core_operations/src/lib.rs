@@ -1,5 +1,10 @@
 use core_db_entities::{get_db, CoreDatabaseConnection};
 use handlers::db_errors::map_db_error_to_status;
+
+// Phase 1 additions
+pub mod auth;
+pub mod services;
+
 use proto::proto::core::{
     grpc_services_server::GrpcServices, AddProductImageRequest, AddWishlistItemRequest,
     CartItemsResponse, CategoriesResponse, CitiesResponse, ColorsResponse, CountriesResponse,

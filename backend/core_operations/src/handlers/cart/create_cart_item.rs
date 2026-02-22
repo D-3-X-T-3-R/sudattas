@@ -11,9 +11,12 @@ pub async fn create_cart_item(
     let req = request.into_inner();
     let cart = cart::ActiveModel {
         cart_id: ActiveValue::NotSet,
-        user_id: ActiveValue::Set(req.user_id),
+        user_id: ActiveValue::Set(Some(req.user_id)),
         product_id: ActiveValue::Set(req.product_id),
         quantity: ActiveValue::Set(req.quantity),
+        session_id: ActiveValue::NotSet,
+        created_at: ActiveValue::NotSet,
+        updated_at: ActiveValue::NotSet,
     };
     match cart.insert(txn).await {
         Ok(cart_model) => {
@@ -22,7 +25,7 @@ pub async fn create_cart_item(
                     cart_id: cart_model.cart_id,
                     product_id: cart_model.product_id,
                     quantity: cart_model.quantity,
-                    user_id: cart_model.user_id,
+                    user_id: cart_model.user_id.unwrap_or(0),
                 }],
             };
             Ok(Response::new(response))

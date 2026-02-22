@@ -21,6 +21,18 @@ pub async fn update_product(
         product_id: ActiveValue::Set(req.product_id),
         stock_quantity: ActiveValue::Set(req.stock_quantity),
         category_id: ActiveValue::Set(req.category_id),
+        sku: ActiveValue::NotSet,
+        slug: ActiveValue::NotSet,
+        price_paise: ActiveValue::NotSet,
+        fabric: ActiveValue::NotSet,
+        weave: ActiveValue::NotSet,
+        occasion: ActiveValue::NotSet,
+        length_meters: ActiveValue::NotSet,
+        has_blouse_piece: ActiveValue::NotSet,
+        care_instructions: ActiveValue::NotSet,
+        status: ActiveValue::NotSet,
+        created_at: ActiveValue::NotSet,
+        updated_at: ActiveValue::NotSet,
     };
     match products.update(txn).await {
         Ok(model) => {

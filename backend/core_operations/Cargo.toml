@@ -28,6 +28,23 @@ sea-orm = "0.12.6"
 
 # Log Dependencies
 log = "0.4"
+
+# Authentication - Password hashing
+argon2 = { version = "0.5", features = ["std"] }
+
+# Session management - Redis
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+
+# Image storage - S3/R2 SDK
+aws-sdk-s3 = "1.11"
+aws-config = "1.0"
+aws-credential-types = "1.0"
+
+# Error handling
+thiserror = "1.0"
+
+# UUID for session IDs
+uuid = { version = "1.6", features = ["v4", "serde"] }
 env_logger = "0.10.1"
 
 # HTTP server for GraphQL

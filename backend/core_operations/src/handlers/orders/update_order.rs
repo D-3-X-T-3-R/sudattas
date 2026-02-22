@@ -22,6 +22,10 @@ pub async fn update_order(
         shipping_address_id: ActiveValue::Set(req.shipping_address_id),
         total_amount: ActiveValue::Set(Decimal::from_f64(req.total_amount).unwrap()),
         status_id: ActiveValue::Set(req.status_id),
+        order_number: ActiveValue::NotSet,
+        payment_status: ActiveValue::NotSet,
+        currency: ActiveValue::NotSet,
+        updated_at: ActiveValue::NotSet,
     };
     match orders.update(txn).await {
         Ok(model) => {
