@@ -1,8 +1,8 @@
-use warp::hyper::body::Bytes;
 use hmac::{Hmac, Mac};
 use proto::proto::core::IngestWebhookRequest;
 use sha2::Sha256;
 use tracing::warn;
+use warp::hyper::body::Bytes;
 use warp::reply::{self, Reply};
 
 use crate::resolvers::utils::connect_grpc_client;
@@ -60,10 +60,7 @@ pub async fn handle_webhook(
     };
 
     // Derive event_type and idempotency key from payload.
-    let event_type = payload["event"]
-        .as_str()
-        .unwrap_or("unknown")
-        .to_string();
+    let event_type = payload["event"].as_str().unwrap_or("unknown").to_string();
 
     let entity_id = payload["payload"]["payment"]["entity"]["id"]
         .as_str()

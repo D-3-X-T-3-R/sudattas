@@ -2,7 +2,9 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use chrono::Utc;
 use core_db_entities::entity::payment_intents;
 use core_db_entities::entity::sea_orm_active_enums::Status;
-use proto::proto::core::{CreatePaymentIntentRequest, PaymentIntentResponse, PaymentIntentsResponse};
+use proto::proto::core::{
+    CreatePaymentIntentRequest, PaymentIntentResponse, PaymentIntentsResponse,
+};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status as TonicStatus};
 
@@ -43,10 +45,7 @@ pub async fn create_payment_intent(
                     .map(|s| format!("{:?}", s).to_lowercase())
                     .unwrap_or_else(|| "pending".to_string()),
                 razorpay_payment_id: model.razorpay_payment_id,
-                created_at: model
-                    .created_at
-                    .map(|t| t.to_string())
-                    .unwrap_or_default(),
+                created_at: model.created_at.map(|t| t.to_string()).unwrap_or_default(),
                 expires_at: model.expires_at.to_string(),
             }],
         })),

@@ -14,16 +14,16 @@ use thiserror::Error;
 pub enum ImageError {
     #[error("S3/R2 error: {0}")]
     S3Error(String),
-    
+
     #[error("Invalid file type: {0}. Allowed: {1}")]
     InvalidFileType(String, String),
-    
+
     #[error("File too large: {0}MB. Max: {1}MB")]
     FileTooLarge(usize, usize),
-    
+
     #[error("Invalid file name")]
     InvalidFileName,
-    
+
     #[error("Configuration error: {0}")]
     ConfigError(String),
 }
@@ -84,18 +84,18 @@ impl ImageService {
             None,
             "r2",
         );
-        
+
         let s3_config = S3Config::builder()
             .endpoint_url(&config.r2_endpoint)
             .region(Region::new("auto"))
             .credentials_provider(credentials)
             .build();
-        
+
         let client = S3Client::from_conf(s3_config);
-        
+
         Ok(Self { client, config })
     }
-    
+
     /// Validate file before upload
     pub fn validate_file(
         &self,
@@ -110,20 +110,23 @@ impl ImageService {
                 ALLOWED_TYPES.join(", "),
             ));
         }
-        
+
         // Check file size
         if file_size_mb > self.config.max_size_mb {
-            return Err(ImageError::FileTooLarge(file_size_mb, self.config.max_size_mb));
+            return Err(ImageError::FileTooLarge(
+                file_size_mb,
+                self.config.max_size_mb,
+            ));
         }
-        
+
         // Check file name
         if file_name.is_empty() || file_name.contains("..") {
             return Err(ImageError::InvalidFileName);
         }
-        
+
         Ok(())
     }
-    
+
     /// Generate a presigned URL for uploading
     ///
     /// Example (requires R2 config; `no_run` so doctest compiles without calling AWS):
@@ -147,7 +150,7 @@ impl ImageService {
     ) -> Result<String, ImageError> {
         let presigning_config = PresigningConfig::expires_in(expiration)
             .map_err(|e| ImageError::S3Error(e.to_string()))?;
-        
+
         let presigned_request = self
             .client
             .put_object()
@@ -157,15 +160,15 @@ impl ImageService {
             .presigned(presigning_config)
             .await
             .map_err(|e| ImageError::S3Error(e.to_string()))?;
-        
+
         Ok(presigned_request.uri().to_string())
     }
-    
+
     /// Generate public URL for an uploaded image
     pub fn get_public_url(&self, object_key: &str) -> String {
         format!("{}/{}", self.config.r2_public_url, object_key)
     }
-    
+
     /// Delete an image from R2
     pub async fn delete_image(&self, object_key: &str) -> Result<(), ImageError> {
         self.client
@@ -175,17 +178,18 @@ impl ImageService {
             .send()
             .await
             .map_err(|e| ImageError::S3Error(e.to_string()))?;
-        
+
         Ok(())
     }
-    
+
     /// Generate multiple size variants for responsive images
     pub fn generate_variants(&self, base_path: &str, file_name: &str) -> ImageVariants {
-        let name_without_ext = file_name.trim_end_matches(".webp")
+        let name_without_ext = file_name
+            .trim_end_matches(".webp")
             .trim_end_matches(".jpg")
             .trim_end_matches(".jpeg")
             .trim_end_matches(".png");
-        
+
         ImageVariants {
             original: format!("{}/{}.webp", base_path, name_without_ext),
             large: format!("{}/{}-large.webp", base_path, name_without_ext),
@@ -198,10 +202,10 @@ impl ImageService {
 /// Image size variants for responsive images
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ImageVariants {
-    pub original: String,     // Full size (1600x2400)
-    pub large: String,        // Large/zoom (1600x2400)
-    pub medium: String,       // Gallery (800x1200)
-    pub thumbnail: String,    // Thumbnail (200x300)
+    pub original: String,  // Full size (1600x2400)
+    pub large: String,     // Large/zoom (1600x2400)
+    pub medium: String,    // Gallery (800x1200)
+    pub thumbnail: String, // Thumbnail (200x300)
 }
 
 /// Request to generate presigned upload URL
@@ -225,7 +229,7 @@ pub struct PresignedUploadResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_validate_file() {
         let config = ImageConfig {
@@ -237,22 +241,28 @@ mod tests {
             r2_public_url: "https://cdn.test.com".to_string(),
             max_size_mb: 5,
         };
-        
+
         let service = ImageService::new(config).unwrap();
-        
+
         // Valid file
         assert!(service.validate_file("test.webp", "image/webp", 2).is_ok());
-        
+
         // Invalid type
-        assert!(service.validate_file("test.pdf", "application/pdf", 2).is_err());
-        
+        assert!(service
+            .validate_file("test.pdf", "application/pdf", 2)
+            .is_err());
+
         // Too large
-        assert!(service.validate_file("test.webp", "image/webp", 10).is_err());
-        
+        assert!(service
+            .validate_file("test.webp", "image/webp", 10)
+            .is_err());
+
         // Invalid name
-        assert!(service.validate_file("../etc/passwd", "image/webp", 2).is_err());
+        assert!(service
+            .validate_file("../etc/passwd", "image/webp", 2)
+            .is_err());
     }
-    
+
     #[test]
     fn test_generate_variants() {
         let config = ImageConfig {
@@ -264,16 +274,16 @@ mod tests {
             r2_public_url: "https://cdn.test.com".to_string(),
             max_size_mb: 5,
         };
-        
+
         let service = ImageService::new(config).unwrap();
         let variants = service.generate_variants("products/saree-123", "hero.webp");
-        
+
         assert_eq!(variants.original, "products/saree-123/hero.webp");
         assert_eq!(variants.large, "products/saree-123/hero-large.webp");
         assert_eq!(variants.medium, "products/saree-123/hero-medium.webp");
         assert_eq!(variants.thumbnail, "products/saree-123/hero-thumb.webp");
     }
-    
+
     #[test]
     fn test_get_public_url() {
         let config = ImageConfig {
@@ -285,10 +295,10 @@ mod tests {
             r2_public_url: "https://cdn.sudattas.com".to_string(),
             max_size_mb: 5,
         };
-        
+
         let service = ImageService::new(config).unwrap();
         let url = service.get_public_url("products/saree-123/hero.webp");
-        
+
         assert_eq!(url, "https://cdn.sudattas.com/products/saree-123/hero.webp");
     }
 }

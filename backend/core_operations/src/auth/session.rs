@@ -11,13 +11,13 @@ use uuid::Uuid;
 pub enum SessionError {
     #[error("Redis connection failed: {0}")]
     RedisError(#[from] redis::RedisError),
-    
+
     #[error("Session not found")]
     SessionNotFound,
-    
+
     #[error("Session expired")]
     SessionExpired,
-    
+
     #[error("Serialization error: {0}")]
     SerializationError(String),
 }
@@ -69,58 +69,64 @@ impl SessionManager {
         let redis = RedisClient::open(redis_url)?;
         Ok(Self { redis, ttl })
     }
-    
+
     /// Create a new session
     pub async fn create_session(&self, data: SessionData) -> Result<String, SessionError> {
         let session_id = Uuid::new_v4().to_string();
         let key = format!("session:{}", session_id);
-        
+
         let mut conn = self.redis.get_multiplexed_async_connection().await?;
-        
+
         let serialized = serde_json::to_string(&data)
             .map_err(|e| SessionError::SerializationError(e.to_string()))?;
-        
-        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs() as u64).await?;
-        
+
+        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs() as u64)
+            .await?;
+
         Ok(session_id)
     }
-    
+
     /// Get session data
     pub async fn get_session(&self, session_id: &str) -> Result<SessionData, SessionError> {
         let key = format!("session:{}", session_id);
         let mut conn = self.redis.get_multiplexed_async_connection().await?;
-        
+
         let data: Option<String> = conn.get(&key).await?;
-        
+
         match data {
             Some(json) => {
                 let session: SessionData = serde_json::from_str(&json)
                     .map_err(|e| SessionError::SerializationError(e.to_string()))?;
-                
+
                 // Update last activity
                 let mut updated = session.clone();
                 updated.last_activity = chrono::Utc::now().timestamp();
                 self.update_session(session_id, updated).await?;
-                
+
                 Ok(session)
             }
             None => Err(SessionError::SessionNotFound),
         }
     }
-    
+
     /// Update session data
-    pub async fn update_session(&self, session_id: &str, data: SessionData) -> Result<(), SessionError> {
+    pub async fn update_session(
+        &self,
+        session_id: &str,
+        data: SessionData,
+    ) -> Result<(), SessionError> {
         let key = format!("session:{}", session_id);
         let mut conn = self.redis.get_multiplexed_async_connection().await?;
-        
+
         let serialized = serde_json::to_string(&data)
             .map_err(|e| SessionError::SerializationError(e.to_string()))?;
-        
-        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs() as u64).await?;
-        
+
+        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs() as u64)
+            .await?;
+
         Ok(())
     }
-    
+
     /// Delete session
     pub async fn delete_session(&self, session_id: &str) -> Result<(), SessionError> {
         let key = format!("session:{}", session_id);
@@ -128,15 +134,20 @@ impl SessionManager {
         conn.del::<_, ()>(&key).await?;
         Ok(())
     }
-    
+
     /// Associate user with session
-    pub async fn login_session(&self, session_id: &str, user_id: i64, email: String) -> Result<(), SessionError> {
+    pub async fn login_session(
+        &self,
+        session_id: &str,
+        user_id: i64,
+        email: String,
+    ) -> Result<(), SessionError> {
         let mut session = self.get_session(session_id).await?;
         session.user_id = Some(user_id);
         session.email = Some(email);
         self.update_session(session_id, session).await
     }
-    
+
     /// Remove user from session (logout)
     pub async fn logout_session(&self, session_id: &str) -> Result<(), SessionError> {
         let mut session = self.get_session(session_id).await?;
@@ -154,10 +165,11 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires Redis; run with --ignored"]
     async fn test_session_lifecycle() {
-        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1".to_string());
+        let redis_url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1".to_string());
 
-        let manager = SessionManager::new(&redis_url, Duration::from_secs(60))
-            .expect("SessionManager::new");
+        let manager =
+            SessionManager::new(&redis_url, Duration::from_secs(60)).expect("SessionManager::new");
         let data = SessionData::default();
         let session_id = manager.create_session(data).await.expect("create_session");
         assert!(!session_id.is_empty());
@@ -172,11 +184,17 @@ mod tests {
         let logged_in = manager.get_session(&session_id).await.expect("get_session");
         assert_eq!(logged_in.user_id, Some(123));
 
-        manager.logout_session(&session_id).await.expect("logout_session");
+        manager
+            .logout_session(&session_id)
+            .await
+            .expect("logout_session");
         let logged_out = manager.get_session(&session_id).await.expect("get_session");
         assert_eq!(logged_out.user_id, None);
 
-        manager.delete_session(&session_id).await.expect("delete_session");
+        manager
+            .delete_session(&session_id)
+            .await
+            .expect("delete_session");
         assert!(manager.get_session(&session_id).await.is_err());
     }
 }

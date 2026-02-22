@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use chrono::Utc;
-use core_db_entities::entity::shipments;
 use core_db_entities::entity::sea_orm_active_enums::Status;
+use core_db_entities::entity::shipments;
 use proto::proto::core::{CreateShipmentRequest, ShipmentResponse, ShipmentsResponse};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status as TonicStatus};

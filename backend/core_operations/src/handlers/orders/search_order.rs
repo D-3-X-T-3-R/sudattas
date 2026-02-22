@@ -3,7 +3,9 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::orders;
 use proto::proto::core::{OrderResponse, OrdersResponse, SearchOrderRequest};
 use rust_decimal::prelude::ToPrimitive;
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect, QueryTrait};
+use sea_orm::{
+    ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect, QueryTrait,
+};
 use tonic::{Request, Response, Status};
 
 pub async fn search_order(

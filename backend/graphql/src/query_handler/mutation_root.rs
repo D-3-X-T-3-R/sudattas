@@ -1,25 +1,20 @@
-use juniper::IntoFieldError;
 use super::Context;
 use crate::resolvers::{
     cart::{
         self,
         schema::{Cart, CartMutation, DeleteCartItem, NewCart},
     },
-    payment_intents::{
+    category::{
         self,
-        schema::{CapturePayment, NewPaymentIntent, PaymentIntent},
+        schema::{Category, CategoryMutation, NewCategory},
     },
-    shipments::{
+    country::{
         self,
-        schema::{NewShipment, Shipment, UpdateShipment},
+        schema::{Country, NewCountry},
     },
     coupons::{
         self,
         schema::{ApplyCoupon, Coupon},
-    },
-    order_events::{
-        self,
-        schema::{NewOrderEvent, OrderEvent},
     },
     discounts::{
         self,
@@ -29,9 +24,37 @@ use crate::resolvers::{
         self,
         schema::{InventoryItem, InventoryItemMutation, NewInventoryItem},
     },
+    order_details::{
+        self,
+        schema::{NewOrderDetails, OrderDetails, OrderDetailsMutation},
+    },
+    order_events::{
+        self,
+        schema::{NewOrderEvent, OrderEvent},
+    },
+    orders::{
+        self,
+        schema::{NewOrder, Order, OrderMutation},
+    },
+    payment_intents::{
+        self,
+        schema::{CapturePayment, NewPaymentIntent, PaymentIntent},
+    },
+    product::{
+        self,
+        schema::{NewProduct, Product, ProductMutation},
+    },
+    product_images::{
+        self,
+        schema::{ConfirmImageUpload, ProductImage, ProductImageMutation},
+    },
     reviews::{
         self,
         schema::{NewReview, Review, ReviewMutation},
+    },
+    shipments::{
+        self,
+        schema::{NewShipment, Shipment, UpdateShipment},
     },
     shipping_addresses::{
         self,
@@ -45,27 +68,6 @@ use crate::resolvers::{
         self,
         schema::{NewShippingZone, ShippingZone, ShippingZoneMutation},
     },
-    category::{
-        self,
-        schema::{Category, CategoryMutation, NewCategory},
-    },
-    country::{self, schema::{Country, NewCountry}},
-    order_details::{
-        self,
-        schema::{NewOrderDetails, OrderDetails, OrderDetailsMutation},
-    },
-    orders::{
-        self,
-        schema::{NewOrder, Order, OrderMutation},
-    },
-    product::{
-        self,
-        schema::{NewProduct, Product, ProductMutation},
-    },
-    product_images::{
-        self,
-        schema::{ConfirmImageUpload, ProductImage, ProductImageMutation},
-    },
     state::{
         self,
         schema::{NewState, State},
@@ -76,6 +78,7 @@ use crate::resolvers::{
     },
 };
 use juniper::FieldResult;
+use juniper::IntoFieldError;
 
 pub struct MutationRoot;
 
@@ -155,10 +158,7 @@ impl MutationRoot {
         let user_id = context
             .jwt_user_id()
             .ok_or_else(|| {
-                juniper::FieldError::new(
-                    "Login required to place an order",
-                    juniper::Value::null(),
-                )
+                juniper::FieldError::new("Login required to place an order", juniper::Value::null())
             })?
             .to_string();
 
@@ -168,14 +168,18 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn create_order_details(order_details: NewOrderDetails) -> FieldResult<Vec<OrderDetails>> {
+    async fn create_order_details(
+        order_details: NewOrderDetails,
+    ) -> FieldResult<Vec<OrderDetails>> {
         order_details::handlers::create_order_detail(order_details)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn update_order_detail(order_detail: OrderDetailsMutation) -> FieldResult<Vec<OrderDetails>> {
+    async fn update_order_detail(
+        order_detail: OrderDetailsMutation,
+    ) -> FieldResult<Vec<OrderDetails>> {
         order_details::handlers::update_order_detail(order_detail)
             .await
             .map_err(|e| e.into_field_error())

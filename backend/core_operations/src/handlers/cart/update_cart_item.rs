@@ -1,7 +1,9 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::cart;
 use proto::proto::core::{CartItemResponse, CartItemsResponse, UpdateCartItemRequest};
-use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter,
+};
 use tonic::{Request, Response, Status};
 
 pub async fn update_cart_item(
@@ -27,7 +29,10 @@ pub async fn update_cart_item(
         .map_err(map_db_error_to_status)?;
 
     let Some(existing) = existing else {
-        return Err(Status::not_found(format!("Cart item {} not found", req.cart_id)));
+        return Err(Status::not_found(format!(
+            "Cart item {} not found",
+            req.cart_id
+        )));
     };
 
     let mut model: cart::ActiveModel = existing.into();

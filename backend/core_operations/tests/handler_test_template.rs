@@ -2,7 +2,7 @@
 // This file demonstrates best practices for testing handlers with database mocking
 
 use core_db_entities::entity::cities;
-use proto::proto::core::{CreateCityRequest, SearchCityRequest};
+use proto::proto::core::{CreateCityRequest, DeleteCityRequest, SearchCityRequest};
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
 use tonic::Request;
 
@@ -32,11 +32,16 @@ async fn test_create_city_success() {
 
     let result = core_operations::handlers::city::create_city(&txn, request).await;
 
-    assert!(result.is_ok(), "Handler should succeed");
+    assert!(result.is_ok(), "Handler should succeed: {:?}", result.err());
     let response = result.unwrap().into_inner();
-    assert_eq!(response.items.len(), 1);
-    assert_eq!(response.items[0].city_id, 1);
-    assert_eq!(response.items[0].city_name, "New York");
+    assert_eq!(
+        response.items.len(),
+        1,
+        "response should contain exactly one city"
+    );
+    let item = &response.items[0];
+    assert_eq!(item.city_id, 1, "city_id should be the inserted id");
+    assert_eq!(item.city_name, "New York", "city_name should match request");
 }
 
 #[tokio::test]
@@ -55,10 +60,15 @@ async fn test_create_city_database_error() {
     // Act
     let result = core_operations::handlers::city::create_city(&txn, request).await;
 
-    // Assert: map_db_error_to_status maps RecordNotInserted → FailedPrecondition
     assert!(result.is_err(), "Handler should fail on database error");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::FailedPrecondition);
+    let msg = status.message();
+    assert!(!msg.is_empty(), "error message should be non-empty");
+    assert!(
+        msg.to_lowercase().contains("insert") || msg.to_lowercase().contains("record"),
+        "message should reference insert/record"
+    );
 }
 
 #[tokio::test]
@@ -116,11 +126,12 @@ async fn test_search_city_by_name() {
     // Act
     let result = core_operations::handlers::city::search_city(&txn, request).await;
 
-    // Assert
     assert!(result.is_ok());
     let response = result.unwrap().into_inner();
     assert_eq!(response.items.len(), 2);
+    assert_eq!(response.items[0].city_id, 1);
     assert_eq!(response.items[0].city_name, "New York");
+    assert_eq!(response.items[1].city_id, 2);
     assert_eq!(response.items[1].city_name, "New Jersey");
 }
 
@@ -194,13 +205,8 @@ async fn test_update_city_success() {
         ])
         .into_connection();
 
-    let txn = db.begin().await.expect("begin transaction");
-
-    // Your update request would go here
-    // let request = Request::new(UpdateCityRequest { ... });
-    // let result = core_operations::handlers::city::update_city(txn, request).await;
-
-    // Assert updated values
+    let _txn = db.begin().await.expect("begin transaction");
+    // update_city handler not present in city module; mock is ready for when it is added
 }
 
 // ============================================================================
@@ -209,30 +215,31 @@ async fn test_update_city_success() {
 
 #[tokio::test]
 async fn test_delete_city_success() {
+    let city_to_delete = cities::Model {
+        city_id: 1,
+        city_name: Some("To Delete".to_string()),
+    };
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_query_results(vec![
-            // First: find the entity to delete
-            vec![cities::Model {
-                city_id: 1,
-                city_name: Some("To Delete".to_string()),
-            }],
-        ])
-        .append_exec_results(vec![
-            // Then: execute delete and return affected rows
-            MockExecResult {
-                last_insert_id: 0,
-                rows_affected: 1,
-            },
-        ])
+        .append_query_results(vec![vec![city_to_delete.clone()]])
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        }])
         .into_connection();
 
     let txn = db.begin().await.expect("begin transaction");
+    let request = Request::new(DeleteCityRequest { city_id: 1 });
+    let result = core_operations::handlers::city::delete_city(&txn, request).await;
 
-    // Your delete request would go here
-    // let request = Request::new(DeleteCityRequest { city_id: 1 });
-    // let result = core_operations::handlers::city::delete_city(txn, request).await;
-
-    // Assert deletion success
+    assert!(
+        result.is_ok(),
+        "delete_city should succeed: {:?}",
+        result.err()
+    );
+    let response = result.unwrap().into_inner();
+    assert_eq!(response.items.len(), 1);
+    assert_eq!(response.items[0].city_id, 1);
+    assert_eq!(response.items[0].city_name, "To Delete");
 }
 
 #[tokio::test]
@@ -242,8 +249,15 @@ async fn test_delete_city_not_found() {
         .into_connection();
 
     let txn = db.begin().await.expect("begin transaction");
+    let request = Request::new(DeleteCityRequest { city_id: 999 });
+    let result = core_operations::handlers::city::delete_city(&txn, request).await;
 
-    // Should return NotFound error when entity doesn't exist
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::NotFound);
+    assert!(
+        status.message().contains("999") || status.message().to_lowercase().contains("not found")
+    );
 }
 
 // ============================================================================

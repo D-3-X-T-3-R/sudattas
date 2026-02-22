@@ -1,6 +1,4 @@
-use proto::proto::core::{
-    CreateOrderEventRequest, GetOrderEventsRequest, OrderEventResponse,
-};
+use proto::proto::core::{CreateOrderEventRequest, GetOrderEventsRequest, OrderEventResponse};
 use tracing::instrument;
 
 use super::schema::{NewOrderEvent, OrderEvent};

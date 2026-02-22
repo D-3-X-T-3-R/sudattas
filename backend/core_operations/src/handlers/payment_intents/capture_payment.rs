@@ -15,7 +15,9 @@ pub async fn capture_payment(
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
-        .ok_or_else(|| TonicStatus::not_found(format!("Payment intent {} not found", req.intent_id)))?;
+        .ok_or_else(|| {
+            TonicStatus::not_found(format!("Payment intent {} not found", req.intent_id))
+        })?;
 
     let mut model = intent.into_active_model();
     model.status = ActiveValue::Set(Some(Status::Processed));

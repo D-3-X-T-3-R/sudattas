@@ -13,12 +13,8 @@ use tracing::{debug, warn};
 /// Returns the `user_id` stored in the session on success, or an error string
 /// describing why validation failed (never includes the raw session ID to
 /// avoid leaking tokens in logs).
-pub async fn validate_session(
-    session_id: &str,
-    redis_url: &str,
-) -> Result<String, String> {
-    let client = redis::Client::open(redis_url)
-        .map_err(|e| format!("Redis client error: {e}"))?;
+pub async fn validate_session(session_id: &str, redis_url: &str) -> Result<String, String> {
+    let client = redis::Client::open(redis_url).map_err(|e| format!("Redis client error: {e}"))?;
 
     let mut conn: redis::aio::MultiplexedConnection = client
         .get_multiplexed_async_connection()

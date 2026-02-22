@@ -17,9 +17,7 @@ pub async fn update_shipment(
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
-        .ok_or_else(|| {
-            TonicStatus::not_found(format!("Shipment {} not found", req.shipment_id))
-        })?;
+        .ok_or_else(|| TonicStatus::not_found(format!("Shipment {} not found", req.shipment_id)))?;
 
     let mut model = existing.into_active_model();
 

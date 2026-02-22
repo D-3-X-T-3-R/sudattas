@@ -8,8 +8,8 @@ use proto::proto::core::{
     CapturePaymentRequest, IngestWebhookRequest, WebhookEventResponse, WebhookEventsResponse,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait,
-    IntoActiveModel, QueryFilter,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
+    QueryFilter,
 };
 use tonic::{Request, Response, Status as TonicStatus};
 

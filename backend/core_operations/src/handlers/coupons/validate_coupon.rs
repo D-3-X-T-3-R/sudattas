@@ -48,24 +48,40 @@ pub async fn check_coupon(
 
     // Status check — treat Pending as "active"
     if coupon.status != Some(Status::Pending) && coupon.status.is_some() {
-        return Ok(coupon_invalid(coupon, order_amount_paise, "Coupon is not active"));
+        return Ok(coupon_invalid(
+            coupon,
+            order_amount_paise,
+            "Coupon is not active",
+        ));
     }
 
     // Date range
     let now = Utc::now();
     if now < coupon.starts_at {
-        return Ok(coupon_invalid(coupon, order_amount_paise, "Coupon has not started yet"));
+        return Ok(coupon_invalid(
+            coupon,
+            order_amount_paise,
+            "Coupon has not started yet",
+        ));
     }
     if let Some(ends_at) = coupon.ends_at {
         if now > ends_at {
-            return Ok(coupon_invalid(coupon, order_amount_paise, "Coupon has expired"));
+            return Ok(coupon_invalid(
+                coupon,
+                order_amount_paise,
+                "Coupon has expired",
+            ));
         }
     }
 
     // Usage limit
     if let (Some(limit), Some(used)) = (coupon.usage_limit, coupon.usage_count) {
         if used >= limit {
-            return Ok(coupon_invalid(coupon, order_amount_paise, "Coupon usage limit reached"));
+            return Ok(coupon_invalid(
+                coupon,
+                order_amount_paise,
+                "Coupon usage limit reached",
+            ));
         }
     }
 
@@ -75,18 +91,13 @@ pub async fn check_coupon(
             return Ok(coupon_invalid(
                 coupon,
                 order_amount_paise,
-                &format!(
-                    "Order value too low; minimum is {} paise",
-                    min
-                ),
+                &format!("Order value too low; minimum is {} paise", min),
             ));
         }
     }
 
     let discount_amount_paise = match coupon.discount_type {
-        DiscountType::Percentage => {
-            (order_amount_paise * coupon.discount_value as i64) / 100
-        }
+        DiscountType::Percentage => (order_amount_paise * coupon.discount_value as i64) / 100,
         DiscountType::FixedAmount => coupon.discount_value as i64,
     };
     let discount_amount_paise = discount_amount_paise.min(order_amount_paise);
@@ -104,11 +115,7 @@ pub async fn check_coupon(
     })
 }
 
-fn coupon_invalid(
-    coupon: coupons::Model,
-    order_amount_paise: i64,
-    reason: &str,
-) -> CouponResponse {
+fn coupon_invalid(coupon: coupons::Model, order_amount_paise: i64, reason: &str) -> CouponResponse {
     CouponResponse {
         coupon_id: coupon.coupon_id,
         code: coupon.code,
