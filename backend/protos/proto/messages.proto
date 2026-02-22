@@ -236,6 +236,8 @@ message SearchProductRequest {
     optional int64 category_id = 5;
     optional double ending_price = 6;
     optional int64 product_id = 7;
+    optional int64 limit = 8;
+    optional int64 offset = 9;
 }
 
 message GetProductsByIdRequest {
@@ -361,6 +363,8 @@ message SearchOrderRequest {
     optional int64 order_date_start = 3;
     optional int64 order_date_end = 4;
     optional int64 status_id = 5;
+    optional int64 limit = 6;
+    optional int64 offset = 7;
 }
 
 message UpdateOrderRequest {
@@ -441,6 +445,10 @@ message CreateReviewRequest {
 
 message SearchReviewRequest {
     int64 review_id = 1;
+    optional int64 product_id = 2;
+    optional int64 user_id = 3;
+    optional int64 limit = 4;
+    optional int64 offset = 5;
 }
 
 message UpdateReviewRequest {

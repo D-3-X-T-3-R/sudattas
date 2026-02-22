@@ -38,6 +38,8 @@ impl WishlistItem {
             ending_price: None,
             stock_quantity: None,
             category_id: None,
+            limit: None,
+            offset: None,
         })
         .await
         .map_err(|e| e.into())

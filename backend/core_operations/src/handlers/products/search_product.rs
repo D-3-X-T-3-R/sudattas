@@ -2,7 +2,7 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::products;
 use proto::proto::core::{ProductResponse, ProductsResponse, SearchProductRequest};
 use rust_decimal::{prelude::ToPrimitive, Decimal};
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect, QueryTrait};
 use tonic::{Request, Response, Status};
 
 pub async fn search_product(
@@ -33,6 +33,8 @@ pub async fn search_product(
         .apply_if(req.ending_price, |query, v| {
             query.filter(products::Column::Price.lte(v))
         })
+        .apply_if(req.limit, |query, v| query.limit(v as u64))
+        .apply_if(req.offset, |query, v| query.offset(v as u64))
         .all(txn)
         .await
     {

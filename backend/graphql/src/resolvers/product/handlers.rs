@@ -52,6 +52,8 @@ pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>
             stock_quantity: to_option_i64(search.stock_quantity),
             category_id: to_option_i64(search.category_id),
             product_id: to_option_i64(search.product_id),
+            limit: to_option_i64(search.limit),
+            offset: to_option_i64(search.offset),
         })
         .await?;
 

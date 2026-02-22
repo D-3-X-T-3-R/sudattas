@@ -1,3 +1,4 @@
+use juniper::{Object, Value};
 use proto::tonic::{self, Code as StatusCode, Status};
 use std::num::ParseIntError;
 use strum::Display;
@@ -69,6 +70,31 @@ pub fn map_err(status: Status) -> GqlError {
 impl std::fmt::Display for GqlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {})", self.code, self.message)
+    }
+}
+
+/// Converts `GqlError` into a juniper `FieldError` with structured extensions so clients
+/// receive a consistent, machine-readable error shape:
+///
+/// ```json
+/// {
+///   "message": "Product not found",
+///   "extensions": { "code": "NotFound", "grpc_code": 5 }
+/// }
+/// ```
+///
+/// The `code` string mirrors gRPC Status code names; `grpc_code` is the numeric value.
+/// Clients should switch on `code` for error handling rather than parsing the message string.
+impl juniper::IntoFieldError for GqlError {
+    fn into_field_error(self) -> juniper::FieldError {
+        let code_str = self.code.to_string();
+        let code_num = self.code as i32;
+
+        let mut ext = Object::with_capacity(2);
+        ext.add_field("code", Value::scalar(code_str));
+        ext.add_field("grpc_code", Value::scalar(code_num));
+
+        juniper::FieldError::new(self.message, Value::object(ext))
     }
 }
 
