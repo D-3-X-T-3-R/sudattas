@@ -58,6 +58,8 @@ impl Order {
 pub struct NewOrder {
     pub user_id: String,
     pub shipping_address_id: String,
+    /// Optional coupon code to apply a discount at checkout
+    pub coupon_code: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]

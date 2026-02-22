@@ -233,6 +233,10 @@ service GRPCServices {
     rpc CapturePayment(CapturePaymentRequest) returns (PaymentIntentsResponse);
     rpc GetPaymentIntent(GetPaymentIntentRequest) returns (PaymentIntentsResponse);
 
+    // Coupons
+    rpc ValidateCoupon(ValidateCouponRequest) returns (CouponsResponse);
+    rpc ApplyCoupon(ApplyCouponRequest) returns (CouponsResponse);
+
     // Shipments
     rpc CreateShipment(CreateShipmentRequest) returns (ShipmentsResponse);
     rpc UpdateShipment(UpdateShipmentRequest) returns (ShipmentsResponse);

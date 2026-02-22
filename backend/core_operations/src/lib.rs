@@ -60,6 +60,7 @@ use proto::proto::core::{
     CapturePaymentRequest, GetPaymentIntentRequest, CreatePaymentIntentRequest,
     PaymentIntentsResponse,
     CreateShipmentRequest, UpdateShipmentRequest, GetShipmentRequest, ShipmentsResponse,
+    ValidateCouponRequest, ApplyCouponRequest, CouponsResponse,
     UpdatePaymentMethodRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
     UpdateProductRatingRequest, UpdateProductRequest, UpdateProductVariantRequest,
     UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingAddressRequest,
@@ -2572,6 +2573,26 @@ impl GrpcServices for MyGRPCServices {
     ) -> Result<Response<ShipmentsResponse>, Status> {
         let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
         let res = handlers::shipments::get_shipment(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn validate_coupon(
+        &self,
+        request: Request<ValidateCouponRequest>,
+    ) -> Result<Response<CouponsResponse>, Status> {
+        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::validate_coupon(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn apply_coupon(
+        &self,
+        request: Request<ApplyCouponRequest>,
+    ) -> Result<Response<CouponsResponse>, Status> {
+        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::apply_coupon(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

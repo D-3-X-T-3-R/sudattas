@@ -1,4 +1,5 @@
 use crate::handlers::cart::delete_cart_item;
+use crate::handlers::coupons::validate_coupon::check_coupon;
 
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
@@ -43,7 +44,7 @@ pub async fn place_order(
             .into_inner()
             .items;
 
-    let total_amount = order_products
+    let gross_amount = order_products
         .iter()
         .filter_map(|product| {
             product_quantity_map
@@ -51,6 +52,26 @@ pub async fn place_order(
                 .map(|&quantity| product.price * quantity as f64)
         })
         .sum::<f64>();
+
+    // Apply coupon if provided, deriving the discounted total.
+    let total_amount = if let Some(ref code) = req.coupon_code {
+        let gross_paise = (gross_amount * 100.0) as i64;
+        match check_coupon(txn, code, gross_paise, true).await {
+            Ok(result) if result.is_valid => {
+                result.final_amount_paise as f64 / 100.0
+            }
+            Ok(result) => {
+                log::warn!("Coupon '{}' invalid at checkout: {}", code, result.reason);
+                gross_amount
+            }
+            Err(e) => {
+                log::warn!("Coupon check failed: {}", e);
+                gross_amount
+            }
+        }
+    } else {
+        gross_amount
+    };
 
     let create_order = create_order(
         txn,
