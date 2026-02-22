@@ -1234,6 +1234,43 @@ message ShippingZonesResponse {
     repeated ShippingZoneResponse items = 1;
 }
 
+// PaymentIntents
+
+message CreatePaymentIntentRequest {
+    int64 order_id = 1;
+    int64 user_id = 2;
+    int64 amount_paise = 3;
+    optional string currency = 4;  // defaults to "INR"
+    string razorpay_order_id = 5;  // Razorpay order ID from payment provider
+}
+
+message CapturePaymentRequest {
+    int64 intent_id = 1;
+    string razorpay_payment_id = 2;  // Payment ID returned by Razorpay after payment
+}
+
+message GetPaymentIntentRequest {
+    optional int64 intent_id = 1;
+    optional int64 order_id = 2;
+}
+
+message PaymentIntentResponse {
+    int64 intent_id = 1;
+    string razorpay_order_id = 2;
+    optional int64 order_id = 3;
+    optional int64 user_id = 4;
+    int64 amount_paise = 5;
+    optional string currency = 6;
+    string status = 7;
+    optional string razorpay_payment_id = 8;
+    string created_at = 9;
+    string expires_at = 10;
+}
+
+message PaymentIntentsResponse {
+    repeated PaymentIntentResponse items = 1;
+}
+
 // PaymentMethods
 
 message CreatePaymentMethodRequest {

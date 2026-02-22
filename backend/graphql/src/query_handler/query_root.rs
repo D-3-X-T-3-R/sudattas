@@ -1,6 +1,7 @@
 use super::Context;
 use crate::resolvers::{
     cart::{self, schema::Cart},
+    payment_intents::{self, schema::{GetPaymentIntent, PaymentIntent}},
     category::{
         self,
         schema::{Category, SearchCategory},
@@ -99,6 +100,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_state(search: SearchState) -> FieldResult<Vec<State>> {
         state::handlers::search_state(search)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // PaymentIntents
+    #[instrument(err, ret)]
+    async fn get_payment_intent(input: GetPaymentIntent) -> FieldResult<Vec<PaymentIntent>> {
+        payment_intents::handlers::get_payment_intent(input)
             .await
             .map_err(|e| e.into())
     }

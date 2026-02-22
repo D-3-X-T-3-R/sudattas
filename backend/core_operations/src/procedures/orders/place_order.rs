@@ -2,12 +2,13 @@ use crate::handlers::cart::delete_cart_item;
 
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
-    products::get_products_by_id,
+    payment_intents::create_payment_intent, products::get_products_by_id,
 };
 
 use proto::proto::core::{
-    CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderRequest, DeleteCartItemRequest,
-    GetCartItemsRequest, GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
+    CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderRequest,
+    CreatePaymentIntentRequest, DeleteCartItemRequest, GetCartItemsRequest, GetProductsByIdRequest,
+    OrdersResponse, PlaceOrderRequest,
 };
 
 use sea_orm::DatabaseTransaction;
@@ -88,6 +89,30 @@ pub async fn place_order(
     .await?
     .into_inner()
     .items;
+
+    // Auto-create a pending payment intent for the new order.
+    // razorpay_order_id must be obtained from Razorpay; here we generate a placeholder
+    // that callers must replace via CreatePaymentIntent when they have a real Razorpay ID.
+    let razorpay_order_id = format!("rzp_pending_{}", create_order.order_id);
+    let amount_paise = (create_order.total_amount * 100.0) as i64;
+    if let Err(e) = create_payment_intent(
+        txn,
+        tonic::Request::new(CreatePaymentIntentRequest {
+            order_id: create_order.order_id,
+            user_id: req.user_id,
+            amount_paise,
+            currency: Some("INR".to_string()),
+            razorpay_order_id,
+        }),
+    )
+    .await
+    {
+        log::warn!(
+            "Failed to create payment intent for order {}: {}",
+            create_order.order_id,
+            e
+        );
+    }
 
     let _ = delete_cart_item(
         txn,
