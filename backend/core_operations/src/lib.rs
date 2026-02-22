@@ -77,8 +77,8 @@ use proto::proto::core::{
 use sea_orm::TransactionTrait;
 use tonic::{Request, Response, Status};
 
-mod handlers;
-mod procedures;
+pub mod handlers;
+pub mod procedures;
 
 #[derive(Default, Debug)]
 pub struct MyGRPCServices {

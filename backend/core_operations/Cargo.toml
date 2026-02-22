@@ -23,8 +23,8 @@ rust_decimal = "1.0"
 dotenv = "0.15.0"
 chrono = "0.4"
 
-# Database and ORM dependencies 
-sea-orm = "0.12.6"
+# Database and ORM dependencies (mock feature for handler unit tests)
+sea-orm = { version = "0.12.6", features = ["mock"] }
 
 # Log Dependencies
 log = "0.4"
@@ -35,8 +35,8 @@ argon2 = { version = "0.5", features = ["std"] }
 # Session management - Redis
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 
-# Image storage - S3/R2 SDK
-aws-sdk-s3 = "1.11"
+# Image storage - S3/R2 SDK (behavior-version required by SDK)
+aws-sdk-s3 = { version = "1.11", features = ["behavior-version-latest"] }
 aws-config = "1.0"
 aws-credential-types = "1.0"
 

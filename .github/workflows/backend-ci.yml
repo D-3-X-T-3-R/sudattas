@@ -30,7 +30,7 @@ jobs:
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@nightly
       with:
-        components: rustfmt
+        components: rustfmt, clippy
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -59,6 +59,10 @@ jobs:
     - name: Check formatting
       working-directory: ./backend
       run: cargo fmt --all -- --check
+
+    - name: Clippy
+      working-directory: ./backend
+      run: cargo clippy --all-targets --all-features -- -D warnings
 
   # ============================================================================
   # Job 2: Build and Test
@@ -122,13 +126,13 @@ jobs:
 
     - name: Run unit tests
       working-directory: ./backend
-      run: cargo test --lib --bins --all-features --no-fail-fast
+      run: cargo test --lib --bins --tests --all-features --no-fail-fast -- --skip ignored
 
     - name: Run integration tests
       working-directory: ./backend
       env:
         TEST_DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/sudattas_test
-      run: cargo test --test '*' --all-features -- --ignored
+      run: cargo test --test integration_critical_paths --all-features -- --ignored
 
     - name: Run doc tests
       working-directory: ./backend

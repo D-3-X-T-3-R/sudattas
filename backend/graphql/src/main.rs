@@ -1,35 +1,18 @@
-use crate::query_handler::{AuthSource, Context};
-use crate::security::jwt_validator::validate_token;
+use graphql::query_handler::{AuthSource, Context};
+use graphql::schema;
+use graphql::security::jwt_validator::validate_token;
+use graphql::security::jwks_loader::load_jwks;
+use graphql::security::session_validator;
+use graphql::webhooks;
 use dotenv::dotenv;
-use juniper::{EmptySubscription, RootNode};
 use reqwest::StatusCode;
 use tracing::{debug, info, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 use warp::{http::Response, reply, Filter, Rejection, Reply};
 
-mod query_handler;
-mod resolvers;
-mod security;
-mod webhooks;
-
 #[derive(Debug)]
 struct Unauthorized {}
 impl warp::reject::Reject for Unauthorized {}
-
-type Schema = RootNode<
-    'static,
-    query_handler::query_root::QueryRoot,
-    query_handler::mutation_root::MutationRoot,
-    EmptySubscription<Context>,
->;
-
-fn schema() -> Schema {
-    RootNode::new(
-        query_handler::query_root::QueryRoot {},
-        query_handler::mutation_root::MutationRoot {},
-        EmptySubscription::<Context>::new(),
-    )
-}
 
 #[tokio::main]
 async fn main() {
@@ -46,7 +29,7 @@ async fn main() {
         .json()
         .init();
 
-    let jwks = security::jwks_loader::load_jwks()
+    let jwks = load_jwks()
         .await
         .expect("Failed to load JWKS");
 
@@ -101,7 +84,7 @@ async fn main() {
                 if auth.is_none() {
                     if let Some(ref sid) = session_id {
                         if let Some(ref rurl) = redis_url {
-                            match security::session_validator::validate_session(sid, rurl).await {
+                            match session_validator::validate_session(sid, rurl).await {
                                 Ok(user_id) => {
                                     debug!(auth_method = "session", "Request authenticated via session");
                                     auth = Some(AuthSource::Session(user_id));

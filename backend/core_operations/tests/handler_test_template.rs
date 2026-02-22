@@ -3,7 +3,7 @@
 
 use core_db_entities::entity::cities;
 use proto::proto::core::{CreateCityRequest, SearchCityRequest};
-use sea_orm::{DatabaseBackend, DatabaseConnection, MockDatabase, MockExecResult, Transaction};
+use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
 use tonic::Request;
 
 // ============================================================================
@@ -12,26 +12,26 @@ use tonic::Request;
 
 #[tokio::test]
 async fn test_create_city_success() {
-    // Arrange: Setup mock database with expected insert result
+    // create_city: INSERT then SELECT to get the row — mock exec then query
     let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 1,
+            rows_affected: 1,
+        }])
         .append_query_results(vec![vec![cities::Model {
             city_id: 1,
             city_name: Some("New York".to_string()),
         }]])
         .into_connection();
 
-    // Create a transaction (for real DB, you'd use db.begin().await.unwrap())
-    let txn = &db.into_transaction();
+    let txn = db.begin().await.expect("begin transaction");
 
-    // Create the request
     let request = Request::new(CreateCityRequest {
         city_name: "New York".to_string(),
     });
 
-    // Act: Call the handler
-    let result = core_operations::handlers::city::create_city(txn, request).await;
+    let result = core_operations::handlers::city::create_city(&txn, request).await;
 
-    // Assert: Verify the response
     assert!(result.is_ok(), "Handler should succeed");
     let response = result.unwrap().into_inner();
     assert_eq!(response.items.len(), 1);
@@ -46,41 +46,43 @@ async fn test_create_city_database_error() {
         .append_exec_errors(vec![sea_orm::DbErr::RecordNotInserted])
         .into_connection();
 
-    let txn = &db.into_transaction();
+    let txn = db.begin().await.expect("begin transaction");
 
     let request = Request::new(CreateCityRequest {
         city_name: "Test City".to_string(),
     });
 
     // Act
-    let result = core_operations::handlers::city::create_city(txn, request).await;
+    let result = core_operations::handlers::city::create_city(&txn, request).await;
 
-    // Assert: Should return an error status
+    // Assert: map_db_error_to_status maps RecordNotInserted → FailedPrecondition
     assert!(result.is_err(), "Handler should fail on database error");
     let status = result.unwrap_err();
-    assert_eq!(status.code(), tonic::Code::Internal);
+    assert_eq!(status.code(), tonic::Code::FailedPrecondition);
 }
 
 #[tokio::test]
 async fn test_create_city_empty_name() {
-    // Test edge case: empty city name
+    // INSERT then SELECT
     let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 1,
+            rows_affected: 1,
+        }])
         .append_query_results(vec![vec![cities::Model {
             city_id: 1,
             city_name: Some("".to_string()),
         }]])
         .into_connection();
 
-    let txn = &db.into_transaction();
+    let txn = db.begin().await.expect("begin transaction");
 
     let request = Request::new(CreateCityRequest {
         city_name: "".to_string(),
     });
 
-    let result = core_operations::handlers::city::create_city(txn, request).await;
+    let result = core_operations::handlers::city::create_city(&txn, request).await;
 
-    // Depending on your business logic, you might want to validate this
-    // For now, we just check it handles empty strings
     assert!(result.is_ok());
 }
 
@@ -104,7 +106,7 @@ async fn test_search_city_by_name() {
         ]])
         .into_connection();
 
-    let txn = &db.into_transaction();
+    let txn = db.begin().await.expect("begin transaction");
 
     let request = Request::new(SearchCityRequest {
         city_id: None,
@@ -112,7 +114,7 @@ async fn test_search_city_by_name() {
     });
 
     // Act
-    let result = core_operations::handlers::city::search_city(txn, request).await;
+    let result = core_operations::handlers::city::search_city(&txn, request).await;
 
     // Assert
     assert!(result.is_ok());
@@ -129,7 +131,7 @@ async fn test_search_city_no_results() {
         .append_query_results(vec![Vec::<cities::Model>::new()])
         .into_connection();
 
-    let txn = &db.into_transaction();
+    let txn = db.begin().await.expect("begin transaction");
 
     let request = Request::new(SearchCityRequest {
         city_id: None,
@@ -137,7 +139,7 @@ async fn test_search_city_no_results() {
     });
 
     // Act
-    let result = core_operations::handlers::city::search_city(txn, request).await;
+    let result = core_operations::handlers::city::search_city(&txn, request).await;
 
     // Assert: Should succeed with empty results
     assert!(result.is_ok());
@@ -155,14 +157,14 @@ async fn test_search_city_by_id() {
         }]])
         .into_connection();
 
-    let txn = &db.into_transaction();
+    let txn = db.begin().await.expect("begin transaction");
 
     let request = Request::new(SearchCityRequest {
         city_id: Some(42),
         city_name: None,
     });
 
-    let result = core_operations::handlers::city::search_city(txn, request).await;
+    let result = core_operations::handlers::city::search_city(&txn, request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap().into_inner();
@@ -192,7 +194,7 @@ async fn test_update_city_success() {
         ])
         .into_connection();
 
-    let txn = &db.into_transaction();
+    let txn = db.begin().await.expect("begin transaction");
 
     // Your update request would go here
     // let request = Request::new(UpdateCityRequest { ... });
@@ -224,7 +226,7 @@ async fn test_delete_city_success() {
         ])
         .into_connection();
 
-    let txn = &db.into_transaction();
+    let txn = db.begin().await.expect("begin transaction");
 
     // Your delete request would go here
     // let request = Request::new(DeleteCityRequest { city_id: 1 });
@@ -239,7 +241,7 @@ async fn test_delete_city_not_found() {
         .append_query_results(vec![Vec::<cities::Model>::new()])
         .into_connection();
 
-    let txn = &db.into_transaction();
+    let txn = db.begin().await.expect("begin transaction");
 
     // Should return NotFound error when entity doesn't exist
 }
@@ -297,9 +299,9 @@ proptest! {
                 }]])
                 .into_connection();
 
-            let txn = &db.into_transaction();
+            let txn = db.begin().await.expect("begin transaction");
             let request = Request::new(CreateCityRequest { city_name: name });
-            let result = core_operations::handlers::city::create_city(txn, request).await;
+            let result = core_operations::handlers::city::create_city(&txn, request).await;
 
             prop_assert!(result.is_ok());
         });
