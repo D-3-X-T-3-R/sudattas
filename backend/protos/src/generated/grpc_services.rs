@@ -2104,6 +2104,74 @@ pub struct ShippingZonesResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreatePaymentIntentRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+    #[prost(int64, tag = "2")]
+    pub user_id: i64,
+    #[prost(int64, tag = "3")]
+    pub amount_paise: i64,
+    /// defaults to "INR"
+    #[prost(string, optional, tag = "4")]
+    pub currency: ::core::option::Option<::prost::alloc::string::String>,
+    /// Razorpay order ID from payment provider
+    #[prost(string, tag = "5")]
+    pub razorpay_order_id: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CapturePaymentRequest {
+    #[prost(int64, tag = "1")]
+    pub intent_id: i64,
+    /// Payment ID returned by Razorpay after payment
+    #[prost(string, tag = "2")]
+    pub razorpay_payment_id: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPaymentIntentRequest {
+    #[prost(int64, optional, tag = "1")]
+    pub intent_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "2")]
+    pub order_id: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PaymentIntentResponse {
+    #[prost(int64, tag = "1")]
+    pub intent_id: i64,
+    #[prost(string, tag = "2")]
+    pub razorpay_order_id: ::prost::alloc::string::String,
+    #[prost(int64, optional, tag = "3")]
+    pub order_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "4")]
+    pub user_id: ::core::option::Option<i64>,
+    #[prost(int64, tag = "5")]
+    pub amount_paise: i64,
+    #[prost(string, optional, tag = "6")]
+    pub currency: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, tag = "7")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "8")]
+    pub razorpay_payment_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, tag = "9")]
+    pub created_at: ::prost::alloc::string::String,
+    #[prost(string, tag = "10")]
+    pub expires_at: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PaymentIntentsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<PaymentIntentResponse>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreatePaymentMethodRequest {
     #[prost(string, tag = "1")]
     pub method_name: ::prost::alloc::string::String,
@@ -6081,6 +6149,86 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /// PaymentIntents
+        pub async fn create_payment_intent(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CreatePaymentIntentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PaymentIntentsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/CreatePaymentIntent",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "CreatePaymentIntent"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn capture_payment(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CapturePaymentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PaymentIntentsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/CapturePayment",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "CapturePayment"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_payment_intent(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetPaymentIntentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PaymentIntentsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/GetPaymentIntent",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "GetPaymentIntent"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -7053,6 +7201,28 @@ pub mod grpc_services_server {
             request: tonic::Request<super::DeletePaymentMethodRequest>,
         ) -> std::result::Result<
             tonic::Response<super::PaymentMethodsResponse>,
+            tonic::Status,
+        >;
+        /// PaymentIntents
+        async fn create_payment_intent(
+            &self,
+            request: tonic::Request<super::CreatePaymentIntentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PaymentIntentsResponse>,
+            tonic::Status,
+        >;
+        async fn capture_payment(
+            &self,
+            request: tonic::Request<super::CapturePaymentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PaymentIntentsResponse>,
+            tonic::Status,
+        >;
+        async fn get_payment_intent(
+            &self,
+            request: tonic::Request<super::GetPaymentIntentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PaymentIntentsResponse>,
             tonic::Status,
         >;
     }
@@ -13985,6 +14155,146 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = DeletePaymentMethodSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/CreatePaymentIntent" => {
+                    #[allow(non_camel_case_types)]
+                    struct CreatePaymentIntentSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::CreatePaymentIntentRequest>
+                    for CreatePaymentIntentSvc<T> {
+                        type Response = super::PaymentIntentsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::CreatePaymentIntentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::create_payment_intent(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = CreatePaymentIntentSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/CapturePayment" => {
+                    #[allow(non_camel_case_types)]
+                    struct CapturePaymentSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::CapturePaymentRequest>
+                    for CapturePaymentSvc<T> {
+                        type Response = super::PaymentIntentsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::CapturePaymentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::capture_payment(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = CapturePaymentSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/GetPaymentIntent" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetPaymentIntentSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::GetPaymentIntentRequest>
+                    for GetPaymentIntentSvc<T> {
+                        type Response = super::PaymentIntentsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetPaymentIntentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::get_payment_intent(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetPaymentIntentSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

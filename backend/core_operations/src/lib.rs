@@ -57,6 +57,8 @@ use proto::proto::core::{
     UpdateColorRequest, UpdateCountryStateMappingRequest, UpdateDiscountRequest,
     UpdateEventLogRequest, UpdateInventoryItemRequest, UpdateInventoryLogRequest,
     UpdateNewsletterSubscriberRequest, UpdateOrderDetailRequest, UpdateOrderRequest,
+    CapturePaymentRequest, GetPaymentIntentRequest, CreatePaymentIntentRequest,
+    PaymentIntentsResponse,
     UpdatePaymentMethodRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
     UpdateProductRatingRequest, UpdateProductRequest, UpdateProductVariantRequest,
     UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingAddressRequest,
@@ -2491,6 +2493,54 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::payment_methods::delete_payment_method(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn create_payment_intent(
+        &self,
+        request: Request<CreatePaymentIntentRequest>,
+    ) -> Result<Response<PaymentIntentsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::payment_intents::create_payment_intent(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn capture_payment(
+        &self,
+        request: Request<CapturePaymentRequest>,
+    ) -> Result<Response<PaymentIntentsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::payment_intents::capture_payment(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_payment_intent(
+        &self,
+        request: Request<GetPaymentIntentRequest>,
+    ) -> Result<Response<PaymentIntentsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::payment_intents::get_payment_intent(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

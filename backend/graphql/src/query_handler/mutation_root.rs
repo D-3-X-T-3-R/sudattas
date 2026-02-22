@@ -4,6 +4,10 @@ use crate::resolvers::{
         self,
         schema::{Cart, CartMutation, DeleteCartItem, NewCart},
     },
+    payment_intents::{
+        self,
+        schema::{CapturePayment, NewPaymentIntent, PaymentIntent},
+    },
     category::{
         self,
         schema::{Category, CategoryMutation, NewCategory},
@@ -183,6 +187,21 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_state(state_id: String) -> FieldResult<Vec<State>> {
         state::handlers::delete_state(state_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // PaymentIntents
+    #[instrument(err, ret)]
+    async fn create_payment_intent(input: NewPaymentIntent) -> FieldResult<Vec<PaymentIntent>> {
+        payment_intents::handlers::create_payment_intent(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn capture_payment(input: CapturePayment) -> FieldResult<Vec<PaymentIntent>> {
+        payment_intents::handlers::capture_payment(input)
             .await
             .map_err(|e| e.into())
     }

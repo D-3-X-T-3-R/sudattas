@@ -227,4 +227,9 @@ service GRPCServices {
     rpc SearchPaymentMethod(SearchPaymentMethodRequest) returns (PaymentMethodsResponse);
     rpc UpdatePaymentMethod(UpdatePaymentMethodRequest) returns (PaymentMethodsResponse);
     rpc DeletePaymentMethod(DeletePaymentMethodRequest) returns (PaymentMethodsResponse);
+
+    // PaymentIntents
+    rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (PaymentIntentsResponse);
+    rpc CapturePayment(CapturePaymentRequest) returns (PaymentIntentsResponse);
+    rpc GetPaymentIntent(GetPaymentIntentRequest) returns (PaymentIntentsResponse);
 }
