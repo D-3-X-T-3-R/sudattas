@@ -7,8 +7,8 @@ use tracing::instrument;
 use super::schema::{Category, CategoryMutation, NewCategory, SearchCategory};
 use crate::resolvers::{
     convert,
-    error::{Code, GqlError},
-    utils::{connect_grpc_client, to_i64, to_option_i64},
+    error::GqlError,
+    utils::{connect_grpc_client, parse_i64, to_i64, to_option_i64},
 };
 
 #[instrument]
@@ -52,9 +52,7 @@ pub(crate) async fn search_category(search: SearchCategory) -> Result<Vec<Catego
 pub(crate) async fn delete_category(category_id: String) -> Result<Vec<Category>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
-    let category_id = category_id
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse category id", Code::InvalidArgument))?;
+    let category_id = parse_i64(&category_id, "category id")?;
 
     let response = client
         .delete_category(DeleteCategoryRequest { category_id })

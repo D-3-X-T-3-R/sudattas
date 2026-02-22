@@ -5,8 +5,8 @@ use tracing::instrument;
 use super::schema::{NewState, SearchState, State};
 use crate::resolvers::{
     convert,
-    error::{Code, GqlError},
-    utils::{connect_grpc_client, to_option_i64},
+    error::GqlError,
+    utils::{connect_grpc_client, parse_i64, to_option_i64},
 };
 
 #[instrument]
@@ -50,9 +50,7 @@ pub(crate) async fn search_state(search: SearchState) -> Result<Vec<State>, GqlE
 pub(crate) async fn delete_state(state_id: String) -> Result<Vec<State>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
-    let state_id = state_id
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse state id", Code::InvalidArgument))?;
+    let state_id = parse_i64(&state_id, "state id")?;
 
     let response = client
         .delete_state(DeleteStateRequest { state_id })
