@@ -3,6 +3,7 @@ pub mod category;
 pub mod convert;
 pub mod coupons;
 pub mod payment_intents;
+pub mod reviews;
 pub mod shipments;
 pub mod country;
 pub mod error;
