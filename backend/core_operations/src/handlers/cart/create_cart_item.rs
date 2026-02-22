@@ -9,12 +9,23 @@ pub async fn create_cart_item(
     request: Request<CreateCartItemRequest>,
 ) -> Result<Response<CartItemsResponse>, Status> {
     let req = request.into_inner();
+
+    let (user_id, session_id) = match (req.user_id, req.session_id) {
+        (Some(uid), sid) => (ActiveValue::Set(Some(uid)), ActiveValue::Set(sid)),
+        (None, Some(sid)) => (ActiveValue::Set(None), ActiveValue::Set(Some(sid))),
+        (None, None) => {
+            return Err(Status::invalid_argument(
+                "Either user_id or session_id must be set",
+            ));
+        }
+    };
+
     let cart = cart::ActiveModel {
         cart_id: ActiveValue::NotSet,
-        user_id: ActiveValue::Set(Some(req.user_id)),
+        user_id,
+        session_id,
         product_id: ActiveValue::Set(req.product_id),
         quantity: ActiveValue::Set(req.quantity),
-        session_id: ActiveValue::NotSet,
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };

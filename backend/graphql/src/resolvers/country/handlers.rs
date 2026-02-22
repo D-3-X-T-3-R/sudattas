@@ -16,8 +16,7 @@ pub(crate) async fn create_country(country: NewCountry) -> Result<Vec<Country>, 
         .create_country(CreateCountryRequest {
             country_name: country.country_name,
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -39,8 +38,7 @@ pub(crate) async fn search_country(search: SearchCountry) -> Result<Vec<Country>
             country_name: search.country_name,
             country_id: to_option_i64(search.country_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -63,8 +61,7 @@ pub(crate) async fn delete_country(country_id: String) -> Result<Vec<Country>, G
 
     let response = client
         .delete_country(DeleteCountryRequest { country_id })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()

@@ -23,6 +23,7 @@ pub async fn delete_user(
                     address: model.address,
                     phone: model.phone,
                     create_date: model.create_date.to_rfc3339(),
+                    session_id: None,
                 }],
             })),
             Err(e) => Err(map_db_error_to_status(e)),

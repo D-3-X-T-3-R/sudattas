@@ -38,8 +38,11 @@ pub struct QueryRoot;
 impl QueryRoot {
     // Cart
     #[instrument(err, ret)]
-    async fn get_cart_items(user_id: String) -> FieldResult<Vec<Cart>> {
-        cart::handlers::get_cart_items(user_id)
+    async fn get_cart_items(
+        user_id: Option<String>,
+        session_id: Option<String>,
+    ) -> FieldResult<Vec<Cart>> {
+        cart::handlers::get_cart_items(user_id, session_id)
             .await
             .map_err(|e| e.into())
     }

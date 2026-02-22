@@ -6,25 +6,29 @@ package grpc_services;
 // Cart
 
 message CreateCartItemRequest {
-    int64 user_id = 1;
+    optional int64 user_id = 1;
     int64 product_id = 2;
     int64 quantity = 3;
+    optional string session_id = 4;  // Guest cart when user_id not set
 }
 
 message GetCartItemsRequest {
-    int64 user_id = 1;
+    optional int64 user_id = 1;
+    optional string session_id = 2;  // Guest cart; use when user_id not set
 }
 
 message UpdateCartItemRequest {
     int64 cart_id = 1;
-    int64 user_id = 2;
+    optional int64 user_id = 2;
     int64 product_id = 3;
     int64 quantity = 4;
+    optional string session_id = 5;
 }
 
 message DeleteCartItemRequest {
-    int64 user_id = 1;
+    optional int64 user_id = 1;
     optional int64 cart_id = 2;
+    optional string session_id = 3;
 }
 
 message CartItemResponse {
@@ -301,6 +305,7 @@ message UserResponse {
     optional string address = 5;
     optional string phone = 6;
     string create_date = 7;
+    optional string session_id = 8;  // Set on create_user when Redis session is created
 }
 
 message UsersResponse {

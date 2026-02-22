@@ -23,7 +23,8 @@ pub async fn place_order(
     let cart_items = get_cart_items(
         txn,
         Request::new(GetCartItemsRequest {
-            user_id: req.user_id,
+            user_id: Some(req.user_id),
+            session_id: None,
         }),
     )
     .await?
@@ -91,8 +92,9 @@ pub async fn place_order(
     let _ = delete_cart_item(
         txn,
         Request::new(DeleteCartItemRequest {
-            user_id: req.user_id,
+            user_id: Some(req.user_id),
             cart_id: None,
+            session_id: None,
         }),
     )
     .await?

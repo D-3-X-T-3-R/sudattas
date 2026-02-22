@@ -6,7 +6,8 @@ use tracing::instrument;
 
 use super::schema::{NewOrder, Order, OrderMutation, SearchOrder};
 use crate::resolvers::{
-    error::{Code, GqlError},
+    convert,
+    error::GqlError,
     utils::{connect_grpc_client, to_f64, to_i64, to_option_i64},
 };
 
@@ -19,21 +20,13 @@ pub(crate) async fn place_order(order: NewOrder) -> Result<Vec<Order>, GqlError>
             user_id: to_i64(order.user_id),
             shipping_address_id: to_i64(order.shipping_address_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
         .items
         .into_iter()
-        .map(|order| Order {
-            user_id: order.user_id.to_string(),
-            shipping_address_id: order.shipping_address_id.to_string(),
-            total_amount: order.total_amount.to_string(),
-            status_id: order.status_id.to_string(),
-            order_date: order.order_date,
-            order_id: order.order_id.to_string(),
-        })
+        .map(convert::order_response_to_gql)
         .collect())
 }
 
@@ -49,21 +42,13 @@ pub(crate) async fn search_order(search: SearchOrder) -> Result<Vec<Order>, GqlE
             order_date_end: to_option_i64(search.order_date_end),
             status_id: to_option_i64(search.status_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
         .items
         .into_iter()
-        .map(|order| Order {
-            user_id: order.user_id.to_string(),
-            shipping_address_id: order.shipping_address_id.to_string(),
-            total_amount: order.total_amount.to_string(),
-            status_id: order.status_id.to_string(),
-            order_date: order.order_date,
-            order_id: order.order_id.to_string(),
-        })
+        .map(convert::order_response_to_gql)
         .collect())
 }
 
@@ -75,21 +60,13 @@ pub(crate) async fn delete_order(order_id: String) -> Result<Vec<Order>, GqlErro
         .delete_order(DeleteOrderRequest {
             order_id: to_i64(order_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
         .items
         .into_iter()
-        .map(|order| Order {
-            user_id: order.user_id.to_string(),
-            shipping_address_id: order.shipping_address_id.to_string(),
-            total_amount: order.total_amount.to_string(),
-            status_id: order.status_id.to_string(),
-            order_date: order.order_date,
-            order_id: order.order_id.to_string(),
-        })
+        .map(convert::order_response_to_gql)
         .collect())
 }
 
@@ -105,20 +82,12 @@ pub(crate) async fn update_order(order: OrderMutation) -> Result<Vec<Order>, Gql
             shipping_address_id: to_i64(order.shipping_address_id),
             total_amount: to_f64(order.total_amount),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
         .items
         .into_iter()
-        .map(|order| Order {
-            user_id: order.user_id.to_string(),
-            shipping_address_id: order.shipping_address_id.to_string(),
-            total_amount: order.total_amount.to_string(),
-            status_id: order.status_id.to_string(),
-            order_date: order.order_date,
-            order_id: order.order_id.to_string(),
-        })
+        .map(convert::order_response_to_gql)
         .collect())
 }

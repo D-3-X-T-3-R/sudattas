@@ -10,8 +10,18 @@ pub async fn get_cart_items(
 ) -> Result<Response<CartItemsResponse>, Status> {
     let req = request.into_inner();
 
+    let filter = match (req.user_id, req.session_id.as_deref()) {
+        (Some(uid), _) => cart::Column::UserId.eq(uid),
+        (_, Some(sid)) => cart::Column::SessionId.eq(sid),
+        (None, None) => {
+            return Err(Status::invalid_argument(
+                "Either user_id or session_id must be set",
+            ));
+        }
+    };
+
     match cart::Entity::find()
-        .filter(cart::Column::UserId.eq(req.user_id))
+        .filter(filter)
         .all(txn)
         .await
     {

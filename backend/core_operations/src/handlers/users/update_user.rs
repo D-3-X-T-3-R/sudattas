@@ -43,6 +43,7 @@ pub async fn update_user(
                 address: updated.address,
                 phone: updated.phone,
                 create_date: updated.create_date.to_rfc3339(),
+                session_id: None,
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

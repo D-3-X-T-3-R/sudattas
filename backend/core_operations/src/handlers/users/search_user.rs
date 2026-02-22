@@ -27,6 +27,7 @@ pub async fn search_user(
                     address: m.address,
                     phone: m.phone,
                     create_date: m.create_date.to_rfc3339(),
+                    session_id: None,
                 })
                 .collect();
             Ok(Response::new(UsersResponse { items }))

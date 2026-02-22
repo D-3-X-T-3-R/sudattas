@@ -18,8 +18,7 @@ pub(crate) async fn create_category(category: NewCategory) -> Result<Vec<Categor
 
     let response = client
         .create_category(CreateCategoryRequest { name })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -41,8 +40,7 @@ pub(crate) async fn search_category(search: SearchCategory) -> Result<Vec<Catego
             name: search.name,
             category_id: to_option_i64(search.category_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -65,8 +63,7 @@ pub(crate) async fn delete_category(category_id: String) -> Result<Vec<Category>
 
     let response = client
         .delete_category(DeleteCategoryRequest { category_id })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -88,8 +85,7 @@ pub(crate) async fn update_category(category: CategoryMutation) -> Result<Vec<Ca
             name: category.name,
             category_id: to_i64(category.category_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()

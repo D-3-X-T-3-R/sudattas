@@ -7,7 +7,7 @@ use tracing::instrument;
 
 use super::schema::{NewProductImage, ProductImage, ProductImageMutation, SearchProductImage};
 use crate::resolvers::{
-    error::{Code, GqlError},
+    error::GqlError,
     utils::{connect_grpc_client, to_i64, to_option_i64},
 };
 
@@ -29,8 +29,7 @@ pub(crate) async fn add_product_image(
                 })
                 .collect(),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -57,8 +56,7 @@ pub(crate) async fn search_product_image(
             product_id: to_option_i64(search.product_id),
             alt_text: search.alt_text,
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -81,8 +79,7 @@ pub(crate) async fn delete_product_image(image_id: String) -> Result<Vec<Product
         .delete_product_image(DeleteProductImageRequest {
             image_id: to_i64(image_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -110,8 +107,7 @@ pub(crate) async fn update_product_image(
             image_id: to_i64(product_image.image_id),
             product_id: to_i64(product_image.product_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()

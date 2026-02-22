@@ -1,3 +1,8 @@
+//! Shared utilities for GraphQL resolvers.
+//!
+//! Use `connect_grpc_client()` then call gRPC methods and use `.await?` to map
+//! `tonic::Status` to `GqlError` via `From` (avoids repeating `.map_err(|e| GqlError::new(...))`).
+
 use crate::resolvers::error::{Code, GqlError};
 use proto::{proto::core::grpc_services_client::GrpcServicesClient, tonic::transport::Channel};
 
