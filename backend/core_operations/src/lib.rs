@@ -88,6 +88,7 @@ pub struct MyGRPCServices {
 /// - If `GRPC_AUTH_TOKEN` env var is absent or empty → pass-through (dev/local mode).
 /// - All calls must supply `authorization: Bearer <GRPC_AUTH_TOKEN>`.
 /// - Auth failures are logged for audit purposes.
+#[allow(clippy::result_large_err)]
 pub fn check_auth(req: Request<()>) -> Result<Request<()>, Status> {
     let expected_token = match std::env::var("GRPC_AUTH_TOKEN") {
         Ok(t) if !t.is_empty() => t,

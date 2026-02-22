@@ -36,12 +36,12 @@ pub async fn update_discount(
     let start = req
         .start_date
         .as_deref()
-        .and_then(|s| parse_date(s))
+        .and_then(parse_date)
         .or(existing.start_date);
     let end = req
         .end_date
         .as_deref()
-        .and_then(|s| parse_date(s))
+        .and_then(parse_date)
         .or(existing.end_date);
 
     let model = discounts::ActiveModel {

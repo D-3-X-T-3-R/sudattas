@@ -17,6 +17,7 @@ pub async fn update_shipping_zone(
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| Status::not_found("Shipping zone not found"))?;
 
+    #[allow(clippy::unnecessary_map_or)]
     let model = shipping_zones::ActiveModel {
         zone_id: ActiveValue::Set(existing.zone_id),
         zone_name: if req.zone_name.as_ref().map_or(true, |s| s.is_empty()) {

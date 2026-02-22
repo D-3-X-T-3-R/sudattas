@@ -44,6 +44,7 @@ pub async fn connect_grpc_client() -> Result<
 
     let auth_token = std::env::var("GRPC_AUTH_TOKEN").ok();
 
+    #[allow(clippy::result_large_err)]
     let client = GrpcServicesClient::with_interceptor(channel, move |mut req: Request<()>| {
         if let Some(ref tok) = auth_token {
             if let Ok(val) = MetadataValue::try_from(format!("Bearer {tok}").as_str()) {

@@ -19,6 +19,7 @@ pub async fn update_payment_method(
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| Status::not_found("Payment method not found"))?;
 
+    #[allow(clippy::unnecessary_map_or)]
     let model = payment_methods::ActiveModel {
         method_id: ActiveValue::Set(existing.method_id),
         method_name: if req.method_name.as_ref().map_or(true, |s| s.is_empty()) {
