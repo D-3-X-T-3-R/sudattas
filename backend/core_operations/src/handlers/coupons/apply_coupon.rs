@@ -38,5 +38,7 @@ pub async fn apply_coupon(
         }
     }
 
-    Ok(Response::new(CouponsResponse { items: vec![result] }))
+    Ok(Response::new(CouponsResponse {
+        items: vec![result],
+    }))
 }

@@ -8,7 +8,9 @@ use super::schema::{NewProduct, Product, ProductMutation, SearchProduct};
 use crate::resolvers::{
     convert,
     error::GqlError,
-    utils::{connect_grpc_client, parse_f64, parse_i64, to_f64, to_i64, to_option_f64, to_option_i64},
+    utils::{
+        connect_grpc_client, parse_f64, parse_i64, to_f64, to_i64, to_option_f64, to_option_i64,
+    },
 };
 
 #[instrument]

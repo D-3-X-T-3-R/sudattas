@@ -1,10 +1,10 @@
+use dotenv::dotenv;
 use graphql::query_handler::{AuthSource, Context};
 use graphql::schema;
-use graphql::security::jwt_validator::validate_token;
 use graphql::security::jwks_loader::load_jwks;
+use graphql::security::jwt_validator::validate_token;
 use graphql::security::session_validator;
 use graphql::webhooks;
-use dotenv::dotenv;
 use reqwest::StatusCode;
 use tracing::{debug, info, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
@@ -29,9 +29,7 @@ async fn main() {
         .json()
         .init();
 
-    let jwks = load_jwks()
-        .await
-        .expect("Failed to load JWKS");
+    let jwks = load_jwks().await.expect("Failed to load JWKS");
 
     let redis_url = std::env::var("REDIS_URL").ok();
 
@@ -115,7 +113,10 @@ async fn main() {
 
     let graphql_copy = warp::post()
         .and(warp::path("v2"))
-        .and(juniper_warp::make_graphql_filter(schema(), context_filter.boxed()))
+        .and(juniper_warp::make_graphql_filter(
+            schema(),
+            context_filter.boxed(),
+        ))
         .recover(handle_auth_rejection)
         .with(cors.clone())
         .with(warp::trace::request());

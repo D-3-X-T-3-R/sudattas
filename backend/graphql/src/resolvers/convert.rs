@@ -7,15 +7,9 @@ use proto::proto::core::{
 };
 
 use crate::resolvers::{
-    cart::schema::Cart,
-    category::schema::Category,
-    country::schema::Country,
-    order_details::schema::OrderDetails,
-    orders::schema::Order,
-    product::schema::Product,
-    product_images::schema::ProductImage,
-    state::schema::State,
-    wishlist::schema::WishlistItem,
+    cart::schema::Cart, category::schema::Category, country::schema::Country,
+    order_details::schema::OrderDetails, orders::schema::Order, product::schema::Product,
+    product_images::schema::ProductImage, state::schema::State, wishlist::schema::WishlistItem,
 };
 
 pub fn product_response_to_gql(p: ProductResponse) -> Product {

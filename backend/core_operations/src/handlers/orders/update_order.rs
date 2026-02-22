@@ -2,7 +2,9 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use chrono::Utc;
 use core_db_entities::entity::orders;
-use proto::proto::core::{CreateOrderEventRequest, OrderResponse, OrdersResponse, UpdateOrderRequest};
+use proto::proto::core::{
+    CreateOrderEventRequest, OrderResponse, OrdersResponse, UpdateOrderRequest,
+};
 use rust_decimal::{
     prelude::{FromPrimitive, ToPrimitive},
     Decimal,

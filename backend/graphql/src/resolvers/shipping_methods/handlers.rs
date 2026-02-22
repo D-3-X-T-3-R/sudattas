@@ -4,7 +4,9 @@ use proto::proto::core::{
 };
 use tracing::instrument;
 
-use super::schema::{NewShippingMethod, SearchShippingMethod, ShippingMethod, ShippingMethodMutation};
+use super::schema::{
+    NewShippingMethod, SearchShippingMethod, ShippingMethod, ShippingMethodMutation,
+};
 use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64},

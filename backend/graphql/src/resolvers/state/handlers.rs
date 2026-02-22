@@ -52,9 +52,7 @@ pub(crate) async fn delete_state(state_id: String) -> Result<Vec<State>, GqlErro
 
     let state_id = parse_i64(&state_id, "state id")?;
 
-    let response = client
-        .delete_state(DeleteStateRequest { state_id })
-        .await?;
+    let response = client.delete_state(DeleteStateRequest { state_id }).await?;
 
     Ok(response
         .into_inner()

@@ -1,17 +1,6 @@
-use juniper::IntoFieldError;
 use super::Context;
 use crate::resolvers::{
     cart::{self, schema::Cart},
-    coupons::{self, schema::{Coupon, ValidateCoupon}},
-    discounts::{self, schema::{Discount, SearchDiscount}},
-    order_events::{self, schema::OrderEvent},
-    inventory::{self, schema::{InventoryItem, SearchInventoryItem}},
-    reviews::{self, schema::{Review, SearchReview}},
-    shipping_addresses::{self, schema::ShippingAddress},
-    shipping_methods::{self, schema::{SearchShippingMethod, ShippingMethod}},
-    shipping_zones::{self, schema::{SearchShippingZone, ShippingZone}},
-    payment_intents::{self, schema::{GetPaymentIntent, PaymentIntent}},
-    shipments::{self, schema::{GetShipment, Shipment}},
     category::{
         self,
         schema::{Category, SearchCategory},
@@ -20,9 +9,26 @@ use crate::resolvers::{
         self,
         schema::{Country, SearchCountry},
     },
+    coupons::{
+        self,
+        schema::{Coupon, ValidateCoupon},
+    },
+    discounts::{
+        self,
+        schema::{Discount, SearchDiscount},
+    },
+    inventory::{
+        self,
+        schema::{InventoryItem, SearchInventoryItem},
+    },
+    order_events::{self, schema::OrderEvent},
     orders::{
         self,
         schema::{Order, SearchOrder},
+    },
+    payment_intents::{
+        self,
+        schema::{GetPaymentIntent, PaymentIntent},
     },
     product::{
         self,
@@ -31,6 +37,23 @@ use crate::resolvers::{
     product_images::{
         self,
         schema::{GetPresignedUploadUrl, PresignedUploadUrl, ProductImage, SearchProductImage},
+    },
+    reviews::{
+        self,
+        schema::{Review, SearchReview},
+    },
+    shipments::{
+        self,
+        schema::{GetShipment, Shipment},
+    },
+    shipping_addresses::{self, schema::ShippingAddress},
+    shipping_methods::{
+        self,
+        schema::{SearchShippingMethod, ShippingMethod},
+    },
+    shipping_zones::{
+        self,
+        schema::{SearchShippingZone, ShippingZone},
     },
     state::{
         self,
@@ -42,6 +65,7 @@ use crate::resolvers::{
     },
 };
 use juniper::FieldResult;
+use juniper::IntoFieldError;
 
 pub struct QueryRoot;
 
@@ -214,7 +238,9 @@ impl QueryRoot {
 
     // Shipping methods
     #[instrument(err, ret)]
-    async fn search_shipping_method(input: SearchShippingMethod) -> FieldResult<Vec<ShippingMethod>> {
+    async fn search_shipping_method(
+        input: SearchShippingMethod,
+    ) -> FieldResult<Vec<ShippingMethod>> {
         shipping_methods::handlers::search_shipping_method(input)
             .await
             .map_err(|e| e.into_field_error())

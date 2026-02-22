@@ -11,8 +11,8 @@ pub async fn confirm_image_upload(
 ) -> Result<Response<ProductImagesResponse>, Status> {
     let req = request.into_inner();
 
-    let public_url = std::env::var("R2_PUBLIC_URL")
-        .unwrap_or_else(|_| "https://images.example.com".to_string());
+    let public_url =
+        std::env::var("R2_PUBLIC_URL").unwrap_or_else(|_| "https://images.example.com".to_string());
 
     let cdn_url = format!("{}/{}", public_url.trim_end_matches('/'), req.key);
 

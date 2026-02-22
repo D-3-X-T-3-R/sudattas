@@ -17,7 +17,9 @@ pub async fn get_payment_intent(
     } else if let Some(order_id) = req.order_id {
         query.filter(payment_intents::Column::OrderId.eq(order_id))
     } else {
-        return Err(Status::invalid_argument("Either intent_id or order_id must be set"));
+        return Err(Status::invalid_argument(
+            "Either intent_id or order_id must be set",
+        ));
     };
 
     let results = query.all(txn).await.map_err(map_db_error_to_status)?;

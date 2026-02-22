@@ -7,17 +7,19 @@ pub mod auth;
 pub mod services;
 
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, AddWishlistItemRequest,
-    CartItemsResponse, CategoriesResponse, CitiesResponse, ColorsResponse, CountriesResponse,
-    CountryStateMappingsResponse, CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest,
-    CreateColorRequest, CreateCountryRequest, CreateCountryStateMappingRequest,
-    CreateDiscountRequest, CreateEventLogRequest, CreateInventoryItemRequest,
-    CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOrderDetailsRequest,
-    CreateOrderRequest, CreatePaymentMethodRequest, CreateProductAttributeMappingRequest,
-    CreateProductAttributeRequest, CreateProductCategoryMappingRequest,
-    CreateProductColorMappingRequest, CreateProductRatingRequest, CreateProductRequest,
-    CreateProductSizeMappingRequest, CreateProductVariantRequest, CreatePromotionRequest,
-    CreateReviewRequest, CreateShippingAddressRequest, CreateShippingMethodRequest,
+    grpc_services_server::GrpcServices, AddWishlistItemRequest, ApplyCouponRequest,
+    CapturePaymentRequest, CartItemsResponse, CategoriesResponse, CitiesResponse, ColorsResponse,
+    ConfirmImageUploadRequest, CountriesResponse, CountryStateMappingsResponse, CouponsResponse,
+    CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest, CreateColorRequest,
+    CreateCountryRequest, CreateCountryStateMappingRequest, CreateDiscountRequest,
+    CreateEventLogRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
+    CreateNewsletterSubscriberRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
+    CreateOrderRequest, CreatePaymentIntentRequest, CreatePaymentMethodRequest,
+    CreateProductAttributeMappingRequest, CreateProductAttributeRequest,
+    CreateProductCategoryMappingRequest, CreateProductColorMappingRequest,
+    CreateProductRatingRequest, CreateProductRequest, CreateProductSizeMappingRequest,
+    CreateProductVariantRequest, CreatePromotionRequest, CreateReviewRequest,
+    CreateShipmentRequest, CreateShippingAddressRequest, CreateShippingMethodRequest,
     CreateShippingZoneRequest, CreateSizeRequest, CreateStateCityMappingRequest,
     CreateStateRequest, CreateSupplierRequest, CreateTransactionRequest, CreateUserActivityRequest,
     CreateUserRequest, CreateUserRoleMappingRequest, CreateUserRoleRequest, DeleteCartItemRequest,
@@ -33,45 +35,40 @@ use proto::proto::core::{
     DeleteStateCityMappingRequest, DeleteStateRequest, DeleteSupplierRequest,
     DeleteTransactionRequest, DeleteUserActivityRequest, DeleteUserRequest,
     DeleteUserRoleMappingRequest, DeleteUserRoleRequest, DeleteWishlistItemRequest,
-    DiscountsResponse, EventLogsResponse, GetCartItemsRequest, GetProductsByIdRequest,
-    GetShippingAddressRequest, InventoryItemsResponse, InventoryLogsResponse,
-    NewsletterSubscribersResponse, OrderDetailsResponse, OrdersResponse, PaymentMethodsResponse,
-    PlaceOrderRequest, ProductAttributeMappingsResponse, ProductAttributesResponse,
-    ProductCategoryMappingsResponse, ProductColorMappingsResponse, ProductImagesResponse,
-    ProductRatingsResponse, ProductSizeMappingsResponse, ProductVariantsResponse, ProductsResponse,
-    PromotionsResponse, ReviewsResponse, SearchCategoryRequest, SearchCityRequest,
-    SearchColorRequest, SearchCountryRequest, SearchCountryStateMappingRequest,
-    SearchDiscountRequest, SearchEventLogRequest, SearchInventoryItemRequest,
-    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOrderDetailRequest,
-    SearchOrderRequest, SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
-    SearchProductAttributeRequest, SearchProductCategoryMappingRequest,
-    SearchProductColorMappingRequest, SearchProductImageRequest, SearchProductRatingRequest,
-    SearchProductRequest, SearchProductSizeMappingRequest, SearchProductVariantRequest,
-    SearchPromotionRequest, SearchReviewRequest, SearchShippingMethodRequest,
-    SearchShippingZoneRequest, SearchSizeRequest, SearchStateCityMappingRequest,
-    SearchStateRequest, SearchSupplierRequest, SearchTransactionRequest, SearchUserActivityRequest,
-    SearchUserRequest, SearchUserRoleMappingRequest, SearchUserRoleRequest,
-    SearchWishlistItemRequest, ShippingAddressesResponse, ShippingMethodsResponse,
-    ShippingZonesResponse, SizesResponse, StateCityMappingsResponse, StatesResponse,
-    SuppliersResponse, TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest,
-    UpdateColorRequest, UpdateCountryStateMappingRequest, UpdateDiscountRequest,
-    UpdateEventLogRequest, UpdateInventoryItemRequest, UpdateInventoryLogRequest,
-    UpdateNewsletterSubscriberRequest, UpdateOrderDetailRequest, UpdateOrderRequest,
-    CapturePaymentRequest, GetPaymentIntentRequest, CreatePaymentIntentRequest,
-    PaymentIntentsResponse,
-    CreateShipmentRequest, UpdateShipmentRequest, GetShipmentRequest, ShipmentsResponse,
-    ValidateCouponRequest, ApplyCouponRequest, CouponsResponse,
-    CreateOrderEventRequest, GetOrderEventsRequest, OrderEventsResponse,
-    IngestWebhookRequest, WebhookEventsResponse,
-    GetPresignedUploadUrlRequest, PresignedUploadUrlResponse,
-    ConfirmImageUploadRequest,
-    UpdatePaymentMethodRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
-    UpdateProductRatingRequest, UpdateProductRequest, UpdateProductVariantRequest,
-    UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingAddressRequest,
-    UpdateShippingMethodRequest, UpdateShippingZoneRequest, UpdateSizeRequest,
-    UpdateStateCityMappingRequest, UpdateSupplierRequest, UpdateTransactionRequest,
-    UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UserActivitiesResponse,
-    UserRoleMappingsResponse, UserRolesResponse, UsersResponse, WishlistItemsResponse,
+    DiscountsResponse, EventLogsResponse, GetCartItemsRequest, GetOrderEventsRequest,
+    GetPaymentIntentRequest, GetPresignedUploadUrlRequest, GetProductsByIdRequest,
+    GetShipmentRequest, GetShippingAddressRequest, IngestWebhookRequest, InventoryItemsResponse,
+    InventoryLogsResponse, NewsletterSubscribersResponse, OrderDetailsResponse,
+    OrderEventsResponse, OrdersResponse, PaymentIntentsResponse, PaymentMethodsResponse,
+    PlaceOrderRequest, PresignedUploadUrlResponse, ProductAttributeMappingsResponse,
+    ProductAttributesResponse, ProductCategoryMappingsResponse, ProductColorMappingsResponse,
+    ProductImagesResponse, ProductRatingsResponse, ProductSizeMappingsResponse,
+    ProductVariantsResponse, ProductsResponse, PromotionsResponse, ReviewsResponse,
+    SearchCategoryRequest, SearchCityRequest, SearchColorRequest, SearchCountryRequest,
+    SearchCountryStateMappingRequest, SearchDiscountRequest, SearchEventLogRequest,
+    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterSubscriberRequest,
+    SearchOrderDetailRequest, SearchOrderRequest, SearchPaymentMethodRequest,
+    SearchProductAttributeMappingRequest, SearchProductAttributeRequest,
+    SearchProductCategoryMappingRequest, SearchProductColorMappingRequest,
+    SearchProductImageRequest, SearchProductRatingRequest, SearchProductRequest,
+    SearchProductSizeMappingRequest, SearchProductVariantRequest, SearchPromotionRequest,
+    SearchReviewRequest, SearchShippingMethodRequest, SearchShippingZoneRequest, SearchSizeRequest,
+    SearchStateCityMappingRequest, SearchStateRequest, SearchSupplierRequest,
+    SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
+    SearchUserRoleMappingRequest, SearchUserRoleRequest, SearchWishlistItemRequest,
+    ShipmentsResponse, ShippingAddressesResponse, ShippingMethodsResponse, ShippingZonesResponse,
+    SizesResponse, StateCityMappingsResponse, StatesResponse, SuppliersResponse,
+    TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest,
+    UpdateCountryStateMappingRequest, UpdateDiscountRequest, UpdateEventLogRequest,
+    UpdateInventoryItemRequest, UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest,
+    UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePaymentMethodRequest,
+    UpdateProductAttributeRequest, UpdateProductImageRequest, UpdateProductRatingRequest,
+    UpdateProductRequest, UpdateProductVariantRequest, UpdatePromotionRequest, UpdateReviewRequest,
+    UpdateShipmentRequest, UpdateShippingAddressRequest, UpdateShippingMethodRequest,
+    UpdateShippingZoneRequest, UpdateSizeRequest, UpdateStateCityMappingRequest,
+    UpdateSupplierRequest, UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest,
+    UpdateUserRoleRequest, UserActivitiesResponse, UserRoleMappingsResponse, UserRolesResponse,
+    UsersResponse, ValidateCouponRequest, WebhookEventsResponse, WishlistItemsResponse,
 };
 
 use sea_orm::TransactionTrait;
@@ -2563,7 +2560,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreateShipmentRequest>,
     ) -> Result<Response<ShipmentsResponse>, Status> {
-        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
         let res = handlers::shipments::create_shipment(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -2573,7 +2576,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<UpdateShipmentRequest>,
     ) -> Result<Response<ShipmentsResponse>, Status> {
-        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
         let res = handlers::shipments::update_shipment(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -2583,7 +2592,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<GetShipmentRequest>,
     ) -> Result<Response<ShipmentsResponse>, Status> {
-        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
         let res = handlers::shipments::get_shipment(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -2593,7 +2608,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<ValidateCouponRequest>,
     ) -> Result<Response<CouponsResponse>, Status> {
-        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
         let res = handlers::coupons::validate_coupon(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -2603,7 +2624,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<ApplyCouponRequest>,
     ) -> Result<Response<CouponsResponse>, Status> {
-        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
         let res = handlers::coupons::apply_coupon(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -2613,7 +2640,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreateOrderEventRequest>,
     ) -> Result<Response<OrderEventsResponse>, Status> {
-        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
         let res = handlers::order_events::create_order_event(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -2623,7 +2656,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<GetOrderEventsRequest>,
     ) -> Result<Response<OrderEventsResponse>, Status> {
-        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
         let res = handlers::order_events::get_order_events(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -2633,7 +2672,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<IngestWebhookRequest>,
     ) -> Result<Response<WebhookEventsResponse>, Status> {
-        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
         let res = handlers::webhooks::ingest_webhook(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
@@ -2650,7 +2695,13 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<ConfirmImageUploadRequest>,
     ) -> Result<Response<ProductImagesResponse>, Status> {
-        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
         let res = handlers::product_images::confirm_image_upload(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)

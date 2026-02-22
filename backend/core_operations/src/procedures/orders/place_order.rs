@@ -9,9 +9,9 @@ use crate::handlers::{
 
 use core_db_entities::entity::inventory;
 use proto::proto::core::{
-    CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest, CreateOrderRequest,
-    CreatePaymentIntentRequest, DeleteCartItemRequest, GetCartItemsRequest, GetProductsByIdRequest,
-    OrdersResponse, PlaceOrderRequest,
+    CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
+    CreateOrderRequest, CreatePaymentIntentRequest, DeleteCartItemRequest, GetCartItemsRequest,
+    GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
@@ -50,10 +50,7 @@ pub async fn place_order(
             .map_err(|e| Status::internal(e.to_string()))?;
 
         let quantity_needed = *product_quantity_map.get(product_id).unwrap_or(&0);
-        let quantity_available = inv
-            .as_ref()
-            .and_then(|i| i.quantity_available)
-            .unwrap_or(0);
+        let quantity_available = inv.as_ref().and_then(|i| i.quantity_available).unwrap_or(0);
 
         if quantity_available < quantity_needed {
             return Err(Status::failed_precondition(format!(
@@ -82,9 +79,7 @@ pub async fn place_order(
     let total_amount = if let Some(ref code) = req.coupon_code {
         let gross_paise = (gross_amount * 100.0) as i64;
         match check_coupon(txn, code, gross_paise, true).await {
-            Ok(result) if result.is_valid => {
-                result.final_amount_paise as f64 / 100.0
-            }
+            Ok(result) if result.is_valid => result.final_amount_paise as f64 / 100.0,
             Ok(result) => {
                 log::warn!("Coupon '{}' invalid at checkout: {}", code, result.reason);
                 gross_amount
@@ -169,7 +164,10 @@ pub async fn place_order(
             from_status: None,
             to_status: Some("processing".to_string()),
             actor_type: "customer".to_string(),
-            message: Some(format!("Order {} placed successfully", create_order.order_id)),
+            message: Some(format!(
+                "Order {} placed successfully",
+                create_order.order_id
+            )),
         }),
     )
     .await;

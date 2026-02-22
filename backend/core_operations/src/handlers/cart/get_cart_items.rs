@@ -20,11 +20,7 @@ pub async fn get_cart_items(
         }
     };
 
-    match cart::Entity::find()
-        .filter(filter)
-        .all(txn)
-        .await
-    {
+    match cart::Entity::find().filter(filter).all(txn).await {
         Ok(cart_models) => {
             let items = cart_models
                 .into_iter()

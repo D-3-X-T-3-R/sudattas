@@ -13,13 +13,8 @@ pub fn build_r2_client() -> Option<(Client, String, String)> {
     let endpoint = std::env::var("R2_ENDPOINT")
         .unwrap_or_else(|_| format!("https://{}.r2.cloudflarestorage.com", account_id));
 
-    let creds = SharedCredentialsProvider::new(Credentials::new(
-        access_key,
-        secret_key,
-        None,
-        None,
-        "r2",
-    ));
+    let creds =
+        SharedCredentialsProvider::new(Credentials::new(access_key, secret_key, None, None, "r2"));
 
     let config = aws_config::SdkConfig::builder()
         .region(Region::new("auto"))
