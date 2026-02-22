@@ -1,13 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use base64;
 use core_db_entities::entity::product_images;
 use proto::proto::core::{AddProductImageRequest, ProductImageResponse, ProductImagesResponse};
-use rust_decimal::{
-    prelude::{FromPrimitive, ToPrimitive},
-    Decimal,
-};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
-use std::fs;
 use tonic::{Request, Response, Status};
 
 pub async fn add_product_image(

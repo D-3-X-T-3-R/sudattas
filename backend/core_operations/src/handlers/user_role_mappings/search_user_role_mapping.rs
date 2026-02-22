@@ -3,7 +3,7 @@ use core_db_entities::entity::user_role_mapping;
 use proto::proto::core::{
     SearchUserRoleMappingRequest, UserRoleMappingResponse, UserRoleMappingsResponse,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn search_user_role_mapping(

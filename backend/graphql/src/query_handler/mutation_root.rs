@@ -8,9 +8,10 @@ use crate::resolvers::{
         self,
         schema::{Category, CategoryMutation, NewCategory},
     },
-    country::{
+    country::{self, schema::{Country, NewCountry}},
+    order_details::{
         self,
-        schema::{Country, NewCountry},
+        schema::{NewOrderDetails, OrderDetails, OrderDetailsMutation},
     },
     orders::{
         self,
@@ -109,6 +110,20 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn place_order(order: NewOrder) -> FieldResult<Vec<Order>> {
         orders::handlers::place_order(order)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn create_order_details(order_details: NewOrderDetails) -> FieldResult<Vec<OrderDetails>> {
+        order_details::handlers::create_order_detail(order_details)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_order_detail(order_detail: OrderDetailsMutation) -> FieldResult<Vec<OrderDetails>> {
+        order_details::handlers::update_order_detail(order_detail)
             .await
             .map_err(|e| e.into())
     }

@@ -57,6 +57,7 @@ pub fn map_err(status: Status) -> GqlError {
         StatusCode::Unavailable => Code::Unavailable,
         StatusCode::DataLoss => Code::DataLoss,
         StatusCode::Unauthenticated => Code::Unauthenticated,
+        #[allow(unreachable_patterns)]
         _ => Code::Unknown,
     };
     GqlError {

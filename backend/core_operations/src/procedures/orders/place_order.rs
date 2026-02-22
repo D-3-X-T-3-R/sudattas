@@ -10,7 +10,7 @@ use proto::proto::core::{
     GetCartItemsRequest, GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
 };
 
-use sea_orm::{ActiveModelTrait, DatabaseTransaction};
+use sea_orm::DatabaseTransaction;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 

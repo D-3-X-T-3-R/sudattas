@@ -1,3 +1,6 @@
+// Re-exports are used by gRPC server; lint sees them unused within this crate
+#![allow(unused_imports)]
+
 pub mod cart;
 pub mod categories;
 pub mod city;
@@ -38,7 +41,7 @@ pub mod user_roles;
 pub mod users;
 pub mod wishlist;
 
-// Re-export all handlers
+// Re-export all handlers (used by gRPC server and other crates)
 pub use cart::*;
 pub use categories::*;
 pub use city::*;

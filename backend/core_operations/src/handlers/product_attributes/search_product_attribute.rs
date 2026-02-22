@@ -3,7 +3,7 @@ use core_db_entities::entity::product_attributes;
 use proto::proto::core::{
     ProductAttributeResponse, ProductAttributesResponse, SearchProductAttributeRequest,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn search_product_attribute(

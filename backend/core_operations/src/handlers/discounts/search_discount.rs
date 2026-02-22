@@ -2,7 +2,7 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::discounts;
 use proto::proto::core::{DiscountResponse, DiscountsResponse, SearchDiscountRequest};
 use rust_decimal::prelude::ToPrimitive;
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 fn date_to_string(d: Option<sea_orm::entity::prelude::Date>) -> String {
