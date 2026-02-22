@@ -1,4 +1,4 @@
-use crate::query_handler::Context;
+use crate::query_handler::{AuthSource, Context};
 use crate::security::jwt_validator::validate_token;
 use dotenv::dotenv;
 use juniper::{EmptySubscription, RootNode};
@@ -43,49 +43,96 @@ async fn main() {
         .with_thread_ids(true)
         .with_target(false)
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+        .json()
         .init();
 
     let jwks = security::jwks_loader::load_jwks()
         .await
         .expect("Failed to load JWKS");
 
-    let context = Context { jwks: jwks.clone() };
+    let redis_url = std::env::var("REDIS_URL").ok();
 
     let cors = warp::cors()
         .allow_any_origin()
         .allow_credentials(true)
-        .allow_headers(vec!["content-type"])
+        .allow_headers(vec!["content-type", "authorization", "x-session-id"])
         .allow_methods(vec!["GET", "POST", "OPTIONS"]);
-
-    let state = warp::any().map(move || context.clone());
 
     let load_balancer_health_check = warp::get().and(warp::path::end()).map(|| {
         Response::builder()
             .header("content-type", "text/plain")
             .body("OK")
     });
-    let context_extractor = warp::header::<String>("authorization")
-        .and(state.clone())
-        .and_then(|token: String, ctx: Context| async move {
-            match validate_token(&token, ctx.jwks()) {
-                Ok(claims) => {
-                    debug!("Validated token with claims: {:#?}", claims);
-                    Ok(claims)
+
+    // Per-request context filter.
+    //
+    // Builds a `Context` that includes the authenticated identity for every request:
+    //   - JWT Bearer  → `AuthSource::Jwt(sub)`       — full login
+    //   - X-Session-Id → `AuthSource::Session(uid)`  — guest session
+    //   - Neither valid → 401 Unauthorized
+    //
+    // Resolvers inspect `context.jwt_user_id()` to gate operations that require a
+    // full login (e.g. checkout / place_order).
+    let jwks_c = jwks.clone();
+    let redis_url_c = redis_url.clone();
+    let context_filter = warp::header::optional::<String>("authorization")
+        .and(warp::header::optional::<String>("x-session-id"))
+        .and(warp::any().map(move || (jwks_c.clone(), redis_url_c.clone())))
+        .and_then(
+            |token: Option<String>,
+             session_id: Option<String>,
+             (jwks, redis_url): (_, Option<String>)| async move {
+                let mut auth: Option<AuthSource> = None;
+
+                // --- JWT path ---
+                if let Some(ref t) = token {
+                    match validate_token(t, &jwks) {
+                        Ok(claims) => {
+                            debug!(auth_method = "jwt", sub = %claims.sub, "Request authenticated");
+                            auth = Some(AuthSource::Jwt(claims.sub));
+                        }
+                        Err(e) => {
+                            warn!(auth_method = "jwt", error = %e, "JWT validation failed");
+                        }
+                    }
                 }
-                Err(e) => {
-                    warn!("Token failed validation: {e:#?}");
-                    Err(warp::reject::custom(Unauthorized {}))
+
+                // --- Session fallback (guest) ---
+                if auth.is_none() {
+                    if let Some(ref sid) = session_id {
+                        if let Some(ref rurl) = redis_url {
+                            match security::session_validator::validate_session(sid, rurl).await {
+                                Ok(user_id) => {
+                                    debug!(auth_method = "session", "Request authenticated via session");
+                                    auth = Some(AuthSource::Session(user_id));
+                                }
+                                Err(e) => {
+                                    warn!(auth_method = "session", reason = %e, "Session validation failed");
+                                }
+                            }
+                        } else {
+                            warn!("X-Session-Id received but REDIS_URL is not configured");
+                        }
+                    }
                 }
-            }
-        });
+
+                // --- No valid credentials ---
+                if auth.is_none() {
+                    warn!(
+                        has_jwt = token.is_some(),
+                        has_session = session_id.is_some(),
+                        "Request rejected: no valid authentication credentials"
+                    );
+                    return Err(warp::reject::custom(Unauthorized {}));
+                }
+
+                Ok::<Context, Rejection>(Context { jwks, redis_url, auth })
+            },
+        );
 
     let graphql_copy = warp::post()
         .and(warp::path("v2"))
-        .and(
-            context_extractor
-                .and(juniper_warp::make_graphql_filter(schema(), state.boxed()))
-                .map(|_claims, response| response),
-        )
+        .and(juniper_warp::make_graphql_filter(schema(), context_filter.boxed()))
         .recover(handle_auth_rejection)
         .with(cors.clone())
         .with(warp::trace::request());
@@ -97,16 +144,24 @@ async fn main() {
         .and(warp::path::param::<String>()) // provider: e.g. "razorpay"
         .and(warp::header::optional::<String>("x-razorpay-signature"))
         .and(warp::body::bytes())
-        .and_then(|provider: String, sig: Option<String>, body: warp::hyper::body::Bytes| async move {
-            webhooks::handle_webhook(provider, sig, body)
-                .await
-                .map_err(|e| {
-                    warn!("Webhook handler error: {:?}", e);
-                    warp::reject::reject()
-                })
-        });
+        .and_then(
+            |provider: String, sig: Option<String>, body: warp::hyper::body::Bytes| async move {
+                webhooks::handle_webhook(provider, sig, body)
+                    .await
+                    .map_err(|e| {
+                        warn!("Webhook handler error: {:?}", e);
+                        warp::reject::reject()
+                    })
+            },
+        );
 
-    info!("Listening on 0.0.0.0:8080");
+    // Bind address is configurable via GRAPHQL_LISTEN_ADDR (default: 0.0.0.0:8080)
+    let listen_addr: std::net::SocketAddr = std::env::var("GRAPHQL_LISTEN_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
+        .parse()
+        .expect("GRAPHQL_LISTEN_ADDR must be a valid socket address");
+
+    info!(listen_addr = %listen_addr, "GraphQL service starting");
 
     warp::serve(
         load_balancer_health_check
@@ -114,7 +169,7 @@ async fn main() {
             .or(webhook_route)
             .or(options_routes),
     )
-    .run(([0, 0, 0, 0], 8080))
+    .run(listen_addr)
     .await
 }
 

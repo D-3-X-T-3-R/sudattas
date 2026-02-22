@@ -21,12 +21,13 @@ tokio = { version = "1", features = ["full"] }
 juniper_warp = "0.7"
 warp = "0.3"
 tracing = { version = "0.1", features = ["log"] }
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "json"] }
 proto = {path = "../protos/"}
 hmac = "0.12.1"
 sha2 = "0.10.9"
 hex = "0.4.3"
 bytes = "1.11.1"
+redis = { version = "1.0.4", features = ["tokio-comp"] }
 
 [build-dependencies]
 tonic-build = "0.10.2"

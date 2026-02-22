@@ -148,8 +148,20 @@ impl MutationRoot {
 
     // Order
     #[instrument(err, ret)]
-    async fn place_order(order: NewOrder) -> FieldResult<Vec<Order>> {
-        orders::handlers::place_order(order)
+    async fn place_order(context: &Context, order: NewOrder) -> FieldResult<Vec<Order>> {
+        // Checkout requires a full login (JWT). Guest sessions (X-Session-Id only) are not
+        // allowed to place orders — the client must authenticate first.
+        let user_id = context
+            .jwt_user_id()
+            .ok_or_else(|| {
+                juniper::FieldError::new(
+                    "Login required to place an order",
+                    juniper::Value::null(),
+                )
+            })?
+            .to_string();
+
+        orders::handlers::place_order(order, user_id)
             .await
             .map_err(|e| e.into())
     }

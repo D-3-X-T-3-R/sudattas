@@ -56,7 +56,8 @@ impl Order {
 #[derive(GraphQLInputObject, Default, Debug)]
 #[graphql(description = "New Order Data")]
 pub struct NewOrder {
-    pub user_id: String,
+    /// `user_id` is intentionally absent — it is taken from the authenticated JWT claim.
+    /// Clients cannot impersonate another user at checkout.
     pub shipping_address_id: String,
     /// Optional coupon code to apply a discount at checkout
     pub coupon_code: Option<String>,
