@@ -16,6 +16,10 @@ use crate::resolvers::{
         self,
         schema::{ApplyCoupon, Coupon},
     },
+    reviews::{
+        self,
+        schema::{NewReview, Review, ReviewMutation},
+    },
     category::{
         self,
         schema::{Category, CategoryMutation, NewCategory},
@@ -257,6 +261,28 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn apply_coupon(input: ApplyCoupon) -> FieldResult<Vec<Coupon>> {
         coupons::handlers::apply_coupon(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Reviews
+    #[instrument(err, ret)]
+    async fn create_review(input: NewReview) -> FieldResult<Vec<Review>> {
+        reviews::handlers::create_review(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_review(input: ReviewMutation) -> FieldResult<Vec<Review>> {
+        reviews::handlers::update_review(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_review(review_id: String) -> FieldResult<Vec<Review>> {
+        reviews::handlers::delete_review(review_id)
             .await
             .map_err(|e| e.into())
     }
