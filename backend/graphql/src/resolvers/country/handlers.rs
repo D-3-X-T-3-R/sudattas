@@ -5,8 +5,8 @@ use tracing::instrument;
 use super::schema::{Country, NewCountry, SearchCountry};
 use crate::resolvers::{
     convert,
-    error::{Code, GqlError},
-    utils::{connect_grpc_client, to_option_i64},
+    error::GqlError,
+    utils::{connect_grpc_client, parse_i64, to_option_i64},
 };
 
 #[instrument]
@@ -50,9 +50,7 @@ pub(crate) async fn search_country(search: SearchCountry) -> Result<Vec<Country>
 pub(crate) async fn delete_country(country_id: String) -> Result<Vec<Country>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
-    let country_id = country_id
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse country id", Code::InvalidArgument))?;
+    let country_id = parse_i64(&country_id, "country id")?;
 
     let response = client
         .delete_country(DeleteCountryRequest { country_id })

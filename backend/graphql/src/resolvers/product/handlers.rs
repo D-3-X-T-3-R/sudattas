@@ -7,8 +7,8 @@ use tracing::instrument;
 use super::schema::{NewProduct, Product, ProductMutation, SearchProduct};
 use crate::resolvers::{
     convert,
-    error::{Code, GqlError},
-    utils::{connect_grpc_client, to_f64, to_i64, to_option_f64, to_option_i64},
+    error::GqlError,
+    utils::{connect_grpc_client, parse_f64, parse_i64, to_f64, to_i64, to_option_f64, to_option_i64},
 };
 
 #[instrument]
@@ -16,19 +16,10 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
     let mut client = connect_grpc_client().await?;
 
     let name = product.name;
-    let stock_quantity = product
-        .stock_quantity
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse stock quantity", Code::InvalidArgument))?;
-    let price = product
-        .price
-        .parse::<f64>()
-        .map_err(|_| GqlError::new("Failed to parse price", Code::InvalidArgument))?;
+    let stock_quantity = parse_i64(&product.stock_quantity, "stock quantity")?;
+    let price = parse_f64(&product.price, "price")?;
     let description = product.description;
-    let category_id = product
-        .category_id
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse category id", Code::InvalidArgument))?;
+    let category_id = parse_i64(&product.category_id, "category id")?;
 
     let response = client
         .create_product(CreateProductRequest {
@@ -76,9 +67,7 @@ pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>
 pub(crate) async fn delete_product(product_id: String) -> Result<Vec<Product>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
-    let product_id = product_id
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse product id", Code::InvalidArgument))?;
+    let product_id = parse_i64(&product_id, "product id")?;
 
     let response = client
         .delete_product(DeleteProductRequest { product_id })

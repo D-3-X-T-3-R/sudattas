@@ -8,25 +8,12 @@ use super::schema::{Cart, CartMutation, DeleteCartItem, NewCart};
 use crate::resolvers::{
     convert,
     error::{Code, GqlError},
-    utils::{connect_grpc_client, to_i64, to_option_i64},
+    utils::{connect_grpc_client, parse_i64, to_i64, to_option_i64},
 };
 
 #[instrument]
 pub(crate) async fn add_cart_item(cart_item: NewCart) -> Result<Vec<Cart>, GqlError> {
     let mut client = connect_grpc_client().await?;
-
-    // let product_id = cart_item
-    //     .product_id
-    //     .parse::<i64>()
-    //     .map_err(|_| GqlError::new("Failed to parse product id", Code::InvalidArgument))?;
-    // let quantity = cart_item
-    //     .quantity
-    //     .parse::<i64>()
-    //     .map_err(|_| GqlError::new("Failed to parse quantity", Code::InvalidArgument))?;
-    // let user_id = cart_item
-    //     .user_id
-    //     .parse::<i64>()
-    //     .map_err(|_| GqlError::new("Failed to parse user id", Code::InvalidArgument))?;
 
     let user_id = to_option_i64(Some(cart_item.user_id.clone()));
     let session_id = cart_item.session_id.clone();
@@ -111,18 +98,9 @@ pub(crate) async fn delete_cart_item(delete: DeleteCartItem) -> Result<Vec<Cart>
 pub(crate) async fn update_cart_item(cart_item: CartMutation) -> Result<Vec<Cart>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
-    let cart_id = cart_item
-        .cart_id
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse cart id", Code::InvalidArgument))?;
-    let product_id = cart_item
-        .product_id
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse product id", Code::InvalidArgument))?;
-    let quantity = cart_item
-        .quantity
-        .parse::<i64>()
-        .map_err(|_| GqlError::new("Failed to parse quantity", Code::InvalidArgument))?;
+    let cart_id = parse_i64(&cart_item.cart_id, "cart id")?;
+    let product_id = parse_i64(&cart_item.product_id, "product id")?;
+    let quantity = parse_i64(&cart_item.quantity, "quantity")?;
     let user_id = to_option_i64(Some(cart_item.user_id.clone()));
     let session_id = cart_item.session_id.clone();
     if user_id.is_none() && session_id.is_none() {
