@@ -16,6 +16,10 @@ use crate::resolvers::{
         self,
         schema::{ApplyCoupon, Coupon},
     },
+    discounts::{
+        self,
+        schema::{Discount, DiscountMutation, NewDiscount},
+    },
     inventory::{
         self,
         schema::{InventoryItem, InventoryItemMutation, NewInventoryItem},
@@ -23,6 +27,18 @@ use crate::resolvers::{
     reviews::{
         self,
         schema::{NewReview, Review, ReviewMutation},
+    },
+    shipping_addresses::{
+        self,
+        schema::{NewShippingAddress, ShippingAddress, ShippingAddressMutation},
+    },
+    shipping_methods::{
+        self,
+        schema::{NewShippingMethod, ShippingMethod, ShippingMethodMutation},
+    },
+    shipping_zones::{
+        self,
+        schema::{NewShippingZone, ShippingZone, ShippingZoneMutation},
     },
     category::{
         self,
@@ -311,6 +327,102 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_inventory_item(inventory_id: String) -> FieldResult<Vec<InventoryItem>> {
         inventory::handlers::delete_inventory_item(inventory_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Discounts
+    #[instrument(err, ret)]
+    async fn create_discount(input: NewDiscount) -> FieldResult<Vec<Discount>> {
+        discounts::handlers::create_discount(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_discount(input: DiscountMutation) -> FieldResult<Vec<Discount>> {
+        discounts::handlers::update_discount(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_discount(discount_id: String) -> FieldResult<Vec<Discount>> {
+        discounts::handlers::delete_discount(discount_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Shipping methods
+    #[instrument(err, ret)]
+    async fn create_shipping_method(input: NewShippingMethod) -> FieldResult<Vec<ShippingMethod>> {
+        shipping_methods::handlers::create_shipping_method(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_shipping_method(
+        input: ShippingMethodMutation,
+    ) -> FieldResult<Vec<ShippingMethod>> {
+        shipping_methods::handlers::update_shipping_method(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_shipping_method(method_id: String) -> FieldResult<Vec<ShippingMethod>> {
+        shipping_methods::handlers::delete_shipping_method(method_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Shipping zones
+    #[instrument(err, ret)]
+    async fn create_shipping_zone(input: NewShippingZone) -> FieldResult<Vec<ShippingZone>> {
+        shipping_zones::handlers::create_shipping_zone(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_shipping_zone(input: ShippingZoneMutation) -> FieldResult<Vec<ShippingZone>> {
+        shipping_zones::handlers::update_shipping_zone(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_shipping_zone(zone_id: String) -> FieldResult<Vec<ShippingZone>> {
+        shipping_zones::handlers::delete_shipping_zone(zone_id)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Shipping addresses
+    #[instrument(err, ret)]
+    async fn create_shipping_address(
+        input: NewShippingAddress,
+    ) -> FieldResult<Vec<ShippingAddress>> {
+        shipping_addresses::handlers::create_shipping_address(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_shipping_address(
+        input: ShippingAddressMutation,
+    ) -> FieldResult<Vec<ShippingAddress>> {
+        shipping_addresses::handlers::update_shipping_address(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_shipping_address(
+        shipping_address_id: String,
+    ) -> FieldResult<Vec<ShippingAddress>> {
+        shipping_addresses::handlers::delete_shipping_address(shipping_address_id)
             .await
             .map_err(|e| e.into())
     }
