@@ -1,5 +1,6 @@
 use core_db_entities::{get_db, CoreDatabaseConnection};
 use handlers::db_errors::map_db_error_to_status;
+use std::time::Duration;
 
 // Phase 1 additions
 pub mod auth;
@@ -74,6 +75,7 @@ mod procedures;
 #[derive(Default, Debug)]
 pub struct MyGRPCServices {
     db: Option<CoreDatabaseConnection>,
+    session_manager: Option<auth::session::SessionManager>,
 }
 
 pub fn check_auth(req: Request<()>) -> Result<Request<()>, Status> {
@@ -86,6 +88,13 @@ impl MyGRPCServices {
     pub async fn init(&mut self) {
         let db = get_db().await.unwrap();
         self.db = Some(db);
+
+        if let Ok(redis_url) = std::env::var("REDIS_URL") {
+            match auth::session::SessionManager::new(&redis_url, Duration::from_secs(86400)) {
+                Ok(sm) => self.session_manager = Some(sm),
+                Err(e) => log::warn!("Redis session manager not available: {}", e),
+            }
+        }
     }
 }
 
@@ -705,8 +714,29 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::users::create_user(&txn, request).await?;
+        let mut res = handlers::users::create_user(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
+
+        if let Some(sm) = &self.session_manager {
+            if let Some(u) = res.get_ref().items.first() {
+                let data = auth::session::SessionData {
+                    user_id: Some(u.user_id),
+                    email: Some(u.email.clone()),
+                    ..Default::default()
+                };
+                match sm.create_session(data).await {
+                    Ok(session_id) => {
+                        if let Some(first) = res.get_mut().items.first_mut() {
+                            first.session_id = Some(session_id);
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to create session for new user {}: {}", u.user_id, e);
+                    }
+                }
+            }
+        }
+
         Ok(res)
     }
 

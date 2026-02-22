@@ -3,19 +3,25 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateCartItemRequest {
-    #[prost(int64, tag = "1")]
-    pub user_id: i64,
+    #[prost(int64, optional, tag = "1")]
+    pub user_id: ::core::option::Option<i64>,
     #[prost(int64, tag = "2")]
     pub product_id: i64,
     #[prost(int64, tag = "3")]
     pub quantity: i64,
+    /// Guest cart when user_id not set
+    #[prost(string, optional, tag = "4")]
+    pub session_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCartItemsRequest {
-    #[prost(int64, tag = "1")]
-    pub user_id: i64,
+    #[prost(int64, optional, tag = "1")]
+    pub user_id: ::core::option::Option<i64>,
+    /// Guest cart; use when user_id not set
+    #[prost(string, optional, tag = "2")]
+    pub session_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -23,21 +29,25 @@ pub struct GetCartItemsRequest {
 pub struct UpdateCartItemRequest {
     #[prost(int64, tag = "1")]
     pub cart_id: i64,
-    #[prost(int64, tag = "2")]
-    pub user_id: i64,
+    #[prost(int64, optional, tag = "2")]
+    pub user_id: ::core::option::Option<i64>,
     #[prost(int64, tag = "3")]
     pub product_id: i64,
     #[prost(int64, tag = "4")]
     pub quantity: i64,
+    #[prost(string, optional, tag = "5")]
+    pub session_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeleteCartItemRequest {
-    #[prost(int64, tag = "1")]
-    pub user_id: i64,
+    #[prost(int64, optional, tag = "1")]
+    pub user_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "2")]
     pub cart_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "3")]
+    pub session_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -512,6 +522,9 @@ pub struct UserResponse {
     pub phone: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, tag = "7")]
     pub create_date: ::prost::alloc::string::String,
+    /// Set on create_user when Redis session is created
+    #[prost(string, optional, tag = "8")]
+    pub session_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

@@ -16,8 +16,7 @@ pub(crate) async fn create_state(state: NewState) -> Result<Vec<State>, GqlError
         .create_state(CreateStateRequest {
             state_name: state.state_name,
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -39,8 +38,7 @@ pub(crate) async fn search_state(search: SearchState) -> Result<Vec<State>, GqlE
             state_name: search.state_name,
             state_id: to_option_i64(search.state_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -63,8 +61,7 @@ pub(crate) async fn delete_state(state_id: String) -> Result<Vec<State>, GqlErro
 
     let response = client
         .delete_state(DeleteStateRequest { state_id })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()

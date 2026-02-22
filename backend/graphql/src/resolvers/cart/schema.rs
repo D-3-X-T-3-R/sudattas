@@ -50,6 +50,8 @@ pub struct NewCart {
     pub user_id: String,
     pub product_id: String,
     pub quantity: String,
+    /// Guest cart: pass session_id from create_user when not logged in
+    pub session_id: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
@@ -58,6 +60,7 @@ pub struct CartMutation {
     pub user_id: String,
     pub product_id: String,
     pub quantity: String,
+    pub session_id: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -65,4 +68,6 @@ pub struct CartMutation {
 pub struct DeleteCartItem {
     pub user_id: String,
     pub cart_id: Option<String>,
+    /// Guest cart: pass session_id when not logged in
+    pub session_id: Option<String>,
 }

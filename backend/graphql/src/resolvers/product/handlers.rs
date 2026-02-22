@@ -6,6 +6,7 @@ use tracing::instrument;
 
 use super::schema::{NewProduct, Product, ProductMutation, SearchProduct};
 use crate::resolvers::{
+    convert,
     error::{Code, GqlError},
     utils::{connect_grpc_client, to_f64, to_i64, to_option_f64, to_option_i64},
 };
@@ -37,21 +38,13 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
             stock_quantity: Some(stock_quantity),
             category_id: Some(category_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
         .items
         .into_iter()
-        .map(|product| Product {
-            name: product.name,
-            description: product.description,
-            product_id: product.product_id.to_string(),
-            price: product.price.to_string(),
-            stock_quantity: product.stock_quantity.map(|val| val.to_string()),
-            category_id: product.category_id.map(|val| val.to_string()),
-        })
+        .map(convert::product_response_to_gql)
         .collect())
 }
 
@@ -69,21 +62,13 @@ pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>
             category_id: to_option_i64(search.category_id),
             product_id: to_option_i64(search.product_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
         .items
         .into_iter()
-        .map(|product| Product {
-            name: product.name,
-            description: product.description,
-            product_id: product.product_id.to_string(),
-            price: product.price.to_string(),
-            stock_quantity: product.stock_quantity.map(|val| val.to_string()),
-            category_id: product.category_id.map(|val| val.to_string()),
-        })
+        .map(convert::product_response_to_gql)
         .collect())
 }
 
@@ -97,21 +82,13 @@ pub(crate) async fn delete_product(product_id: String) -> Result<Vec<Product>, G
 
     let response = client
         .delete_product(DeleteProductRequest { product_id })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
         .items
         .into_iter()
-        .map(|product| Product {
-            name: product.name,
-            description: product.description,
-            product_id: product.product_id.to_string(),
-            price: product.price.to_string(),
-            stock_quantity: product.stock_quantity.map(|val| val.to_string()),
-            category_id: product.category_id.map(|val| val.to_string()),
-        })
+        .map(convert::product_response_to_gql)
         .collect())
 }
 
@@ -128,20 +105,12 @@ pub(crate) async fn update_product(product: ProductMutation) -> Result<Vec<Produ
             category_id: to_option_i64(product.category_id),
             product_id: to_i64(product.product_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
         .items
         .into_iter()
-        .map(|product| Product {
-            name: product.name,
-            description: product.description,
-            product_id: product.product_id.to_string(),
-            price: product.price.to_string(),
-            stock_quantity: product.stock_quantity.map(|val| val.to_string()),
-            category_id: product.category_id.map(|val| val.to_string()),
-        })
+        .map(convert::product_response_to_gql)
         .collect())
 }

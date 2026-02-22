@@ -6,7 +6,7 @@ use tracing::instrument;
 
 use super::schema::{DeleteWishlistItem, NewWishlistItem, SearchWishlistItem, WishlistItem};
 use crate::resolvers::{
-    error::{Code, GqlError},
+    error::GqlError,
     utils::{connect_grpc_client, to_i64, to_option_i64},
 };
 
@@ -21,8 +21,7 @@ pub(crate) async fn add_wishlist_item(
             user_id: to_i64(wishlist.user_id),
             product_id: to_i64(wishlist.product_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -49,8 +48,7 @@ pub(crate) async fn search_wishlist_item(
             user_id: to_i64(search.user_id),
             product_id: to_option_i64(search.product_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -76,8 +74,7 @@ pub(crate) async fn delete_wishlist_item(
             wishlist_id: to_i64(delete.wishlist_id),
             user_id: to_i64(delete.user_id),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()

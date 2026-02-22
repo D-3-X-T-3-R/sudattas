@@ -1,6 +1,21 @@
+use crate::auth::AuthError;
 use log::error;
 use sea_orm::DbErr;
 use tonic::Status;
+
+/// Maps auth errors to gRPC Status for use in handlers.
+pub fn map_auth_error_to_status(auth_error: AuthError) -> Status {
+    use AuthError::*;
+    match auth_error {
+        HashingError(msg) => Status::internal(msg),
+        VerificationFailed => Status::unauthenticated("Invalid password"),
+        InvalidHashFormat => Status::internal("Invalid password hash format"),
+        UserNotFound => Status::not_found("User not found"),
+        InvalidCredentials => Status::unauthenticated("Invalid credentials"),
+        AccountInactive => Status::failed_precondition("Account is inactive or suspended"),
+        AccountLocked => Status::failed_precondition("Too many failed login attempts"),
+    }
+}
 
 pub fn map_db_error_to_status(db_error: DbErr) -> Status {
     error!("Database error occurred: {:?}", db_error);

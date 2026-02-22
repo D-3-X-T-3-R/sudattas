@@ -48,6 +48,7 @@ impl Default for SessionData {
 }
 
 /// Session manager
+#[derive(Debug)]
 pub struct SessionManager {
     redis: RedisClient,
     ttl: Duration,
@@ -76,7 +77,7 @@ impl SessionManager {
         let serialized = serde_json::to_string(&data)
             .map_err(|e| SessionError::SerializationError(e.to_string()))?;
         
-        conn.set_ex(&key, serialized, self.ttl.as_secs() as u64).await?;
+        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs() as u64).await?;
         
         Ok(session_id)
     }
@@ -112,7 +113,7 @@ impl SessionManager {
         let serialized = serde_json::to_string(&data)
             .map_err(|e| SessionError::SerializationError(e.to_string()))?;
         
-        conn.set_ex(&key, serialized, self.ttl.as_secs() as u64).await?;
+        conn.set_ex::<_, _, ()>(&key, serialized, self.ttl.as_secs() as u64).await?;
         
         Ok(())
     }
@@ -121,7 +122,7 @@ impl SessionManager {
     pub async fn delete_session(&self, session_id: &str) -> Result<(), SessionError> {
         let key = format!("session:{}", session_id);
         let mut conn = self.redis.get_multiplexed_async_connection().await?;
-        conn.del(&key).await?;
+        conn.del::<_, ()>(&key).await?;
         Ok(())
     }
     

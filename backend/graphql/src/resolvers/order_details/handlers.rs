@@ -7,7 +7,7 @@ use tracing::instrument;
 
 use super::schema::{NewOrderDetails, OrderDetails, OrderDetailsMutation, SearchOrderDetails};
 use crate::resolvers::{
-    error::{Code, GqlError},
+    error::GqlError,
     utils::{connect_grpc_client, to_f64, to_i64, to_option_f64, to_option_i64},
 };
 
@@ -29,8 +29,7 @@ pub(crate) async fn create_order_detail(
         .collect();
     let response = client
         .create_order_details(CreateOrderDetailsRequest { order_details })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -61,8 +60,7 @@ pub(crate) async fn search_order_detail(
             price_start: to_option_f64(search.price_start),
             price_end: to_option_f64(search.price_end),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()
@@ -92,8 +90,7 @@ pub(crate) async fn update_order_detail(
             quantity: to_i64(order_detail.quantity),
             price: to_f64(order_detail.price),
         })
-        .await
-        .map_err(|e| GqlError::new(&format!("gRPC request failed: {}", e), Code::Internal))?;
+        .await?;
 
     Ok(response
         .into_inner()

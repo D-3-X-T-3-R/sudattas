@@ -1,6 +1,8 @@
 // Authentication service using Argon2id
 // Integrates with existing JWT system in GraphQL service
 
+pub mod session;
+
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,

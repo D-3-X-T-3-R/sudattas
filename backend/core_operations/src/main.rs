@@ -3,6 +3,7 @@ use dotenv::dotenv;
 use tonic::transport::Server;
 
 pub mod handlers;
+pub use core_operations::auth;
 
 use proto::proto::core::grpc_services_server::GrpcServicesServer;
 
