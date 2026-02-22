@@ -11,13 +11,13 @@ use crate::resolvers::{
     utils::{connect_grpc_client, to_f64, to_i64, to_option_i64},
 };
 
-#[instrument]
-pub(crate) async fn place_order(order: NewOrder) -> Result<Vec<Order>, GqlError> {
+#[instrument(skip(user_id))]
+pub(crate) async fn place_order(order: NewOrder, user_id: String) -> Result<Vec<Order>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
     let response = client
         .place_order(PlaceOrderRequest {
-            user_id: to_i64(order.user_id),
+            user_id: to_i64(Some(user_id)),
             shipping_address_id: to_i64(order.shipping_address_id),
             coupon_code: order.coupon_code,
         })

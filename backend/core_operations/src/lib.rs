@@ -86,10 +86,34 @@ pub struct MyGRPCServices {
     session_manager: Option<auth::session::SessionManager>,
 }
 
+/// gRPC interceptor that enforces bearer-token auth when `GRPC_AUTH_TOKEN` is set.
+///
+/// - If `GRPC_AUTH_TOKEN` env var is absent or empty → pass-through (dev/local mode).
+/// - All calls must supply `authorization: Bearer <GRPC_AUTH_TOKEN>`.
+/// - Auth failures are logged for audit purposes.
 pub fn check_auth(req: Request<()>) -> Result<Request<()>, Status> {
-    req.metadata().get("authorization");
+    let expected_token = match std::env::var("GRPC_AUTH_TOKEN") {
+        Ok(t) if !t.is_empty() => t,
+        _ => return Ok(req), // Token not configured — dev/local mode, allow all
+    };
 
-    Ok(req)
+    let provided = req
+        .metadata()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+
+    match provided {
+        Some(tok) if tok == expected_token => Ok(req),
+        Some(_) => {
+            tracing::warn!("gRPC auth rejected: invalid token");
+            Err(Status::unauthenticated("Invalid authorization token"))
+        }
+        None => {
+            tracing::warn!("gRPC auth rejected: missing authorization header");
+            Err(Status::unauthenticated("Missing authorization header"))
+        }
+    }
 }
 
 impl MyGRPCServices {

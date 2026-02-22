@@ -1,0 +1,16 @@
+# Normalize line endings to LF in the repository (eol=lf) and on checkout (eol=lf).
+# This prevents the "LF will be replaced by CRLF" warning on Windows with autocrlf=true.
+
+* text=auto eol=lf
+
+# Binaries — never touch line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
