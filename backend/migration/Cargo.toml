@@ -1,0 +1,17 @@
+[package]
+name = "migration"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "migrate"
+path = "src/main.rs"
+
+[lib]
+name = "migration"
+path = "src/lib.rs"
+
+[dependencies]
+sea-orm-migration = { version = "0.12", features = ["sqlx-mysql", "runtime-tokio-rustls"] }
+tokio = { version = "1", features = ["full"] }
+dotenv = "0.15"

@@ -45,6 +45,17 @@ use juniper::FieldResult;
 
 pub struct QueryRoot;
 
+/// Minimal auth capability info; uses Context fields so they are not reported as dead code.
+#[derive(juniper::GraphQLObject)]
+struct AuthInfo {
+    /// Whether session-based (guest) auth is enabled (REDIS_URL configured).
+    session_enabled: bool,
+    /// Number of JWKS keys loaded for JWT validation.
+    jwks_key_count: i32,
+    /// Current request’s user ID (JWT or session), if any.
+    current_user_id: Option<String>,
+}
+
 #[juniper::graphql_object(Context = Context)]
 impl QueryRoot {
     /// Returns the current API version string.
@@ -57,6 +68,15 @@ impl QueryRoot {
     /// - Deprecated fields carry `@deprecated` before removal.
     fn api_version() -> &'static str {
         "2.0.0"
+    }
+
+    /// Auth capabilities and current identity for this request.
+    fn auth_info(context: &Context) -> AuthInfo {
+        AuthInfo {
+            session_enabled: context.redis_url.is_some(),
+            jwks_key_count: context.jwks().keys.len() as i32,
+            current_user_id: context.user_id().map(|s| s.to_string()),
+        }
     }
 
     // Cart

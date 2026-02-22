@@ -1,0 +1,174 @@
+use sea_orm_migration::prelude::*;
+
+/// Migration: create the six tables added during active development.
+///
+/// - sessions          — guest & user Redis-backed session records
+/// - coupons           — discount codes for checkout
+/// - payment_intents   — Razorpay payment intent lifecycle
+/// - shipments         — per-order fulfillment tracking
+/// - order_events      — immutable audit log for order lifecycle changes
+/// - webhook_events    — idempotent inbound webhook records
+pub struct Migration;
+
+impl MigrationName for Migration {
+    fn name(&self) -> &str {
+        "m20250101_000001_new_tables"
+    }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // sessions
+        manager
+            .create_table(
+                Table::create()
+                    .table(Sessions::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(Sessions::SessionId).string().not_null().primary_key())
+                    .col(ColumnDef::new(Sessions::UserId).big_integer().null())
+                    .col(ColumnDef::new(Sessions::Data).json().not_null())
+                    .col(ColumnDef::new(Sessions::IpAddress).string().null())
+                    .col(ColumnDef::new(Sessions::LastActivity).timestamp_with_time_zone().null())
+                    .col(ColumnDef::new(Sessions::ExpiresAt).timestamp_with_time_zone().not_null())
+                    .col(ColumnDef::new(Sessions::CreatedAt).timestamp_with_time_zone().null())
+                    .to_owned(),
+            )
+            .await?;
+
+        // coupons
+        manager
+            .create_table(
+                Table::create()
+                    .table(Coupons::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(Coupons::CouponId).big_integer().not_null().auto_increment().primary_key())
+                    .col(ColumnDef::new(Coupons::Code).string().not_null().unique_key())
+                    .col(ColumnDef::new(Coupons::DiscountType).enumeration(
+                        Alias::new("discount_type"),
+                        [Alias::new("percentage"), Alias::new("fixed_amount")],
+                    ).not_null())
+                    .col(ColumnDef::new(Coupons::DiscountValue).integer().not_null())
+                    .col(ColumnDef::new(Coupons::MinOrderValuePaise).integer().null())
+                    .col(ColumnDef::new(Coupons::UsageLimit).integer().null())
+                    .col(ColumnDef::new(Coupons::UsageCount).integer().null())
+                    .col(ColumnDef::new(Coupons::Status).enumeration(
+                        Alias::new("status"),
+                        [Alias::new("pending"), Alias::new("processed"), Alias::new("failed")],
+                    ).null())
+                    .col(ColumnDef::new(Coupons::StartsAt).timestamp_with_time_zone().not_null())
+                    .col(ColumnDef::new(Coupons::EndsAt).timestamp_with_time_zone().null())
+                    .col(ColumnDef::new(Coupons::CreatedAt).timestamp_with_time_zone().null())
+                    .to_owned(),
+            )
+            .await?;
+
+        // payment_intents
+        manager
+            .create_table(
+                Table::create()
+                    .table(PaymentIntents::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(PaymentIntents::IntentId).big_integer().not_null().auto_increment().primary_key())
+                    .col(ColumnDef::new(PaymentIntents::RazorpayOrderId).string().not_null().unique_key())
+                    .col(ColumnDef::new(PaymentIntents::OrderId).big_integer().null())
+                    .col(ColumnDef::new(PaymentIntents::UserId).big_integer().null())
+                    .col(ColumnDef::new(PaymentIntents::AmountPaise).integer().not_null())
+                    .col(ColumnDef::new(PaymentIntents::Currency).string().null())
+                    .col(ColumnDef::new(PaymentIntents::Status).enumeration(
+                        Alias::new("status"),
+                        [Alias::new("pending"), Alias::new("processed"), Alias::new("failed")],
+                    ).null())
+                    .col(ColumnDef::new(PaymentIntents::RazorpayPaymentId).string().null())
+                    .col(ColumnDef::new(PaymentIntents::Metadata).json().null())
+                    .col(ColumnDef::new(PaymentIntents::CreatedAt).timestamp_with_time_zone().null())
+                    .col(ColumnDef::new(PaymentIntents::ExpiresAt).timestamp_with_time_zone().not_null())
+                    .to_owned(),
+            )
+            .await?;
+
+        // shipments
+        manager
+            .create_table(
+                Table::create()
+                    .table(Shipments::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(Shipments::ShipmentId).big_integer().not_null().auto_increment().primary_key())
+                    .col(ColumnDef::new(Shipments::OrderId).big_integer().not_null())
+                    .col(ColumnDef::new(Shipments::ShiprocketOrderId).string().null())
+                    .col(ColumnDef::new(Shipments::AwbCode).string().null())
+                    .col(ColumnDef::new(Shipments::Carrier).string().null())
+                    .col(ColumnDef::new(Shipments::Status).enumeration(
+                        Alias::new("status"),
+                        [Alias::new("pending"), Alias::new("processed"), Alias::new("failed")],
+                    ).null())
+                    .col(ColumnDef::new(Shipments::TrackingEvents).json().null())
+                    .col(ColumnDef::new(Shipments::CreatedAt).timestamp_with_time_zone().null())
+                    .col(ColumnDef::new(Shipments::DeliveredAt).timestamp_with_time_zone().null())
+                    .to_owned(),
+            )
+            .await?;
+
+        // order_events
+        manager
+            .create_table(
+                Table::create()
+                    .table(OrderEvents::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(OrderEvents::EventId).big_integer().not_null().auto_increment().primary_key())
+                    .col(ColumnDef::new(OrderEvents::OrderId).big_integer().not_null())
+                    .col(ColumnDef::new(OrderEvents::EventType).string().not_null())
+                    .col(ColumnDef::new(OrderEvents::FromStatus).string().null())
+                    .col(ColumnDef::new(OrderEvents::ToStatus).string().null())
+                    .col(ColumnDef::new(OrderEvents::ActorType).enumeration(
+                        Alias::new("actor_type"),
+                        [Alias::new("customer"), Alias::new("admin"), Alias::new("system")],
+                    ).not_null())
+                    .col(ColumnDef::new(OrderEvents::Message).text().null())
+                    .col(ColumnDef::new(OrderEvents::CreatedAt).timestamp_with_time_zone().null())
+                    .to_owned(),
+            )
+            .await?;
+
+        // webhook_events
+        manager
+            .create_table(
+                Table::create()
+                    .table(WebhookEvents::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(WebhookEvents::EventId).big_integer().not_null().auto_increment().primary_key())
+                    .col(ColumnDef::new(WebhookEvents::Provider).string().not_null())
+                    .col(ColumnDef::new(WebhookEvents::EventType).string().not_null())
+                    .col(ColumnDef::new(WebhookEvents::WebhookId).string().not_null().unique_key())
+                    .col(ColumnDef::new(WebhookEvents::Payload).json().not_null())
+                    .col(ColumnDef::new(WebhookEvents::Status).enumeration(
+                        Alias::new("status"),
+                        [Alias::new("pending"), Alias::new("processed"), Alias::new("failed")],
+                    ).null())
+                    .col(ColumnDef::new(WebhookEvents::ReceivedAt).timestamp_with_time_zone().null())
+                    .to_owned(),
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager.drop_table(Table::drop().table(WebhookEvents::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(OrderEvents::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(Shipments::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(PaymentIntents::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(Coupons::Table).to_owned()).await?;
+        manager.drop_table(Table::drop().table(Sessions::Table).to_owned()).await?;
+        Ok(())
+    }
+}
+
+// ── Iden enums ────────────────────────────────────────────────────────────────
+
+#[derive(Iden)] enum Sessions { Table, SessionId, UserId, Data, IpAddress, LastActivity, ExpiresAt, CreatedAt }
+#[derive(Iden)] enum Coupons { Table, CouponId, Code, DiscountType, DiscountValue, MinOrderValuePaise, UsageLimit, UsageCount, Status, StartsAt, EndsAt, CreatedAt }
+#[derive(Iden)] enum PaymentIntents { Table, IntentId, RazorpayOrderId, OrderId, UserId, AmountPaise, Currency, Status, RazorpayPaymentId, Metadata, CreatedAt, ExpiresAt }
+#[derive(Iden)] enum Shipments { Table, ShipmentId, OrderId, ShiprocketOrderId, AwbCode, Carrier, Status, TrackingEvents, CreatedAt, DeliveredAt }
+#[derive(Iden)] enum OrderEvents { Table, EventId, OrderId, EventType, FromStatus, ToStatus, ActorType, Message, CreatedAt }
+#[derive(Iden)] enum WebhookEvents { Table, EventId, Provider, EventType, WebhookId, Payload, Status, ReceivedAt }
