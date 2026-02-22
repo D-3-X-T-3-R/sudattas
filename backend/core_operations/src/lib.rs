@@ -59,6 +59,7 @@ use proto::proto::core::{
     UpdateNewsletterSubscriberRequest, UpdateOrderDetailRequest, UpdateOrderRequest,
     CapturePaymentRequest, GetPaymentIntentRequest, CreatePaymentIntentRequest,
     PaymentIntentsResponse,
+    CreateShipmentRequest, UpdateShipmentRequest, GetShipmentRequest, ShipmentsResponse,
     UpdatePaymentMethodRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
     UpdateProductRatingRequest, UpdateProductRequest, UpdateProductVariantRequest,
     UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingAddressRequest,
@@ -2541,6 +2542,36 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::payment_intents::get_payment_intent(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn create_shipment(
+        &self,
+        request: Request<CreateShipmentRequest>,
+    ) -> Result<Response<ShipmentsResponse>, Status> {
+        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::shipments::create_shipment(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn update_shipment(
+        &self,
+        request: Request<UpdateShipmentRequest>,
+    ) -> Result<Response<ShipmentsResponse>, Status> {
+        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::shipments::update_shipment(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_shipment(
+        &self,
+        request: Request<GetShipmentRequest>,
+    ) -> Result<Response<ShipmentsResponse>, Status> {
+        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::shipments::get_shipment(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

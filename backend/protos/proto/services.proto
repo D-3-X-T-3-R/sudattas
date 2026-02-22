@@ -232,4 +232,9 @@ service GRPCServices {
     rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (PaymentIntentsResponse);
     rpc CapturePayment(CapturePaymentRequest) returns (PaymentIntentsResponse);
     rpc GetPaymentIntent(GetPaymentIntentRequest) returns (PaymentIntentsResponse);
+
+    // Shipments
+    rpc CreateShipment(CreateShipmentRequest) returns (ShipmentsResponse);
+    rpc UpdateShipment(UpdateShipmentRequest) returns (ShipmentsResponse);
+    rpc GetShipment(GetShipmentRequest) returns (ShipmentsResponse);
 }
