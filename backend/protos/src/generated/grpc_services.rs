@@ -950,6 +950,8 @@ pub struct CreateInventoryItemRequest {
 pub struct SearchInventoryItemRequest {
     #[prost(int64, tag = "1")]
     pub inventory_id: i64,
+    #[prost(int64, optional, tag = "2")]
+    pub product_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

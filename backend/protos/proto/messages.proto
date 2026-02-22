@@ -551,6 +551,7 @@ message CreateInventoryItemRequest {
 
 message SearchInventoryItemRequest {
     int64 inventory_id = 1;
+    optional int64 product_id = 2;
 }
 
 message UpdateInventoryItemRequest {
