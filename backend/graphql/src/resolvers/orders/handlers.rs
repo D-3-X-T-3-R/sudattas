@@ -19,6 +19,7 @@ pub(crate) async fn place_order(order: NewOrder) -> Result<Vec<Order>, GqlError>
         .place_order(PlaceOrderRequest {
             user_id: to_i64(order.user_id),
             shipping_address_id: to_i64(order.shipping_address_id),
+            coupon_code: order.coupon_code,
         })
         .await?;
 

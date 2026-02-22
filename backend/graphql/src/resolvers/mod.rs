@@ -1,6 +1,7 @@
 pub mod cart;
 pub mod category;
 pub mod convert;
+pub mod coupons;
 pub mod payment_intents;
 pub mod shipments;
 pub mod country;

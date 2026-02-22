@@ -12,6 +12,10 @@ use crate::resolvers::{
         self,
         schema::{NewShipment, Shipment, UpdateShipment},
     },
+    coupons::{
+        self,
+        schema::{ApplyCoupon, Coupon},
+    },
     category::{
         self,
         schema::{Category, CategoryMutation, NewCategory},
@@ -245,6 +249,14 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn update_shipment(input: UpdateShipment) -> FieldResult<Vec<Shipment>> {
         shipments::handlers::update_shipment(input)
+            .await
+            .map_err(|e| e.into())
+    }
+
+    // Coupons
+    #[instrument(err, ret)]
+    async fn apply_coupon(input: ApplyCoupon) -> FieldResult<Vec<Coupon>> {
+        coupons::handlers::apply_coupon(input)
             .await
             .map_err(|e| e.into())
     }

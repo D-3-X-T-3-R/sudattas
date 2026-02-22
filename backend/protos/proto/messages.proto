@@ -346,7 +346,7 @@ message CategoriesResponse {
 message PlaceOrderRequest{
     int64 shipping_address_id = 1;
     int64 user_id = 2;
-
+    optional string coupon_code = 3;
 }
 message CreateOrderRequest {
     int64 user_id = 1;
@@ -1232,6 +1232,33 @@ message ShippingZoneResponse {
 
 message ShippingZonesResponse {
     repeated ShippingZoneResponse items = 1;
+}
+
+// Coupons
+
+message ValidateCouponRequest {
+    string code = 1;
+    int64 order_amount_paise = 2;
+}
+
+message ApplyCouponRequest {
+    string code = 1;
+    int64 order_amount_paise = 2;
+}
+
+message CouponResponse {
+    int64 coupon_id = 1;
+    string code = 2;
+    string discount_type = 3;   // percentage | fixed_amount
+    int32 discount_value = 4;
+    int64 discount_amount_paise = 5;
+    int64 final_amount_paise = 6;
+    bool is_valid = 7;
+    string reason = 8;
+}
+
+message CouponsResponse {
+    repeated CouponResponse items = 1;
 }
 
 // Shipments
