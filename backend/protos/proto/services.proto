@@ -237,6 +237,9 @@ service GRPCServices {
     rpc ValidateCoupon(ValidateCouponRequest) returns (CouponsResponse);
     rpc ApplyCoupon(ApplyCouponRequest) returns (CouponsResponse);
 
+    // Webhooks
+    rpc IngestWebhook(IngestWebhookRequest) returns (WebhookEventsResponse);
+
     // OrderEvents
     rpc CreateOrderEvent(CreateOrderEventRequest) returns (OrderEventsResponse);
     rpc GetOrderEvents(GetOrderEventsRequest) returns (OrderEventsResponse);

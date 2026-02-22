@@ -62,6 +62,7 @@ use proto::proto::core::{
     CreateShipmentRequest, UpdateShipmentRequest, GetShipmentRequest, ShipmentsResponse,
     ValidateCouponRequest, ApplyCouponRequest, CouponsResponse,
     CreateOrderEventRequest, GetOrderEventsRequest, OrderEventsResponse,
+    IngestWebhookRequest, WebhookEventsResponse,
     UpdatePaymentMethodRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
     UpdateProductRatingRequest, UpdateProductRequest, UpdateProductVariantRequest,
     UpdatePromotionRequest, UpdateReviewRequest, UpdateShippingAddressRequest,
@@ -2614,6 +2615,16 @@ impl GrpcServices for MyGRPCServices {
     ) -> Result<Response<OrderEventsResponse>, Status> {
         let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
         let res = handlers::order_events::get_order_events(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn ingest_webhook(
+        &self,
+        request: Request<IngestWebhookRequest>,
+    ) -> Result<Response<WebhookEventsResponse>, Status> {
+        let txn = self.db.as_ref().unwrap().begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::webhooks::ingest_webhook(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

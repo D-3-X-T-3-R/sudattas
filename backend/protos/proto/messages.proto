@@ -1367,6 +1367,29 @@ message PaymentMethodsResponse {
     repeated PaymentMethodResponse items = 1;
 }
 
+// Webhooks
+
+message IngestWebhookRequest {
+    string provider = 1;
+    string event_type = 2;
+    string webhook_id = 3;      // idempotency key (e.g. provider:payment_id)
+    string payload_json = 4;    // raw JSON payload string
+    bool signature_verified = 5;
+}
+
+message WebhookEventResponse {
+    int64 event_id = 1;
+    string provider = 2;
+    string event_type = 3;
+    string webhook_id = 4;
+    string status = 5;
+    string received_at = 6;
+}
+
+message WebhookEventsResponse {
+    repeated WebhookEventResponse items = 1;
+}
+
 // OrderEvents
 
 message CreateOrderEventRequest {
