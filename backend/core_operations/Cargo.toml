@@ -20,11 +20,11 @@ async-graphql = "6.0.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rust_decimal = "1.0"
-dotenv = "0.15.0"
+dotenvy = "0.15"
 chrono = "0.4"
 
 # Database and ORM dependencies (mock feature for handler unit tests)
-sea-orm = { version = "0.12.6", features = ["mock"] }
+sea-orm = { version = "1.1", features = ["mock"] }
 
 # Log Dependencies
 log = "0.4"

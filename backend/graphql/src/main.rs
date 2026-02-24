@@ -1,4 +1,4 @@
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use graphql::query_handler::{AuthSource, Context};
 use graphql::schema;
 use graphql::security::jwks_loader::load_jwks;
