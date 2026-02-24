@@ -114,14 +114,11 @@ jobs:
         MYSQL_PORT: 3306
         MYSQL_USER: root
         MYSQL_PASSWORD: test_password
-        MYSQL_DATABASE: sudattas_test
       run: |
         # Wait for MySQL to be ready
         sleep 10
-        
-        # Run schema migration
-        mysql -h 127.0.0.1 -P 3306 -u root -ptest_password sudattas_test < backend/database/sql_dump/01_schema.sql
-        
+        # 01_schema.sql creates and uses database SUDATTAS; run without specifying DB so tables go there
+        mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded successfully"
 
     - name: Run unit tests
@@ -131,7 +128,7 @@ jobs:
     - name: Run integration tests
       working-directory: ./backend
       env:
-        TEST_DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/sudattas_test
+        TEST_DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/SUDATTAS
       run: cargo test --test integration_critical_paths --all-features -- --ignored
 
     - name: Run doc tests
@@ -198,7 +195,7 @@ jobs:
     - name: Setup test database
       run: |
         sleep 10
-        mysql -h 127.0.0.1 -P 3306 -u root -ptest_password sudattas_test < backend/database/sql_dump/01_schema.sql
+        mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
 
     - name: Install tarpaulin
       run: cargo install cargo-tarpaulin
@@ -206,7 +203,7 @@ jobs:
     - name: Generate coverage
       working-directory: ./backend
       env:
-        TEST_DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/sudattas_test
+        TEST_DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/SUDATTAS
       run: cargo tarpaulin --all-features --workspace --timeout 300 --out Xml
 
     - name: Upload coverage to Codecov
