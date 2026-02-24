@@ -14,8 +14,9 @@
 //! - Place order (may fail with FailedPrecondition if cart empty or stock missing).
 
 use proto::proto::core::{
-    CreateCartItemRequest, CreateUserRequest, GetCartItemsRequest, PlaceOrderRequest,
-    SearchProductRequest,
+    CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest, CreateCountryRequest,
+    CreateProductRequest, CreateShippingAddressRequest, CreateStateRequest, CreateUserRequest,
+    GetCartItemsRequest, PlaceOrderRequest, SearchProductRequest,
 };
 use sea_orm::{Database, TransactionTrait};
 use tonic::Request;
@@ -96,34 +97,51 @@ async fn integration_search_product() {
 }
 
 #[tokio::test]
-#[ignore = "requires TEST_DATABASE_URL and migrated schema; run after integration_create_user or with existing user/product"]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_cart_by_session() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
     let txn = db.begin().await.expect("begin transaction");
 
+    // Create category and product (handled by test)
+    let cat = core_operations::handlers::categories::create_category(
+        &txn,
+        Request::new(CreateCategoryRequest {
+            name: "Integration Test Category".to_string(),
+        }),
+    )
+    .await
+    .expect("create category");
+    let category_id = cat.into_inner().items[0].category_id;
+
+    let prod = core_operations::handlers::products::create_product(
+        &txn,
+        Request::new(CreateProductRequest {
+            name: "Integration Test Product".to_string(),
+            description: None,
+            price: 9.99,
+            stock_quantity: Some(10),
+            category_id: Some(category_id),
+        }),
+    )
+    .await
+    .expect("create product");
+    let product_id = prod.into_inner().items[0].product_id;
+
     let session_id = format!(
         "test_session_{}",
         std::time::SystemTime::now().elapsed().unwrap().as_millis()
     );
 
-    // Create cart item with session_id (guest cart)
     let create_req = Request::new(CreateCartItemRequest {
         user_id: None,
         session_id: Some(session_id.clone()),
-        product_id: 1,
+        product_id,
         quantity: 2,
     });
     let create_result = core_operations::handlers::cart::create_cart_item(&txn, create_req).await;
-    if create_result.is_err() {
-        txn.rollback().await.ok();
-        eprintln!(
-            "create_cart_item failed (maybe ProductID 1 missing): {:?}",
-            create_result.err()
-        );
-        return;
-    }
+    assert!(create_result.is_ok(), "create_cart_item: {:?}", create_result.err());
 
     let get_req = Request::new(GetCartItemsRequest {
         user_id: None,
@@ -141,20 +159,84 @@ async fn integration_cart_by_session() {
         !response.items.is_empty(),
         "cart should contain the created item"
     );
-    assert_eq!(response.items[0].product_id, 1);
+    assert_eq!(response.items[0].product_id, product_id);
     assert_eq!(response.items[0].quantity, 2);
 }
 
 #[tokio::test]
-#[ignore = "requires TEST_DATABASE_URL, schema, and existing user/cart/shipping address"]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
     let txn = db.begin().await.expect("begin transaction");
+
+    // Create required data (handled by test)
+    let country = core_operations::handlers::country::create_country(
+        &txn,
+        Request::new(CreateCountryRequest {
+            country_name: "Test Country".to_string(),
+        }),
+    )
+    .await
+    .expect("create country");
+    let country_id = country.into_inner().items[0].country_id;
+
+    let state = core_operations::handlers::state::create_state(
+        &txn,
+        Request::new(CreateStateRequest {
+            state_name: "Test State".to_string(),
+        }),
+    )
+    .await
+    .expect("create state");
+    let state_id = state.into_inner().items[0].state_id;
+
+    let city = core_operations::handlers::city::create_city(
+        &txn,
+        Request::new(CreateCityRequest {
+            city_name: "Test City".to_string(),
+        }),
+    )
+    .await
+    .expect("create city");
+    let city_id = city.into_inner().items[0].city_id;
+
+    let addr = core_operations::handlers::shipping_address::create_shipping_address(
+        &txn,
+        Request::new(CreateShippingAddressRequest {
+            country_id,
+            state_id,
+            city_id,
+            road: "123 Test St".to_string(),
+            apartment_no_or_name: "".to_string(),
+        }),
+    )
+    .await
+    .expect("create shipping address");
+    let shipping_address_id = addr.into_inner().items[0].shipping_address_id;
+
+    let user = core_operations::handlers::users::create_user(
+        &txn,
+        Request::new(CreateUserRequest {
+            username: "place_order_user".to_string(),
+            email: format!(
+                "place_order_{}@test.local",
+                std::time::SystemTime::now().elapsed().unwrap().as_millis()
+            ),
+            password: "SecurePass123!".to_string(),
+            full_name: Some("Place Order User".to_string()),
+            address: None,
+            phone: None,
+        }),
+    )
+    .await
+    .expect("create user");
+    let user_id = user.into_inner().items[0].user_id;
+
     let req = Request::new(PlaceOrderRequest {
-        user_id: 1,
-        shipping_address_id: 1,
+        user_id,
+        shipping_address_id,
         coupon_code: None,
     });
 
