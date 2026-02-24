@@ -141,7 +141,11 @@ async fn integration_cart_by_session() {
         quantity: 2,
     });
     let create_result = core_operations::handlers::cart::create_cart_item(&txn, create_req).await;
-    assert!(create_result.is_ok(), "create_cart_item: {:?}", create_result.err());
+    assert!(
+        create_result.is_ok(),
+        "create_cart_item: {:?}",
+        create_result.err()
+    );
 
     let get_req = Request::new(GetCartItemsRequest {
         user_id: None,
