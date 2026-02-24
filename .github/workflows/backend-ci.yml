@@ -121,6 +121,20 @@ jobs:
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded successfully"
 
+    - name: Regenerate entities and verify
+      run: |
+        cargo install sea-orm-cli
+        sea-orm-cli generate entity \
+          -u "mysql://root:test_password@127.0.0.1:3306/SUDATTAS" \
+          -o backend/core_db_entities/src/entity \
+          --with-serde both \
+          --date-time-crate chrono \
+          --max-connections 1
+        if ! git diff --exit-code backend/core_db_entities/src/entity; then
+          echo "::error::Entity files are out of sync with schema. Run: sea-orm-cli generate entity -u 'mysql://root:test_password@127.0.0.1:3306/SUDATTAS' -o backend/core_db_entities/src/entity --with-serde both --date-time-crate chrono"
+          exit 1
+        fi
+
     - name: Run unit tests
       working-directory: ./backend
       run: cargo test --lib --bins --tests --all-features --no-fail-fast -- --skip ignored

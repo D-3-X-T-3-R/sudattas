@@ -3,6 +3,25 @@
 MySQL database for the Sudattas e-commerce backend.
 Entities are generated via `sea-orm-cli generate entity` and live in `core_db_entities/src/entity/`.
 
+## Regenerating Entities
+
+**CI verifies** that committed entities match the schema. If you change the schema, regenerate entities before pushing:
+
+```powershell
+# From backend/: start MySQL (docker-compose up -d), then regenerate
+cd backend/core_db_entities
+.\regenerate_entities.ps1
+```
+
+Or manually:
+```bash
+# 1. Start MySQL (cd backend && docker-compose up -d)
+# 2. Wait for MySQL to be ready
+cargo install sea-orm-cli --locked
+sea-orm-cli generate entity -u "mysql://root:12345678@localhost:3306/SUDATTAS" \
+  -o backend/core_db_entities/src/entity --with-serde both --date-time-crate chrono
+```
+
 ---
 
 ## Core Domain Tables

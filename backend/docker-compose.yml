@@ -1,0 +1,19 @@
+# Local development: MySQL with SUDATTAS schema
+# Run from backend/: docker-compose up -d
+# Then: sea-orm-cli generate entity -u "mysql://root:12345678@localhost:3306/SUDATTAS" -o core_db_entities/src/entity --with-serde both --date-time-crate chrono
+
+services:
+  mysql:
+    build: ./database
+    image: sudattas-mysql:local
+    container_name: sudattas-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "12345678"
+      MYSQL_DATABASE: SUDATTAS
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

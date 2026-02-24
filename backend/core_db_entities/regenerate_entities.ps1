@@ -22,7 +22,9 @@ try {
 # Step 2: Start Docker services
 Write-Host ""
 Write-Host "[2/6] Starting Docker services..." -ForegroundColor Yellow
-Set-Location D:\personal\sudattas
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$backendRoot = Resolve-Path (Join-Path $scriptDir "..\..")
+Set-Location $backendRoot
 docker-compose up -d
 
 if ($LASTEXITCODE -ne 0) {
@@ -36,14 +38,14 @@ Write-Host ""
 Write-Host "[3/6] Waiting for MySQL to be ready (30 seconds)..." -ForegroundColor Yellow
 Start-Sleep -Seconds 30
 
-# Test MySQL connection
+# Test MySQL connection (root matches docker-compose.yml / database Dockerfile)
 $maxRetries = 5
 $retry = 0
 $connected = $false
 
 while ($retry -lt $maxRetries -and -not $connected) {
     try {
-        $result = docker exec sudattas-mysql mysql -u sudattas_user -psudattas_pass_2024 SUDATTAS -e "SELECT 1;" 2>$null
+        $result = docker exec sudattas-mysql mysql -u root -p12345678 SUDATTAS -e "SELECT 1;" 2>$null
         if ($LASTEXITCODE -eq 0) {
             $connected = $true
             Write-Host "[OK] MySQL is ready" -ForegroundColor Green
@@ -64,14 +66,14 @@ if (-not $connected) {
 # Step 4: Verify database schema
 Write-Host ""
 Write-Host "[4/6] Checking database tables..." -ForegroundColor Yellow
-$tableOutput = docker exec sudattas-mysql mysql -u sudattas_user -psudattas_pass_2024 SUDATTAS -e "SHOW TABLES;" 2>$null
+$tableOutput = docker exec sudattas-mysql mysql -u root -p12345678 SUDATTAS -e "SHOW TABLES;" 2>$null
 $tableCount = ($tableOutput -split "`n").Count - 1
 Write-Host "[OK] Found $tableCount tables" -ForegroundColor Green
 
 # Check for Phase 1 tables
 $phase1Tables = @("sessions", "payment_intents", "shipments", "coupons", "order_events", "webhook_events")
 foreach ($table in $phase1Tables) {
-    $exists = docker exec sudattas-mysql mysql -u sudattas_user -psudattas_pass_2024 SUDATTAS -e "SHOW TABLES LIKE '$table';" 2>$null
+    $exists = docker exec sudattas-mysql mysql -u root -p12345678 SUDATTAS -e "SHOW TABLES LIKE '$table';" 2>$null
     if ($exists -match $table) {
         Write-Host "  [OK] $table exists" -ForegroundColor Green
     } else {
@@ -82,7 +84,7 @@ foreach ($table in $phase1Tables) {
 # Step 5: Remove old entity files
 Write-Host ""
 Write-Host "[5/6] Removing old entity files..." -ForegroundColor Yellow
-Set-Location D:\personal\sudattas\backend\core_db_entities\src\entity
+Set-Location (Join-Path $scriptDir "src\entity")
 $oldFiles = Get-ChildItem *.rs -ErrorAction SilentlyContinue
 if ($oldFiles) {
     $oldFiles | Remove-Item
@@ -94,9 +96,9 @@ if ($oldFiles) {
 # Step 6: Generate new entities
 Write-Host ""
 Write-Host "[6/6] Generating new entity files..." -ForegroundColor Yellow
-Set-Location D:\personal\sudattas\backend\core_db_entities
+Set-Location $scriptDir
 
-$connectionString = "mysql://sudattas_user:sudattas_pass_2024@localhost:3306/SUDATTAS"
+$connectionString = "mysql://root:12345678@localhost:3306/SUDATTAS"
 sea-orm-cli generate entity -u $connectionString -o src\entity --with-serde both --date-time-crate chrono --max-connections 1
 
 if ($LASTEXITCODE -ne 0) {
@@ -104,7 +106,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host ""
     Write-Host "Troubleshooting:" -ForegroundColor Yellow
     Write-Host "  1. Make sure sea-orm-cli is installed: cargo install sea-orm-cli" -ForegroundColor Gray
-    Write-Host "  2. Check MySQL is accessible: docker exec sudattas-mysql mysql -u sudattas_user -psudattas_pass_2024 -e 'SELECT 1;'" -ForegroundColor Gray
+    Write-Host "  2. Check MySQL is accessible: docker exec sudattas-mysql mysql -u root -p12345678 -e 'SELECT 1;'" -ForegroundColor Gray
     exit 1
 }
 
