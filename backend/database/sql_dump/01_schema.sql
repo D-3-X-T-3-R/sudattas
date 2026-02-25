@@ -61,6 +61,18 @@ DROP TABLE IF EXISTS `Users`;
 -- ============================================================================
 
 -- Table structure for table `Users` (Enhanced with auth & security)
+-- Lookup table for user statuses
+CREATE TABLE `user_statuses` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `code` VARCHAR(50) NOT NULL UNIQUE,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `user_statuses` (`code`) VALUES
+  ('active'),
+  ('inactive'),
+  ('suspended');
+
 CREATE TABLE `Users` (
     `UserID` bigint NOT NULL AUTO_INCREMENT,
     `Username` varchar(255) NOT NULL,
@@ -72,13 +84,15 @@ CREATE TABLE `Users` (
     `FullName` varchar(255) DEFAULT NULL,
     `Address` text,
     `Phone` varchar(20) DEFAULT NULL,
-    `status` ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
+    `user_status_id` BIGINT DEFAULT NULL,
     `last_login_at` TIMESTAMP NULL,
     `CreateDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`UserID`),
-    INDEX `idx_email_status` (`Email`, `status`),
-    INDEX `idx_status` (`status`)
+    INDEX `idx_email` (`Email`),
+    INDEX `idx_user_status` (`user_status_id`),
+    CONSTRAINT `fk_users_user_status`
+      FOREIGN KEY (`user_status_id`) REFERENCES `user_statuses`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Categories`
@@ -89,6 +103,18 @@ CREATE TABLE `Categories` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Products` (Enhanced for saree e-commerce)
+-- Lookup table for product statuses
+CREATE TABLE `product_statuses` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `code` VARCHAR(50) NOT NULL UNIQUE,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `product_statuses` (`code`) VALUES
+  ('draft'),
+  ('active'),
+  ('archived');
+
 CREATE TABLE `Products` (
     `ProductID` bigint NOT NULL AUTO_INCREMENT,
     `sku` VARCHAR(100) UNIQUE,
@@ -107,15 +133,17 @@ CREATE TABLE `Products` (
     `has_blouse_piece` BOOLEAN DEFAULT TRUE,
     `care_instructions` TEXT,
     -- Product management
-    `status` ENUM('draft', 'active', 'archived') DEFAULT 'active',
+    `product_status_id` BIGINT DEFAULT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`ProductID`),
     FOREIGN KEY (`CategoryID`) REFERENCES `Categories`(`CategoryID`),
     INDEX `idx_sku` (`sku`),
     INDEX `idx_slug` (`slug`),
-    INDEX `idx_status` (`status`),
-    INDEX `idx_fabric` (`fabric`)
+    INDEX `idx_product_status` (`product_status_id`),
+    INDEX `idx_fabric` (`fabric`),
+    CONSTRAINT `fk_products_product_status`
+      FOREIGN KEY (`product_status_id`) REFERENCES `product_statuses`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `OrderStatus`

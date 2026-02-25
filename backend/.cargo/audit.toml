@@ -1,0 +1,5 @@
+# cargo-audit configuration (backend crate)
+
+[advisories]
+# rsa 0.9.10 via sqlx-mysql / sea-orm; no fixed version available yet.
+ignore = ["RUSTSEC-2023-0071"]
