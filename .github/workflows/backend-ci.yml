@@ -171,7 +171,7 @@ jobs:
 
     - name: Run security audit
       working-directory: ./
-      run: cargo audit --config .cargo/audit.toml
+      run: cargo audit
 
   # ============================================================================
   # Job 4: Code Coverage
