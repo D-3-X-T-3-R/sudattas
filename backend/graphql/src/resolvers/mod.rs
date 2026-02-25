@@ -5,6 +5,7 @@ pub mod country;
 pub mod coupons;
 pub mod discounts;
 pub mod error;
+pub mod grpc_client;
 pub mod inventory;
 pub mod order_details;
 pub mod order_events;
