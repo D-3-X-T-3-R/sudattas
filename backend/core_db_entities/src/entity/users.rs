@@ -56,6 +56,14 @@ pub enum Relation {
     PaymentIntents,
     #[sea_orm(has_many = "super::sessions::Entity")]
     Sessions,
+    #[sea_orm(
+        belongs_to = "super::user_statuses::Entity",
+        from = "Column::UserStatusId",
+        to = "super::user_statuses::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    UserStatuses,
 }
 
 impl Related<super::cart::Entity> for Entity {
@@ -127,6 +135,12 @@ impl Related<super::payment_intents::Entity> for Entity {
 impl Related<super::sessions::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Sessions.def()
+    }
+}
+
+impl Related<super::user_statuses::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserStatuses.def()
     }
 }
 

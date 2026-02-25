@@ -76,6 +76,14 @@ pub enum Relation {
     Reviews,
     #[sea_orm(has_many = "super::wishlist::Entity")]
     Wishlist,
+    #[sea_orm(
+        belongs_to = "super::product_statuses::Entity",
+        from = "Column::ProductStatusId",
+        to = "super::product_statuses::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    ProductStatuses,
 }
 
 impl Related<super::cart::Entity> for Entity {
@@ -159,6 +167,12 @@ impl Related<super::reviews::Entity> for Entity {
 impl Related<super::wishlist::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Wishlist.def()
+    }
+}
+
+impl Related<super::product_statuses::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ProductStatuses.def()
     }
 }
 
