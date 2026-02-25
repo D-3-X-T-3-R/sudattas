@@ -56,6 +56,25 @@ async fn e2e_health_then_api_version() {
 
 #[tokio::test]
 #[ignore = "requires GraphQL server running; run with --ignored"]
+async fn e2e_readiness_endpoint_returns_200_or_503() {
+    let client = Client::new();
+    let res = client
+        .get(format!("{}/ready", base_url()))
+        .send()
+        .await
+        .expect("GET /ready");
+    // 200 when gRPC (and optional Redis) are up; 503 when not ready.
+    assert!(
+        res.status().is_success() || res.status().as_u16() == 503,
+        "readiness should return 200 or 503, got {}",
+        res.status()
+    );
+    let body = res.text().await.expect("readiness body");
+    assert!(!body.is_empty(), "readiness body should be non-empty");
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running; run with --ignored"]
 async fn e2e_graphql_response_structure() {
     let client = Client::new();
     let res = client

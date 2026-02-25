@@ -43,27 +43,28 @@ use proto::proto::core::{
     PlaceOrderRequest, PresignedUploadUrlResponse, ProductAttributeMappingsResponse,
     ProductAttributesResponse, ProductCategoryMappingsResponse, ProductColorMappingsResponse,
     ProductImagesResponse, ProductRatingsResponse, ProductSizeMappingsResponse,
-    ProductVariantsResponse, ProductsResponse, PromotionsResponse, ReviewsResponse,
-    SearchCategoryRequest, SearchCityRequest, SearchColorRequest, SearchCountryRequest,
-    SearchCountryStateMappingRequest, SearchDiscountRequest, SearchEventLogRequest,
-    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterSubscriberRequest,
-    SearchOrderDetailRequest, SearchOrderRequest, SearchPaymentMethodRequest,
-    SearchProductAttributeMappingRequest, SearchProductAttributeRequest,
-    SearchProductCategoryMappingRequest, SearchProductColorMappingRequest,
-    SearchProductImageRequest, SearchProductRatingRequest, SearchProductRequest,
-    SearchProductSizeMappingRequest, SearchProductVariantRequest, SearchPromotionRequest,
-    SearchReviewRequest, SearchShippingMethodRequest, SearchShippingZoneRequest, SearchSizeRequest,
-    SearchStateCityMappingRequest, SearchStateRequest, SearchSupplierRequest,
-    SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
-    SearchUserRoleMappingRequest, SearchUserRoleRequest, SearchWishlistItemRequest,
-    ShipmentsResponse, ShippingAddressesResponse, ShippingMethodsResponse, ShippingZonesResponse,
-    SizesResponse, StateCityMappingsResponse, StatesResponse, SuppliersResponse,
-    TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest,
-    UpdateCountryStateMappingRequest, UpdateDiscountRequest, UpdateEventLogRequest,
-    UpdateInventoryItemRequest, UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest,
-    UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePaymentMethodRequest,
-    UpdateProductAttributeRequest, UpdateProductImageRequest, UpdateProductRatingRequest,
-    UpdateProductRequest, UpdateProductVariantRequest, UpdatePromotionRequest, UpdateReviewRequest,
+    ProductVariantsResponse, ProductsResponse, PromotionsResponse, ReadinessRequest,
+    ReadinessResponse, ReviewsResponse, SearchCategoryRequest, SearchCityRequest,
+    SearchColorRequest, SearchCountryRequest, SearchCountryStateMappingRequest,
+    SearchDiscountRequest, SearchEventLogRequest, SearchInventoryItemRequest,
+    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOrderDetailRequest,
+    SearchOrderRequest, SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
+    SearchProductAttributeRequest, SearchProductCategoryMappingRequest,
+    SearchProductColorMappingRequest, SearchProductImageRequest, SearchProductRatingRequest,
+    SearchProductRequest, SearchProductSizeMappingRequest, SearchProductVariantRequest,
+    SearchPromotionRequest, SearchReviewRequest, SearchShippingMethodRequest,
+    SearchShippingZoneRequest, SearchSizeRequest, SearchStateCityMappingRequest,
+    SearchStateRequest, SearchSupplierRequest, SearchTransactionRequest, SearchUserActivityRequest,
+    SearchUserRequest, SearchUserRoleMappingRequest, SearchUserRoleRequest,
+    SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
+    ShippingMethodsResponse, ShippingZonesResponse, SizesResponse, StateCityMappingsResponse,
+    StatesResponse, SuppliersResponse, TransactionsResponse, UpdateCartItemRequest,
+    UpdateCategoryRequest, UpdateColorRequest, UpdateCountryStateMappingRequest,
+    UpdateDiscountRequest, UpdateEventLogRequest, UpdateInventoryItemRequest,
+    UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOrderDetailRequest,
+    UpdateOrderRequest, UpdatePaymentMethodRequest, UpdateProductAttributeRequest,
+    UpdateProductImageRequest, UpdateProductRatingRequest, UpdateProductRequest,
+    UpdateProductVariantRequest, UpdatePromotionRequest, UpdateReviewRequest,
     UpdateShipmentRequest, UpdateShippingAddressRequest, UpdateShippingMethodRequest,
     UpdateShippingZoneRequest, UpdateSizeRequest, UpdateStateCityMappingRequest,
     UpdateSupplierRequest, UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest,
@@ -2706,5 +2707,61 @@ impl GrpcServices for MyGRPCServices {
         let res = handlers::product_images::confirm_image_upload(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
+    }
+
+    async fn readiness(
+        &self,
+        _request: Request<ReadinessRequest>,
+    ) -> Result<Response<ReadinessResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("Database not initialized"))?;
+        db.ping()
+            .await
+            .map_err(|e| Status::unavailable(format!("DB ping failed: {}", e)))?;
+        Ok(Response::new(ReadinessResponse {
+            ok: true,
+            error: None,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod readiness_tests {
+    use super::*;
+    use proto::proto::core::ReadinessRequest;
+    use sea_orm::{DatabaseBackend, MockDatabase};
+    use tonic::Request;
+
+    #[tokio::test]
+    async fn test_readiness_returns_ok_when_db_ping_succeeds() {
+        let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
+        let service = MyGRPCServices {
+            db: Some(db),
+            session_manager: None,
+        };
+        let req = Request::new(ReadinessRequest {});
+        let result = service.readiness(req).await;
+        assert!(
+            result.is_ok(),
+            "readiness should succeed with mock db: {:?}",
+            result.err()
+        );
+        let res = result.unwrap().into_inner();
+        assert!(res.ok);
+        assert!(res.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_readiness_returns_unavailable_when_db_not_initialized() {
+        let service = MyGRPCServices {
+            db: None,
+            session_manager: None,
+        };
+        let req = Request::new(ReadinessRequest {});
+        let result = service.readiness(req).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unavailable);
     }
 }
