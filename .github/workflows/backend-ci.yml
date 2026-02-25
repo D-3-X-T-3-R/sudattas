@@ -170,8 +170,8 @@ jobs:
       run: cargo install cargo-audit
 
     - name: Run security audit
-      working-directory: ./backend
-      run: cargo audit
+      working-directory: ./
+      run: cargo audit --config .cargo/audit.toml
 
   # ============================================================================
   # Job 4: Code Coverage
