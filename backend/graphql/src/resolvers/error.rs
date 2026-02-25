@@ -9,7 +9,7 @@ pub struct GqlError {
     pub message: String,
 }
 
-#[derive(Display, Debug)]
+#[derive(Display, Debug, PartialEq, Eq)]
 pub enum Code {
     Ok = 0,
     Cancelled = 1,
