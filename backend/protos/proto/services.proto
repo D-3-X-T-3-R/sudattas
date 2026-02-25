@@ -252,4 +252,7 @@ service GRPCServices {
     rpc CreateShipment(CreateShipmentRequest) returns (ShipmentsResponse);
     rpc UpdateShipment(UpdateShipmentRequest) returns (ShipmentsResponse);
     rpc GetShipment(GetShipmentRequest) returns (ShipmentsResponse);
+
+    // Health / readiness (DB ping; for orchestrators)
+    rpc Readiness(ReadinessRequest) returns (ReadinessResponse);
 }
