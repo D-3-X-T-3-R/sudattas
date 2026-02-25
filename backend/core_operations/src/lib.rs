@@ -43,27 +43,28 @@ use proto::proto::core::{
     PlaceOrderRequest, PresignedUploadUrlResponse, ProductAttributeMappingsResponse,
     ProductAttributesResponse, ProductCategoryMappingsResponse, ProductColorMappingsResponse,
     ProductImagesResponse, ProductRatingsResponse, ProductSizeMappingsResponse,
-    ProductVariantsResponse, ProductsResponse, PromotionsResponse, ReviewsResponse,
-    SearchCategoryRequest, SearchCityRequest, SearchColorRequest, SearchCountryRequest,
-    SearchCountryStateMappingRequest, SearchDiscountRequest, SearchEventLogRequest,
-    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterSubscriberRequest,
-    SearchOrderDetailRequest, SearchOrderRequest, SearchPaymentMethodRequest,
-    SearchProductAttributeMappingRequest, SearchProductAttributeRequest,
-    SearchProductCategoryMappingRequest, SearchProductColorMappingRequest,
-    SearchProductImageRequest, SearchProductRatingRequest, SearchProductRequest,
-    SearchProductSizeMappingRequest, SearchProductVariantRequest, SearchPromotionRequest,
-    SearchReviewRequest, SearchShippingMethodRequest, SearchShippingZoneRequest, SearchSizeRequest,
-    SearchStateCityMappingRequest, SearchStateRequest, SearchSupplierRequest,
-    SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
-    SearchUserRoleMappingRequest, SearchUserRoleRequest, SearchWishlistItemRequest,
-    ShipmentsResponse, ShippingAddressesResponse, ShippingMethodsResponse, ShippingZonesResponse,
-    SizesResponse, StateCityMappingsResponse, StatesResponse, SuppliersResponse,
-    TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest,
-    UpdateCountryStateMappingRequest, UpdateDiscountRequest, UpdateEventLogRequest,
-    UpdateInventoryItemRequest, UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest,
-    UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePaymentMethodRequest,
-    UpdateProductAttributeRequest, UpdateProductImageRequest, UpdateProductRatingRequest,
-    UpdateProductRequest, UpdateProductVariantRequest, UpdatePromotionRequest, UpdateReviewRequest,
+    ProductVariantsResponse, ProductsResponse, PromotionsResponse, ReadinessRequest,
+    ReadinessResponse, ReviewsResponse, SearchCategoryRequest, SearchCityRequest,
+    SearchColorRequest, SearchCountryRequest, SearchCountryStateMappingRequest,
+    SearchDiscountRequest, SearchEventLogRequest, SearchInventoryItemRequest,
+    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOrderDetailRequest,
+    SearchOrderRequest, SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
+    SearchProductAttributeRequest, SearchProductCategoryMappingRequest,
+    SearchProductColorMappingRequest, SearchProductImageRequest, SearchProductRatingRequest,
+    SearchProductRequest, SearchProductSizeMappingRequest, SearchProductVariantRequest,
+    SearchPromotionRequest, SearchReviewRequest, SearchShippingMethodRequest,
+    SearchShippingZoneRequest, SearchSizeRequest, SearchStateCityMappingRequest,
+    SearchStateRequest, SearchSupplierRequest, SearchTransactionRequest, SearchUserActivityRequest,
+    SearchUserRequest, SearchUserRoleMappingRequest, SearchUserRoleRequest,
+    SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
+    ShippingMethodsResponse, ShippingZonesResponse, SizesResponse, StateCityMappingsResponse,
+    StatesResponse, SuppliersResponse, TransactionsResponse, UpdateCartItemRequest,
+    UpdateCategoryRequest, UpdateColorRequest, UpdateCountryStateMappingRequest,
+    UpdateDiscountRequest, UpdateEventLogRequest, UpdateInventoryItemRequest,
+    UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOrderDetailRequest,
+    UpdateOrderRequest, UpdatePaymentMethodRequest, UpdateProductAttributeRequest,
+    UpdateProductImageRequest, UpdateProductRatingRequest, UpdateProductRequest,
+    UpdateProductVariantRequest, UpdatePromotionRequest, UpdateReviewRequest,
     UpdateShipmentRequest, UpdateShippingAddressRequest, UpdateShippingMethodRequest,
     UpdateShippingZoneRequest, UpdateSizeRequest, UpdateStateCityMappingRequest,
     UpdateSupplierRequest, UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest,
@@ -2706,5 +2707,22 @@ impl GrpcServices for MyGRPCServices {
         let res = handlers::product_images::confirm_image_upload(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
+    }
+
+    async fn readiness(
+        &self,
+        _request: Request<ReadinessRequest>,
+    ) -> Result<Response<ReadinessResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("Database not initialized"))?;
+        db.ping()
+            .await
+            .map_err(|e| Status::unavailable(format!("DB ping failed: {}", e)))?;
+        Ok(Response::new(ReadinessResponse {
+            ok: true,
+            error: None,
+        }))
     }
 }

@@ -1440,3 +1440,11 @@ message OrderEventResponse {
 message OrderEventsResponse {
     repeated OrderEventResponse items = 1;
 }
+
+// Readiness (health) check — used by orchestrators to verify DB and optional deps.
+message ReadinessRequest {}
+
+message ReadinessResponse {
+    bool ok = 1;
+    optional string error = 2;  // set when ok is false
+}

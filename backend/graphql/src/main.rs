@@ -1,4 +1,5 @@
 use dotenvy::dotenv;
+use graphql::health;
 use graphql::query_handler::{AuthSource, Context};
 use graphql::schema;
 use graphql::security::jwks_loader::load_jwks;
@@ -39,11 +40,32 @@ async fn main() {
         .allow_headers(vec!["content-type", "authorization", "x-session-id"])
         .allow_methods(vec!["GET", "POST", "OPTIONS"]);
 
+    // Liveness: GET / — process is up (orchestrators use this for restart decisions).
     let load_balancer_health_check = warp::get().and(warp::path::end()).map(|| {
         Response::builder()
             .header("content-type", "text/plain")
             .body("OK")
     });
+
+    // Readiness: GET /ready — dependencies (gRPC/DB, optional Redis) are up; use for traffic routing.
+    let readiness_check = warp::get()
+        .and(warp::path("ready"))
+        .and(warp::path::end())
+        .and_then(|| async move {
+            match health::check_ready().await {
+                Ok(()) => Ok::<_, std::convert::Infallible>(reply::with_status(
+                    "OK".to_string(),
+                    StatusCode::OK,
+                )),
+                Err(e) => {
+                    warn!(error = %e, "Readiness check failed");
+                    Ok::<_, std::convert::Infallible>(reply::with_status(
+                        e,
+                        StatusCode::SERVICE_UNAVAILABLE,
+                    ))
+                }
+            }
+        });
 
     // Per-request context filter.
     //
@@ -149,6 +171,7 @@ async fn main() {
 
     warp::serve(
         load_balancer_health_check
+            .or(readiness_check)
             .or(graphql_copy)
             .or(webhook_route)
             .or(options_routes),

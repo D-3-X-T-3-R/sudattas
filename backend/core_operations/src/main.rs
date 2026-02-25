@@ -11,7 +11,9 @@ use proto::proto::core::grpc_services_server::GrpcServicesServer;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
-    let addr = std::env::var("GRPC_SERVER").unwrap().parse()?;
+    let addr = std::env::var("GRPC_SERVER")
+        .unwrap_or_else(|_| "0.0.0.0:50051".to_string())
+        .parse()?;
     let mut service = MyGRPCServices::default();
     service.init().await;
 
