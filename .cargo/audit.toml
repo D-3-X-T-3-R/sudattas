@@ -1,4 +1,4 @@
-[# cargo-audit configuration for this repo
+# cargo-audit configuration for this repo
 
 [advisories]
 # rsa 0.9.10 via sqlx-mysql / sea-orm; no fixed version available yet.
