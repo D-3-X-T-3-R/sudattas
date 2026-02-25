@@ -28,7 +28,7 @@ pub async fn update_user(
         password_hash: ActiveValue::Set(existing.password_hash),
         email_verified: ActiveValue::Set(existing.email_verified),
         email_verified_at: ActiveValue::Set(existing.email_verified_at),
-        status: ActiveValue::Set(existing.status),
+        user_status_id: ActiveValue::Set(existing.user_status_id),
         last_login_at: ActiveValue::Set(existing.last_login_at),
         updated_at: ActiveValue::NotSet,
     };
