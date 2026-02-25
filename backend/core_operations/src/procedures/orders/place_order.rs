@@ -36,6 +36,12 @@ pub async fn place_order(
     .into_inner()
     .items;
 
+    if cart_items.is_empty() {
+        return Err(Status::failed_precondition(
+            "Cannot place order: cart is empty",
+        ));
+    }
+
     let (product_quantity_map, product_ids): (HashMap<i64, i64>, Vec<i64>) = cart_items
         .iter()
         .map(|item| ((item.product_id, item.quantity), item.product_id))

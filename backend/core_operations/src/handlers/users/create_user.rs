@@ -27,7 +27,7 @@ pub async fn create_user(
         password_hash: ActiveValue::Set(Some(password_hash)),
         email_verified: ActiveValue::NotSet,
         email_verified_at: ActiveValue::NotSet,
-        status: ActiveValue::NotSet,
+        user_status_id: ActiveValue::NotSet,
         last_login_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };

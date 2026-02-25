@@ -29,7 +29,7 @@ pub async fn create_product(
         length_meters: ActiveValue::NotSet,
         has_blouse_piece: ActiveValue::NotSet,
         care_instructions: ActiveValue::NotSet,
-        status: ActiveValue::NotSet,
+        product_status_id: ActiveValue::NotSet,
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };
