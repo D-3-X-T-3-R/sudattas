@@ -2726,3 +2726,42 @@ impl GrpcServices for MyGRPCServices {
         }))
     }
 }
+
+#[cfg(test)]
+mod readiness_tests {
+    use super::*;
+    use proto::proto::core::ReadinessRequest;
+    use sea_orm::{DatabaseBackend, MockDatabase};
+    use tonic::Request;
+
+    #[tokio::test]
+    async fn test_readiness_returns_ok_when_db_ping_succeeds() {
+        let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
+        let service = MyGRPCServices {
+            db: Some(db),
+            session_manager: None,
+        };
+        let req = Request::new(ReadinessRequest {});
+        let result = service.readiness(req).await;
+        assert!(
+            result.is_ok(),
+            "readiness should succeed with mock db: {:?}",
+            result.err()
+        );
+        let res = result.unwrap().into_inner();
+        assert!(res.ok);
+        assert!(res.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_readiness_returns_unavailable_when_db_not_initialized() {
+        let service = MyGRPCServices {
+            db: None,
+            session_manager: None,
+        };
+        let req = Request::new(ReadinessRequest {});
+        let result = service.readiness(req).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unavailable);
+    }
+}
