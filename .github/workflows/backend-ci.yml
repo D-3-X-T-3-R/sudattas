@@ -170,7 +170,7 @@ jobs:
       run: cargo install cargo-audit
 
     - name: Run security audit
-      working-directory: ./
+      working-directory: ./backend
       run: cargo audit
 
   # ============================================================================
