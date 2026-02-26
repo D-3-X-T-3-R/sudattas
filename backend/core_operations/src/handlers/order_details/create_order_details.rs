@@ -23,6 +23,34 @@ pub async fn create_order_details(
             product_id: ActiveValue::Set(details.product_id),
             quantity: ActiveValue::Set(details.quantity),
             price: ActiveValue::Set(Decimal::from_f64(details.price).unwrap()),
+            unit_price_minor: details
+                .unit_price_minor
+                .map(ActiveValue::Set)
+                .unwrap_or(ActiveValue::NotSet)
+                .into(),
+            discount_minor: details
+                .discount_minor
+                .map(ActiveValue::Set)
+                .unwrap_or(ActiveValue::NotSet)
+                .into(),
+            tax_minor: details
+                .tax_minor
+                .map(ActiveValue::Set)
+                .unwrap_or(ActiveValue::NotSet)
+                .into(),
+            sku: details
+                .sku
+                .clone()
+                .map(ActiveValue::Set)
+                .unwrap_or(ActiveValue::NotSet)
+                .into(),
+            title: details
+                .title
+                .clone()
+                .map(ActiveValue::Set)
+                .unwrap_or(ActiveValue::NotSet)
+                .into(),
+            line_attrs: ActiveValue::NotSet,
         };
 
         match create_order_detail.insert(txn).await {

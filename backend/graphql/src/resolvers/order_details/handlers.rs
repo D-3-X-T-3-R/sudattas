@@ -26,6 +26,11 @@ pub(crate) async fn create_order_detail(
             product_id: to_i64(details.product_id),
             quantity: to_i64(details.quantity),
             price: to_f64(details.price),
+            unit_price_minor: None,
+            discount_minor: None,
+            tax_minor: None,
+            sku: None,
+            title: None,
         })
         .collect();
     let response = client

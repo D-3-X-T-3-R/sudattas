@@ -24,6 +24,46 @@ pub async fn create_order(
         payment_status: ActiveValue::NotSet,
         currency: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
+        subtotal_minor: req
+            .subtotal_minor
+            .map(ActiveValue::Set)
+            .unwrap_or(ActiveValue::NotSet)
+            .into(),
+        shipping_minor: req
+            .shipping_minor
+            .map(ActiveValue::Set)
+            .unwrap_or(ActiveValue::NotSet)
+            .into(),
+        tax_total_minor: req
+            .tax_total_minor
+            .map(ActiveValue::Set)
+            .unwrap_or(ActiveValue::NotSet)
+            .into(),
+        discount_total_minor: req
+            .discount_total_minor
+            .map(ActiveValue::Set)
+            .unwrap_or(ActiveValue::NotSet)
+            .into(),
+        grand_total_minor: req
+            .grand_total_minor
+            .map(ActiveValue::Set)
+            .unwrap_or(ActiveValue::NotSet)
+            .into(),
+        applied_coupon_id: req
+            .applied_coupon_id
+            .map(ActiveValue::Set)
+            .unwrap_or(ActiveValue::NotSet)
+            .into(),
+        applied_coupon_code: req
+            .applied_coupon_code
+            .map(ActiveValue::Set)
+            .unwrap_or(ActiveValue::NotSet)
+            .into(),
+        applied_discount_paise: req
+            .applied_discount_paise
+            .map(ActiveValue::Set)
+            .unwrap_or(ActiveValue::NotSet)
+            .into(),
     };
     match order.insert(txn).await {
         Ok(model) => {

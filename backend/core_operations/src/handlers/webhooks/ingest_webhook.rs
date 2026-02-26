@@ -1,15 +1,15 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::payment_intents::capture_payment;
 use chrono::Utc;
-use core_db_entities::entity::payment_intents;
 use core_db_entities::entity::sea_orm_active_enums::Status;
 use core_db_entities::entity::webhook_events;
+use core_db_entities::entity::{orders, payment_intents};
 use proto::proto::core::{
     CapturePaymentRequest, IngestWebhookRequest, WebhookEventResponse, WebhookEventsResponse,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
-    QueryFilter,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend,
+    EntityTrait, IntoActiveModel, QueryFilter, Statement,
 };
 use tonic::{Request, Response, Status as TonicStatus};
 use tracing::info;
@@ -135,6 +135,32 @@ async fn process_payment_captured(
         }),
     )
     .await?;
+
+    // Phase 4: increment coupon usage_count only on verified payment (not on place_order).
+    // Enforce usage_limit under concurrency: atomic UPDATE so only one of N concurrent
+    // captures can increment when at limit.
+    if let Some(order_id) = intent.order_id {
+        if let Ok(Some(order)) = orders::Entity::find_by_id(order_id).one(txn).await {
+            if let Some(coupon_id) = order.applied_coupon_id {
+                let res = txn
+                    .execute(Statement::from_sql_and_values(
+                        DbBackend::MySql,
+                        r#"UPDATE coupons SET usage_count = COALESCE(usage_count, 0) + 1
+                           WHERE coupon_id = ? AND (usage_limit IS NULL OR COALESCE(usage_count, 0) < usage_limit)"#,
+                        [coupon_id.into()],
+                    ))
+                    .await;
+                if let Ok(result) = res {
+                    if result.rows_affected() > 0 {
+                        info!(
+                            coupon_id = coupon_id,
+                            "coupon usage_count incremented (within limit)"
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     Ok(())
 }

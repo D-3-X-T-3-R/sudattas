@@ -197,22 +197,28 @@ pub async fn place_order(
         }
     }
 
-    // Apply coupon if provided, deriving the discounted total in paise.
-    let total_paise = if let Some(ref code) = req.coupon_code {
-        match check_coupon(txn, code, gross_paise, true).await {
-            Ok(result) if result.is_valid => result.final_amount_paise,
+    // Apply coupon if provided, deriving the discounted total in paise and coupon snapshot.
+    // Do not increment coupon usage_count here; only on verified payment (Phase 4).
+    let (total_paise, coupon_snapshot) = if let Some(ref code) = req.coupon_code {
+        match check_coupon(txn, code, gross_paise, false).await {
+            Ok(result) if result.is_valid => (
+                result.final_amount_paise,
+                Some((result.coupon_id, code.clone(), result.discount_amount_paise)),
+            ),
             Ok(result) => {
                 log::warn!("Coupon '{}' invalid at checkout: {}", code, result.reason);
-                gross_paise
+                (gross_paise, None)
             }
             Err(e) => {
                 log::warn!("Coupon check failed: {}", e);
-                gross_paise
+                (gross_paise, None)
             }
         }
     } else {
-        gross_paise
+        (gross_paise, None)
     };
+
+    let discount_total_minor = gross_paise - total_paise;
 
     let create_order = create_order(
         txn,
@@ -221,6 +227,14 @@ pub async fn place_order(
             status_id: 2, // Always start with order status is processing
             user_id: req.user_id,
             total_amount: paise_to_major_f64(total_paise),
+            subtotal_minor: Some(gross_paise),
+            shipping_minor: Some(0),
+            tax_total_minor: Some(0),
+            discount_total_minor: Some(discount_total_minor),
+            grand_total_minor: Some(total_paise),
+            applied_coupon_id: coupon_snapshot.as_ref().map(|s| s.0),
+            applied_coupon_code: coupon_snapshot.as_ref().map(|s| s.1.clone()),
+            applied_discount_paise: coupon_snapshot.as_ref().map(|s| s.2 as i32),
         }),
     )
     .await?
@@ -239,16 +253,21 @@ pub async fn place_order(
     let mut order_details: Vec<CreateOrderDetailRequest> = Vec::new();
 
     for product in order_products.iter() {
+        let quantity = product_quantity_map
+            .get(&product.product_id)
+            .unwrap()
+            .to_owned();
+        let unit_price_paise = paise_from_major_f64(product.price);
         order_details.push(CreateOrderDetailRequest {
             order_id: create_order.order_id,
             product_id: product.product_id,
-            quantity: product_quantity_map
-                .get(&product.product_id)
-                .unwrap()
-                .to_owned(),
-            // Persist unit price as-is for now; a later pass will introduce
-            // explicit snapshot fields in minor units.
+            quantity,
             price: product.price,
+            unit_price_minor: Some(unit_price_paise as i32),
+            discount_minor: None,
+            tax_minor: None,
+            sku: None,
+            title: Some(product.name.clone()),
         })
     }
 
