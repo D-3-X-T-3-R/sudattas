@@ -20,3 +20,7 @@ For orchestrators (e.g. Kubernetes):
 
 - **GraphQL:** `GRAPHQL_LISTEN_ADDR` (default `0.0.0.0:8080`).
 - **gRPC (core_operations):** `GRPC_SERVER` (default `0.0.0.0:50051`).
+
+## Metrics and resilience
+
+- **Prometheus:** `GET /metrics` — scrape endpoint for request counts and latency. See [RESILIENCE.md](RESILIENCE.md) for rate limiting, gRPC timeouts/retries/circuit breaker, and webhooks.

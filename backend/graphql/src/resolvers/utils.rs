@@ -7,54 +7,23 @@
 //! GraphQL input into numeric types with a consistent InvalidArgument error.
 
 use crate::resolvers::error::{Code, GqlError};
-use proto::{
-    proto::core::grpc_services_client::GrpcServicesClient,
-    tonic::{
-        metadata::MetadataValue, service::interceptor::InterceptedService, transport::Channel,
-        Request,
-    },
-};
+use crate::resolvers::grpc_client;
 
-/// Connect to the internal gRPC service and attach `GRPC_AUTH_TOKEN` as a
-/// `Bearer` token on every outgoing request (if the env var is set).
-///
-/// In dev mode (no `GRPC_AUTH_TOKEN`), requests are forwarded without auth.
+/// Connect to the internal gRPC service (timeout, retry, circuit breaker).
+/// Attaches `GRPC_AUTH_TOKEN` as Bearer. For request_id propagation use `grpc_client::connect_grpc_client_with_metadata(Some(id))`.
 pub async fn connect_grpc_client() -> Result<
-    GrpcServicesClient<
-        InterceptedService<
-            Channel,
-            impl Fn(Request<()>) -> Result<Request<()>, proto::tonic::Status> + Clone,
+    proto::proto::core::grpc_services_client::GrpcServicesClient<
+        proto::tonic::service::interceptor::InterceptedService<
+            proto::tonic::transport::Channel,
+            impl Fn(
+                    proto::tonic::Request<()>,
+                ) -> Result<proto::tonic::Request<()>, proto::tonic::Status>
+                + Clone,
         >,
     >,
     GqlError,
 > {
-    let grpc_url = std::env::var("GRPC_URL")
-        .map_err(|_| GqlError::new("GRPC_URL not set in environment", Code::Internal))?;
-
-    let channel = Channel::from_shared(grpc_url)
-        .map_err(|e| GqlError::new(&format!("Invalid GRPC_URL: {}", e), Code::Internal))?
-        .connect()
-        .await
-        .map_err(|e| {
-            GqlError::new(
-                &format!("Failed to connect to gRPC service: {}", e),
-                Code::Unavailable,
-            )
-        })?;
-
-    let auth_token = std::env::var("GRPC_AUTH_TOKEN").ok();
-
-    #[allow(clippy::result_large_err)]
-    let client = GrpcServicesClient::with_interceptor(channel, move |mut req: Request<()>| {
-        if let Some(ref tok) = auth_token {
-            if let Ok(val) = MetadataValue::try_from(format!("Bearer {tok}").as_str()) {
-                req.metadata_mut().insert("authorization", val);
-            }
-        }
-        Ok(req)
-    });
-
-    Ok(client)
+    grpc_client::connect_grpc_client_with_metadata(None).await
 }
 
 pub fn to_option_i64<T: Into<Option<String>>>(input: T) -> Option<i64> {
