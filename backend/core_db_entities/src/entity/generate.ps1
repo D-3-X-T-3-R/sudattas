@@ -6,9 +6,9 @@ $ErrorActionPreference = "Stop"
 # Remove old entities
 Remove-Item *.rs -ErrorAction SilentlyContinue
 
-# Generate entities from local Docker MySQL
+# Generate entities from local Docker MySQL (SUDATTAS schema).
 sea-orm-cli generate entity `
-  -u "mysql://root:12345678@localhost:3306/SUDATTAS" `
+  -u "mysql://root:12345678@127.0.0.1:3306/SUDATTAS" `
   --with-serde both `
   --date-time-crate chrono `
   --max-connections 1
