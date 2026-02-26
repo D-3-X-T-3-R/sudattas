@@ -3,14 +3,36 @@
 //! Use `connect_grpc_client()` then call gRPC methods and use `.await?` to map
 //! `tonic::Status` to `GqlError` via `From` (avoids repeating `.map_err(|e| GqlError::new(...))`).
 //!
+//! Use `connect_grpc_client_from_context(ctx)` when you have a request Context so that
+//! `request_id` is propagated to gRPC for distributed tracing.
+//!
 //! Use `parse_i64(s, label)` and `parse_f64(s, label)` to parse String fields from
 //! GraphQL input into numeric types with a consistent InvalidArgument error.
 
+use crate::query_handler::Context;
 use crate::resolvers::error::{Code, GqlError};
 use crate::resolvers::grpc_client;
 
+/// Connect to the internal gRPC service with request_id from context (distributed tracing).
+pub async fn connect_grpc_client_from_context(
+    ctx: &Context,
+) -> Result<
+    proto::proto::core::grpc_services_client::GrpcServicesClient<
+        proto::tonic::service::interceptor::InterceptedService<
+            proto::tonic::transport::Channel,
+            impl Fn(
+                    proto::tonic::Request<()>,
+                ) -> Result<proto::tonic::Request<()>, proto::tonic::Status>
+                + Clone,
+        >,
+    >,
+    GqlError,
+> {
+    grpc_client::connect_grpc_client_with_metadata(ctx.request_id()).await
+}
+
 /// Connect to the internal gRPC service (timeout, retry, circuit breaker).
-/// Attaches `GRPC_AUTH_TOKEN` as Bearer. For request_id propagation use `grpc_client::connect_grpc_client_with_metadata(Some(id))`.
+/// Attaches `GRPC_AUTH_TOKEN` as Bearer. For request_id propagation use `connect_grpc_client_from_context(ctx)` or `grpc_client::connect_grpc_client_with_metadata(Some(id))`.
 pub async fn connect_grpc_client() -> Result<
     proto::proto::core::grpc_services_client::GrpcServicesClient<
         proto::tonic::service::interceptor::InterceptedService<
