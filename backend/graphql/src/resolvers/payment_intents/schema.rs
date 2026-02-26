@@ -1,6 +1,6 @@
 use juniper::{graphql_object, GraphQLInputObject};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PaymentIntent {
     pub intent_id: String,
     pub razorpay_order_id: String,

@@ -21,6 +21,8 @@ fn test_api_version_query() {
         jwks: JWKSet { keys: vec![] },
         redis_url: None,
         auth: Some(AuthSource::Jwt("user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
     };
 
     let (res, _errors) = juniper::execute_sync(
@@ -46,6 +48,8 @@ fn test_api_version_format_semver_like() {
         jwks: JWKSet { keys: vec![] },
         redis_url: None,
         auth: Some(AuthSource::Jwt("any".to_string())),
+        request_id: None,
+        idempotency_key: None,
     };
 
     let (res, _) = juniper::execute_sync(
@@ -77,6 +81,8 @@ fn test_api_version_with_session_context() {
         jwks: JWKSet { keys: vec![] },
         redis_url: Some("redis://127.0.0.1".to_string()),
         auth: Some(AuthSource::Session("guest_99".to_string())),
+        request_id: None,
+        idempotency_key: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -106,6 +112,8 @@ fn test_auth_info_query() {
         jwks: JWKSet { keys: vec![] },
         redis_url: Some("redis://127.0.0.1:6379".to_string()),
         auth: Some(AuthSource::Session("42".to_string())),
+        request_id: None,
+        idempotency_key: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -153,6 +161,8 @@ fn test_auth_info_jwt_context() {
         },
         redis_url: None,
         auth: Some(AuthSource::Jwt("jwt_user_456".to_string())),
+        request_id: None,
+        idempotency_key: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -187,6 +197,8 @@ fn test_auth_info_session_disabled_when_no_redis() {
         jwks: JWKSet { keys: vec![] },
         redis_url: None,
         auth: Some(AuthSource::Session("sid".to_string())),
+        request_id: None,
+        idempotency_key: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -224,6 +236,8 @@ fn test_multiple_root_fields_in_one_query() {
         jwks: JWKSet { keys: vec![] },
         redis_url: None,
         auth: Some(AuthSource::Jwt("u".to_string())),
+        request_id: None,
+        idempotency_key: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -252,6 +266,78 @@ fn test_multiple_root_fields_in_one_query() {
 // =============================================================================
 // Error handling
 // =============================================================================
+// place_order auth (JWT required)
+// =============================================================================
+
+#[tokio::test]
+async fn test_place_order_requires_jwt_rejects_session_only() {
+    // place_order requires full login (JWT). Session-only (guest) must get an error.
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Session("guest_99".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"mutation { placeOrder(order: { shippingAddressId: "1" }) { orderId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "place_order with session-only auth should return error, got: {:?}",
+        (res, errors)
+    );
+    let err_str = format!("{:?}", errors[0]);
+    assert!(
+        err_str.to_lowercase().contains("login"),
+        "error should mention login: {}",
+        err_str
+    );
+}
+
+#[tokio::test]
+async fn test_place_order_with_jwt_accepts_request() {
+    // With JWT context, place_order mutation is accepted (gRPC may fail if server down).
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("user_42".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+
+    let schema = schema();
+    let result = juniper::execute(
+        r#"mutation { placeOrder(order: { shippingAddressId: "1" }) { orderId } }"#,
+        None,
+        &schema,
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await;
+
+    // Either success (if gRPC up) or error from gRPC/unavailable - not "Login required"
+    if let Ok((_, errors)) = result {
+        if !errors.is_empty() {
+            let err_str = format!("{:?}", errors[0]);
+            assert!(
+                !err_str.to_lowercase().contains("login required"),
+                "with JWT we should not get login required: {}",
+                err_str
+            );
+        }
+    }
+}
+
+// =============================================================================
 
 #[test]
 fn test_invalid_query_syntax_returns_errors() {
@@ -259,6 +345,8 @@ fn test_invalid_query_syntax_returns_errors() {
         jwks: JWKSet { keys: vec![] },
         redis_url: None,
         auth: Some(AuthSource::Jwt("u".to_string())),
+        request_id: None,
+        idempotency_key: None,
     };
 
     let schema = schema();
@@ -282,6 +370,8 @@ fn test_unknown_field_returns_errors() {
         jwks: JWKSet { keys: vec![] },
         redis_url: None,
         auth: Some(AuthSource::Jwt("u".to_string())),
+        request_id: None,
+        idempotency_key: None,
     };
 
     let schema = schema();

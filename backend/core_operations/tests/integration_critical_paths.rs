@@ -12,6 +12,7 @@
 //! - Product search with limit.
 //! - Guest cart by session_id: create item, get cart, rollback.
 //! - Place order (may fail with FailedPrecondition if cart empty or stock missing).
+//!   Also serves as auth+place_order integration: order is placed for the created user (user-scoped).
 
 use proto::proto::core::{
     CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest, CreateCountryRequest,

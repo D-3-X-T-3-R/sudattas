@@ -77,7 +77,13 @@ async fn main() {
     let cors = warp::cors()
         .allow_any_origin()
         .allow_credentials(true)
-        .allow_headers(vec!["content-type", "authorization", "x-session-id"])
+        .allow_headers(vec![
+            "content-type",
+            "authorization",
+            "x-session-id",
+            "x-request-id",
+            "idempotency-key",
+        ])
         .allow_methods(vec!["GET", "POST", "OPTIONS"]);
 
     // Liveness: GET / — process is up (orchestrators use this for restart decisions).
@@ -120,10 +126,14 @@ async fn main() {
     let redis_url_c = redis_url.clone();
     let context_filter = warp::header::optional::<String>("authorization")
         .and(warp::header::optional::<String>("x-session-id"))
+        .and(warp::header::optional::<String>("x-request-id"))
+        .and(warp::header::optional::<String>("idempotency-key"))
         .and(warp::any().map(move || (jwks_c.clone(), redis_url_c.clone())))
         .and_then(
             |token: Option<String>,
              session_id: Option<String>,
+             x_request_id: Option<String>,
+             idempotency_key: Option<String>,
              (jwks, redis_url): (_, Option<String>)| async move {
                 let mut auth: Option<AuthSource> = None;
 
@@ -169,7 +179,15 @@ async fn main() {
                     return Err(warp::reject::custom(Unauthorized {}));
                 }
 
-                Ok::<Context, Rejection>(Context { jwks, redis_url, auth })
+                let request_id =
+                    x_request_id.or_else(|| Some(Uuid::new_v4().to_string()));
+                Ok::<Context, Rejection>(Context {
+                    jwks,
+                    redis_url,
+                    auth,
+                    request_id,
+                    idempotency_key,
+                })
             },
         );
 

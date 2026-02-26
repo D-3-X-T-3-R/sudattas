@@ -21,8 +21,8 @@
 
 ## Request / trace IDs
 
-- Each request gets a `request_id` (UUID) in the tracing span. Use it for log correlation.
-- When distributed tracing is enabled, the same ID can be propagated to gRPC metadata.
+- Each request gets a `request_id` (UUID) in the tracing span (or from `x-request-id` header if provided). Use it for log correlation.
+- The same ID is propagated to gRPC as `x-request-id` metadata for place_order and capture_payment (and can be extended to other resolvers via `connect_grpc_client_from_context(ctx)`).
 
 ## Webhooks
 
@@ -32,8 +32,8 @@
 
 ## Idempotency (mutations)
 
-- **place_order** and **capture_payment** accept optional header `Idempotency-Key`. When set, the key is stored with the response; repeated requests with the same key within the configured window return the cached response.
-- Window: 24 hours (configurable via `IDEMPOTENCY_WINDOW_HOURS`).
+- **place_order** and **capture_payment** accept optional header `Idempotency-Key`. When set and `REDIS_URL` is configured, the mutation result is cached in Redis; repeated requests with the same key within the window return the cached response.
+- Window: 24 hours (configurable via `IDEMPOTENCY_WINDOW_HOURS`). Keys are stored as `idempotency:{operation}:{key}` with SETEX.
 
 ## Structured logging
 
