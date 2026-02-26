@@ -156,4 +156,3 @@ async fn integration_cart_by_session() {
     assert_eq!(response.items[0].product_id, product_id);
     assert_eq!(response.items[0].quantity, 2);
 }
-
