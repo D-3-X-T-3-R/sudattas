@@ -8,12 +8,17 @@ use super::schema::{NewOrder, Order, OrderMutation, SearchOrder};
 use crate::resolvers::{
     convert,
     error::GqlError,
+    grpc_client,
     utils::{connect_grpc_client, to_f64, to_i64, to_option_i64},
 };
 
 #[instrument(skip(user_id))]
-pub(crate) async fn place_order(order: NewOrder, user_id: String) -> Result<Vec<Order>, GqlError> {
-    let mut client = connect_grpc_client().await?;
+pub(crate) async fn place_order(
+    order: NewOrder,
+    user_id: String,
+    request_id: Option<&str>,
+) -> Result<Vec<Order>, GqlError> {
+    let mut client = grpc_client::connect_grpc_client_with_metadata(request_id).await?;
 
     let response = client
         .place_order(PlaceOrderRequest {

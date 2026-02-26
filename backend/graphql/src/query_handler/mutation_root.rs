@@ -162,9 +162,17 @@ impl MutationRoot {
             })?
             .to_string();
 
-        orders::handlers::place_order(order, user_id)
-            .await
-            .map_err(|e| e.into_field_error())
+        let request_id = context.request_id().map(|s| s.to_string());
+        crate::idempotency::with_idempotency(
+            context.redis_url.as_deref(),
+            "place_order",
+            context.idempotency_key(),
+            || async move {
+                orders::handlers::place_order(order, user_id, request_id.as_deref()).await
+            },
+        )
+        .await
+        .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
@@ -253,10 +261,21 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn capture_payment(input: CapturePayment) -> FieldResult<Vec<PaymentIntent>> {
-        payment_intents::handlers::capture_payment(input)
-            .await
-            .map_err(|e| e.into_field_error())
+    async fn capture_payment(
+        context: &Context,
+        input: CapturePayment,
+    ) -> FieldResult<Vec<PaymentIntent>> {
+        let request_id = context.request_id().map(|s| s.to_string());
+        crate::idempotency::with_idempotency(
+            context.redis_url.as_deref(),
+            "capture_payment",
+            context.idempotency_key(),
+            || async move {
+                payment_intents::handlers::capture_payment(input, request_id.as_deref()).await
+            },
+        )
+        .await
+        .map_err(|e| e.into_field_error())
     }
 
     // ProductImage

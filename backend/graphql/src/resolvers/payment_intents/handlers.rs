@@ -7,6 +7,7 @@ use tracing::instrument;
 use super::schema::{CapturePayment, GetPaymentIntent, NewPaymentIntent, PaymentIntent};
 use crate::resolvers::{
     error::GqlError,
+    grpc_client,
     utils::{connect_grpc_client, parse_i64},
 };
 
@@ -48,8 +49,11 @@ pub(crate) async fn create_payment_intent(
 }
 
 #[instrument]
-pub(crate) async fn capture_payment(input: CapturePayment) -> Result<Vec<PaymentIntent>, GqlError> {
-    let mut client = connect_grpc_client().await?;
+pub(crate) async fn capture_payment(
+    input: CapturePayment,
+    request_id: Option<&str>,
+) -> Result<Vec<PaymentIntent>, GqlError> {
+    let mut client = grpc_client::connect_grpc_client_with_metadata(request_id).await?;
     let response = client
         .capture_payment(CapturePaymentRequest {
             intent_id: parse_i64(&input.intent_id, "intent id")?,
