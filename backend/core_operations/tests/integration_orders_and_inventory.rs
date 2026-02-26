@@ -928,7 +928,7 @@ async fn integration_order_snapshot_unchanged_after_price_change() {
 #[ignore = "requires TEST_DATABASE_URL and migrated schema (Phase 4); coupon row must exist"]
 async fn integration_coupon_usage_count_not_incremented_by_place_order() {
     use core_db_entities::entity::coupons;
-    use core_db_entities::entity::sea_orm_active_enums::{DiscountType, Status};
+    use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType};
     use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -946,7 +946,7 @@ async fn integration_coupon_usage_count_not_incremented_by_place_order() {
         min_order_value_paise: ActiveValue::Set(None),
         usage_limit: ActiveValue::Set(Some(2)),
         usage_count: ActiveValue::Set(Some(0)),
-        status: ActiveValue::Set(Some(Status::Pending)),
+        coupon_status: ActiveValue::Set(Some(CouponStatus::Active)),
         starts_at: ActiveValue::Set(chrono::Utc::now() - chrono::Duration::days(1)),
         ends_at: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
@@ -1096,7 +1096,7 @@ async fn integration_coupon_usage_count_not_incremented_by_place_order() {
 #[ignore = "requires TEST_DATABASE_URL and migrated schema (Phase 4)"]
 async fn integration_coupon_usage_not_incremented_by_failed_payment() {
     use core_db_entities::entity::coupons;
-    use core_db_entities::entity::sea_orm_active_enums::{DiscountType, Status};
+    use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType};
     use proto::proto::core::IngestWebhookRequest;
     use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
     use tonic::Request;
@@ -1116,7 +1116,7 @@ async fn integration_coupon_usage_not_incremented_by_failed_payment() {
         min_order_value_paise: ActiveValue::Set(None),
         usage_limit: ActiveValue::Set(Some(2)),
         usage_count: ActiveValue::Set(Some(0)),
-        status: ActiveValue::Set(Some(Status::Pending)),
+        coupon_status: ActiveValue::Set(Some(CouponStatus::Active)),
         starts_at: ActiveValue::Set(chrono::Utc::now() - chrono::Duration::days(1)),
         ends_at: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
@@ -1333,7 +1333,7 @@ async fn integration_coupon_usage_not_incremented_by_failed_payment() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema (Phase 4); commits data"]
 async fn integration_coupon_limit_enforced_under_concurrency() {
-    use core_db_entities::entity::sea_orm_active_enums::{DiscountType, Status};
+    use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType};
     use core_db_entities::entity::{coupons, payment_intents};
     use proto::proto::core::IngestWebhookRequest;
     use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
@@ -1355,7 +1355,7 @@ async fn integration_coupon_limit_enforced_under_concurrency() {
         min_order_value_paise: ActiveValue::Set(None),
         usage_limit: ActiveValue::Set(Some(1)),
         usage_count: ActiveValue::Set(Some(0)),
-        status: ActiveValue::Set(Some(Status::Pending)),
+        coupon_status: ActiveValue::Set(Some(CouponStatus::Active)),
         starts_at: ActiveValue::Set(chrono::Utc::now() - chrono::Duration::days(1)),
         ends_at: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
