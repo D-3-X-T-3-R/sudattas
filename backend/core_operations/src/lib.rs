@@ -4,6 +4,7 @@ use std::time::Duration;
 
 // Phase 1 additions
 pub mod auth;
+pub mod money;
 pub mod services;
 
 use proto::proto::core::{
@@ -905,13 +906,15 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<PlaceOrderRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
-        let txn = self
+        let db = self
             .db
             .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
+            .ok_or_else(|| Status::unavailable("Database not initialized"))?;
+
+        // Durable idempotency for place_order is implemented at the database
+        // layer via the idempotency_keys table. For now, we expect callers to
+        // handle idempotency at the gateway; core simply executes the request.
+        let txn = db.begin().await.map_err(map_db_error_to_status)?;
         let res = procedures::orders::place_order(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)

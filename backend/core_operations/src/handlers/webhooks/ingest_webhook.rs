@@ -12,12 +12,21 @@ use sea_orm::{
     QueryFilter,
 };
 use tonic::{Request, Response, Status as TonicStatus};
+use tracing::info;
 
 pub async fn ingest_webhook(
     txn: &DatabaseTransaction,
     request: Request<IngestWebhookRequest>,
 ) -> Result<Response<WebhookEventsResponse>, TonicStatus> {
     let req = request.into_inner();
+
+    info!(
+        provider = %req.provider,
+        event_type = %req.event_type,
+        webhook_id = %req.webhook_id,
+        signature_verified = req.signature_verified,
+        "ingest_webhook received event"
+    );
 
     // Idempotency: if we've already seen this webhook_id, return it as-is.
     if let Some(existing) = webhook_events::Entity::find()
@@ -26,6 +35,10 @@ pub async fn ingest_webhook(
         .await
         .map_err(map_db_error_to_status)?
     {
+        info!(
+            webhook_id = %req.webhook_id,
+            "ingest_webhook idempotent replay – returning existing event"
+        );
         return Ok(Response::new(WebhookEventsResponse {
             items: vec![model_to_response(existing)],
         }));
@@ -68,6 +81,14 @@ pub async fn ingest_webhook(
     active.status = ActiveValue::Set(Some(new_status));
     let updated = active.update(txn).await.map_err(map_db_error_to_status)?;
 
+    info!(
+        webhook_id = %updated.webhook_id,
+        provider = %updated.provider,
+        event_type = %updated.event_type,
+        status = ?updated.status,
+        "ingest_webhook completed"
+    );
+
     Ok(Response::new(WebhookEventsResponse {
         items: vec![model_to_response(updated)],
     }))
@@ -98,6 +119,13 @@ async fn process_payment_captured(
                 razorpay_order_id
             ))
         })?;
+
+    info!(
+        webhook_payment_id = %payment_id,
+        razorpay_order_id = %razorpay_order_id,
+        payment_intent_id = intent.intent_id,
+        "process_payment_captured resolved payment_intent for webhook"
+    );
 
     capture_payment(
         txn,

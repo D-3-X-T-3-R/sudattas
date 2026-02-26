@@ -11,6 +11,7 @@ pub mod coupons;
 pub mod db_errors;
 pub mod discounts;
 pub mod event_logs;
+pub mod idempotency;
 pub mod inventory;
 pub mod inventory_logs;
 pub mod newsletter_subscribers;
