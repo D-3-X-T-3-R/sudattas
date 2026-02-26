@@ -12,7 +12,9 @@ use crate::handlers::{
 };
 
 use core_db_entities::entity::prelude::IdempotencyKeys;
-use core_db_entities::entity::{idempotency_keys, inventory, orders};
+use core_db_entities::entity::{
+    idempotency_keys, inventory, orders, sea_orm_active_enums::Status as IdempotencyStatus,
+};
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
     CreateOrderRequest, CreatePaymentIntentRequest, DeleteCartItemRequest, GetCartItemsRequest,
@@ -123,8 +125,8 @@ pub async fn place_order(
                 ));
             }
 
-            match existing.status.as_str() {
-                "completed" => {
+            match existing.status {
+                IdempotencyStatus::Processed => {
                     // Reconstruct the response from the stored order_id reference.
                     let order_id: i64 = existing
                         .response_ref
@@ -147,7 +149,6 @@ pub async fn place_order(
                         user_id = existing_order.user_id,
                         "place_order idempotent replay – returning existing order"
                     );
-
                     return Ok(Response::new(OrdersResponse {
                         items: vec![proto::proto::core::OrderResponse {
                             order_id: existing_order.order_id,
@@ -159,15 +160,14 @@ pub async fn place_order(
                         }],
                     }));
                 }
-                "in_progress" => {
+                IdempotencyStatus::Pending => {
                     return Err(Status::unavailable(
                         "Idempotent place_order still in progress; retry later",
                     ));
                 }
-                "failed" => {
+                IdempotencyStatus::Failed => {
                     // Allow retry after failure by continuing below.
                 }
-                _ => {}
             }
         } else {
             // Insert a fresh in_progress row. We update it to completed/failed later.
@@ -184,9 +184,9 @@ pub async fn place_order(
                 key: Set(key.to_string()),
                 request_hash: Set(request_hash.clone()),
                 response_ref: Set(None),
-                status: Set("in_progress".to_string()),
-                created_at: Set(now.into()),
-                expires_at: Set(expires.into()),
+                status: Set(IdempotencyStatus::Pending),
+                created_at: Set(now),
+                expires_at: Set(expires),
             };
 
             active
@@ -340,7 +340,7 @@ pub async fn place_order(
             .map_err(|e| Status::internal(e.to_string()))?
         {
             let mut active: idempotency_keys::ActiveModel = existing.into();
-            active.status = Set("completed".to_string());
+            active.status = Set(IdempotencyStatus::Processed);
             active.response_ref = Set(Some(create_order.order_id.to_string()));
             active
                 .update(txn)
