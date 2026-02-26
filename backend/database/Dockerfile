@@ -1,7 +1,7 @@
 FROM mysql:latest
 
 # Environment variables
-ENV MYSQL_DATABASE=sudattas
+ENV MYSQL_DATABASE=SUDATTAS
 ENV MYSQL_ROOT_PASSWORD=12345678
 
 ADD sql_dump/01_schema.sql /docker-entrypoint-initdb.d/

@@ -119,14 +119,9 @@ jobs:
       run: |
         # Wait for MySQL to be ready
         sleep 10
-        # 01_schema.sql creates and uses database SUDATTAS; run without specifying DB so tables go there
+        # 01_schema.sql is the single source of truth; creates and uses database SUDATTAS
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded successfully"
-
-        # Apply Rust migrations so new tables (e.g. idempotency_keys) exist in SUDATTAS
-        cd backend
-        DATABASE_URL="mysql://root:test_password@127.0.0.1:3306/SUDATTAS" cargo run -p migration -- up
-        cd ..
 
     - name: Regenerate entities and verify
       run: |
@@ -233,9 +228,6 @@ jobs:
         sleep 10
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded successfully"
-        cd backend
-        DATABASE_URL="mysql://root:test_password@127.0.0.1:3306/SUDATTAS" cargo run -p migration -- up
-        cd ..
 
     - name: Run integration tests
       working-directory: ./backend
