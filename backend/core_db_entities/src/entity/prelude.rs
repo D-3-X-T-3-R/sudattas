@@ -9,6 +9,7 @@ pub use super::country_state_mapping::Entity as CountryStateMapping;
 pub use super::coupons::Entity as Coupons;
 pub use super::discounts::Entity as Discounts;
 pub use super::event_logs::Entity as EventLogs;
+pub use super::idempotency_keys::Entity as IdempotencyKeys;
 pub use super::inventory::Entity as Inventory;
 pub use super::inventory_log::Entity as InventoryLog;
 pub use super::newsletter_subscribers::Entity as NewsletterSubscribers;

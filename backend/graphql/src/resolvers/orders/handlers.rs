@@ -1,7 +1,6 @@
 use proto::proto::core::{
     DeleteOrderRequest, PlaceOrderRequest, SearchOrderRequest, UpdateOrderRequest,
 };
-
 use tracing::instrument;
 
 use super::schema::{NewOrder, Order, OrderMutation, SearchOrder};
@@ -17,16 +16,23 @@ pub(crate) async fn place_order(
     order: NewOrder,
     user_id: String,
     request_id: Option<&str>,
+    idempotency_key: Option<&str>,
 ) -> Result<Vec<Order>, GqlError> {
     let mut client = grpc_client::connect_grpc_client_with_metadata(request_id).await?;
 
-    let response = client
-        .place_order(PlaceOrderRequest {
-            user_id: to_i64(Some(user_id)),
-            shipping_address_id: to_i64(order.shipping_address_id),
-            coupon_code: order.coupon_code,
-        })
-        .await?;
+    let mut req = proto::tonic::Request::new(PlaceOrderRequest {
+        user_id: to_i64(Some(user_id)),
+        shipping_address_id: to_i64(order.shipping_address_id),
+        coupon_code: order.coupon_code,
+    });
+
+    if let Some(key) = idempotency_key {
+        if let Ok(value) = key.parse() {
+            req.metadata_mut().insert("idempotency-key", value);
+        }
+    }
+
+    let response = client.place_order(req).await?;
 
     Ok(response
         .into_inner()

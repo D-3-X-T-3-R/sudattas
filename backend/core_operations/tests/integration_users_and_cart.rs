@@ -1,32 +1,21 @@
-//! Integration tests for critical paths. Require a real MySQL database.
+//! Integration tests for user creation, product search, and cart flows.
 //!
 //! **Setup**
 //! - Set `TEST_DATABASE_URL` or `DATABASE_URL` (e.g. `mysql://root:test_password@127.0.0.1:3306/sudattas_test`).
 //! - Schema must be loaded first (e.g. migrations or `backend/database/sql_dump/01_schema.sql`).
 //!
 //! **Run**
-//! - `cargo test --test integration_critical_paths -- --ignored`
-//!
-//! **Coverage**
-//! - User creation and rollback (no committed data).
-//! - Product search with limit.
-//! - Guest cart by session_id: create item, get cart, rollback.
-//! - Place order (may fail with FailedPrecondition if cart empty or stock missing).
-//!   Also serves as auth+place_order integration: order is placed for the created user (user-scoped).
+//! - `cargo test --test integration_users_and_cart -- --ignored`
 
+mod integration_common;
+
+use integration_common::test_db_url;
 use proto::proto::core::{
-    CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest, CreateCountryRequest,
-    CreateProductRequest, CreateShippingAddressRequest, CreateStateRequest, CreateUserRequest,
-    GetCartItemsRequest, PlaceOrderRequest, SearchProductRequest,
+    CreateCartItemRequest, CreateCategoryRequest, CreateProductRequest, CreateUserRequest,
+    GetCartItemsRequest, SearchProductRequest,
 };
 use sea_orm::{Database, TransactionTrait};
 use tonic::Request;
-
-fn test_db_url() -> String {
-    std::env::var("TEST_DATABASE_URL")
-        .or_else(|_| std::env::var("DATABASE_URL"))
-        .expect("TEST_DATABASE_URL or DATABASE_URL must be set for integration tests")
-}
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
@@ -166,93 +155,4 @@ async fn integration_cart_by_session() {
     );
     assert_eq!(response.items[0].product_id, product_id);
     assert_eq!(response.items[0].quantity, 2);
-}
-
-#[tokio::test]
-#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_place_order() {
-    let db = Database::connect(&test_db_url())
-        .await
-        .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
-
-    // Create required data (handled by test)
-    let country = core_operations::handlers::country::create_country(
-        &txn,
-        Request::new(CreateCountryRequest {
-            country_name: "Test Country".to_string(),
-        }),
-    )
-    .await
-    .expect("create country");
-    let country_id = country.into_inner().items[0].country_id;
-
-    let state = core_operations::handlers::state::create_state(
-        &txn,
-        Request::new(CreateStateRequest {
-            state_name: "Test State".to_string(),
-        }),
-    )
-    .await
-    .expect("create state");
-    let state_id = state.into_inner().items[0].state_id;
-
-    let city = core_operations::handlers::city::create_city(
-        &txn,
-        Request::new(CreateCityRequest {
-            city_name: "Test City".to_string(),
-        }),
-    )
-    .await
-    .expect("create city");
-    let city_id = city.into_inner().items[0].city_id;
-
-    let addr = core_operations::handlers::shipping_address::create_shipping_address(
-        &txn,
-        Request::new(CreateShippingAddressRequest {
-            country_id,
-            state_id,
-            city_id,
-            road: "123 Test St".to_string(),
-            apartment_no_or_name: "".to_string(),
-        }),
-    )
-    .await
-    .expect("create shipping address");
-    let shipping_address_id = addr.into_inner().items[0].shipping_address_id;
-
-    let user = core_operations::handlers::users::create_user(
-        &txn,
-        Request::new(CreateUserRequest {
-            username: "place_order_user".to_string(),
-            email: format!(
-                "place_order_{}@test.local",
-                std::time::SystemTime::now().elapsed().unwrap().as_millis()
-            ),
-            password: "SecurePass123!".to_string(),
-            full_name: Some("Place Order User".to_string()),
-            address: None,
-            phone: None,
-        }),
-    )
-    .await
-    .expect("create user");
-    let user_id = user.into_inner().items[0].user_id;
-
-    let req = Request::new(PlaceOrderRequest {
-        user_id,
-        shipping_address_id,
-        coupon_code: None,
-    });
-
-    let result = core_operations::procedures::orders::place_order(&txn, req).await;
-    txn.rollback().await.ok();
-
-    // May fail with precondition (no cart items, or stock) in a fresh DB
-    if let Err(e) = &result {
-        if e.code() == tonic::Code::FailedPrecondition {
-            return; // expected when cart is empty or stock missing
-        }
-    }
-    assert!(result.is_ok(), "place_order failed: {:?}", result.err());
 }

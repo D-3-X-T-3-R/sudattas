@@ -11,6 +11,7 @@ pub mod country_state_mapping;
 pub mod coupons;
 pub mod discounts;
 pub mod event_logs;
+pub mod idempotency_keys;
 pub mod inventory;
 pub mod inventory_log;
 pub mod newsletter_subscribers;

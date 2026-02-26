@@ -163,12 +163,19 @@ impl MutationRoot {
             .to_string();
 
         let request_id = context.request_id().map(|s| s.to_string());
+        let idempotency_key = context.idempotency_key().map(|s| s.to_string());
         crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "place_order",
             context.idempotency_key(),
             || async move {
-                orders::handlers::place_order(order, user_id, request_id.as_deref()).await
+                orders::handlers::place_order(
+                    order,
+                    user_id,
+                    request_id.as_deref(),
+                    idempotency_key.as_deref(),
+                )
+                .await
             },
         )
         .await
