@@ -20,7 +20,8 @@ use proto::proto::core::{
     CreateOrderRequest, CreatePaymentIntentRequest, DeleteCartItemRequest, GetCartItemsRequest,
     GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, Statement};
+use sea_orm::DbBackend;
 
 use chrono::Utc;
 use rust_decimal::prelude::ToPrimitive;
@@ -275,6 +276,25 @@ pub async fn place_order(
     .await?
     .into_inner()
     .items;
+
+    // Atomic inventory decrement: reserve stock for this order (same transaction).
+    for (product_id, quantity) in &product_quantity_map {
+        let qty = *quantity;
+        let result = txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable - ? WHERE ProductID = ? AND QuantityAvailable >= ?"#,
+                [qty.into(), (*product_id).into(), qty.into()],
+            ))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        if result.rows_affected() == 0 {
+            return Err(Status::failed_precondition(format!(
+                "Insufficient stock for product {} (need {}); inventory update had no effect",
+                product_id, qty
+            )));
+        }
+    }
 
     // Auto-create a pending payment intent for the new order.
     // razorpay_order_id must be obtained from Razorpay; here we generate a placeholder
