@@ -1,19 +1,17 @@
 use sea_orm_migration::prelude::*;
 
-/// Migration: create the core commerce-supporting tables added during active development.
+/// Combined migration: baseline (no-op) + new commerce tables.
 ///
-/// - sessions          — guest & user Redis-backed session records
-/// - coupons           — discount codes for checkout
-/// - payment_intents   — Razorpay payment intent lifecycle
-/// - shipments         — per-order fulfillment tracking
-/// - order_events      — immutable audit log for order lifecycle changes
-/// - webhook_events    — idempotent inbound webhook records
-/// - idempotency_keys  — durable idempotency records for orders/payments
+/// Baseline: The original 40+ tables (Users, Products, Orders, Cart, etc.) are created
+/// from the SQL dump (01_schema.sql) and are NOT re-created here.
+///
+/// New tables: sessions, coupons, payment_intents, shipments, order_events,
+/// webhook_events, idempotency_keys — all created with if_not_exists.
 pub struct Migration;
 
 impl MigrationName for Migration {
     fn name(&self) -> &str {
-        "m20250101_000001_new_tables"
+        "m20240101_000001_baseline_and_new_tables"
     }
 }
 

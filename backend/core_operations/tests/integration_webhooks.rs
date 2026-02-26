@@ -77,19 +77,15 @@ async fn integration_webhook_triggers_capture_payment() {
 
     let result = core_operations::handlers::webhooks::ingest_webhook(&txn, req).await;
 
-    // Always roll back so this test remains non-destructive.
-    txn.rollback().await.ok();
-
     assert!(
         result.is_ok(),
         "ingest_webhook should succeed for valid payment.captured: {:?}",
         result.err()
     );
 
-    // Verify that capture_payment was triggered by checking that the intent now
-    // has the gateway payment id attached and status processed.
+    // Verify within the transaction that capture_payment was triggered (intent updated).
     let updated_intent = payment_intents::Entity::find_by_id(inserted_intent.intent_id)
-        .one(&db)
+        .one(&txn)
         .await
         .expect("re-query payment_intent")
         .expect("payment_intent should exist");
@@ -104,4 +100,7 @@ async fn integration_webhook_triggers_capture_payment() {
         Some(core_db_entities::entity::sea_orm_active_enums::Status::Processed),
         "capture_payment should mark intent as processed"
     );
+
+    // Roll back so this test remains non-destructive.
+    txn.rollback().await.ok();
 }

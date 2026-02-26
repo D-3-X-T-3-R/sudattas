@@ -20,8 +20,10 @@ use proto::proto::core::{
     CreateOrderRequest, CreatePaymentIntentRequest, DeleteCartItemRequest, GetCartItemsRequest,
     GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, Statement};
 use sea_orm::DbBackend;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, Statement,
+};
 
 use chrono::Utc;
 use rust_decimal::prelude::ToPrimitive;
