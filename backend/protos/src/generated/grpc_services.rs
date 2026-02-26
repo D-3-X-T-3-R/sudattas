@@ -608,6 +608,22 @@ pub struct CreateOrderRequest {
     pub status_id: i64,
     #[prost(double, tag = "4")]
     pub total_amount: f64,
+    #[prost(int64, optional, tag = "5")]
+    pub subtotal_minor: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "6")]
+    pub shipping_minor: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "7")]
+    pub tax_total_minor: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "8")]
+    pub discount_total_minor: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "9")]
+    pub grand_total_minor: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "10")]
+    pub applied_coupon_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "11")]
+    pub applied_coupon_code: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int32, optional, tag = "12")]
+    pub applied_discount_paise: ::core::option::Option<i32>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -686,6 +702,16 @@ pub struct CreateOrderDetailRequest {
     pub quantity: i64,
     #[prost(double, tag = "4")]
     pub price: f64,
+    #[prost(int32, optional, tag = "5")]
+    pub unit_price_minor: ::core::option::Option<i32>,
+    #[prost(int32, optional, tag = "6")]
+    pub discount_minor: ::core::option::Option<i32>,
+    #[prost(int32, optional, tag = "7")]
+    pub tax_minor: ::core::option::Option<i32>,
+    #[prost(string, optional, tag = "8")]
+    pub sku: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "9")]
+    pub title: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
