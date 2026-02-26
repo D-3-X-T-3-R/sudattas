@@ -23,6 +23,10 @@ pub struct Context {
     /// `None` only during initial context construction; the auth gate always ensures this is `Some`
     /// before a resolver runs.
     pub auth: Option<AuthSource>,
+    /// Request ID for distributed tracing; propagated to gRPC as `x-request-id` when set.
+    pub request_id: Option<String>,
+    /// Optional idempotency key from `Idempotency-Key` header; used for place_order and capture_payment.
+    pub idempotency_key: Option<String>,
 }
 
 impl Context {
@@ -47,6 +51,16 @@ impl Context {
             Some(AuthSource::Jwt(id)) | Some(AuthSource::Session(id)) => Some(id.as_str()),
             None => None,
         }
+    }
+
+    /// Request ID for this request; propagated to gRPC for distributed tracing.
+    pub fn request_id(&self) -> Option<&str> {
+        self.request_id.as_deref()
+    }
+
+    /// Idempotency key from header, when present; used to dedupe place_order and capture_payment.
+    pub fn idempotency_key(&self) -> Option<&str> {
+        self.idempotency_key.as_deref()
     }
 }
 

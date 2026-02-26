@@ -2,7 +2,7 @@ use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 
 use crate::resolvers::order_details::schema::{OrderDetails, SearchOrderDetails};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Order {
     pub user_id: String,
     pub order_date: String,
