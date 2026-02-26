@@ -497,4 +497,3 @@ async fn integration_cancel_order_restores_inventory() {
 
     txn.rollback().await.ok();
 }
-

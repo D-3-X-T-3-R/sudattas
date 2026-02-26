@@ -105,4 +105,3 @@ async fn integration_webhook_triggers_capture_payment() {
         "capture_payment should mark intent as processed"
     );
 }
-
