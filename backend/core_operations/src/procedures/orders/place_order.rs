@@ -154,10 +154,7 @@ pub async fn place_order(
                             user_id: existing_order.user_id,
                             order_date: existing_order.order_date.to_string(),
                             shipping_address_id: existing_order.shipping_address_id,
-                            total_amount: existing_order
-                                .total_amount
-                                .to_f64()
-                                .unwrap_or(0.0),
+                            total_amount: existing_order.total_amount.to_f64().unwrap_or(0.0),
                             status_id: existing_order.status_id,
                         }],
                     }));
