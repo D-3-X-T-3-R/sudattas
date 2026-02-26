@@ -236,6 +236,7 @@ jobs:
       run: |
         cargo test -p core_operations --test integration_users_and_cart --all-features -- --ignored
         cargo test -p core_operations --test integration_orders_and_inventory --all-features -- --ignored
+        cargo test -p core_operations --test integration_place_order_idempotency --all-features -- --ignored
         cargo test -p core_operations --test integration_webhooks --all-features -- --ignored
 
   # Aggregate test status so downstream jobs can keep `needs: test`
