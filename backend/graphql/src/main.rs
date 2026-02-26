@@ -1,4 +1,5 @@
 use dotenvy::dotenv;
+use governor::{Quota, RateLimiter};
 use graphql::health;
 use graphql::query_handler::{AuthSource, Context};
 use graphql::schema;
@@ -6,14 +7,23 @@ use graphql::security::jwks_loader::load_jwks;
 use graphql::security::jwt_validator::validate_token;
 use graphql::security::session_validator;
 use graphql::webhooks;
+use metrics_exporter_prometheus::PrometheusBuilder;
 use reqwest::StatusCode;
+use std::net::IpAddr;
+use std::num::NonZeroU32;
+use std::sync::Arc;
 use tracing::{debug, info, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
+use uuid::Uuid;
 use warp::{http::Response, reply, Filter, Rejection, Reply};
 
 #[derive(Debug)]
 struct Unauthorized {}
 impl warp::reject::Reject for Unauthorized {}
+
+#[derive(Debug)]
+struct RateLimited {}
+impl warp::reject::Reject for RateLimited {}
 
 #[tokio::main]
 async fn main() {
@@ -33,6 +43,36 @@ async fn main() {
     let jwks = load_jwks().await.expect("Failed to load JWKS");
 
     let redis_url = std::env::var("REDIS_URL").ok();
+
+    let rate_limit_per_minute: u32 = std::env::var("RATE_LIMIT_PER_MINUTE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60);
+    let rate_limiter: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>> =
+        if rate_limit_per_minute == 0 {
+            None
+        } else {
+            let n = rate_limit_per_minute.max(1);
+            let quota = Quota::per_minute(NonZeroU32::new(n).unwrap_or(NonZeroU32::MIN));
+            Some(Arc::new(RateLimiter::keyed(quota)))
+        };
+    let rate_limit_filter = {
+        let limiter = rate_limiter.clone();
+        warp::addr::remote()
+            .and(warp::any().map(move || limiter.clone()))
+            .and_then(
+                |addr: Option<std::net::SocketAddr>,
+                 lim: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>>| async move {
+                    if let (Some(addr), Some(ref l)) = (addr, lim) {
+                        if l.check_key(&addr.ip()).is_err() {
+                            return Err(warp::reject::custom(RateLimited {}));
+                        }
+                    }
+                    Ok::<(), Rejection>(())
+                },
+            )
+            .map(|_| ())
+    };
 
     let cors = warp::cors()
         .allow_any_origin()
@@ -133,7 +173,7 @@ async fn main() {
             },
         );
 
-    let graphql_copy = warp::post()
+    let graphql_route = warp::post()
         .and(warp::path("v2"))
         .and(juniper_warp::make_graphql_filter(
             schema(),
@@ -141,11 +181,17 @@ async fn main() {
         ))
         .recover(handle_auth_rejection)
         .with(cors.clone())
-        .with(warp::trace::request());
+        .with(warp::trace::trace(
+            |_| tracing::info_span!("request", request_id = %Uuid::new_v4()),
+        ));
+    let graphql_copy = rate_limit_filter
+        .clone()
+        .and(graphql_route)
+        .map(|_, reply| reply);
 
     let options_routes = warp::options().map(warp::reply).with(cors);
 
-    let webhook_route = warp::post()
+    let webhook_route_inner = warp::post()
         .and(warp::path("webhook"))
         .and(warp::path::param::<String>()) // provider: e.g. "razorpay"
         .and(warp::header::optional::<String>("x-razorpay-signature"))
@@ -160,6 +206,9 @@ async fn main() {
                     })
             },
         );
+    let webhook_route = rate_limit_filter
+        .and(webhook_route_inner)
+        .map(|_, reply| reply);
 
     // Bind address is configurable via GRAPHQL_LISTEN_ADDR (default: 0.0.0.0:8080)
     let listen_addr: std::net::SocketAddr = std::env::var("GRAPHQL_LISTEN_ADDR")
@@ -167,11 +216,24 @@ async fn main() {
         .parse()
         .expect("GRAPHQL_LISTEN_ADDR must be a valid socket address");
 
+    let prom_handle = PrometheusBuilder::new()
+        .install_recorder()
+        .expect("Prometheus metrics recorder");
+
+    let metrics_route = warp::get()
+        .and(warp::path("metrics"))
+        .and(warp::path::end())
+        .map(move || {
+            let body = prom_handle.render();
+            warp::reply::with_header(body, "content-type", "text/plain; charset=utf-8")
+        });
+
     info!(listen_addr = %listen_addr, "GraphQL service starting");
 
     warp::serve(
         load_balancer_health_check
             .or(readiness_check)
+            .or(metrics_route)
             .or(graphql_copy)
             .or(webhook_route)
             .or(options_routes),
@@ -185,6 +247,11 @@ async fn handle_auth_rejection(err: Rejection) -> Result<impl Reply, std::conver
         Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
     } else if err.find::<Unauthorized>().is_some() {
         Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED))
+    } else if err.find::<RateLimited>().is_some() {
+        Ok(reply::with_status(
+            "TOO_MANY_REQUESTS",
+            StatusCode::TOO_MANY_REQUESTS,
+        ))
     } else if let Some(_e) = err.find::<warp::filters::body::BodyDeserializeError>() {
         Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST))
     } else {
