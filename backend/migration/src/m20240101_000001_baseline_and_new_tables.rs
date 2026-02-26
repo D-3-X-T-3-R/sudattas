@@ -1,18 +1,17 @@
 use sea_orm_migration::prelude::*;
 
-/// Migration: create the six tables added during active development.
+/// Combined migration: baseline (no-op) + new commerce tables.
 ///
-/// - sessions          — guest & user Redis-backed session records
-/// - coupons           — discount codes for checkout
-/// - payment_intents   — Razorpay payment intent lifecycle
-/// - shipments         — per-order fulfillment tracking
-/// - order_events      — immutable audit log for order lifecycle changes
-/// - webhook_events    — idempotent inbound webhook records
+/// Baseline: The original 40+ tables (Users, Products, Orders, Cart, etc.) are created
+/// from the SQL dump (01_schema.sql) and are NOT re-created here.
+///
+/// New tables: sessions, coupons, payment_intents, shipments, order_events,
+/// webhook_events, idempotency_keys — all created with if_not_exists.
 pub struct Migration;
 
 impl MigrationName for Migration {
     fn name(&self) -> &str {
-        "m20250101_000001_new_tables"
+        "m20240101_000001_baseline_and_new_tables"
     }
 }
 
@@ -48,6 +47,60 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(Sessions::CreatedAt)
                             .timestamp_with_time_zone()
                             .null(),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        // idempotency_keys
+        manager
+            .create_table(
+                Table::create()
+                    .table(IdempotencyKeys::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(IdempotencyKeys::Id)
+                            .big_integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(IdempotencyKeys::Scope).string().not_null())
+                    .col(ColumnDef::new(IdempotencyKeys::Key).string().not_null())
+                    .col(
+                        ColumnDef::new(IdempotencyKeys::RequestHash)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(IdempotencyKeys::ResponseRef).string().null())
+                    .col(
+                        ColumnDef::new(IdempotencyKeys::Status)
+                            .enumeration(
+                                Alias::new("idempotency_status"),
+                                [
+                                    Alias::new("in_progress"),
+                                    Alias::new("completed"),
+                                    Alias::new("failed"),
+                                ],
+                            )
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(IdempotencyKeys::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(IdempotencyKeys::ExpiresAt)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
+                    .index(
+                        Index::create()
+                            .name("idx_idempotency_scope_key")
+                            .col(IdempotencyKeys::Scope)
+                            .col(IdempotencyKeys::Key)
+                            .unique(),
                     )
                     .to_owned(),
             )
@@ -309,6 +362,9 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
+            .drop_table(Table::drop().table(IdempotencyKeys::Table).to_owned())
+            .await?;
+        manager
             .drop_table(Table::drop().table(WebhookEvents::Table).to_owned())
             .await?;
         manager
@@ -408,4 +464,17 @@ enum WebhookEvents {
     Payload,
     Status,
     ReceivedAt,
+}
+
+#[derive(Iden)]
+enum IdempotencyKeys {
+    Table,
+    Id,
+    Scope,
+    Key,
+    RequestHash,
+    ResponseRef,
+    Status,
+    CreatedAt,
+    ExpiresAt,
 }

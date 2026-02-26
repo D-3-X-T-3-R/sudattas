@@ -65,13 +65,13 @@ jobs:
       run: cargo clippy --all-targets --all-features -- -D warnings
 
   # ============================================================================
-  # Job 2: Build and Test
+  # Job 2: Build and Test (split for parallelism)
   # ============================================================================
-  test:
-    name: Build and Test
+  test-schema-entities:
+    name: Schema & Entities
     runs-on: ubuntu-latest
     needs: lint
-    
+
     services:
       mysql:
         image: mysql:8.0
@@ -123,6 +123,11 @@ jobs:
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded successfully"
 
+        # Apply Rust migrations so new tables (e.g. idempotency_keys) exist in SUDATTAS
+        cd backend
+        DATABASE_URL="mysql://root:test_password@127.0.0.1:3306/SUDATTAS" cargo run -p migration -- up
+        cd ..
+
     - name: Regenerate entities and verify
       run: |
         cargo install sea-orm-cli
@@ -137,19 +142,119 @@ jobs:
           exit 1
         fi
 
+  test-unit-doc:
+    name: Unit & Doc Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rustfmt
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          backend/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install protobuf compiler
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler libprotobuf-dev
+        protoc --version
+
     - name: Run unit tests
       working-directory: ./backend
       run: cargo test --lib --bins --tests --all-features --no-fail-fast -- --skip ignored
+
+    - name: Run doc tests
+      working-directory: ./backend
+      run: cargo test --doc --all-features
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: sudattas_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rustfmt
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          backend/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install protobuf compiler
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler libprotobuf-dev
+        protoc --version
+
+    - name: Setup test database
+      env:
+        MYSQL_HOST: 127.0.0.1
+        MYSQL_PORT: 3306
+        MYSQL_USER: root
+        MYSQL_PASSWORD: test_password
+      run: |
+        # Wait for MySQL to be ready
+        sleep 10
+        mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
+        echo "Database schema loaded successfully"
+        cd backend
+        DATABASE_URL="mysql://root:test_password@127.0.0.1:3306/SUDATTAS" cargo run -p migration -- up
+        cd ..
 
     - name: Run integration tests
       working-directory: ./backend
       env:
         TEST_DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/SUDATTAS
-      run: cargo test --test integration_critical_paths --all-features -- --ignored
+      run: |
+        cargo test -p core_operations --test integration_users_and_cart --all-features -- --ignored
+        cargo test -p core_operations --test integration_orders_and_inventory --all-features -- --ignored
+        cargo test -p core_operations --test integration_webhooks --all-features -- --ignored
 
-    - name: Run doc tests
-      working-directory: ./backend
-      run: cargo test --doc --all-features
+  # Aggregate test status so downstream jobs can keep `needs: test`
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    needs: [test-schema-entities, test-unit-doc, test-integration]
+
+    steps:
+    - name: Aggregate test status
+      run: echo "All test sub-jobs passed"
 
   # ============================================================================
   # Job 3: Security Audit
