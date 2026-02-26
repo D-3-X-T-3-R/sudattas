@@ -278,7 +278,7 @@ async fn integration_place_order() {
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_webhook_triggers_capture_payment() {
     use core_db_entities::entity::payment_intents;
-    use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, Set};
+    use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
 
     let db = Database::connect(&test_db_url())
         .await
