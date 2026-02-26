@@ -13,7 +13,7 @@ use crate::handlers::{
 
 use core_db_entities::entity::prelude::IdempotencyKeys;
 use core_db_entities::entity::{
-    idempotency_keys, inventory, orders, sea_orm_active_enums::Status as IdempotencyStatus,
+    idempotency_keys, orders, sea_orm_active_enums::Status as IdempotencyStatus,
 };
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
@@ -67,25 +67,6 @@ pub async fn place_order(
         .iter()
         .map(|item| ((item.product_id, item.quantity), item.product_id))
         .unzip();
-
-    // Stock check: reject the order if any item exceeds available inventory.
-    for product_id in &product_ids {
-        let inv = inventory::Entity::find()
-            .filter(inventory::Column::ProductId.eq(*product_id))
-            .one(txn)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let quantity_needed = *product_quantity_map.get(product_id).unwrap_or(&0);
-        let quantity_available = inv.as_ref().and_then(|i| i.quantity_available).unwrap_or(0);
-
-        if quantity_available < quantity_needed {
-            return Err(Status::failed_precondition(format!(
-                "Insufficient stock for product {}: {} requested, {} available",
-                product_id, quantity_needed, quantity_available
-            )));
-        }
-    }
 
     let order_products =
         get_products_by_id(txn, Request::new(GetProductsByIdRequest { product_ids }))
