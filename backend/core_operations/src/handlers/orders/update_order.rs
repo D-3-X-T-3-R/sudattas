@@ -9,11 +9,11 @@ use rust_decimal::{
     prelude::{FromPrimitive, ToPrimitive},
     Decimal,
 };
-use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction,
-    EntityTrait, QueryFilter, Statement,
-};
 use sea_orm::DbBackend;
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait,
+    QueryFilter, Statement,
+};
 use tonic::{Request, Response, Status};
 
 pub async fn update_order(
