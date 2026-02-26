@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use chrono::Utc;
-use core_db_entities::entity::orders;
+use core_db_entities::entity::{order_details, order_status, orders};
 use proto::proto::core::{
     CreateOrderEventRequest, OrderResponse, OrdersResponse, UpdateOrderRequest,
 };
@@ -9,7 +9,11 @@ use rust_decimal::{
     prelude::{FromPrimitive, ToPrimitive},
     Decimal,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction,
+    EntityTrait, QueryFilter, Statement,
+};
+use sea_orm::DbBackend;
 use tonic::{Request, Response, Status};
 
 pub async fn update_order(
@@ -40,6 +44,32 @@ pub async fn update_order(
 
     match orders.update(txn).await {
         Ok(model) => {
+            // When transitioning to cancelled, restore inventory from order line items.
+            let cancelled = order_status::Entity::find()
+                .filter(order_status::Column::StatusName.eq("cancelled"))
+                .one(txn)
+                .await
+                .map_err(map_db_error_to_status)?;
+            if let Some(ref c) = cancelled {
+                if model.status_id == c.status_id {
+                    let details = order_details::Entity::find()
+                        .filter(order_details::Column::OrderId.eq(model.order_id))
+                        .all(txn)
+                        .await
+                        .map_err(map_db_error_to_status)?;
+                    for d in &details {
+                        let _ = txn
+                            .execute(Statement::from_sql_and_values(
+                                DbBackend::MySql,
+                                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable + ? WHERE ProductID = ?"#,
+                                [d.quantity.into(), d.product_id.into()],
+                            ))
+                            .await
+                            .map_err(map_db_error_to_status)?;
+                    }
+                }
+            }
+
             // Emit a status-change event if status_id changed.
             if prev_status_id.map(|p| p != model.status_id).unwrap_or(true) {
                 let _ = create_order_event(
