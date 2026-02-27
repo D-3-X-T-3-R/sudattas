@@ -18,6 +18,7 @@ use proto::proto::core::{
 };
 use sea_orm::{Database, TransactionTrait};
 use tonic::Request;
+use uuid::Uuid;
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
@@ -604,12 +605,12 @@ async fn integration_concurrent_checkouts_last_unit_exactly_one_succeeds() {
     .expect("create shipping address");
     let shipping_address_id = addr.into_inner().items[0].shipping_address_id;
 
-    let ts = std::time::SystemTime::now().elapsed().unwrap().as_millis();
+    let unique = Uuid::new_v4().to_string();
     let user_a = core_operations::handlers::users::create_user(
         &txn_setup,
         Request::new(CreateUserRequest {
-            username: format!("concurrent_a_{}", ts),
-            email: format!("concurrent_a_{}@test.local", ts),
+            username: format!("concurrent_a_{}", unique),
+            email: format!("concurrent_a_{}@test.local", unique),
             password: "SecurePass123!".to_string(),
             full_name: Some("User A".to_string()),
             address: None,
@@ -620,11 +621,12 @@ async fn integration_concurrent_checkouts_last_unit_exactly_one_succeeds() {
     .expect("create user A");
     let user_id_a = user_a.into_inner().items[0].user_id;
 
+    let unique_b = Uuid::new_v4().to_string();
     let user_b = core_operations::handlers::users::create_user(
         &txn_setup,
         Request::new(CreateUserRequest {
-            username: format!("concurrent_b_{}", ts),
-            email: format!("concurrent_b_{}@test.local", ts),
+            username: format!("concurrent_b_{}", unique_b),
+            email: format!("concurrent_b_{}@test.local", unique_b),
             password: "SecurePass123!".to_string(),
             full_name: Some("User B".to_string()),
             address: None,
@@ -1289,7 +1291,7 @@ async fn integration_coupon_usage_not_incremented_by_failed_payment() {
         "usage_count must not increment on payment.failed"
     );
 
-    // 2) payment.captured must increment usage_count
+    // 2) payment.captured must increment usage_count (Phase 5: amount + currency for verification).
     let payload_captured = serde_json::json!({
         "event": "payment.captured",
         "payload": {
@@ -1297,6 +1299,8 @@ async fn integration_coupon_usage_not_incremented_by_failed_payment() {
                 "entity": {
                     "id": "pay_ok_1",
                     "order_id": razorpay_order_id,
+                    "amount": 1500,
+                    "currency": "INR"
                 }
             }
         }
@@ -1343,10 +1347,7 @@ async fn integration_coupon_limit_enforced_under_concurrency() {
 
     // Setup in one txn and commit so both webhook txns see the data.
     let txn_setup = db.begin().await.expect("begin");
-    let code = format!(
-        "phase4_conc_{}",
-        std::time::SystemTime::now().elapsed().unwrap().as_millis()
-    );
+    let code = format!("phase4_conc_{}", Uuid::new_v4());
     let coupon = coupons::ActiveModel {
         coupon_id: ActiveValue::NotSet,
         code: ActiveValue::Set(code.clone()),
@@ -1444,19 +1445,12 @@ async fn integration_coupon_limit_enforced_under_concurrency() {
     let shipping_address_id = addr.into_inner().items[0].shipping_address_id;
 
     for i in 0..2 {
+        let u = Uuid::new_v4().to_string();
         let user = core_operations::handlers::users::create_user(
             &txn_setup,
             Request::new(CreateUserRequest {
-                username: format!(
-                    "conc_u{}_{}",
-                    i,
-                    std::time::SystemTime::now().elapsed().unwrap().as_millis()
-                ),
-                email: format!(
-                    "conc_u{}_{}@t.local",
-                    i,
-                    std::time::SystemTime::now().elapsed().unwrap().as_millis()
-                ),
+                username: format!("conc_u{}_{}", i, u),
+                email: format!("conc_u{}_{}@t.local", i, u),
                 password: "Pass123!".to_string(),
                 full_name: Some("U".to_string()),
                 address: None,
@@ -1531,6 +1525,8 @@ async fn integration_coupon_limit_enforced_under_concurrency() {
                     "entity": {
                         "id": format!("pay_conc_1_{}", intent1.intent_id),
                         "order_id": razorpay_order_id_1,
+                        "amount": intent1.amount_paise as i64,
+                        "currency": intent1.currency.as_deref().unwrap_or("INR")
                     }
                 }
             }
@@ -1549,6 +1545,8 @@ async fn integration_coupon_limit_enforced_under_concurrency() {
                     "entity": {
                         "id": format!("pay_conc_2_{}", intent2.intent_id),
                         "order_id": razorpay_order_id_2,
+                        "amount": intent2.amount_paise as i64,
+                        "currency": intent2.currency.as_deref().unwrap_or("INR")
                     }
                 }
             }
