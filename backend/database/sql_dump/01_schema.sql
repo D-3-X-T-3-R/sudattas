@@ -218,7 +218,7 @@ CREATE TABLE `Orders` (
     `ShippingAddressID` BIGINT NOT NULL,
     `TotalAmount` DECIMAL(10,2) NOT NULL COMMENT 'Legacy field, use total_paise instead',
     `StatusID` BIGINT NOT NULL,
-    `payment_status` ENUM('pending', 'authorized', 'captured', 'failed') DEFAULT 'pending',
+    `payment_status` ENUM('pending', 'authorized', 'captured', 'failed', 'needs_review') DEFAULT 'pending',
     `currency` VARCHAR(3) DEFAULT 'INR',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `subtotal_minor` BIGINT NULL DEFAULT NULL,
@@ -571,7 +571,7 @@ CREATE TABLE `payment_intents` (
     `user_id` BIGINT NULL,
     `amount_paise` INT NOT NULL,
     `currency` VARCHAR(3) DEFAULT 'INR',
-    `status` ENUM('pending', 'processed', 'failed') DEFAULT NULL,
+    `status` ENUM('pending', 'processed', 'failed', 'needs_review') DEFAULT NULL,
     `razorpay_payment_id` VARCHAR(100),
     `metadata` JSON,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -667,5 +667,6 @@ INSERT INTO `OrderStatus` (`StatusName`) VALUES
 ('shipped'),
 ('delivered'),
 ('cancelled'),
-('refunded')
+('refunded'),
+('needs_review')
 ON DUPLICATE KEY UPDATE StatusName = VALUES(StatusName);

@@ -1,18 +1,20 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::handlers::order_events::create_order_event;
 use crate::handlers::payment_intents::capture_payment;
 use chrono::Utc;
-use core_db_entities::entity::sea_orm_active_enums::Status;
+use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status};
 use core_db_entities::entity::webhook_events;
-use core_db_entities::entity::{orders, payment_intents};
+use core_db_entities::entity::{order_status, orders, payment_intents};
 use proto::proto::core::{
-    CapturePaymentRequest, IngestWebhookRequest, WebhookEventResponse, WebhookEventsResponse,
+    CapturePaymentRequest, CreateOrderEventRequest, IngestWebhookRequest, WebhookEventResponse,
+    WebhookEventsResponse,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend,
     EntityTrait, IntoActiveModel, QueryFilter, Statement,
 };
 use tonic::{Request, Response, Status as TonicStatus};
-use tracing::info;
+use tracing::{info, warn};
 
 pub async fn ingest_webhook(
     txn: &DatabaseTransaction,
@@ -98,15 +100,16 @@ async fn process_payment_captured(
     txn: &DatabaseTransaction,
     payload: &serde_json::Value,
 ) -> Result<(), TonicStatus> {
-    let payment_id = payload["payload"]["payment"]["entity"]["id"]
+    let entity = &payload["payload"]["payment"]["entity"];
+    let payment_id = entity["id"]
         .as_str()
         .ok_or_else(|| TonicStatus::invalid_argument("Missing payment id in webhook payload"))?;
 
-    // Razorpay order_id in the payload is their own "order_xxx" string — not our internal ID.
-    // Look up the payment intent by razorpay_order_id to find our intent_id.
-    let razorpay_order_id = payload["payload"]["payment"]["entity"]["order_id"]
-        .as_str()
-        .unwrap_or("");
+    // Razorpay: amount is in smallest currency unit (paise for INR).
+    let webhook_amount_paise: i64 = entity["amount"].as_i64().unwrap_or(0);
+    let webhook_currency: String = entity["currency"].as_str().unwrap_or("").to_uppercase();
+
+    let razorpay_order_id = entity["order_id"].as_str().unwrap_or("");
 
     let intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::RazorpayOrderId.eq(razorpay_order_id))
@@ -127,6 +130,54 @@ async fn process_payment_captured(
         "process_payment_captured resolved payment_intent for webhook"
     );
 
+    // Phase 5: Verify amount and currency before treating as paid.
+    let intent_paise = intent.amount_paise as i64;
+    let order = match intent.order_id {
+        Some(oid) => orders::Entity::find_by_id(oid)
+            .one(txn)
+            .await
+            .ok()
+            .flatten(),
+        None => None,
+    };
+    let order_grand_paise: Option<i64> = order.as_ref().and_then(|o| o.grand_total_minor);
+    let intent_currency = intent.currency.as_deref().unwrap_or("").to_uppercase();
+
+    // When intent has no order, verify only webhook vs intent; when it has an order, require order grand total to match too.
+    let amount_ok =
+        webhook_amount_paise == intent_paise && order_grand_paise.is_none_or(|g| g == intent_paise);
+    let currency_ok = !webhook_currency.is_empty() && webhook_currency == intent_currency;
+
+    if !amount_ok || !currency_ok {
+        warn!(
+            payment_intent_id = intent.intent_id,
+            webhook_amount_paise = webhook_amount_paise,
+            intent_paise = intent_paise,
+            order_grand_paise = ?order_grand_paise,
+            webhook_currency = %webhook_currency,
+            intent_currency = %intent_currency,
+            "payment.captured amount/currency mismatch – marking as needs_review"
+        );
+        // Mark intent and order as needs_review via raw SQL (no generated enum dependency).
+        let _ = txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "UPDATE payment_intents SET status = 'needs_review' WHERE intent_id = ?",
+                [intent.intent_id.into()],
+            ))
+            .await;
+        if let Some(order_id) = intent.order_id {
+            let _ = txn
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    r#"UPDATE Orders SET payment_status = 'needs_review', StatusID = (SELECT StatusID FROM OrderStatus WHERE StatusName = 'needs_review' LIMIT 1) WHERE OrderID = ?"#,
+                    [order_id.into()],
+                ))
+                .await;
+        }
+        return Ok(());
+    }
+
     capture_payment(
         txn,
         tonic::Request::new(CapturePaymentRequest {
@@ -136,9 +187,43 @@ async fn process_payment_captured(
     )
     .await?;
 
+    // Update order payment_status and status_id; emit order_events for payment captured.
+    if let Some(order_id) = intent.order_id {
+        let confirmed = order_status::Entity::find()
+            .filter(order_status::Column::StatusName.eq("confirmed"))
+            .one(txn)
+            .await
+            .map_err(|e| TonicStatus::internal(e.to_string()))?
+            .map(|r| r.status_id);
+        if let Some(sid) = confirmed {
+            let mut order_active: orders::ActiveModel = orders::Entity::find_by_id(order_id)
+                .one(txn)
+                .await
+                .map_err(|e| TonicStatus::internal(e.to_string()))?
+                .ok_or_else(|| TonicStatus::not_found("Order not found"))?
+                .into_active_model();
+            order_active.payment_status = ActiveValue::Set(Some(PaymentStatus::Captured));
+            order_active.status_id = ActiveValue::Set(sid);
+            order_active
+                .update(txn)
+                .await
+                .map_err(map_db_error_to_status)?;
+        }
+        let _ = create_order_event(
+            txn,
+            Request::new(CreateOrderEventRequest {
+                order_id,
+                event_type: "payment_captured".to_string(),
+                from_status: Some("pending".to_string()),
+                to_status: Some("confirmed".to_string()),
+                actor_type: "system".to_string(),
+                message: Some("Payment captured".to_string()),
+            }),
+        )
+        .await;
+    }
+
     // Phase 4: increment coupon usage_count only on verified payment (not on place_order).
-    // Enforce usage_limit under concurrency: atomic UPDATE so only one of N concurrent
-    // captures can increment when at limit.
     if let Some(order_id) = intent.order_id {
         if let Ok(Some(order)) = orders::Entity::find_by_id(order_id).one(txn).await {
             if let Some(coupon_id) = order.applied_coupon_id {
