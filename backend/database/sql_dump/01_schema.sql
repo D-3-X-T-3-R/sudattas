@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS `order_events`;
 DROP TABLE IF EXISTS `webhook_events`;
 DROP TABLE IF EXISTS `shipments`;
 DROP TABLE IF EXISTS `payment_intents`;
+DROP TABLE IF EXISTS `idempotency_keys`;
 DROP TABLE IF EXISTS `sessions`;
 DROP TABLE IF EXISTS `coupons`;
 DROP TABLE IF EXISTS `OrderDetails`;
@@ -208,7 +209,7 @@ CREATE TABLE `ShippingAddresses` (
     FOREIGN KEY (`CityID`) REFERENCES `Cities`(`CityID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `Orders` (Enhanced with payment tracking)
+-- Table structure for table `Orders` (Enhanced with payment tracking and order/coupon snapshot)
 CREATE TABLE `Orders` (
     `OrderID` BIGINT NOT NULL AUTO_INCREMENT,
     `order_number` VARCHAR(50) UNIQUE COMMENT 'SUD-2024-00001',
@@ -220,6 +221,14 @@ CREATE TABLE `Orders` (
     `payment_status` ENUM('pending', 'authorized', 'captured', 'failed') DEFAULT 'pending',
     `currency` VARCHAR(3) DEFAULT 'INR',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `subtotal_minor` BIGINT NULL DEFAULT NULL,
+    `shipping_minor` BIGINT NULL DEFAULT 0,
+    `tax_total_minor` BIGINT NULL DEFAULT 0,
+    `discount_total_minor` BIGINT NULL DEFAULT 0,
+    `grand_total_minor` BIGINT NULL DEFAULT NULL,
+    `applied_coupon_id` BIGINT NULL DEFAULT NULL,
+    `applied_coupon_code` VARCHAR(64) NULL DEFAULT NULL,
+    `applied_discount_paise` INT NULL DEFAULT NULL,
     PRIMARY KEY (`OrderID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
     FOREIGN KEY (`ShippingAddressID`) REFERENCES `ShippingAddresses`(`ShippingAddressID`),
@@ -228,13 +237,19 @@ CREATE TABLE `Orders` (
     INDEX `idx_payment_status` (`payment_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `OrderDetails`
+-- Table structure for table `OrderDetails` (with line-level snapshot)
 CREATE TABLE `OrderDetails` (
     `OrderDetailID` bigint NOT NULL AUTO_INCREMENT,
     `OrderID` bigint NOT NULL,
     `ProductID` bigint NOT NULL,
     `Quantity` bigint NOT NULL,
     `Price` decimal(10,2) NOT NULL,
+    `unit_price_minor` INT NULL DEFAULT NULL,
+    `discount_minor` INT NULL DEFAULT NULL,
+    `tax_minor` INT NULL DEFAULT NULL,
+    `sku` VARCHAR(255) NULL DEFAULT NULL,
+    `title` VARCHAR(512) NULL DEFAULT NULL,
+    `line_attrs` JSON NULL DEFAULT NULL,
     PRIMARY KEY (`OrderDetailID`),
     FOREIGN KEY (`OrderID`) REFERENCES `Orders`(`OrderID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
@@ -556,7 +571,7 @@ CREATE TABLE `payment_intents` (
     `user_id` BIGINT NULL,
     `amount_paise` INT NOT NULL,
     `currency` VARCHAR(3) DEFAULT 'INR',
-    `status` ENUM('created', 'attempted', 'paid', 'failed') DEFAULT 'created',
+    `status` ENUM('pending', 'processed', 'failed') DEFAULT NULL,
     `razorpay_payment_id` VARCHAR(100),
     `metadata` JSON,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -592,11 +607,11 @@ CREATE TABLE `coupons` (
     `min_order_value_paise` INT DEFAULT 0,
     `usage_limit` INT NULL,
     `usage_count` INT DEFAULT 0,
-    `status` ENUM('active', 'inactive') DEFAULT 'active',
+    `coupon_status` ENUM('active', 'inactive') DEFAULT 'active',
     `starts_at` TIMESTAMP NOT NULL,
     `ends_at` TIMESTAMP NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX `idx_code` (`code`, `status`)
+    INDEX `idx_code` (`code`, `coupon_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Order events for state machine audit trail
@@ -624,6 +639,20 @@ CREATE TABLE `webhook_events` (
     `received_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_webhook_id` (`webhook_id`),
     INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Idempotency keys for durable place_order / capture_payment
+CREATE TABLE `idempotency_keys` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `scope` VARCHAR(255) NOT NULL,
+    `key` VARCHAR(255) NOT NULL,
+    `request_hash` VARCHAR(255) NOT NULL,
+    `response_ref` VARCHAR(255) NULL DEFAULT NULL,
+    `status` ENUM('pending', 'processed', 'failed') NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `expires_at` TIMESTAMP NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE INDEX `idx_idempotency_scope_key` (`scope`, `key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================

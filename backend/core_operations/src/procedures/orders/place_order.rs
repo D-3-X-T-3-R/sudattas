@@ -46,6 +46,95 @@ pub async fn place_order(
 
     let req = request.into_inner();
 
+    // If an idempotency key is present, check for an existing Processed/Pending result.
+    // For Processed we must distinguish replay (same payload) from conflict (different payload):
+    // load cart and compare request_hash when cart is non-empty; if different, return AlreadyExists.
+    const IDEMPOTENCY_SCOPE: &str = "place_order";
+    if let Some(ref key) = idempotency_key {
+        if let Some(existing) = IdempotencyKeys::find()
+            .filter(idempotency_keys::Column::Scope.eq(IDEMPOTENCY_SCOPE))
+            .filter(idempotency_keys::Column::Key.eq(key.as_str()))
+            .one(txn)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+        {
+            match existing.status {
+                IdempotencyStatus::Processed => {
+                    let replay_cart = get_cart_items(
+                        txn,
+                        Request::new(GetCartItemsRequest {
+                            user_id: Some(req.user_id),
+                            session_id: None,
+                        }),
+                    )
+                    .await?
+                    .into_inner()
+                    .items;
+                    if !replay_cart.is_empty() {
+                        let cart_snapshot: Vec<_> = replay_cart
+                            .iter()
+                            .map(|item| {
+                                json!({
+                                    "product_id": item.product_id,
+                                    "quantity": item.quantity,
+                                })
+                            })
+                            .collect();
+                        let payload_json = json!({
+                            "user_id": req.user_id,
+                            "shipping_address_id": req.shipping_address_id,
+                            "coupon_code": req.coupon_code,
+                            "cart": cart_snapshot,
+                        });
+                        let incoming_hash = compute_request_hash(&payload_json.to_string());
+                        if existing.request_hash != incoming_hash {
+                            return Err(Status::already_exists(
+                                "Idempotency key reuse with different payload",
+                            ));
+                        }
+                    }
+                    let order_id: i64 = existing
+                        .response_ref
+                        .as_ref()
+                        .and_then(|s| s.parse().ok())
+                        .ok_or_else(|| {
+                            Status::internal("Invalid response_ref in idempotency_keys")
+                        })?;
+                    let existing_order = orders::Entity::find_by_id(order_id)
+                        .one(txn)
+                        .await
+                        .map_err(|e| Status::internal(e.to_string()))?
+                        .ok_or_else(|| {
+                            Status::internal("Order referenced by idempotency_keys not found")
+                        })?;
+                    info!(
+                        order_id = existing_order.order_id,
+                        user_id = existing_order.user_id,
+                        "place_order idempotent replay – returning existing order"
+                    );
+                    return Ok(Response::new(OrdersResponse {
+                        items: vec![proto::proto::core::OrderResponse {
+                            order_id: existing_order.order_id,
+                            user_id: existing_order.user_id,
+                            order_date: existing_order.order_date.to_string(),
+                            shipping_address_id: existing_order.shipping_address_id,
+                            total_amount: existing_order.total_amount.to_f64().unwrap_or(0.0),
+                            status_id: existing_order.status_id,
+                        }],
+                    }));
+                }
+                IdempotencyStatus::Pending => {
+                    return Err(Status::unavailable(
+                        "Idempotent place_order still in progress; retry later",
+                    ));
+                }
+                IdempotencyStatus::Failed => {
+                    // Allow retry; fall through to place order and update row later.
+                }
+            }
+        }
+    }
+
     let cart_items = get_cart_items(
         txn,
         Request::new(GetCartItemsRequest {
@@ -92,8 +181,8 @@ pub async fn place_order(
     });
     let request_hash = compute_request_hash(&payload_json.to_string());
 
-    // If an idempotency key is provided, consult the idempotency_keys table before mutating state.
-    const IDEMPOTENCY_SCOPE: &str = "place_order";
+    // If an idempotency key is provided, enforce payload consistency and insert Pending row if new.
+    // (Processed/Pending replay already returned above.)
     if let Some(ref key) = idempotency_key {
         if let Some(existing) = IdempotencyKeys::find()
             .filter(idempotency_keys::Column::Scope.eq(IDEMPOTENCY_SCOPE))
@@ -108,51 +197,7 @@ pub async fn place_order(
                     "Idempotency key reuse with different payload",
                 ));
             }
-
-            match existing.status {
-                IdempotencyStatus::Processed => {
-                    // Reconstruct the response from the stored order_id reference.
-                    let order_id: i64 = existing
-                        .response_ref
-                        .as_ref()
-                        .and_then(|s| s.parse().ok())
-                        .ok_or_else(|| {
-                            Status::internal("Invalid response_ref in idempotency_keys")
-                        })?;
-
-                    let existing_order = orders::Entity::find_by_id(order_id)
-                        .one(txn)
-                        .await
-                        .map_err(|e| Status::internal(e.to_string()))?
-                        .ok_or_else(|| {
-                            Status::internal("Order referenced by idempotency_keys not found")
-                        })?;
-
-                    info!(
-                        order_id = existing_order.order_id,
-                        user_id = existing_order.user_id,
-                        "place_order idempotent replay – returning existing order"
-                    );
-                    return Ok(Response::new(OrdersResponse {
-                        items: vec![proto::proto::core::OrderResponse {
-                            order_id: existing_order.order_id,
-                            user_id: existing_order.user_id,
-                            order_date: existing_order.order_date.to_string(),
-                            shipping_address_id: existing_order.shipping_address_id,
-                            total_amount: existing_order.total_amount.to_f64().unwrap_or(0.0),
-                            status_id: existing_order.status_id,
-                        }],
-                    }));
-                }
-                IdempotencyStatus::Pending => {
-                    return Err(Status::unavailable(
-                        "Idempotent place_order still in progress; retry later",
-                    ));
-                }
-                IdempotencyStatus::Failed => {
-                    // Allow retry after failure by continuing below.
-                }
-            }
+            // Existing row is Failed (Processed/Pending already returned above); allow retry, no insert.
         } else {
             // Insert a fresh in_progress row. We update it to completed/failed later.
             let ttl_hours = std::env::var("IDEMPOTENCY_WINDOW_HOURS")
@@ -197,22 +242,28 @@ pub async fn place_order(
         }
     }
 
-    // Apply coupon if provided, deriving the discounted total in paise.
-    let total_paise = if let Some(ref code) = req.coupon_code {
-        match check_coupon(txn, code, gross_paise, true).await {
-            Ok(result) if result.is_valid => result.final_amount_paise,
+    // Apply coupon if provided, deriving the discounted total in paise and coupon snapshot.
+    // Do not increment coupon usage_count here; only on verified payment (Phase 4).
+    let (total_paise, coupon_snapshot) = if let Some(ref code) = req.coupon_code {
+        match check_coupon(txn, code, gross_paise, false).await {
+            Ok(result) if result.is_valid => (
+                result.final_amount_paise,
+                Some((result.coupon_id, code.clone(), result.discount_amount_paise)),
+            ),
             Ok(result) => {
                 log::warn!("Coupon '{}' invalid at checkout: {}", code, result.reason);
-                gross_paise
+                (gross_paise, None)
             }
             Err(e) => {
                 log::warn!("Coupon check failed: {}", e);
-                gross_paise
+                (gross_paise, None)
             }
         }
     } else {
-        gross_paise
+        (gross_paise, None)
     };
+
+    let discount_total_minor = gross_paise - total_paise;
 
     let create_order = create_order(
         txn,
@@ -221,6 +272,14 @@ pub async fn place_order(
             status_id: 2, // Always start with order status is processing
             user_id: req.user_id,
             total_amount: paise_to_major_f64(total_paise),
+            subtotal_minor: Some(gross_paise),
+            shipping_minor: Some(0),
+            tax_total_minor: Some(0),
+            discount_total_minor: Some(discount_total_minor),
+            grand_total_minor: Some(total_paise),
+            applied_coupon_id: coupon_snapshot.as_ref().map(|s| s.0),
+            applied_coupon_code: coupon_snapshot.as_ref().map(|s| s.1.clone()),
+            applied_discount_paise: coupon_snapshot.as_ref().map(|s| s.2 as i32),
         }),
     )
     .await?
@@ -239,16 +298,21 @@ pub async fn place_order(
     let mut order_details: Vec<CreateOrderDetailRequest> = Vec::new();
 
     for product in order_products.iter() {
+        let quantity = product_quantity_map
+            .get(&product.product_id)
+            .unwrap()
+            .to_owned();
+        let unit_price_paise = paise_from_major_f64(product.price);
         order_details.push(CreateOrderDetailRequest {
             order_id: create_order.order_id,
             product_id: product.product_id,
-            quantity: product_quantity_map
-                .get(&product.product_id)
-                .unwrap()
-                .to_owned(),
-            // Persist unit price as-is for now; a later pass will introduce
-            // explicit snapshot fields in minor units.
+            quantity,
             price: product.price,
+            unit_price_minor: Some(unit_price_paise as i32),
+            discount_minor: None,
+            tax_minor: None,
+            sku: None,
+            title: Some(product.name.clone()),
         })
     }
 

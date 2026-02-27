@@ -6,5 +6,4 @@ members = [
     "core_operations",
     "protos",
     "graphql",
-    "migration",
 ]

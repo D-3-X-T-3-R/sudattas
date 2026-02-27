@@ -107,7 +107,7 @@ Line items for each order.
 | Quantity | INT | |
 | Price | DECIMAL(10,2) | Price at time of order |
 
-### order_events *(migration: m20250101)*
+### order_events
 Immutable audit log for order lifecycle changes.
 
 | Column | Type | Notes |
@@ -133,7 +133,7 @@ Lookup table for order status labels.
 
 ## Payment & Fulfilment Tables
 
-### payment_intents *(migration: m20250101)*
+### payment_intents
 Razorpay payment intent lifecycle tracking.
 
 | Column | Type | Notes |
@@ -150,7 +150,7 @@ Razorpay payment intent lifecycle tracking.
 | created_at | TIMESTAMP | |
 | expires_at | TIMESTAMP | Intent expiry |
 
-### shipments *(migration: m20250101)*
+### shipments
 Fulfilment tracking per order.
 
 | Column | Type | Notes |
@@ -165,7 +165,7 @@ Fulfilment tracking per order.
 | created_at | TIMESTAMP | |
 | delivered_at | TIMESTAMP | Set when status = processed |
 
-### webhook_events *(migration: m20250101)*
+### webhook_events
 Idempotent inbound webhook records.
 
 | Column | Type | Notes |
@@ -182,7 +182,7 @@ Idempotent inbound webhook records.
 
 ## Promotions & Discounts
 
-### coupons *(migration: m20250101)*
+### coupons
 
 | Column | Type | Notes |
 |---|---|---|
@@ -214,7 +214,7 @@ Marketing promotions (banner-level, not cart-level).
 
 ## Auth & Sessions
 
-### sessions *(migration: m20250101)*
+### sessions
 Guest and authenticated session records.
 
 | Column | Type | Notes |
@@ -275,25 +275,17 @@ Stock management per product.
 
 ---
 
-## Migration History
+## Schema source
 
-| Migration | Description |
-|---|---|
-| `m20240101_000001_baseline` | No-op — marks original schema dump as baseline |
-| `m20250101_000001_new_tables` | Creates: sessions, coupons, payment_intents, shipments, order_events, webhook_events |
+The database schema is maintained only in SQL files (no Rust migrations):
 
-### Running Migrations
+- **`backend/database/sql_dump/01_schema.sql`** — creates database `SUDATTAS`, drops existing tables if present, and creates all tables (Orders, OrderDetails, payment_intents, coupons, idempotency_keys, webhook_events, etc.).
+- **`backend/database/sql_dump/02_data.sql`** — optional seed/reference data.
+
+### Loading the schema
 
 ```bash
-# Apply all pending migrations
-DATABASE_URL=mysql://user:pass@host/db cargo run --bin migrate -- up
-
-# Check status
-DATABASE_URL=mysql://user:pass@host/db cargo run --bin migrate -- status
-
-# Roll back last batch
-DATABASE_URL=mysql://user:pass@host/db cargo run --bin migrate -- down
-
-# Fresh database (WARNING: drops all tables)
-DATABASE_URL=mysql://user:pass@host/db cargo run --bin migrate -- fresh
+# Load schema (and optionally data) into MySQL
+mysql -h HOST -P PORT -u USER -p < backend/database/sql_dump/01_schema.sql
+# Optional: mysql -h HOST -P PORT -u USER -p < backend/database/sql_dump/02_data.sql
 ```

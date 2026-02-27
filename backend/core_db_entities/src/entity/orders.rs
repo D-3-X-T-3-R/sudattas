@@ -24,6 +24,14 @@ pub struct Model {
     pub payment_status: Option<PaymentStatus>,
     pub currency: Option<String>,
     pub updated_at: Option<DateTimeUtc>,
+    pub subtotal_minor: Option<i64>,
+    pub shipping_minor: Option<i64>,
+    pub tax_total_minor: Option<i64>,
+    pub discount_total_minor: Option<i64>,
+    pub grand_total_minor: Option<i64>,
+    pub applied_coupon_id: Option<i64>,
+    pub applied_coupon_code: Option<String>,
+    pub applied_discount_paise: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
