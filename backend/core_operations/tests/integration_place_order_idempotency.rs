@@ -22,6 +22,7 @@ use proto::proto::core::{
 use sea_orm::{ActiveModelTrait, ActiveValue, Database, TransactionTrait};
 use serde_json::json;
 use tonic::Request;
+use uuid::Uuid;
 
 fn build_place_order_payload_json(
     user_id: i64,
@@ -46,10 +47,11 @@ fn build_place_order_payload_json(
 }
 
 async fn seed_user_and_address(txn: &sea_orm::DatabaseTransaction) -> (i64, i64) {
+    let unique = Uuid::new_v4().to_string();
     let country = core_operations::handlers::country::create_country(
         txn,
         Request::new(CreateCountryRequest {
-            country_name: "Idem Country".to_string(),
+            country_name: format!("Idem Country {}", unique),
         }),
     )
     .await
@@ -59,7 +61,7 @@ async fn seed_user_and_address(txn: &sea_orm::DatabaseTransaction) -> (i64, i64)
     let state = core_operations::handlers::state::create_state(
         txn,
         Request::new(CreateStateRequest {
-            state_name: "Idem State".to_string(),
+            state_name: format!("Idem State {}", unique),
         }),
     )
     .await
@@ -69,7 +71,7 @@ async fn seed_user_and_address(txn: &sea_orm::DatabaseTransaction) -> (i64, i64)
     let city = core_operations::handlers::city::create_city(
         txn,
         Request::new(CreateCityRequest {
-            city_name: "Idem City".to_string(),
+            city_name: format!("Idem City {}", unique),
         }),
     )
     .await
@@ -82,7 +84,7 @@ async fn seed_user_and_address(txn: &sea_orm::DatabaseTransaction) -> (i64, i64)
             country_id,
             state_id,
             city_id,
-            road: "123 Idem St".to_string(),
+            road: format!("123 Idem St {}", unique),
             apartment_no_or_name: "".to_string(),
         }),
     )
@@ -93,14 +95,8 @@ async fn seed_user_and_address(txn: &sea_orm::DatabaseTransaction) -> (i64, i64)
     let user = core_operations::handlers::users::create_user(
         txn,
         Request::new(CreateUserRequest {
-            username: format!(
-                "idem_user_{}",
-                std::time::SystemTime::now().elapsed().unwrap().as_millis()
-            ),
-            email: format!(
-                "idem_{}@test.local",
-                std::time::SystemTime::now().elapsed().unwrap().as_millis()
-            ),
+            username: format!("idem_user_{}", unique),
+            email: format!("idem_{}@test.local", unique),
             password: "SecurePass123!".to_string(),
             full_name: Some("Idem User".to_string()),
             address: None,
