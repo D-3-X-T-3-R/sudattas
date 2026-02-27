@@ -40,6 +40,14 @@ pub async fn update_order(
         payment_status: ActiveValue::NotSet,
         currency: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
+        subtotal_minor: ActiveValue::NotSet,
+        shipping_minor: ActiveValue::NotSet,
+        tax_total_minor: ActiveValue::NotSet,
+        discount_total_minor: ActiveValue::NotSet,
+        grand_total_minor: ActiveValue::NotSet,
+        applied_coupon_id: ActiveValue::NotSet,
+        applied_coupon_code: ActiveValue::NotSet,
+        applied_discount_paise: ActiveValue::NotSet,
     };
 
     match orders.update(txn).await {

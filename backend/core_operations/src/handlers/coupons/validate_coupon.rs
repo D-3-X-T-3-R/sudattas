@@ -1,6 +1,6 @@
 use chrono::Utc;
 use core_db_entities::entity::coupons;
-use core_db_entities::entity::sea_orm_active_enums::{DiscountType, Status};
+use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType};
 use proto::proto::core::{CouponResponse, CouponsResponse, ValidateCouponRequest};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status as TonicStatus};
@@ -46,8 +46,8 @@ pub async fn check_coupon(
         }
     };
 
-    // Status check — treat Pending as "active"
-    if coupon.status != Some(Status::Pending) && coupon.status.is_some() {
+    // Status check — only active coupons are usable
+    if coupon.coupon_status != Some(CouponStatus::Active) && coupon.coupon_status.is_some() {
         return Ok(coupon_invalid(
             coupon,
             order_amount_paise,

@@ -21,6 +21,12 @@ pub async fn update_order_detail(
         product_id: ActiveValue::Set(req.product_id),
         quantity: ActiveValue::Set(req.quantity),
         price: ActiveValue::Set(Decimal::from_f64(req.price).unwrap()),
+        unit_price_minor: ActiveValue::NotSet,
+        discount_minor: ActiveValue::NotSet,
+        tax_minor: ActiveValue::NotSet,
+        sku: ActiveValue::NotSet,
+        title: ActiveValue::NotSet,
+        line_attrs: ActiveValue::NotSet,
     };
     match order_details.update(txn).await {
         Ok(model) => {

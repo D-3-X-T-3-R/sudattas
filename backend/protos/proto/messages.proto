@@ -355,6 +355,14 @@ message CreateOrderRequest {
     int64 shipping_address_id = 2;
     int64 status_id = 3;
     double total_amount = 4;
+    optional int64 subtotal_minor = 5;
+    optional int64 shipping_minor = 6;
+    optional int64 tax_total_minor = 7;
+    optional int64 discount_total_minor = 8;
+    optional int64 grand_total_minor = 9;
+    optional int64 applied_coupon_id = 10;
+    optional string applied_coupon_code = 11;
+    optional int32 applied_discount_paise = 12;
 }
 
 message SearchOrderRequest {
@@ -399,6 +407,11 @@ message CreateOrderDetailRequest {
     int64 product_id = 2;
     int64 quantity = 3;
     double price = 4;
+    optional int32 unit_price_minor = 5;
+    optional int32 discount_minor = 6;
+    optional int32 tax_minor = 7;
+    optional string sku = 8;
+    optional string title = 9;
 }
 
 message CreateOrderDetailsRequest {
