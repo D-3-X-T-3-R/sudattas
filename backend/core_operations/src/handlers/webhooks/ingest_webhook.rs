@@ -1,13 +1,12 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::handlers::order_events::create_order_event;
 use crate::handlers::payment_intents::capture_payment;
+use crate::order_state_machine;
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status};
 use core_db_entities::entity::webhook_events;
-use core_db_entities::entity::{order_status, orders, payment_intents};
+use core_db_entities::entity::{orders, payment_intents};
 use proto::proto::core::{
-    CapturePaymentRequest, CreateOrderEventRequest, IngestWebhookRequest, WebhookEventResponse,
-    WebhookEventsResponse,
+    CapturePaymentRequest, IngestWebhookRequest, WebhookEventResponse, WebhookEventsResponse,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend,
@@ -184,7 +183,6 @@ async fn process_payment_captured(
             intent_currency = %intent_currency,
             "payment.captured amount/currency mismatch – marking as needs_review"
         );
-        // Mark intent and order as needs_review via raw SQL (no generated enum dependency).
         let _ = txn
             .execute(Statement::from_sql_and_values(
                 DbBackend::MySql,
@@ -193,13 +191,16 @@ async fn process_payment_captured(
             ))
             .await;
         if let Some(order_id) = intent.order_id {
-            let _ = txn
-                .execute(Statement::from_sql_and_values(
-                    DbBackend::MySql,
-                    r#"UPDATE Orders SET payment_status = 'needs_review', StatusID = (SELECT StatusID FROM OrderStatus WHERE StatusName = 'needs_review' LIMIT 1) WHERE OrderID = ?"#,
-                    [order_id.into()],
-                ))
-                .await;
+            let _ = order_state_machine::transition_order_status(
+                txn,
+                order_id,
+                order_state_machine::OrderState::NeedsReview,
+                "payment_mismatch",
+                "system",
+                Some("Amount/currency mismatch – needs review"),
+                Some(PaymentStatus::NeedsReview),
+            )
+            .await;
         }
         return Ok(());
     }
@@ -213,38 +214,15 @@ async fn process_payment_captured(
     )
     .await?;
 
-    // Update order payment_status and status_id; emit order_events for payment captured.
     if let Some(order_id) = intent.order_id {
-        let confirmed = order_status::Entity::find()
-            .filter(order_status::Column::StatusName.eq("confirmed"))
-            .one(txn)
-            .await
-            .map_err(|e| TonicStatus::internal(e.to_string()))?
-            .map(|r| r.status_id);
-        if let Some(sid) = confirmed {
-            let mut order_active: orders::ActiveModel = orders::Entity::find_by_id(order_id)
-                .one(txn)
-                .await
-                .map_err(|e| TonicStatus::internal(e.to_string()))?
-                .ok_or_else(|| TonicStatus::not_found("Order not found"))?
-                .into_active_model();
-            order_active.payment_status = ActiveValue::Set(Some(PaymentStatus::Captured));
-            order_active.status_id = ActiveValue::Set(sid);
-            order_active
-                .update(txn)
-                .await
-                .map_err(map_db_error_to_status)?;
-        }
-        let _ = create_order_event(
+        let _ = order_state_machine::transition_order_status(
             txn,
-            Request::new(CreateOrderEventRequest {
-                order_id,
-                event_type: "payment_captured".to_string(),
-                from_status: Some("pending".to_string()),
-                to_status: Some("confirmed".to_string()),
-                actor_type: "system".to_string(),
-                message: Some("Payment captured".to_string()),
-            }),
+            order_id,
+            order_state_machine::OrderState::Paid,
+            "payment_captured",
+            "system",
+            Some("Payment captured"),
+            Some(PaymentStatus::Captured),
         )
         .await;
     }
