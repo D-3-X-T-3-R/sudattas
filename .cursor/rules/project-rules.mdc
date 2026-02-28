@@ -1,0 +1,123 @@
+---
+description: Project rules – generated files, testing/verification, no new SQL files
+alwaysApply: true
+---
+
+# Project Rules
+
+## 1. Generated Files and Entity Regeneration
+
+### 1.1 Never manually edit generated files
+
+Do **not** add, edit, or remove code in generated files. These include (but are not limited to):
+
+- `backend/core_db_entities/src/entity/*.rs` (SeaORM entities)
+- Any file that is produced by a codegen or schema-based generator in this project
+
+If the schema or generator output changes, regenerate the files instead of hand-editing them.
+
+### 1.2 Preparing to generate: Docker database
+
+Before running the entity generator:
+
+1. **Check if the `sudattas_local` Docker image (or container) is running** and **stop it** so the database is in a clean state for the generate script.
+2. **Start the database** by running:
+   ```
+   D:\personal\sudattas\backend\database\run_database_windows.bat
+   ```
+   This builds and runs the MySQL container so the schema is available at `127.0.0.1:3306` (user `root`, password `12345678`, database `SUDATTAS`).
+
+### 1.3 Generating entities
+
+After the database is running with the current schema:
+
+1. Run the entity generator script:
+   ```
+   D:\personal\sudattas\backend\core_db_entities\src\entity\generate.ps1
+   ```
+   (Run from PowerShell; the script expects to run from `core_db_entities/src/entity` or with the correct working directory so it can connect to the local MySQL and write the `.rs` entity files.)
+
+This script uses `sea-orm-cli generate entity` against the local Docker MySQL and overwrites the entity files in `backend/core_db_entities/src/entity/`.
+
+### 1.4 When you change the schema
+
+- **Always regenerate entities after schema changes** (e.g. after editing `backend/database/sql_dump/01_schema.sql`).
+- **Generate before making any other code changes** that depend on the new schema. Order of operations:
+  1. Apply or load the schema (e.g. run the SQL or ensure the DB used by the script has the new schema).
+  2. Run the Docker and generate steps above so entity files match the schema.
+  3. Then update application code, tests, and migrations that depend on the new entities.
+
+Do not add or edit generated entity code by hand to match schema changes; always regenerate.
+
+---
+
+## 2. No New SQL Files
+
+Do **not** create any new `.sql` files in this project.
+
+- **Schema changes:** Edit the existing schema file (e.g. `backend/database/sql_dump/01_schema.sql`) instead of adding new migration or schema files.
+- **Data or migrations:** Add statements to the appropriate existing SQL file(s) that the project already uses (e.g. `02_data.sql` if it exists for data).
+
+If a change would require a new `.sql` file, incorporate it into an existing SQL file instead.
+
+---
+
+## 3. Testing and Verification
+
+### 3.1 Unit tests when logic is added or updated
+
+Whenever you add or change logic (handlers, procedures, helpers):
+
+- Add **unit tests** that cover:
+  - **Success cases**: happy path with valid inputs.
+  - **Failure cases**: invalid input, missing data, permission/validation errors.
+  - **Edge cases**: empty inputs, boundaries, nil/zero, duplicate keys, concurrent behavior where relevant.
+
+Use the project’s existing patterns (e.g. `handler_*` tests with mock DB, `#[test]` in modules).
+
+### 3.2 Integration tests when logic is added or updated
+
+Whenever you add or change logic that touches the database or cross-service behavior:
+
+- Add **integration tests** (in `backend/core_operations/tests/`) that cover:
+  - **Success cases**: full flow against a real DB (with `TEST_DATABASE_URL`).
+  - **Failure cases**: bad data, constraint violations, not-found, conflict.
+  - **Edge cases**: empty results, limits, idempotency, concurrency if applicable.
+
+Mark tests that need the DB with `#[ignore = "requires TEST_DATABASE_URL and ..."]` and run them with `--ignored`.
+
+### 3.3 Verification steps after making changes
+
+Before considering the task done, run the following from the **backend** directory and ensure all succeed:
+
+**a. Clippy (no warnings)**  
+```bash
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+**b. All unit tests**  
+```bash
+cargo test --all-features -- --skip ignored
+```
+(Or equivalent so that all non-ignored tests run.)
+
+**c. Integration tests**  
+- Ensure the **Docker image/container for `sudattas_local`** (or the project MySQL) is **running** and the schema is loaded.
+- Set the test DB URL, then run all integration tests:
+  - **PowerShell:**  
+    `$env:TEST_DATABASE_URL = "mysql://root:12345678@127.0.0.1:3306/SUDATTAS"`  
+  - **Then:**  
+    `cargo test -p core_operations --test '*' --all-features -- --ignored`
+
+**d. Format**  
+```bash
+cargo fmt
+```
+
+### 3.4 Definition of done
+
+The task is **done only when**:
+
+- All of step 3.3 has been run successfully: clippy passes, all unit tests pass, integration tests pass (with DB running and `TEST_DATABASE_URL` set), and `cargo fmt` has been run.
+
+If any of these fail, fix the issues and re-run until everything passes.
