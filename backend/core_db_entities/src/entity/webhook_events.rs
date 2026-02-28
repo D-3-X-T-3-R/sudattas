@@ -11,7 +11,6 @@ pub struct Model {
     pub event_id: i64,
     pub provider: String,
     pub event_type: String,
-    #[sea_orm(unique)]
     pub webhook_id: String,
     #[sea_orm(unique)]
     pub provider_event_id: Option<String>,

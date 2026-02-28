@@ -234,7 +234,8 @@ CREATE TABLE `Orders` (
     FOREIGN KEY (`ShippingAddressID`) REFERENCES `ShippingAddresses`(`ShippingAddressID`),
     FOREIGN KEY (`StatusID`) REFERENCES `OrderStatus`(`StatusID`),
     INDEX `idx_order_number` (`order_number`),
-    INDEX `idx_payment_status` (`payment_status`)
+    INDEX `idx_payment_status` (`payment_status`),
+    INDEX `idx_orders_date_status_user` (`OrderDate`, `StatusID`, `UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `OrderDetails` (with line-level snapshot)
@@ -252,7 +253,8 @@ CREATE TABLE `OrderDetails` (
     `line_attrs` JSON NULL DEFAULT NULL,
     PRIMARY KEY (`OrderDetailID`),
     FOREIGN KEY (`OrderID`) REFERENCES `Orders`(`OrderID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
+    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
+    INDEX `idx_order_details_order_id` (`OrderID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Reviews` (Enhanced with moderation)
@@ -334,7 +336,8 @@ CREATE TABLE `Inventory` (
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`InventoryID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`SupplierID`) REFERENCES `Suppliers`(`SupplierID`)
+    FOREIGN KEY (`SupplierID`) REFERENCES `Suppliers`(`SupplierID`),
+    INDEX `idx_inventory_product_id` (`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `ProductAttributes`
@@ -571,13 +574,14 @@ CREATE TABLE `payment_intents` (
     `user_id` BIGINT NULL,
     `amount_paise` INT NOT NULL,
     `currency` VARCHAR(3) DEFAULT 'INR',
-    `status` ENUM('pending', 'processed', 'failed', 'needs_review') DEFAULT NULL,
-    `razorpay_payment_id` VARCHAR(100),
+    `status` ENUM('pending', 'processed', 'failed', 'needs_review') NOT NULL DEFAULT 'pending',
+    `razorpay_payment_id` VARCHAR(100) NULL,
     `metadata` JSON,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `expires_at` TIMESTAMP NOT NULL,
     FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
     FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`),
+    UNIQUE KEY `uq_razorpay_payment_id` (`razorpay_payment_id`),
     INDEX `idx_razorpay_order` (`razorpay_order_id`),
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -611,7 +615,8 @@ CREATE TABLE `coupons` (
     `starts_at` TIMESTAMP NOT NULL,
     `ends_at` TIMESTAMP NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX `idx_code` (`code`, `coupon_status`)
+    INDEX `idx_code` (`code`, `coupon_status`),
+    INDEX `idx_coupons_code_ends_at` (`code`, `ends_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Order events for state machine audit trail
@@ -628,16 +633,17 @@ CREATE TABLE `order_events` (
     INDEX `idx_order` (`order_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Webhook events for idempotent webhook processing
+-- Webhook events for idempotent webhook processing (webhook_id unique per provider)
 CREATE TABLE `webhook_events` (
     `event_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `provider` VARCHAR(50) NOT NULL,
     `event_type` VARCHAR(100) NOT NULL,
-    `webhook_id` VARCHAR(255) UNIQUE NOT NULL,
+    `webhook_id` VARCHAR(255) NOT NULL,
     `provider_event_id` VARCHAR(255) NULL UNIQUE COMMENT 'e.g. x-razorpay-event-id for replay protection',
     `payload` JSON NOT NULL,
     `status` ENUM('pending', 'processed', 'failed') DEFAULT 'pending',
     `received_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uq_webhook_provider_id` (`provider`, `webhook_id`),
     INDEX `idx_webhook_id` (`webhook_id`),
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -659,6 +665,11 @@ CREATE TABLE `idempotency_keys` (
 -- ============================================================================
 -- DEFAULT DATA
 -- ============================================================================
+
+-- P1 Data model: FK from Orders to coupons (coupons table created after Orders)
+ALTER TABLE `Orders`
+  ADD CONSTRAINT `fk_orders_applied_coupon`
+  FOREIGN KEY (`applied_coupon_id`) REFERENCES `coupons`(`coupon_id`);
 
 -- Insert default order statuses
 INSERT INTO `OrderStatus` (`StatusName`) VALUES

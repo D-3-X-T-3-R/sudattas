@@ -24,7 +24,7 @@ pub async fn create_payment_intent(
         user_id: ActiveValue::Set(Some(req.user_id)),
         amount_paise: ActiveValue::Set(req.amount_paise as i32),
         currency: ActiveValue::Set(Some(currency)),
-        status: ActiveValue::Set(Some(Status::Pending)),
+        status: ActiveValue::Set(Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
         created_at: ActiveValue::Set(Some(Utc::now())),
@@ -40,10 +40,7 @@ pub async fn create_payment_intent(
                 user_id: model.user_id,
                 amount_paise: model.amount_paise as i64,
                 currency: model.currency,
-                status: model
-                    .status
-                    .map(|s| format!("{:?}", s).to_lowercase())
-                    .unwrap_or_else(|| "pending".to_string()),
+                status: format!("{:?}", model.status).to_lowercase(),
                 razorpay_payment_id: model.razorpay_payment_id,
                 created_at: model.created_at.map(|t| t.to_string()).unwrap_or_default(),
                 expires_at: model.expires_at.to_string(),
