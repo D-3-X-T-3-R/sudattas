@@ -5,6 +5,7 @@ use std::time::Duration;
 // Phase 1 additions
 pub mod auth;
 pub mod money;
+pub mod observability;
 pub mod services;
 
 use proto::proto::core::{

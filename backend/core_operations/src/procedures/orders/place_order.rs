@@ -342,6 +342,7 @@ pub async fn place_order(
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
         if result.rows_affected() == 0 {
+            crate::observability::record_inventory_update_failure_total();
             return Err(Status::failed_precondition(format!(
                 "Insufficient stock for product {} (need {}); inventory update had no effect",
                 product_id, qty

@@ -68,6 +68,7 @@ pub async fn capture_payment(
             }));
         } else {
             // Conflicting payment ids for the same intent: mark as NeedsReview at the caller.
+            crate::observability::record_payment_capture_conflict_total();
             info!(
                 payment_intent_id = intent.intent_id,
                 existing_razorpay_payment_id = %existing_gateway_id,
@@ -89,6 +90,7 @@ pub async fn capture_payment(
 
     if let Some(other) = existing_for_gateway {
         if other.intent_id != intent.intent_id {
+            crate::observability::record_payment_capture_conflict_total();
             info!(
                 payment_intent_id = other.intent_id,
                 new_intent_id = intent.intent_id,
