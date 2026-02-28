@@ -15,7 +15,8 @@ pub struct Model {
     pub user_id: Option<i64>,
     pub amount_paise: i32,
     pub currency: Option<String>,
-    pub status: Option<Status>,
+    pub status: Status,
+    #[sea_orm(unique)]
     pub razorpay_payment_id: Option<String>,
     pub metadata: Option<Json>,
     pub created_at: Option<DateTimeUtc>,

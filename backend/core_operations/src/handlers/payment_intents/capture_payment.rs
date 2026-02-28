@@ -57,10 +57,7 @@ pub async fn capture_payment(
                     user_id: intent.user_id,
                     amount_paise: intent.amount_paise as i64,
                     currency: intent.currency.clone(),
-                    status: intent
-                        .status
-                        .map(|s| format!("{:?}", s).to_lowercase())
-                        .unwrap_or_else(|| "processed".to_string()),
+                    status: format!("{:?}", intent.status).to_lowercase(),
                     razorpay_payment_id: intent.razorpay_payment_id.clone(),
                     created_at: intent.created_at.map(|t| t.to_string()).unwrap_or_default(),
                     expires_at: intent.expires_at.to_string(),
@@ -104,7 +101,7 @@ pub async fn capture_payment(
     }
 
     let mut model = intent.into_active_model();
-    model.status = ActiveValue::Set(Some(Status::Processed));
+    model.status = ActiveValue::Set(Status::Processed);
     model.razorpay_payment_id = ActiveValue::Set(Some(req.razorpay_payment_id));
 
     match model.update(txn).await {
@@ -116,10 +113,7 @@ pub async fn capture_payment(
                 user_id: updated.user_id,
                 amount_paise: updated.amount_paise as i64,
                 currency: updated.currency,
-                status: updated
-                    .status
-                    .map(|s| format!("{:?}", s).to_lowercase())
-                    .unwrap_or_else(|| "processed".to_string()),
+                status: format!("{:?}", updated.status).to_lowercase(),
                 razorpay_payment_id: updated.razorpay_payment_id,
                 created_at: updated
                     .created_at
