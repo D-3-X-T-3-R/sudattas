@@ -5,6 +5,7 @@ use crate::handlers::coupons::{
 };
 use crate::handlers::idempotency::compute_request_hash;
 use crate::handlers::order_events::create_order_event;
+use crate::handlers::outbox::{enqueue_outbox_event, ORDER_PLACED};
 use crate::money::{
     paise_checked_add, paise_checked_mul, paise_from_major_f64, paise_to_major_f64,
 };
@@ -423,6 +424,17 @@ pub async fn place_order(
                 create_order.order_id
             )),
         }),
+    )
+    .await;
+
+    // P1 Outbox: enqueue OrderPlaced for transactional notification
+    let payload = json!({ "order_id": create_order.order_id, "user_id": create_order.user_id });
+    let _ = enqueue_outbox_event(
+        txn,
+        ORDER_PLACED,
+        "order",
+        &create_order.order_id.to_string(),
+        payload,
     )
     .await;
 

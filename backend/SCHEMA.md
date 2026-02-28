@@ -178,6 +178,20 @@ Idempotent inbound webhook records.
 | status | ENUM(pending, processed, failed) | Processing state |
 | received_at | TIMESTAMP | |
 
+### outbox_events (P1)
+Transactional notification outbox: worker publishes pending events (emails/SMS) idempotently.
+
+| Column | Type | Notes |
+|---|---|---|
+| event_id | BIGINT PK | |
+| event_type | VARCHAR | OrderPlaced, PaymentCaptured, Shipped, Delivered, Refunded |
+| aggregate_type | VARCHAR | e.g. `order` |
+| aggregate_id | VARCHAR | e.g. order_id |
+| payload | JSON | Template variables |
+| status | ENUM(pending, processed, failed) | processed = published |
+| created_at | TIMESTAMP | |
+| published_at | TIMESTAMP | Set when status = processed |
+
 ---
 
 ## Promotions & Discounts

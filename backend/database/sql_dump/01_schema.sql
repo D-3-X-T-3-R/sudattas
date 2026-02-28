@@ -6,6 +6,7 @@ USE `SUDATTAS`;
 -- Dropping existing tables if they exist;
 -- Dropping tables with dependencies first
 
+DROP TABLE IF EXISTS `outbox_events`;
 DROP TABLE IF EXISTS `order_events`;
 DROP TABLE IF EXISTS `webhook_events`;
 DROP TABLE IF EXISTS `shipments`;
@@ -702,6 +703,21 @@ CREATE TABLE `idempotency_keys` (
     `expires_at` TIMESTAMP NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE INDEX `idx_idempotency_scope_key` (`scope`, `key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P1 Outbox for transactional notifications (emails/SMS); worker publishes pending idempotently
+CREATE TABLE `outbox_events` (
+    `event_id` BIGINT NOT NULL AUTO_INCREMENT,
+    `event_type` VARCHAR(50) NOT NULL COMMENT 'OrderPlaced, PaymentCaptured, Shipped, Delivered, Refunded',
+    `aggregate_type` VARCHAR(50) NOT NULL DEFAULT 'order',
+    `aggregate_id` VARCHAR(255) NOT NULL,
+    `payload` JSON NOT NULL,
+    `status` ENUM('pending', 'processed', 'failed') NOT NULL DEFAULT 'pending' COMMENT 'processed = published for delivery',
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `published_at` TIMESTAMP NULL,
+    PRIMARY KEY (`event_id`),
+    INDEX `idx_outbox_status` (`status`),
+    INDEX `idx_outbox_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
