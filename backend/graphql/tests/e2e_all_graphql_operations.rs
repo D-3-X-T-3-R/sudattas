@@ -22,12 +22,11 @@ async fn post_gql(
     if let Some(v) = variables {
         body["variables"] = v;
     }
-    let res = client
-        .post(format!("{}/v2", base_url()))
-        .json(&body)
-        .send()
-        .await
-        .expect("POST /v2");
+    let mut req = client.post(format!("{}/v2", base_url())).json(&body);
+    if let Ok(session_id) = std::env::var("GRAPHQL_SESSION_ID") {
+        req = req.header("X-Session-Id", session_id);
+    }
+    let res = req.send().await.expect("POST /v2");
     let status = res.status();
     let body: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
     (status, body)

@@ -1,6 +1,8 @@
-# Local development: MySQL with SUDATTAS schema
+# Local development: MySQL + Redis for E2E and session auth
 # Run from backend/: docker-compose up -d
-# Then: sea-orm-cli generate entity -u "mysql://root:12345678@localhost:3306/SUDATTAS" -o core_db_entities/src/entity --with-serde both --date-time-crate chrono
+# Load schema: mysql -h 127.0.0.1 -u root -p12345678 < database/sql_dump/01_schema.sql
+# Seed session for E2E: redis-cli SET session:ci-e2e-session 1
+# Then: .\run_e2e_local.ps1 (or run E2E tests manually)
 
 services:
   mysql:
@@ -17,3 +19,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: sudattas-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

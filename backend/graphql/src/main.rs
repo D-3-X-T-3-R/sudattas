@@ -1,5 +1,6 @@
 use dotenvy::dotenv;
 use governor::{Quota, RateLimiter};
+use graphql::graphql_handler;
 use graphql::health;
 use graphql::query_handler::{AuthSource, Context};
 use graphql::schema;
@@ -58,6 +59,36 @@ async fn main() {
         };
     let rate_limit_filter = {
         let limiter = rate_limiter.clone();
+        warp::addr::remote()
+            .and(warp::any().map(move || limiter.clone()))
+            .and_then(
+                |addr: Option<std::net::SocketAddr>,
+                 lim: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>>| async move {
+                    if let (Some(addr), Some(ref l)) = (addr, lim) {
+                        if l.check_key(&addr.ip()).is_err() {
+                            return Err(warp::reject::custom(RateLimited {}));
+                        }
+                    }
+                    Ok::<(), Rejection>(())
+                },
+            )
+            .map(|_| ())
+    };
+
+    let webhook_limit_per_minute: u32 = std::env::var("RATE_LIMIT_WEBHOOK_PER_MINUTE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
+    let webhook_rate_limiter: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>> =
+        if webhook_limit_per_minute == 0 {
+            None
+        } else {
+            let n = webhook_limit_per_minute.max(1);
+            let quota = Quota::per_minute(NonZeroU32::new(n).unwrap_or(NonZeroU32::MIN));
+            Some(Arc::new(RateLimiter::keyed(quota)))
+        };
+    let webhook_rate_limit_filter = {
+        let limiter = webhook_rate_limiter.clone();
         warp::addr::remote()
             .and(warp::any().map(move || limiter.clone()))
             .and_then(
@@ -191,12 +222,19 @@ async fn main() {
             },
         );
 
+    let graphql_schema = Arc::new(schema());
     let graphql_route = warp::post()
         .and(warp::path("v2"))
-        .and(juniper_warp::make_graphql_filter(
-            schema(),
-            context_filter.boxed(),
-        ))
+        .and(warp::path::end())
+        .and(context_filter.clone())
+        .and(warp::body::bytes())
+        .and_then({
+            let schema = graphql_schema.clone();
+            move |ctx: Context, body: warp::hyper::body::Bytes| {
+                let schema = schema.clone();
+                async move { graphql_handler::handle_graphql_request(ctx, body, schema).await }
+            }
+        })
         .recover(handle_auth_rejection)
         .with(cors.clone())
         .with(warp::trace::trace(
@@ -228,7 +266,7 @@ async fn main() {
                     })
             },
         );
-    let webhook_route = rate_limit_filter
+    let webhook_route = webhook_rate_limit_filter
         .and(webhook_route_inner)
         .map(|_, reply| reply);
 
@@ -252,35 +290,43 @@ async fn main() {
 
     info!(listen_addr = %listen_addr, "GraphQL service starting");
 
-    warp::serve(
-        load_balancer_health_check
-            .or(readiness_check)
-            .or(metrics_route)
-            .or(graphql_copy)
-            .or(webhook_route)
-            .or(options_routes),
-    )
-    .run(listen_addr)
-    .await
+    // No catch-all route: unmatched paths reject. Top-level recover turns NotFound -> 404.
+    let routes = load_balancer_health_check
+        .or(readiness_check)
+        .or(metrics_route)
+        .or(graphql_copy)
+        .or(webhook_route)
+        .or(options_routes)
+        .recover(handle_auth_rejection);
+
+    warp::serve(routes).run(listen_addr).await
 }
 
 async fn handle_auth_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
-    if err.is_not_found() {
-        Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
-    } else if err.find::<Unauthorized>().is_some() {
-        Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED))
-    } else if err.find::<RateLimited>().is_some() {
-        Ok(reply::with_status(
+    // Check auth/rate-limit first: when graphql rejects (e.g. 401), we still try options() which
+    // adds MethodNotAllowed; we must return 401 not 404 for POST /v2 with bad auth.
+    if err.find::<Unauthorized>().is_some() {
+        return Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED));
+    }
+    if err.find::<RateLimited>().is_some() {
+        return Ok(reply::with_status(
             "TOO_MANY_REQUESTS",
             StatusCode::TOO_MANY_REQUESTS,
-        ))
-    } else if let Some(_e) = err.find::<warp::filters::body::BodyDeserializeError>() {
-        Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST))
-    } else {
-        warn!("Unhandled rejection: {:?}", err);
-        Ok(reply::with_status(
-            "INTERNAL_SERVER_ERROR",
-            StatusCode::INTERNAL_SERVER_ERROR,
-        ))
+        ));
     }
+    if let Some(_e) = err.find::<warp::filters::body::BodyDeserializeError>() {
+        return Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST));
+    }
+    if err.is_not_found() {
+        return Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND));
+    }
+    if err.find::<warp::reject::MethodNotAllowed>().is_some() {
+        // No route matched (e.g. GET /unknown-path); last filter tried was options() -> 405.
+        return Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND));
+    }
+    warn!("Unhandled rejection: {:?}", err);
+    Ok(reply::with_status(
+        "INTERNAL_SERVER_ERROR",
+        StatusCode::INTERNAL_SERVER_ERROR,
+    ))
 }

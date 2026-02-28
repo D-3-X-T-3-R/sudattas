@@ -1,10 +1,13 @@
 //! Library exports for the GraphQL service. Used by the binary and by integration tests.
 
+pub mod graphql_handler;
+pub mod graphql_limits;
 pub mod health;
 pub mod idempotency;
 pub mod query_handler;
 pub mod resolvers;
 pub mod security;
+pub mod validation;
 pub mod webhooks;
 
 pub use juniper::{EmptySubscription, RootNode};

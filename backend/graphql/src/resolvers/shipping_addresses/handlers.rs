@@ -9,6 +9,7 @@ use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64},
 };
+use crate::validation;
 
 fn address_response_to_gql(a: ShippingAddressResponse) -> ShippingAddress {
     ShippingAddress {
@@ -39,6 +40,7 @@ pub(crate) async fn get_shipping_addresses() -> Result<Vec<ShippingAddress>, Gql
 pub(crate) async fn create_shipping_address(
     input: NewShippingAddress,
 ) -> Result<Vec<ShippingAddress>, GqlError> {
+    validation::validate_address_road(&input.road)?;
     let mut client = connect_grpc_client().await?;
     let response = client
         .create_shipping_address(CreateShippingAddressRequest {
@@ -61,6 +63,7 @@ pub(crate) async fn create_shipping_address(
 pub(crate) async fn update_shipping_address(
     input: ShippingAddressMutation,
 ) -> Result<Vec<ShippingAddress>, GqlError> {
+    validation::validate_address_road(&input.road)?;
     let mut client = connect_grpc_client().await?;
     let response = client
         .update_shipping_address(UpdateShippingAddressRequest {
