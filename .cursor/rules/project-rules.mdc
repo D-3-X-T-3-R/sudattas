@@ -16,35 +16,30 @@ Do **not** add, edit, or remove code in generated files. These include (but are 
 
 If the schema or generator output changes, regenerate the files instead of hand-editing them.
 
-### 1.2 Preparing to generate: Docker database
+### 1.2 Start database and regenerate entities
 
-Before running the entity generator:
+Use the **start-db** script in `backend`. It stops any running container using an image named `sudattas_*`, starts the database (build and run via `run_database_windows.bat`), then regenerates SeaORM entities (via `core_db_entities/src/entity/generate.ps1`).
 
-1. **Check if the `sudattas_local` Docker image (or container) is running** and **stop it** so the database is in a clean state for the generate script.
-2. **Start the database** by running:
-   ```
-   D:\personal\sudattas\backend\database\run_database_windows.bat
-   ```
-   This builds and runs the MySQL container so the schema is available at `127.0.0.1:3306` (user `root`, password `12345678`, database `SUDATTAS`).
+**From PowerShell** (from repo root or from `backend`):
 
-### 1.3 Generating entities
+```powershell
+.\backend\start-db.ps1
+```
 
-After the database is running with the current schema:
+Or from the backend directory:
 
-1. Run the entity generator script:
-   ```
-   D:\personal\sudattas\backend\core_db_entities\src\entity\generate.ps1
-   ```
-   (Run from PowerShell; the script expects to run from `core_db_entities/src/entity` or with the correct working directory so it can connect to the local MySQL and write the `.rs` entity files.)
+```powershell
+.\start-db.ps1
+```
 
-This script uses `sea-orm-cli generate entity` against the local Docker MySQL and overwrites the entity files in `backend/core_db_entities/src/entity/`.
+The script ensures the MySQL container is running with the schema from `backend/database/sql_dump/01_schema.sql` and overwrites entity files in `backend/core_db_entities/src/entity/`.
 
-### 1.4 When you change the schema
+### 1.3 When you change the schema
 
 - **Always regenerate entities after schema changes** (e.g. after editing `backend/database/sql_dump/01_schema.sql`).
 - **Generate before making any other code changes** that depend on the new schema. Order of operations:
-  1. Apply or load the schema (e.g. run the SQL or ensure the DB used by the script has the new schema).
-  2. Run the Docker and generate steps above so entity files match the schema.
+  1. Edit the schema file (e.g. `01_schema.sql`).
+  2. Run `backend/start-db.ps1` so the database is rebuilt with the new schema and entity files are regenerated.
   3. Then update application code, tests, and migrations that depend on the new entities.
 
 Do not add or edit generated entity code by hand to match schema changes; always regenerate.
@@ -102,7 +97,7 @@ cargo test --all-features -- --skip ignored
 (Or equivalent so that all non-ignored tests run.)
 
 **c. Integration tests**  
-- Ensure the **Docker image/container for `sudattas_local`** (or the project MySQL) is **running** and the schema is loaded.
+- Ensure the database is running (e.g. run `backend/start-db.ps1` so the MySQL container and schema are up).
 - Set the test DB URL, then run all integration tests:
   - **PowerShell:**  
     `$env:TEST_DATABASE_URL = "mysql://root:12345678@127.0.0.1:3306/SUDATTAS"`  

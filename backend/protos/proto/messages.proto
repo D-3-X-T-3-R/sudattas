@@ -1409,6 +1409,7 @@ message IngestWebhookRequest {
     string webhook_id = 3;      // idempotency key (e.g. provider:payment_id)
     string payload_json = 4;    // raw JSON payload string
     bool signature_verified = 5;
+    optional string provider_event_id = 6;  // e.g. x-razorpay-event-id for replay protection
 }
 
 message WebhookEventResponse {
