@@ -303,25 +303,30 @@ async fn main() {
 }
 
 async fn handle_auth_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
-    if err.is_not_found() {
-        Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
-    } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
-        // Warp often reports "no route" as MethodNotAllowed when path doesn't exist; return 404.
-        Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
-    } else if err.find::<Unauthorized>().is_some() {
-        Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED))
-    } else if err.find::<RateLimited>().is_some() {
-        Ok(reply::with_status(
+    // Check auth/rate-limit first: when graphql rejects (e.g. 401), we still try options() which
+    // adds MethodNotAllowed; we must return 401 not 404 for POST /v2 with bad auth.
+    if err.find::<Unauthorized>().is_some() {
+        return Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED));
+    }
+    if err.find::<RateLimited>().is_some() {
+        return Ok(reply::with_status(
             "TOO_MANY_REQUESTS",
             StatusCode::TOO_MANY_REQUESTS,
-        ))
-    } else if let Some(_e) = err.find::<warp::filters::body::BodyDeserializeError>() {
-        Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST))
-    } else {
-        warn!("Unhandled rejection: {:?}", err);
-        Ok(reply::with_status(
-            "INTERNAL_SERVER_ERROR",
-            StatusCode::INTERNAL_SERVER_ERROR,
-        ))
+        ));
     }
+    if let Some(_e) = err.find::<warp::filters::body::BodyDeserializeError>() {
+        return Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST));
+    }
+    if err.is_not_found() {
+        return Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND));
+    }
+    if err.find::<warp::reject::MethodNotAllowed>().is_some() {
+        // No route matched (e.g. GET /unknown-path); last filter tried was options() -> 405.
+        return Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND));
+    }
+    warn!("Unhandled rejection: {:?}", err);
+    Ok(reply::with_status(
+        "INTERNAL_SERVER_ERROR",
+        StatusCode::INTERNAL_SERVER_ERROR,
+    ))
 }
