@@ -7,6 +7,7 @@ pub mod discounts;
 pub mod error;
 pub mod grpc_client;
 pub mod inventory;
+pub mod money;
 pub mod order_details;
 pub mod order_events;
 pub mod orders;

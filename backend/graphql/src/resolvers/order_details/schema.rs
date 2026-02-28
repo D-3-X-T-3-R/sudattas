@@ -1,5 +1,6 @@
 use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 
+use crate::resolvers::money::{money_from_major_string, Money};
 use crate::resolvers::product::schema::{Product, SearchProduct};
 
 #[derive(Default, Debug, Clone)]
@@ -26,8 +27,14 @@ impl OrderDetails {
         &self.quantity
     }
 
+    /// Legacy string (major units); prefer price_money for integer paise + formatted.
     async fn price(&self) -> &String {
         &self.price
+    }
+
+    /// Money type: amount_paise (integer), currency, formatted string.
+    async fn price_money(&self) -> Money {
+        money_from_major_string(&self.price)
     }
 
     async fn order_detail_id(&self) -> &String {

@@ -1,5 +1,7 @@
 use juniper::{graphql_object, GraphQLInputObject};
 
+use crate::resolvers::money::{money_from_paise, Money};
+
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PaymentIntent {
     pub intent_id: String,
@@ -29,8 +31,14 @@ impl PaymentIntent {
     async fn user_id(&self) -> &Option<String> {
         &self.user_id
     }
+    /// Amount in paise (legacy string); prefer amount for Money type.
     async fn amount_paise(&self) -> &String {
         &self.amount_paise
+    }
+    /// Money type: amount_paise (integer), currency, formatted string.
+    async fn amount(&self) -> Money {
+        let paise = self.amount_paise.parse().unwrap_or(0);
+        money_from_paise(paise, self.currency.as_deref())
     }
     async fn currency(&self) -> &Option<String> {
         &self.currency

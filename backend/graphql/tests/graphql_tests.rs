@@ -391,6 +391,54 @@ fn test_unknown_field_returns_errors() {
 }
 
 // =============================================================================
+// Money type (GraphQL schema: amount_paise, currency, formatted)
+// =============================================================================
+
+#[test]
+fn test_money_type_in_schema() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("u".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+
+    let (res, errors) = juniper::execute_sync(
+        r#"{ __type(name: "Money") { name kind fields { name } } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .unwrap();
+
+    assert!(
+        errors.is_empty(),
+        "introspection should not error: {:?}",
+        errors
+    );
+    let data = to_json(&res);
+    let typ = data.get("__type").expect("__type(Money) should be present");
+    assert_eq!(typ.get("name").and_then(|v| v.as_str()), Some("Money"));
+    let fields: Vec<String> = typ
+        .get("fields")
+        .and_then(|f| f.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|f| f.get("name").and_then(|n| n.as_str()).map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        fields.contains(&"amountPaise".to_string()),
+        "Money.amountPaise"
+    );
+    assert!(fields.contains(&"currency".to_string()), "Money.currency");
+    assert!(fields.contains(&"formatted".to_string()), "Money.formatted");
+}
+
+// =============================================================================
 // Phase 8: Query depth limit
 // =============================================================================
 
@@ -429,5 +477,40 @@ async fn integration_handler_rejects_deep_query_with_400() {
         response.status(),
         warp::http::StatusCode::BAD_REQUEST,
         "deep query should return 400"
+    );
+}
+
+/// Integration test (no server): when GRAPHQL_MAX_QUERY_COMPLEXITY is set, handler returns 400 for high-complexity query.
+#[tokio::test]
+async fn integration_handler_rejects_high_complexity_with_400_when_limit_set() {
+    use graphql::graphql_handler;
+    use std::sync::Arc;
+
+    // Query with complexity 1+2+3+4+5 = 15 (five nesting levels)
+    let complex_query = "{ a { b { c { d { e } } } } }";
+    assert_eq!(
+        graphql::graphql_limits::compute_query_complexity(complex_query),
+        15
+    );
+
+    std::env::set_var("GRAPHQL_MAX_QUERY_COMPLEXITY", "10");
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("u".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+    let body =
+        warp::hyper::body::Bytes::from(serde_json::json!({ "query": complex_query }).to_string());
+    let response = graphql_handler::handle_graphql_request(ctx, body, Arc::new(schema()))
+        .await
+        .expect("handler should not reject");
+    std::env::remove_var("GRAPHQL_MAX_QUERY_COMPLEXITY");
+
+    assert_eq!(
+        response.status(),
+        warp::http::StatusCode::BAD_REQUEST,
+        "high-complexity query should return 400 when GRAPHQL_MAX_QUERY_COMPLEXITY is set"
     );
 }
