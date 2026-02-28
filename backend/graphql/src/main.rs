@@ -290,16 +290,17 @@ async fn main() {
 
     info!(listen_addr = %listen_addr, "GraphQL service starting");
 
-    warp::serve(
-        load_balancer_health_check
-            .or(readiness_check)
-            .or(metrics_route)
-            .or(graphql_copy)
-            .or(webhook_route)
-            .or(options_routes),
-    )
-    .run(listen_addr)
-    .await
+    let not_found = warp::any().map(|| reply::with_status("Not Found", StatusCode::NOT_FOUND));
+
+    let routes = load_balancer_health_check
+        .or(readiness_check)
+        .or(metrics_route)
+        .or(graphql_copy)
+        .or(webhook_route)
+        .or(options_routes)
+        .or(not_found);
+
+    warp::serve(routes).run(listen_addr).await
 }
 
 async fn handle_auth_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
