@@ -323,6 +323,7 @@ jobs:
         OAUTH_AUDIENCE: https://www.googleapis.com/oauth2/v3/tokeninfo
         GRAPHQL_URL: http://127.0.0.1:8080
         GRAPHQL_SESSION_ID: ci-e2e-session
+        RATE_LIMIT_PER_MINUTE: "200"
       timeout-minutes: 8
       run: |
         ./target/debug/core_operations &
