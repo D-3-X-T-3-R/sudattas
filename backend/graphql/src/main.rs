@@ -290,21 +290,23 @@ async fn main() {
 
     info!(listen_addr = %listen_addr, "GraphQL service starting");
 
-    let not_found = warp::any().map(|| reply::with_status("Not Found", StatusCode::NOT_FOUND));
-
+    // No catch-all route: unmatched paths reject. Top-level recover turns NotFound -> 404.
     let routes = load_balancer_health_check
         .or(readiness_check)
         .or(metrics_route)
         .or(graphql_copy)
         .or(webhook_route)
         .or(options_routes)
-        .or(not_found);
+        .recover(handle_auth_rejection);
 
     warp::serve(routes).run(listen_addr).await
 }
 
 async fn handle_auth_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
     if err.is_not_found() {
+        Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
+    } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
+        // Warp often reports "no route" as MethodNotAllowed when path doesn't exist; return 404.
         Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
     } else if err.find::<Unauthorized>().is_some() {
         Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED))
