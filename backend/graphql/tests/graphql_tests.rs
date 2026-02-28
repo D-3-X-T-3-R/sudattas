@@ -1,8 +1,9 @@
 //! GraphQL schema and resolver tests. Run with: `cargo test -p graphql`
 //!
 //! Covers: apiVersion, authInfo, context variants (JWT/session/none), error handling,
-//! and query structure.
+//! query structure, and Phase 8 depth/complexity limits.
 
+use graphql::graphql_limits;
 use graphql::security::jwks_loader::JWKey;
 use graphql::{schema, AuthSource, Context, JWKSet};
 
@@ -387,4 +388,46 @@ fn test_unknown_field_returns_errors() {
         Err(_) => {} // validation error (e.g. unknown field) returns Err
         Ok((_, errors)) => assert!(!errors.is_empty(), "unknown field should yield errors"),
     }
+}
+
+// =============================================================================
+// Phase 8: Query depth limit
+// =============================================================================
+
+#[test]
+fn test_query_depth_limit_rejects_deep_query() {
+    // Depth 11: root + 10 nested levels
+    let query = "{ a { b { c { d { e { f { g { h { i { j { x } } } } } } } } } } }";
+    let err = graphql_limits::check_query_depth(query, 10).unwrap_err();
+    assert!(
+        err.contains("exceeds maximum"),
+        "depth limit should return clear error: {}",
+        err
+    );
+}
+
+/// Integration test (no server): handler returns 400 when query exceeds depth limit.
+#[tokio::test]
+async fn integration_handler_rejects_deep_query_with_400() {
+    use graphql::graphql_handler;
+    use std::sync::Arc;
+
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("u".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+    let deep_query = "{ a { b { c { d { e { f { g { h { i { j { x } } } } } } } } } } }";
+    let body =
+        warp::hyper::body::Bytes::from(serde_json::json!({ "query": deep_query }).to_string());
+    let response = graphql_handler::handle_graphql_request(ctx, body, Arc::new(schema()))
+        .await
+        .expect("handler should not reject");
+    assert_eq!(
+        response.status(),
+        warp::http::StatusCode::BAD_REQUEST,
+        "deep query should return 400"
+    );
 }

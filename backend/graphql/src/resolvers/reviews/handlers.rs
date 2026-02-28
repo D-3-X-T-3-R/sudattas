@@ -53,7 +53,7 @@ pub(crate) async fn search_review(input: SearchReview) -> Result<Vec<Review>, Gq
             review_id,
             product_id: to_option_i64(input.product_id),
             user_id: to_option_i64(input.user_id),
-            limit: to_option_i64(input.limit),
+            limit: crate::graphql_limits::cap_page_size(to_option_i64(input.limit)),
             offset: to_option_i64(input.offset),
         })
         .await?;

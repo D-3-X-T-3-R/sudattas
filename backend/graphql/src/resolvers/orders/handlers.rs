@@ -53,7 +53,7 @@ pub(crate) async fn search_order(search: SearchOrder) -> Result<Vec<Order>, GqlE
             order_date_start: to_option_i64(search.order_date_start),
             order_date_end: to_option_i64(search.order_date_end),
             status_id: to_option_i64(search.status_id),
-            limit: to_option_i64(search.limit),
+            limit: crate::graphql_limits::cap_page_size(to_option_i64(search.limit)),
             offset: to_option_i64(search.offset),
         })
         .await?;
