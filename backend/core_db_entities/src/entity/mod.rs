@@ -34,6 +34,7 @@ pub mod product_statuses;
 pub mod product_variants;
 pub mod products;
 pub mod promotions;
+pub mod refunds;
 pub mod reviews;
 pub mod sea_orm_active_enums;
 pub mod sessions;

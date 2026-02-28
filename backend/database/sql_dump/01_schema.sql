@@ -579,6 +579,8 @@ CREATE TABLE `payment_intents` (
     `metadata` JSON,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `expires_at` TIMESTAMP NOT NULL,
+    `gateway_fee_paise` INT NULL COMMENT 'P1 Settlement: fee from gateway if provided',
+    `gateway_tax_paise` INT NULL COMMENT 'P1 Settlement: tax from gateway if provided',
     FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
     FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`),
     UNIQUE KEY `uq_razorpay_payment_id` (`razorpay_payment_id`),
@@ -642,6 +644,21 @@ CREATE TABLE `coupon_scope` (
     `is_allowlist` TINYINT(1) NOT NULL COMMENT '1=allow (cart must match at least one), 0=deny (cart must not match any)',
     UNIQUE KEY `uq_coupon_scope` (`coupon_id`, `scope_type`, `scope_id`),
     FOREIGN KEY (`coupon_id`) REFERENCES `coupons`(`coupon_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P1 Payments & refunds: refund records (gateway_refund_id unique for idempotency).
+CREATE TABLE `refunds` (
+    `refund_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `order_id` BIGINT NOT NULL,
+    `gateway_refund_id` VARCHAR(100) UNIQUE NOT NULL COMMENT 'Idempotency: same id returns same refund',
+    `amount_paise` INT NOT NULL,
+    `currency` VARCHAR(3) DEFAULT 'INR',
+    `status` ENUM('pending', 'processed', 'failed') DEFAULT 'pending',
+    `line_items_refunded` JSON NULL COMMENT 'Optional: [{order_detail_id, quantity_refunded, amount_paise}]',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
+    INDEX `idx_refunds_order` (`order_id`),
+    INDEX `idx_refunds_gateway` (`gateway_refund_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Order events for state machine audit trail

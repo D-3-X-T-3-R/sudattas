@@ -27,6 +27,8 @@ fn make_intent(
         metadata: None,
         created_at: None,
         expires_at: chrono::Utc::now(),
+        gateway_fee_paise: None,
+        gateway_tax_paise: None,
     }
 }
 
@@ -160,6 +162,8 @@ async fn create_payment_intent_success() {
             metadata: None,
             created_at: None,
             expires_at: chrono::Utc::now(),
+            gateway_fee_paise: None,
+            gateway_tax_paise: None,
         }]])
         .into_connection();
     let txn = db.begin().await.expect("begin");

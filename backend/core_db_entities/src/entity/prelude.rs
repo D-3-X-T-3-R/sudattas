@@ -32,6 +32,7 @@ pub use super::product_statuses::Entity as ProductStatuses;
 pub use super::product_variants::Entity as ProductVariants;
 pub use super::products::Entity as Products;
 pub use super::promotions::Entity as Promotions;
+pub use super::refunds::Entity as Refunds;
 pub use super::reviews::Entity as Reviews;
 pub use super::sessions::Entity as Sessions;
 pub use super::shipments::Entity as Shipments;

@@ -1455,6 +1455,41 @@ message OrderEventsResponse {
     repeated OrderEventResponse items = 1;
 }
 
+// P1 Refunds (idempotent by gateway_refund_id; line-item aware optional)
+message CreateRefundRequest {
+    int64 order_id = 1;
+    string gateway_refund_id = 2;  // Unique per refund; idempotency key
+    int64 amount_paise = 3;
+    optional string currency = 4;  // defaults to INR
+    optional string line_items_refunded_json = 5;  // JSON array of {order_detail_id, quantity_refunded, amount_paise}
+}
+
+message RefundResponse {
+    int64 refund_id = 1;
+    int64 order_id = 2;
+    string gateway_refund_id = 3;
+    int64 amount_paise = 4;
+    string currency = 5;
+    string status = 6;
+    string created_at = 7;
+}
+
+message RefundsResponse {
+    repeated RefundResponse items = 1;
+}
+
+// P1 Manual NeedsReview resolution (admin: mark as paid / cancelled / refunded)
+message ResolveNeedsReviewRequest {
+    int64 order_id = 1;
+    string resolution = 2;  // "paid" | "cancelled" | "refunded"
+    string actor_id = 3;    // admin identifier for audit (e.g. user_id or "admin")
+}
+
+message ResolveNeedsReviewResponse {
+    bool success = 1;
+    string message = 2;  // e.g. "Order marked as paid"
+}
+
 // Readiness (health) check — used by orchestrators to verify DB and optional deps.
 message ReadinessRequest {}
 
