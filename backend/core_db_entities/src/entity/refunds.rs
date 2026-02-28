@@ -5,24 +5,18 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "payment_intents")]
+#[sea_orm(table_name = "refunds")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub intent_id: i64,
+    pub refund_id: i64,
+    pub order_id: i64,
     #[sea_orm(unique)]
-    pub razorpay_order_id: String,
-    pub order_id: Option<i64>,
-    pub user_id: Option<i64>,
+    pub gateway_refund_id: String,
     pub amount_paise: i32,
     pub currency: Option<String>,
-    pub status: Status,
-    #[sea_orm(unique)]
-    pub razorpay_payment_id: Option<String>,
-    pub metadata: Option<Json>,
+    pub status: Option<Status>,
+    pub line_items_refunded: Option<Json>,
     pub created_at: Option<DateTimeUtc>,
-    pub expires_at: DateTimeUtc,
-    pub gateway_fee_paise: Option<i32>,
-    pub gateway_tax_paise: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -35,25 +29,11 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Orders,
-    #[sea_orm(
-        belongs_to = "super::users::Entity",
-        from = "Column::UserId",
-        to = "super::users::Column::UserId",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Users,
 }
 
 impl Related<super::orders::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Orders.def()
-    }
-}
-
-impl Related<super::users::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Users.def()
     }
 }
 

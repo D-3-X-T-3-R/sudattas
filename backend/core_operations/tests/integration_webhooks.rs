@@ -40,6 +40,8 @@ async fn integration_webhook_triggers_capture_payment() {
         status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };
@@ -138,6 +140,8 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
         status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };
@@ -231,6 +235,8 @@ async fn integration_webhook_out_of_order_same_payment_second_idempotent() {
         status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };
@@ -329,6 +335,8 @@ async fn integration_webhook_amount_mismatch_marked_needs_review_not_paid() {
         status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };
@@ -431,6 +439,8 @@ async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
         status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };

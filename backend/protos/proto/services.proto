@@ -248,6 +248,12 @@ service GRPCServices {
     rpc CreateOrderEvent(CreateOrderEventRequest) returns (OrderEventsResponse);
     rpc GetOrderEvents(GetOrderEventsRequest) returns (OrderEventsResponse);
 
+    // P1 Refunds
+    rpc CreateRefund(CreateRefundRequest) returns (RefundsResponse);
+
+    // P1 Manual NeedsReview resolution (admin)
+    rpc ResolveNeedsReview(ResolveNeedsReviewRequest) returns (ResolveNeedsReviewResponse);
+
     // Shipments
     rpc CreateShipment(CreateShipmentRequest) returns (ShipmentsResponse);
     rpc UpdateShipment(UpdateShipmentRequest) returns (ShipmentsResponse);

@@ -20,7 +20,7 @@ use proto::proto::core::{
     CreateProductAttributeMappingRequest, CreateProductAttributeRequest,
     CreateProductCategoryMappingRequest, CreateProductColorMappingRequest,
     CreateProductRatingRequest, CreateProductRequest, CreateProductSizeMappingRequest,
-    CreateProductVariantRequest, CreatePromotionRequest, CreateReviewRequest,
+    CreateProductVariantRequest, CreatePromotionRequest, CreateRefundRequest, CreateReviewRequest,
     CreateShipmentRequest, CreateShippingAddressRequest, CreateShippingMethodRequest,
     CreateShippingZoneRequest, CreateSizeRequest, CreateStateCityMappingRequest,
     CreateStateRequest, CreateSupplierRequest, CreateTransactionRequest, CreateUserActivityRequest,
@@ -46,11 +46,12 @@ use proto::proto::core::{
     ProductAttributesResponse, ProductCategoryMappingsResponse, ProductColorMappingsResponse,
     ProductImagesResponse, ProductRatingsResponse, ProductSizeMappingsResponse,
     ProductVariantsResponse, ProductsResponse, PromotionsResponse, ReadinessRequest,
-    ReadinessResponse, ReviewsResponse, SearchCategoryRequest, SearchCityRequest,
-    SearchColorRequest, SearchCountryRequest, SearchCountryStateMappingRequest,
-    SearchDiscountRequest, SearchEventLogRequest, SearchInventoryItemRequest,
-    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOrderDetailRequest,
-    SearchOrderRequest, SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
+    ReadinessResponse, RefundsResponse, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
+    ReviewsResponse, SearchCategoryRequest, SearchCityRequest, SearchColorRequest,
+    SearchCountryRequest, SearchCountryStateMappingRequest, SearchDiscountRequest,
+    SearchEventLogRequest, SearchInventoryItemRequest, SearchInventoryLogRequest,
+    SearchNewsletterSubscriberRequest, SearchOrderDetailRequest, SearchOrderRequest,
+    SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
     SearchProductAttributeRequest, SearchProductCategoryMappingRequest,
     SearchProductColorMappingRequest, SearchProductImageRequest, SearchProductRatingRequest,
     SearchProductRequest, SearchProductSizeMappingRequest, SearchProductVariantRequest,
@@ -2671,6 +2672,38 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::order_events::get_order_events(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn create_refund(
+        &self,
+        request: Request<CreateRefundRequest>,
+    ) -> Result<Response<RefundsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::refunds::create_refund(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn resolve_needs_review(
+        &self,
+        request: Request<ResolveNeedsReviewRequest>,
+    ) -> Result<Response<ResolveNeedsReviewResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::resolve_needs_review(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

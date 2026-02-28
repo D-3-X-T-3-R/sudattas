@@ -76,6 +76,8 @@ pub enum Relation {
     OrderEvents,
     #[sea_orm(has_many = "super::payment_intents::Entity")]
     PaymentIntents,
+    #[sea_orm(has_many = "super::refunds::Entity")]
+    Refunds,
     #[sea_orm(has_many = "super::shipments::Entity")]
     Shipments,
 }
@@ -125,6 +127,12 @@ impl Related<super::order_events::Entity> for Entity {
 impl Related<super::payment_intents::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::PaymentIntents.def()
+    }
+}
+
+impl Related<super::refunds::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Refunds.def()
     }
 }
 

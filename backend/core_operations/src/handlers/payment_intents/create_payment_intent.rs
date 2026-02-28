@@ -27,6 +27,8 @@ pub async fn create_payment_intent(
         status: ActiveValue::Set(Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(Some(Utc::now())),
         expires_at: ActiveValue::Set(expires_at),
     };
