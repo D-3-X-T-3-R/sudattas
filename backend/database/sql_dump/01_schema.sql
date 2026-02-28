@@ -634,6 +634,7 @@ CREATE TABLE `webhook_events` (
     `provider` VARCHAR(50) NOT NULL,
     `event_type` VARCHAR(100) NOT NULL,
     `webhook_id` VARCHAR(255) UNIQUE NOT NULL,
+    `provider_event_id` VARCHAR(255) NULL UNIQUE COMMENT 'e.g. x-razorpay-event-id for replay protection',
     `payload` JSON NOT NULL,
     `status` ENUM('pending', 'processed', 'failed') DEFAULT 'pending',
     `received_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
