@@ -60,6 +60,7 @@ tracing = "0.1.44"
 [dev-dependencies]
 # Test dependencies
 tokio-test = "0.4"
+proptest = "1.5"
 
 [build-dependencies]
 tonic-build = "0.10.2"
