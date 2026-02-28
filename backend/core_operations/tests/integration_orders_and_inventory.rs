@@ -13,8 +13,8 @@ use integration_common::test_db_url;
 use proto::proto::core::{
     CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest, CreateCountryRequest,
     CreateInventoryItemRequest, CreateProductRequest, CreateShippingAddressRequest,
-    CreateStateRequest, CreateSupplierRequest, CreateUserRequest, PlaceOrderRequest,
-    UpdateOrderRequest,
+    CreateStateRequest, CreateSupplierRequest, CreateUserRequest, GetOrderEventsRequest,
+    PlaceOrderRequest, UpdateOrderRequest,
 };
 use sea_orm::{Database, TransactionTrait};
 use tonic::Request;
@@ -497,6 +497,268 @@ async fn integration_cancel_order_restores_inventory() {
     );
 
     txn.rollback().await.ok();
+}
+
+/// Phase 7: Illegal order state transition (e.g. pending → delivered) fails with InvalidArgument.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_order_state_machine_illegal_transition_fails() {
+    use core_db_entities::entity::order_status;
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let order = place_order_minimal_setup(&txn).await;
+
+    let delivered_status = order_status::Entity::find()
+        .filter(order_status::Column::StatusName.eq("delivered".to_string()))
+        .one(&txn)
+        .await
+        .expect("query delivered status")
+        .expect("delivered status should exist");
+
+    let illegal_req = Request::new(UpdateOrderRequest {
+        order_id: order.order_id,
+        user_id: order.user_id,
+        shipping_address_id: order.shipping_address_id,
+        total_amount: order.total_amount,
+        status_id: delivered_status.status_id,
+    });
+
+    let res = core_operations::handlers::orders::update_order(&txn, illegal_req).await;
+    assert!(res.is_err(), "update_order must fail for pending → delivered");
+    let err = res.unwrap_err();
+    assert_eq!(
+        err.code(),
+        tonic::Code::InvalidArgument,
+        "illegal transition should return InvalidArgument"
+    );
+    assert!(
+        err.message().to_lowercase().contains("illegal")
+            || err.message().to_lowercase().contains("transition"),
+        "error message should mention illegal transition"
+    );
+
+    txn.rollback().await.ok();
+}
+
+/// Phase 7: Valid transition (pending → confirmed) succeeds and emits order_events.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_order_state_machine_valid_transition_emits_event() {
+    use core_db_entities::entity::order_status;
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let order = place_order_minimal_setup(&txn).await;
+
+    let confirmed_status = order_status::Entity::find()
+        .filter(order_status::Column::StatusName.eq("confirmed".to_string()))
+        .one(&txn)
+        .await
+        .expect("query confirmed status")
+        .expect("confirmed status should exist");
+
+    let update_req = Request::new(UpdateOrderRequest {
+        order_id: order.order_id,
+        user_id: order.user_id,
+        shipping_address_id: order.shipping_address_id,
+        total_amount: order.total_amount,
+        status_id: confirmed_status.status_id,
+    });
+
+    let update_res = core_operations::handlers::orders::update_order(&txn, update_req).await;
+    assert!(
+        update_res.is_ok(),
+        "update_order pending → confirmed should succeed: {:?}",
+        update_res.err()
+    );
+
+    let events_res = core_operations::handlers::order_events::get_order_events(
+        &txn,
+        Request::new(GetOrderEventsRequest {
+            order_id: order.order_id,
+        }),
+    )
+    .await
+    .expect("get_order_events should succeed");
+    let events = events_res.into_inner().items;
+    assert!(
+        !events.is_empty(),
+        "valid transition should emit at least one order_event"
+    );
+    let has_status_changed = events
+        .iter()
+        .any(|e| e.event_type == "status_changed");
+    assert!(
+        has_status_changed,
+        "order_events should include status_changed: {:?}",
+        events
+    );
+
+    txn.rollback().await.ok();
+}
+
+/// Minimal setup: supplier, category, product, inventory, address, user, cart item, place_order.
+/// Returns the first order from the response (order_id, user_id, shipping_address_id, total_amount).
+struct MinimalOrder {
+    order_id: i64,
+    user_id: i64,
+    shipping_address_id: i64,
+    total_amount: f64,
+}
+
+async fn place_order_minimal_setup(
+    txn: &sea_orm::DatabaseTransaction,
+) -> MinimalOrder {
+    let supplier = core_operations::handlers::suppliers::create_supplier(
+        txn,
+        Request::new(CreateSupplierRequest {
+            name: "State Machine Supplier".to_string(),
+            contact_info: "sm@example.test".to_string(),
+            address: "123 SM St".to_string(),
+        }),
+    )
+    .await
+    .expect("create supplier");
+    let supplier_id = supplier.into_inner().items[0].supplier_id;
+
+    let cat = core_operations::handlers::categories::create_category(
+        txn,
+        Request::new(CreateCategoryRequest {
+            name: "SM Category".to_string(),
+        }),
+    )
+    .await
+    .expect("create category");
+    let category_id = cat.into_inner().items[0].category_id;
+
+    let prod = core_operations::handlers::products::create_product(
+        txn,
+        Request::new(CreateProductRequest {
+            name: "SM Product".to_string(),
+            description: None,
+            price: 10.0,
+            stock_quantity: Some(10),
+            category_id: Some(category_id),
+        }),
+    )
+    .await
+    .expect("create product");
+    let product_id = prod.into_inner().items[0].product_id;
+
+    let _inv = core_operations::handlers::inventory::create_inventory_item(
+        txn,
+        Request::new(CreateInventoryItemRequest {
+            product_id,
+            quantity_available: 10,
+            reorder_level: 0,
+            supplier_id,
+        }),
+    )
+    .await
+    .expect("create inventory item");
+
+    let country = core_operations::handlers::country::create_country(
+        txn,
+        Request::new(CreateCountryRequest {
+            country_name: "SM Country".to_string(),
+        }),
+    )
+    .await
+    .expect("create country");
+    let country_id = country.into_inner().items[0].country_id;
+
+    let state = core_operations::handlers::state::create_state(
+        txn,
+        Request::new(CreateStateRequest {
+            state_name: "SM State".to_string(),
+        }),
+    )
+    .await
+    .expect("create state");
+    let state_id = state.into_inner().items[0].state_id;
+
+    let city = core_operations::handlers::city::create_city(
+        txn,
+        Request::new(CreateCityRequest {
+            city_name: "SM City".to_string(),
+        }),
+    )
+    .await
+    .expect("create city");
+    let city_id = city.into_inner().items[0].city_id;
+
+    let addr = core_operations::handlers::shipping_address::create_shipping_address(
+        txn,
+        Request::new(CreateShippingAddressRequest {
+            country_id,
+            state_id,
+            city_id,
+            road: "456 SM St".to_string(),
+            apartment_no_or_name: "".to_string(),
+        }),
+    )
+    .await
+    .expect("create shipping address");
+    let shipping_address_id = addr.into_inner().items[0].shipping_address_id;
+
+    let user = core_operations::handlers::users::create_user(
+        txn,
+        Request::new(CreateUserRequest {
+            username: "sm_user".to_string(),
+            email: format!(
+                "sm_{}@test.local",
+                std::time::SystemTime::now().elapsed().unwrap().as_millis()
+            ),
+            password: "SecurePass123!".to_string(),
+            full_name: Some("SM User".to_string()),
+            address: None,
+            phone: None,
+        }),
+    )
+    .await
+    .expect("create user");
+    let user_id = user.into_inner().items[0].user_id;
+
+    let _cart = core_operations::handlers::cart::create_cart_item(
+        txn,
+        Request::new(CreateCartItemRequest {
+            user_id: Some(user_id),
+            session_id: None,
+            product_id,
+            quantity: 2,
+        }),
+    )
+    .await
+    .expect("create cart item");
+
+    let response = core_operations::procedures::orders::place_order(
+        txn,
+        Request::new(PlaceOrderRequest {
+            user_id,
+            shipping_address_id,
+            coupon_code: None,
+        }),
+    )
+    .await
+    .expect("place_order should succeed");
+    let orders = response.into_inner().items;
+    assert!(!orders.is_empty(), "place_order should return at least one order");
+    let o = &orders[0];
+    MinimalOrder {
+        order_id: o.order_id,
+        user_id: o.user_id,
+        shipping_address_id: o.shipping_address_id,
+        total_amount: o.total_amount,
+    }
 }
 
 /// Phase 3 concurrency: two concurrent checkouts for the last unit → exactly one succeeds,
