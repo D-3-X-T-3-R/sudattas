@@ -308,6 +308,10 @@ jobs:
     - name: Seed Redis session for e2e auth
       run: redis-cli -h 127.0.0.1 SET session:ci-e2e-session 1
 
+    - name: Build E2E binaries
+      working-directory: ./backend
+      run: cargo build -p core_operations -p graphql --all-features
+
     - name: Start servers and run E2E GraphQL tests
       working-directory: ./backend
       env:
@@ -321,15 +325,15 @@ jobs:
         GRAPHQL_SESSION_ID: ci-e2e-session
       timeout-minutes: 8
       run: |
-        cargo run -p core_operations -- &
+        ./target/debug/core_operations &
         sleep 5
-        cargo run -p graphql -- &
-        for i in $(seq 1 45); do
+        ./target/debug/graphql &
+        for i in $(seq 1 60); do
           if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1; then
             echo "GraphQL server ready"
             break
           fi
-          sleep 2
+          sleep 3
         done
         curl -sf http://127.0.0.1:8080/ > /dev/null || { echo "GraphQL server did not become ready"; exit 1; }
         cargo test -p graphql --test e2e_tests --all-features -- --ignored
