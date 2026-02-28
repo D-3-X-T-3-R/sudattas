@@ -13,6 +13,8 @@ pub struct Model {
     pub event_type: String,
     #[sea_orm(unique)]
     pub webhook_id: String,
+    #[sea_orm(unique)]
+    pub provider_event_id: Option<String>,
     pub payload: Json,
     pub status: Option<Status>,
     pub received_at: Option<DateTimeUtc>,

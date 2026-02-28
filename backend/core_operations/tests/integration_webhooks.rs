@@ -75,6 +75,7 @@ async fn integration_webhook_triggers_capture_payment() {
         webhook_id: format!("razorpay:{}", payment_id),
         payload_json: payload.to_string(),
         signature_verified: true,
+        provider_event_id: None,
     });
 
     let result = core_operations::handlers::webhooks::ingest_webhook(&txn, req).await;
@@ -166,6 +167,7 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
         webhook_id: webhook_id.clone(),
         payload_json: payload.to_string(),
         signature_verified: true,
+        provider_event_id: None,
     });
 
     let r1 = core_operations::handlers::webhooks::ingest_webhook(&txn, req).await;
@@ -177,6 +179,7 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
         webhook_id: webhook_id.clone(),
         payload_json: payload.to_string(),
         signature_verified: true,
+        provider_event_id: None,
     });
     let r2 = core_operations::handlers::webhooks::ingest_webhook(&txn, req2).await;
     assert!(
@@ -261,6 +264,7 @@ async fn integration_webhook_out_of_order_same_payment_second_idempotent() {
             webhook_id: "razorpay:pay_oo_first".to_string(),
             payload_json: payload.to_string(),
             signature_verified: true,
+            provider_event_id: None,
         }),
     )
     .await;
@@ -274,6 +278,7 @@ async fn integration_webhook_out_of_order_same_payment_second_idempotent() {
             webhook_id: "razorpay:pay_oo_second".to_string(),
             payload_json: payload.to_string(),
             signature_verified: true,
+            provider_event_id: None,
         }),
     )
     .await;
@@ -359,6 +364,7 @@ async fn integration_webhook_amount_mismatch_marked_needs_review_not_paid() {
             webhook_id: format!("razorpay:{}", payment_id),
             payload_json: payload_wrong_amount.to_string(),
             signature_verified: true,
+            provider_event_id: None,
         }),
     )
     .await;
@@ -462,6 +468,7 @@ async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
             webhook_id: format!("razorpay:{}", payment_id),
             payload_json: payload_wrong_currency.to_string(),
             signature_verified: true,
+            provider_event_id: None,
         }),
     )
     .await;
@@ -484,6 +491,89 @@ async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
         status.as_deref(),
         Some("needs_review"),
         "intent should be marked needs_review on currency mismatch"
+    );
+
+    txn.rollback().await.ok();
+}
+
+/// Phase 6: Replay protection – same provider_event_id twice; second returns AlreadyExists.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and schema with provider_event_id (run generate.ps1 after schema)"]
+async fn integration_webhook_replay_provider_event_id_rejected() {
+    use core_db_entities::entity::webhook_events;
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let provider_event_id = format!(
+        "evt_replay_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let webhook_id = format!(
+        "razorpay:pay_replay_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let payload = serde_json::json!({
+        "event": "payment.captured",
+        "payload": { "payment": { "entity": { "id": "pay_replay_1" } } }
+    });
+
+    let r1 = core_operations::handlers::webhooks::ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: Some(provider_event_id.clone()),
+        }),
+    )
+    .await;
+    assert!(
+        r1.is_ok(),
+        "first ingest with provider_event_id should succeed: {:?}",
+        r1.err()
+    );
+
+    let r2 = core_operations::handlers::webhooks::ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: format!(
+                "razorpay:pay_replay_2_{}",
+                std::time::SystemTime::now().elapsed().unwrap().as_millis()
+            ),
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: Some(provider_event_id.clone()),
+        }),
+    )
+    .await;
+    assert!(
+        r2.is_err(),
+        "second ingest with same provider_event_id should fail (replay)"
+    );
+    let err = r2.unwrap_err();
+    assert_eq!(
+        err.code(),
+        tonic::Code::AlreadyExists,
+        "replay should return AlreadyExists"
+    );
+
+    let count = webhook_events::Entity::find()
+        .filter(webhook_events::Column::ProviderEventId.eq(provider_event_id.as_str()))
+        .all(&txn)
+        .await
+        .expect("query");
+    assert_eq!(
+        count.len(),
+        1,
+        "only one row should have this provider_event_id"
     );
 
     txn.rollback().await.ok();

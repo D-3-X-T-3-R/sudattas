@@ -1275,6 +1275,7 @@ async fn integration_coupon_usage_not_incremented_by_failed_payment() {
             webhook_id: "razorpay:pay_fail_1".to_string(),
             payload_json: payload_failed.to_string(),
             signature_verified: true,
+            provider_event_id: None,
         }),
     )
     .await
@@ -1313,6 +1314,7 @@ async fn integration_coupon_usage_not_incremented_by_failed_payment() {
             webhook_id: "razorpay:pay_ok_1".to_string(),
             payload_json: payload_captured.to_string(),
             signature_verified: true,
+            provider_event_id: None,
         }),
     )
     .await
@@ -1533,6 +1535,7 @@ async fn integration_coupon_limit_enforced_under_concurrency() {
         })
         .to_string(),
         signature_verified: true,
+        provider_event_id: None,
     });
     let req2 = Request::new(IngestWebhookRequest {
         provider: "razorpay".to_string(),
@@ -1553,6 +1556,7 @@ async fn integration_coupon_limit_enforced_under_concurrency() {
         })
         .to_string(),
         signature_verified: true,
+        provider_event_id: None,
     });
 
     let txn1 = db.begin().await.expect("begin");

@@ -2424,6 +2424,9 @@ pub struct IngestWebhookRequest {
     pub payload_json: ::prost::alloc::string::String,
     #[prost(bool, tag = "5")]
     pub signature_verified: bool,
+    /// e.g. x-razorpay-event-id for replay protection
+    #[prost(string, optional, tag = "6")]
+    pub provider_event_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
