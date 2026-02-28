@@ -14,6 +14,15 @@ fn base_url() -> String {
     u.trim_end_matches('/').to_string()
 }
 
+/// When GRAPHQL_SESSION_ID is set (e.g. in CI), add X-Session-Id header for auth.
+fn add_session_header(req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    if let Ok(session_id) = std::env::var("GRAPHQL_SESSION_ID") {
+        req.header("X-Session-Id", session_id)
+    } else {
+        req
+    }
+}
+
 // =============================================================================
 // Health and version
 // =============================================================================
@@ -36,14 +45,16 @@ async fn e2e_health_then_api_version() {
     let body = health.text().await.expect("health body");
     assert!(body.contains("OK") || !body.is_empty(), "health body");
 
-    let gql = client
-        .post(format!("{}/v2", base))
-        .json(&serde_json::json!({
-            "query": "{ apiVersion }"
-        }))
-        .send()
-        .await
-        .expect("POST /v2 GraphQL");
+    let gql = add_session_header(
+        client
+            .post(format!("{}/v2", base))
+            .json(&serde_json::json!({
+                "query": "{ apiVersion }"
+            })),
+    )
+    .send()
+    .await
+    .expect("POST /v2 GraphQL");
     assert!(gql.status().is_success(), "GraphQL should return 200");
     let body: serde_json::Value = gql.json().await.expect("JSON body");
     assert_eq!(
@@ -77,12 +88,12 @@ async fn e2e_readiness_endpoint_returns_200_or_503() {
 #[ignore = "requires GraphQL server running; run with --ignored"]
 async fn e2e_graphql_response_structure() {
     let client = Client::new();
-    let res = client
-        .post(format!("{}/v2", base_url()))
-        .json(&serde_json::json!({ "query": "{ apiVersion authInfo { sessionEnabled currentUserId } }" }))
-        .send()
-        .await
-        .expect("POST /v2");
+    let res = add_session_header(client.post(format!("{}/v2", base_url())).json(
+        &serde_json::json!({ "query": "{ apiVersion authInfo { sessionEnabled currentUserId } }" }),
+    ))
+    .send()
+    .await
+    .expect("POST /v2");
 
     assert!(res.status().is_success());
     let body: serde_json::Value = res.json().await.expect("JSON");
@@ -110,13 +121,15 @@ async fn e2e_graphql_response_structure() {
 #[ignore = "requires GraphQL server running; run with --ignored"]
 async fn e2e_post_invalid_json_returns_4xx() {
     let client = Client::new();
-    let res = client
-        .post(format!("{}/v2", base_url()))
-        .header("content-type", "application/json")
-        .body("not valid json")
-        .send()
-        .await
-        .expect("POST");
+    let res = add_session_header(
+        client
+            .post(format!("{}/v2", base_url()))
+            .header("content-type", "application/json")
+            .body("not valid json"),
+    )
+    .send()
+    .await
+    .expect("POST");
 
     assert!(
         res.status().is_client_error(),
@@ -128,14 +141,14 @@ async fn e2e_post_invalid_json_returns_4xx() {
 #[ignore = "requires GraphQL server running; run with --ignored"]
 async fn e2e_graphql_syntax_error_returns_200_with_errors() {
     let client = Client::new();
-    let res = client
-        .post(format!("{}/v2", base_url()))
-        .json(&serde_json::json!({
+    let res = add_session_header(client.post(format!("{}/v2", base_url())).json(
+        &serde_json::json!({
             "query": "{ apiVersion "
-        }))
-        .send()
-        .await
-        .expect("POST");
+        }),
+    ))
+    .send()
+    .await
+    .expect("POST");
 
     assert!(
         res.status().is_success(),
@@ -184,5 +197,114 @@ async fn e2e_post_without_auth_returns_401() {
     assert!(
         status.as_u16() == 401 || status.is_success(),
         "either 401 (auth required) or 200 (auth optional)"
+    );
+}
+
+// =============================================================================
+// Phase 8: Depth limit, validation, page size cap (integration/e2e)
+// =============================================================================
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running; run with --ignored"]
+async fn e2e_depth_limit_returns_400() {
+    let client = Client::new();
+    let deep_query = "{ a { b { c { d { e { f { g { h { i { j { x } } } } } } } } } } } }";
+    let res = add_session_header(
+        client
+            .post(format!("{}/v2", base_url()))
+            .json(&serde_json::json!({ "query": deep_query })),
+    )
+    .send()
+    .await
+    .expect("POST /v2");
+    let status = res.status();
+    // 400 when depth limit enforced; 401 if auth required and no credentials sent
+    assert!(
+        status.as_u16() == 400 || status.as_u16() == 401,
+        "expect 400 (depth limit) or 401 (auth); got {}",
+        status
+    );
+    if status.as_u16() == 400 {
+        let body: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
+        let err_msg = body
+            .get("errors")
+            .and_then(|e| e.get(0))
+            .and_then(|e| e.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("");
+        assert!(
+            err_msg.to_lowercase().contains("depth") || err_msg.contains("exceeds"),
+            "error message should mention depth limit: {}",
+            err_msg
+        );
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running and auth; run with --ignored"]
+async fn e2e_validation_cart_quantity_rejected() {
+    let client = Client::new();
+    let res = add_session_header(
+        client
+            .post(format!("{}/v2", base_url()))
+            .json(&serde_json::json!({
+                "query": "mutation { addCartItem(cartItem: { userId: \"1\", productId: \"1\", quantity: \"0\" }) { cartId } }"
+            })),
+    )
+    .send()
+    .await
+        .expect("POST /v2");
+    let status = res.status();
+    let body: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
+    if status.as_u16() == 401 {
+        return;
+    }
+    assert!(
+        status.is_success(),
+        "expect 2xx or 401, got {} body={}",
+        status,
+        body
+    );
+    let errors = body.get("errors").and_then(|e| e.as_array());
+    assert!(
+        errors.map(|a| !a.is_empty()).unwrap_or(false),
+        "quantity 0 should yield validation error: {}",
+        body
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running and auth; run with --ignored"]
+async fn e2e_search_product_page_size_capped() {
+    let client = Client::new();
+    let res = add_session_header(client.post(format!("{}/v2", base_url())).json(
+        &serde_json::json!({
+            "query": "query { searchProduct(search: { limit: \"100\" }) { productId name } }"
+        }),
+    ))
+    .send()
+    .await
+    .expect("POST /v2");
+    let status = res.status();
+    let body: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
+    if status.as_u16() == 401 {
+        return;
+    }
+    assert!(
+        status.is_success(),
+        "expect 2xx or 401, got {} body={}",
+        status,
+        body
+    );
+    let empty: Vec<serde_json::Value> = vec![];
+    let items = body
+        .get("data")
+        .and_then(|d| d.get("searchProduct"))
+        .and_then(|a| a.as_array())
+        .unwrap_or(&empty);
+    assert!(
+        items.len() <= 50,
+        "page size should be capped at 50, got {}",
+        items.len()
     );
 }

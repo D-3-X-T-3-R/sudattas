@@ -45,6 +45,7 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
 pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
+    let limit = crate::graphql_limits::cap_page_size(to_option_i64(search.limit));
     let response = client
         .search_product(SearchProductRequest {
             name: search.name,
@@ -54,7 +55,7 @@ pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>
             stock_quantity: to_option_i64(search.stock_quantity),
             category_id: to_option_i64(search.category_id),
             product_id: to_option_i64(search.product_id),
-            limit: to_option_i64(search.limit),
+            limit,
             offset: to_option_i64(search.offset),
         })
         .await?;
