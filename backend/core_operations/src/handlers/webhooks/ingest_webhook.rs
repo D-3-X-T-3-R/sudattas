@@ -93,6 +93,7 @@ pub async fn ingest_webhook(
             Ok(_) => Status::Processed,
             Err(e) => {
                 log::warn!("payment.captured processing failed: {}", e);
+                crate::observability::record_webhook_processing_failed_total();
                 Status::Failed
             }
         }
@@ -174,6 +175,7 @@ async fn process_payment_captured(
     let currency_ok = !webhook_currency.is_empty() && webhook_currency == intent_currency;
 
     if !amount_ok || !currency_ok {
+        crate::observability::record_payment_mismatch_total();
         warn!(
             payment_intent_id = intent.intent_id,
             webhook_amount_paise = webhook_amount_paise,

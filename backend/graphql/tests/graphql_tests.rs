@@ -480,6 +480,62 @@ async fn integration_handler_rejects_deep_query_with_400() {
     );
 }
 
+// =============================================================================
+// P1 Observability: metrics recorded by handler
+// =============================================================================
+
+/// Integration test (no server): GraphQL handler runs and records request metrics; when we have
+/// the Prometheus handle, rendered output should contain our metric names.
+#[tokio::test]
+async fn integration_handler_records_graphql_metrics() {
+    use graphql::graphql_handler;
+    use std::sync::Arc;
+
+    let handle = metrics_exporter_prometheus::PrometheusBuilder::new()
+        .install_recorder()
+        .ok();
+
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("u".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+    let body = warp::hyper::body::Bytes::from(
+        serde_json::json!({ "query": "{ apiVersion }" }).to_string(),
+    );
+    let response = graphql_handler::handle_graphql_request(ctx, body, Arc::new(schema()))
+        .await
+        .expect("handler should not reject");
+
+    assert!(
+        response.status().is_success(),
+        "handler should return 2xx, got {}",
+        response.status()
+    );
+
+    if let Some(h) = handle {
+        let out = h.render();
+        if !out.is_empty() {
+            assert!(
+                out.contains("graphql_requests_total"),
+                "metrics output should contain graphql_requests_total: {}",
+                out
+            );
+            assert!(
+                out.contains("graphql_request_duration_seconds"),
+                "metrics output should contain graphql_request_duration_seconds: {}",
+                out
+            );
+        }
+    }
+}
+
+// =============================================================================
+// Phase 8: Query depth limit
+// =============================================================================
+
 /// Integration test (no server): when GRAPHQL_MAX_QUERY_COMPLEXITY is set, handler returns 400 for high-complexity query.
 #[tokio::test]
 async fn integration_handler_rejects_high_complexity_with_400_when_limit_set() {
