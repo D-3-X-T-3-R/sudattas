@@ -529,7 +529,10 @@ async fn integration_order_state_machine_illegal_transition_fails() {
     });
 
     let res = core_operations::handlers::orders::update_order(&txn, illegal_req).await;
-    assert!(res.is_err(), "update_order must fail for pending → delivered");
+    assert!(
+        res.is_err(),
+        "update_order must fail for pending → delivered"
+    );
     let err = res.unwrap_err();
     assert_eq!(
         err.code(),
@@ -594,9 +597,7 @@ async fn integration_order_state_machine_valid_transition_emits_event() {
         !events.is_empty(),
         "valid transition should emit at least one order_event"
     );
-    let has_status_changed = events
-        .iter()
-        .any(|e| e.event_type == "status_changed");
+    let has_status_changed = events.iter().any(|e| e.event_type == "status_changed");
     assert!(
         has_status_changed,
         "order_events should include status_changed: {:?}",
@@ -615,9 +616,7 @@ struct MinimalOrder {
     total_amount: f64,
 }
 
-async fn place_order_minimal_setup(
-    txn: &sea_orm::DatabaseTransaction,
-) -> MinimalOrder {
+async fn place_order_minimal_setup(txn: &sea_orm::DatabaseTransaction) -> MinimalOrder {
     let supplier = core_operations::handlers::suppliers::create_supplier(
         txn,
         Request::new(CreateSupplierRequest {
@@ -751,7 +750,10 @@ async fn place_order_minimal_setup(
     .await
     .expect("place_order should succeed");
     let orders = response.into_inner().items;
-    assert!(!orders.is_empty(), "place_order should return at least one order");
+    assert!(
+        !orders.is_empty(),
+        "place_order should return at least one order"
+    );
     let o = &orders[0];
     MinimalOrder {
         order_id: o.order_id,
