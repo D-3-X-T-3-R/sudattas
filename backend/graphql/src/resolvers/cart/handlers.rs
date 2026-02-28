@@ -10,6 +10,7 @@ use crate::resolvers::{
     error::{Code, GqlError},
     utils::{connect_grpc_client, parse_i64, to_i64, to_option_i64},
 };
+use crate::validation;
 
 #[instrument]
 pub(crate) async fn add_cart_item(cart_item: NewCart) -> Result<Vec<Cart>, GqlError> {
@@ -23,11 +24,13 @@ pub(crate) async fn add_cart_item(cart_item: NewCart) -> Result<Vec<Cart>, GqlEr
             Code::InvalidArgument,
         ));
     }
+    let qty = to_i64(cart_item.quantity);
+    validation::validate_quantity(qty, "quantity")?;
     let response = client
         .create_cart_item(CreateCartItemRequest {
             user_id,
             product_id: to_i64(cart_item.product_id),
-            quantity: to_i64(cart_item.quantity),
+            quantity: qty,
             session_id,
         })
         .await?;
@@ -101,6 +104,7 @@ pub(crate) async fn update_cart_item(cart_item: CartMutation) -> Result<Vec<Cart
     let cart_id = parse_i64(&cart_item.cart_id, "cart id")?;
     let product_id = parse_i64(&cart_item.product_id, "product id")?;
     let quantity = parse_i64(&cart_item.quantity, "quantity")?;
+    validation::validate_quantity(quantity, "quantity")?;
     let user_id = to_option_i64(Some(cart_item.user_id.clone()));
     let session_id = cart_item.session_id.clone();
     if user_id.is_none() && session_id.is_none() {
