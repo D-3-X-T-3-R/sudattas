@@ -611,12 +611,37 @@ CREATE TABLE `coupons` (
     `min_order_value_paise` INT DEFAULT 0,
     `usage_limit` INT NULL,
     `usage_count` INT DEFAULT 0,
+    `max_uses_per_customer` INT NULL COMMENT 'If set, each user may use this coupon at most this many times',
     `coupon_status` ENUM('active', 'inactive') DEFAULT 'active',
     `starts_at` TIMESTAMP NOT NULL,
     `ends_at` TIMESTAMP NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_code` (`code`, `coupon_status`),
     INDEX `idx_coupons_code_ends_at` (`code`, `ends_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P1 Coupons & promotions: per-customer redemption tracking (recorded on verified payment).
+CREATE TABLE `coupon_redemptions` (
+    `redemption_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `coupon_id` BIGINT NOT NULL,
+    `user_id` BIGINT NOT NULL,
+    `order_id` BIGINT NOT NULL,
+    `redeemed_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`coupon_id`) REFERENCES `coupons`(`coupon_id`),
+    FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`),
+    FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
+    INDEX `idx_coupon_user` (`coupon_id`, `user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P1 Coupons & promotions: allowlist/denylist product or category applicability.
+CREATE TABLE `coupon_scope` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `coupon_id` BIGINT NOT NULL,
+    `scope_type` ENUM('product', 'category') NOT NULL,
+    `scope_id` BIGINT NOT NULL,
+    `is_allowlist` TINYINT(1) NOT NULL COMMENT '1=allow (cart must match at least one), 0=deny (cart must not match any)',
+    UNIQUE KEY `uq_coupon_scope` (`coupon_id`, `scope_type`, `scope_id`),
+    FOREIGN KEY (`coupon_id`) REFERENCES `coupons`(`coupon_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Order events for state machine audit trail

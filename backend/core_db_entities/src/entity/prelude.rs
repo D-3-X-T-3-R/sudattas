@@ -6,6 +6,8 @@ pub use super::cities::Entity as Cities;
 pub use super::colors::Entity as Colors;
 pub use super::countries::Entity as Countries;
 pub use super::country_state_mapping::Entity as CountryStateMapping;
+pub use super::coupon_redemptions::Entity as CouponRedemptions;
+pub use super::coupon_scope::Entity as CouponScope;
 pub use super::coupons::Entity as Coupons;
 pub use super::discounts::Entity as Discounts;
 pub use super::event_logs::Entity as EventLogs;

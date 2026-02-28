@@ -62,6 +62,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Users,
+    #[sea_orm(has_many = "super::coupon_redemptions::Entity")]
+    CouponRedemptions,
     #[sea_orm(
         belongs_to = "super::coupons::Entity",
         from = "Column::AppliedCouponId",
@@ -99,6 +101,12 @@ impl Related<super::shipping_addresses::Entity> for Entity {
 impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Users.def()
+    }
+}
+
+impl Related<super::coupon_redemptions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CouponRedemptions.def()
     }
 }
 

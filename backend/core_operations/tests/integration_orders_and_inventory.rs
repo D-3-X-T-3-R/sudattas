@@ -10,13 +10,13 @@
 mod integration_common;
 
 use integration_common::test_db_url;
+use proto::proto::core::{ApplyCouponRequest, CreateShipmentRequest};
 use proto::proto::core::{
     CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest, CreateCountryRequest,
     CreateInventoryItemRequest, CreateProductRequest, CreateShippingAddressRequest,
     CreateStateRequest, CreateSupplierRequest, CreateUserRequest, GetOrderEventsRequest,
     PlaceOrderRequest, UpdateOrderRequest,
 };
-use proto::proto::core::{ApplyCouponRequest, CreateShipmentRequest};
 use sea_orm::{Database, EntityTrait, TransactionTrait};
 use tonic::Request;
 use uuid::Uuid;
@@ -1213,6 +1213,7 @@ async fn integration_coupon_usage_count_not_incremented_by_place_order() {
         min_order_value_paise: ActiveValue::Set(None),
         usage_limit: ActiveValue::Set(Some(2)),
         usage_count: ActiveValue::Set(Some(0)),
+        max_uses_per_customer: ActiveValue::Set(None),
         coupon_status: ActiveValue::Set(Some(CouponStatus::Active)),
         starts_at: ActiveValue::Set(chrono::Utc::now() - chrono::Duration::days(1)),
         ends_at: ActiveValue::Set(None),
@@ -1383,6 +1384,7 @@ async fn integration_coupon_usage_not_incremented_by_failed_payment() {
         min_order_value_paise: ActiveValue::Set(None),
         usage_limit: ActiveValue::Set(Some(2)),
         usage_count: ActiveValue::Set(Some(0)),
+        max_uses_per_customer: ActiveValue::Set(None),
         coupon_status: ActiveValue::Set(Some(CouponStatus::Active)),
         starts_at: ActiveValue::Set(chrono::Utc::now() - chrono::Duration::days(1)),
         ends_at: ActiveValue::Set(None),
@@ -1623,6 +1625,7 @@ async fn integration_coupon_limit_enforced_under_concurrency() {
         min_order_value_paise: ActiveValue::Set(None),
         usage_limit: ActiveValue::Set(Some(1)),
         usage_count: ActiveValue::Set(Some(0)),
+        max_uses_per_customer: ActiveValue::Set(None),
         coupon_status: ActiveValue::Set(Some(CouponStatus::Active)),
         starts_at: ActiveValue::Set(chrono::Utc::now() - chrono::Duration::days(1)),
         ends_at: ActiveValue::Set(None),
@@ -1874,6 +1877,7 @@ async fn integration_apply_coupon_then_place_order_with_discount() {
         min_order_value_paise: ActiveValue::Set(Some(5000)),
         usage_limit: ActiveValue::Set(Some(10)),
         usage_count: ActiveValue::Set(Some(0)),
+        max_uses_per_customer: ActiveValue::Set(None),
         coupon_status: ActiveValue::Set(Some(CouponStatus::Active)),
         starts_at: ActiveValue::Set(chrono::Utc::now() - chrono::Duration::days(1)),
         ends_at: ActiveValue::Set(None),
@@ -2074,5 +2078,130 @@ async fn integration_create_shipment_for_order() {
         .expect("query shipments");
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].order_id, order.order_id);
+    txn.rollback().await.ok();
+}
+
+/// P1 Per-customer coupon limit: with max_uses_per_customer=1, after one redemption the same user cannot apply the coupon again.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_per_customer_coupon_limit_enforced() {
+    use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType};
+    use core_db_entities::entity::{coupon_redemptions, coupons};
+    use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let txn = db.begin().await.expect("begin");
+
+    let code = format!(
+        "percust_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let coupon = coupons::ActiveModel {
+        coupon_id: ActiveValue::NotSet,
+        code: ActiveValue::Set(code.clone()),
+        discount_type: ActiveValue::Set(DiscountType::FixedAmount),
+        discount_value: ActiveValue::Set(500),
+        min_order_value_paise: ActiveValue::Set(None),
+        usage_limit: ActiveValue::Set(Some(10)),
+        usage_count: ActiveValue::Set(Some(0)),
+        max_uses_per_customer: ActiveValue::Set(Some(1)),
+        coupon_status: ActiveValue::Set(Some(CouponStatus::Active)),
+        starts_at: ActiveValue::Set(chrono::Utc::now() - chrono::Duration::days(1)),
+        ends_at: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(None),
+    };
+    let inserted = coupon.insert(&txn).await.expect("insert coupon");
+    let coupon_id = inserted.coupon_id;
+
+    let order1 = place_order_minimal_setup(&txn).await;
+
+    let redemption = coupon_redemptions::ActiveModel {
+        redemption_id: ActiveValue::NotSet,
+        coupon_id: ActiveValue::Set(coupon_id),
+        user_id: ActiveValue::Set(order1.user_id),
+        order_id: ActiveValue::Set(order1.order_id),
+        redeemed_at: ActiveValue::Set(None),
+    };
+    redemption
+        .insert(&txn)
+        .await
+        .expect("insert redemption (simulate one use)");
+
+    let supplier = core_operations::handlers::suppliers::create_supplier(
+        &txn,
+        Request::new(CreateSupplierRequest {
+            name: "PC Supplier".to_string(),
+            contact_info: "pc@test".to_string(),
+            address: "A".to_string(),
+        }),
+    )
+    .await
+    .expect("supplier");
+    let supplier_id = supplier.into_inner().items[0].supplier_id;
+    let cat = core_operations::handlers::categories::create_category(
+        &txn,
+        Request::new(CreateCategoryRequest {
+            name: "PC Cat".to_string(),
+        }),
+    )
+    .await
+    .expect("category");
+    let prod = core_operations::handlers::products::create_product(
+        &txn,
+        Request::new(CreateProductRequest {
+            name: "PC Product".to_string(),
+            description: None,
+            price: 15.0,
+            stock_quantity: Some(10),
+            category_id: Some(cat.into_inner().items[0].category_id),
+        }),
+    )
+    .await
+    .expect("product");
+    let product_id = prod.into_inner().items[0].product_id;
+    let _inv = core_operations::handlers::inventory::create_inventory_item(
+        &txn,
+        Request::new(CreateInventoryItemRequest {
+            product_id,
+            quantity_available: 10,
+            reorder_level: 0,
+            supplier_id,
+        }),
+    )
+    .await
+    .expect("inventory");
+    let _ = core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: Some(order1.user_id),
+            session_id: None,
+            product_id,
+            quantity: 1,
+        }),
+    )
+    .await
+    .expect("cart");
+
+    let response = core_operations::procedures::orders::place_order(
+        &txn,
+        Request::new(PlaceOrderRequest {
+            user_id: order1.user_id,
+            shipping_address_id: order1.shipping_address_id,
+            coupon_code: Some(code),
+        }),
+    )
+    .await
+    .expect("place_order");
+    let orders = response.into_inner().items;
+    assert!(!orders.is_empty());
+    let order_row = core_db_entities::entity::orders::Entity::find_by_id(orders[0].order_id)
+        .one(&txn)
+        .await
+        .expect("query order")
+        .expect("order exists");
+    assert!(
+        order_row.applied_coupon_id.is_none(),
+        "per-customer limit: second order by same user should not have coupon applied (redemption already recorded)"
+    );
     txn.rollback().await.ok();
 }
