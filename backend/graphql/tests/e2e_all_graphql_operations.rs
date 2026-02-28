@@ -114,6 +114,38 @@ async fn e2e_query_search_order() {
     assert_valid_gql_response(status, &body);
 }
 
+/// E2E: Order Money type (totalAmountMoney { amountPaise, currency, formatted }) is returned.
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_query_search_order_money_fields() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"query { searchOrder(search: { userId: "1", limit: "5" }) { orderId totalAmount totalAmountMoney { amountPaise currency formatted } } }"#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+    if let Some(orders) = body
+        .get("data")
+        .and_then(|d| d.get("searchOrder"))
+        .and_then(|o| o.as_array())
+    {
+        for order in orders {
+            if let Some(money) = order.get("totalAmountMoney") {
+                assert!(
+                    money.get("amountPaise").is_some(),
+                    "totalAmountMoney.amountPaise"
+                );
+                assert!(money.get("currency").is_some(), "totalAmountMoney.currency");
+                assert!(
+                    money.get("formatted").is_some(),
+                    "totalAmountMoney.formatted"
+                );
+            }
+        }
+    }
+}
+
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_query_search_wishlist_item() {
@@ -160,6 +192,32 @@ async fn e2e_query_get_payment_intent() {
     )
     .await;
     assert_valid_gql_response(status, &body);
+}
+
+/// E2E: PaymentIntent Money type (amount { amountPaise, currency, formatted }) is returned.
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_query_get_payment_intent_money_fields() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"query { getPaymentIntent(input: { intentId: "1" }) { intentId amountPaise amount { amountPaise currency formatted } } }"#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+    if let Some(list) = body
+        .get("data")
+        .and_then(|d| d.get("getPaymentIntent"))
+        .and_then(|x| x.as_array())
+    {
+        for intent in list {
+            if let Some(money) = intent.get("amount") {
+                assert!(money.get("amountPaise").is_some(), "amount.amountPaise");
+                assert!(money.get("currency").is_some(), "amount.currency");
+                assert!(money.get("formatted").is_some(), "amount.formatted");
+            }
+        }
+    }
 }
 
 #[tokio::test]
@@ -337,6 +395,38 @@ async fn e2e_mutation_place_order() {
         None,
     ).await;
     assert_valid_gql_response(status, &body);
+}
+
+/// E2E: placeOrder returns Money type (totalAmountMoney) when data is present.
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_mutation_place_order_money_fields() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"mutation { placeOrder(order: { shippingAddressId: "1" }) { orderId totalAmountMoney { amountPaise currency formatted } } }"#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+    if let Some(orders) = body
+        .get("data")
+        .and_then(|d| d.get("placeOrder"))
+        .and_then(|o| o.as_array())
+    {
+        for order in orders {
+            if let Some(money) = order.get("totalAmountMoney") {
+                assert!(
+                    money.get("amountPaise").is_some(),
+                    "totalAmountMoney.amountPaise"
+                );
+                assert!(money.get("currency").is_some(), "totalAmountMoney.currency");
+                assert!(
+                    money.get("formatted").is_some(),
+                    "totalAmountMoney.formatted"
+                );
+            }
+        }
+    }
 }
 
 #[tokio::test]

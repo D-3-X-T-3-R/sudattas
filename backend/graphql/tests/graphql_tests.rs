@@ -391,6 +391,54 @@ fn test_unknown_field_returns_errors() {
 }
 
 // =============================================================================
+// Money type (GraphQL schema: amount_paise, currency, formatted)
+// =============================================================================
+
+#[test]
+fn test_money_type_in_schema() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("u".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+
+    let (res, errors) = juniper::execute_sync(
+        r#"{ __type(name: "Money") { name kind fields { name } } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .unwrap();
+
+    assert!(
+        errors.is_empty(),
+        "introspection should not error: {:?}",
+        errors
+    );
+    let data = to_json(&res);
+    let typ = data.get("__type").expect("__type(Money) should be present");
+    assert_eq!(typ.get("name").and_then(|v| v.as_str()), Some("Money"));
+    let fields: Vec<String> = typ
+        .get("fields")
+        .and_then(|f| f.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|f| f.get("name").and_then(|n| n.as_str()).map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        fields.contains(&"amountPaise".to_string()),
+        "Money.amountPaise"
+    );
+    assert!(fields.contains(&"currency".to_string()), "Money.currency");
+    assert!(fields.contains(&"formatted".to_string()), "Money.formatted");
+}
+
+// =============================================================================
 // Phase 8: Query depth limit
 // =============================================================================
 
