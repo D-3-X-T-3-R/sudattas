@@ -21,6 +21,7 @@ pub mod order_details;
 pub mod order_events;
 pub mod order_status;
 pub mod orders;
+pub mod outbox_events;
 pub mod payment_intents;
 pub mod payment_methods;
 pub mod product_attribute_mapping;

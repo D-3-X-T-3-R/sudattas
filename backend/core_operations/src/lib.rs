@@ -79,6 +79,7 @@ use sea_orm::TransactionTrait;
 use tonic::{Request, Response, Status};
 
 pub mod handlers;
+pub mod notifications;
 pub mod order_state_machine;
 pub mod procedures;
 
