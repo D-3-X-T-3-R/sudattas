@@ -213,10 +213,14 @@ async fn main() {
         .and(warp::path("webhook"))
         .and(warp::path::param::<String>()) // provider: e.g. "razorpay"
         .and(warp::header::optional::<String>("x-razorpay-signature"))
+        .and(warp::header::optional::<String>("x-razorpay-event-id"))
         .and(warp::body::bytes())
         .and_then(
-            |provider: String, sig: Option<String>, body: warp::hyper::body::Bytes| async move {
-                webhooks::handle_webhook(provider, sig, body)
+            |provider: String,
+             sig: Option<String>,
+             event_id: Option<String>,
+             body: warp::hyper::body::Bytes| async move {
+                webhooks::handle_webhook(provider, sig, event_id, body)
                     .await
                     .map_err(|e| {
                         warn!("Webhook handler error: {:?}", e);

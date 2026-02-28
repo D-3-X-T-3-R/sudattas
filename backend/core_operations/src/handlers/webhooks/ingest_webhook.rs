@@ -46,15 +46,41 @@ pub async fn ingest_webhook(
         }));
     }
 
+    // Phase 6 replay protection: reject duplicate provider_event_id (e.g. x-razorpay-event-id).
+    if let Some(ref peid) = req.provider_event_id {
+        let peid = peid.trim();
+        if !peid.is_empty()
+            && webhook_events::Entity::find()
+                .filter(webhook_events::Column::ProviderEventId.eq(peid))
+                .one(txn)
+                .await
+                .map_err(map_db_error_to_status)?
+                .is_some()
+        {
+            return Err(TonicStatus::already_exists(format!(
+                "Replay: provider_event_id already processed: {}",
+                peid
+            )));
+        }
+    }
+
     // Persist with Pending status.
     let payload_json: serde_json::Value =
         serde_json::from_str(&req.payload_json).unwrap_or(serde_json::Value::Null);
+
+    let provider_event_id_value = req
+        .provider_event_id
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(String::from);
 
     let event = webhook_events::ActiveModel {
         event_id: ActiveValue::NotSet,
         provider: ActiveValue::Set(req.provider.clone()),
         event_type: ActiveValue::Set(req.event_type.clone()),
         webhook_id: ActiveValue::Set(req.webhook_id.clone()),
+        provider_event_id: ActiveValue::Set(provider_event_id_value),
         payload: ActiveValue::Set(payload_json.clone()),
         status: ActiveValue::Set(Some(Status::Pending)),
         received_at: ActiveValue::Set(Some(Utc::now())),
