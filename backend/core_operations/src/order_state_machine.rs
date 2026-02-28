@@ -9,8 +9,8 @@ use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use core_db_entities::entity::{order_status, orders};
 use proto::proto::core::CreateOrderEventRequest;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait,
-    IntoActiveModel, QueryFilter,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
+    QueryFilter,
 };
 use std::collections::HashSet;
 use tonic::Request;
@@ -61,7 +61,10 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
         ),
         (Shipped, [Delivered, Refunded].into_iter().collect()),
         (Delivered, [Refunded].into_iter().collect()),
-        (NeedsReview, [PendingPayment, Cancelled].into_iter().collect()),
+        (
+            NeedsReview,
+            [PendingPayment, Cancelled].into_iter().collect(),
+        ),
         (Cancelled, HashSet::new()),
         (Refunded, HashSet::new()),
     ]
@@ -210,9 +213,18 @@ mod tests {
     #[test]
     fn pending_can_transition_to_paid_needs_review_cancelled() {
         assert!(can_transition(OrderState::PendingPayment, OrderState::Paid));
-        assert!(can_transition(OrderState::PendingPayment, OrderState::NeedsReview));
-        assert!(can_transition(OrderState::PendingPayment, OrderState::Cancelled));
-        assert!(!can_transition(OrderState::PendingPayment, OrderState::Processing));
+        assert!(can_transition(
+            OrderState::PendingPayment,
+            OrderState::NeedsReview
+        ));
+        assert!(can_transition(
+            OrderState::PendingPayment,
+            OrderState::Cancelled
+        ));
+        assert!(!can_transition(
+            OrderState::PendingPayment,
+            OrderState::Processing
+        ));
     }
 
     #[test]
@@ -220,18 +232,27 @@ mod tests {
         assert!(can_transition(OrderState::Paid, OrderState::Processing));
         assert!(can_transition(OrderState::Paid, OrderState::Cancelled));
         assert!(can_transition(OrderState::Paid, OrderState::Refunded));
-        assert!(!can_transition(OrderState::Paid, OrderState::PendingPayment));
+        assert!(!can_transition(
+            OrderState::Paid,
+            OrderState::PendingPayment
+        ));
     }
 
     #[test]
     fn terminal_states_have_no_outgoing() {
         assert!(!can_transition(OrderState::Cancelled, OrderState::Paid));
-        assert!(!can_transition(OrderState::Refunded, OrderState::Processing));
+        assert!(!can_transition(
+            OrderState::Refunded,
+            OrderState::Processing
+        ));
         assert!(can_transition(OrderState::Cancelled, OrderState::Cancelled));
     }
 
     #[test]
     fn same_state_is_allowed() {
-        assert!(can_transition(OrderState::Processing, OrderState::Processing));
+        assert!(can_transition(
+            OrderState::Processing,
+            OrderState::Processing
+        ));
     }
 }
