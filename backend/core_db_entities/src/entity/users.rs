@@ -52,6 +52,8 @@ pub enum Relation {
     UserRolesMapping,
     #[sea_orm(has_many = "super::wishlist::Entity")]
     Wishlist,
+    #[sea_orm(has_many = "super::coupon_redemptions::Entity")]
+    CouponRedemptions,
     #[sea_orm(has_many = "super::payment_intents::Entity")]
     PaymentIntents,
     #[sea_orm(has_many = "super::sessions::Entity")]
@@ -123,6 +125,12 @@ impl Related<super::user_roles_mapping::Entity> for Entity {
 impl Related<super::wishlist::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Wishlist.def()
+    }
+}
+
+impl Related<super::coupon_redemptions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CouponRedemptions.def()
     }
 }
 

@@ -172,7 +172,11 @@ async fn create_payment_intent_success() {
         razorpay_order_id: "rz_order_abc".to_string(),
     });
     let result = create_payment_intent(&txn, req).await;
-    assert!(result.is_ok(), "create_payment_intent should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "create_payment_intent should succeed: {:?}",
+        result.err()
+    );
     let res = result.unwrap().into_inner();
     assert_eq!(res.items.len(), 1);
     assert_eq!(res.items[0].intent_id, 42);

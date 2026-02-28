@@ -8,6 +8,8 @@ pub mod cities;
 pub mod colors;
 pub mod countries;
 pub mod country_state_mapping;
+pub mod coupon_redemptions;
+pub mod coupon_scope;
 pub mod coupons;
 pub mod discounts;
 pub mod event_logs;

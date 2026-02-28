@@ -1,5 +1,8 @@
 use crate::handlers::cart::delete_cart_item;
-use crate::handlers::coupons::validate_coupon::check_coupon;
+use crate::handlers::coupons::{
+    eligibility::{check_coupon_scope, check_per_customer_limit, CartProduct},
+    validate_coupon::check_coupon,
+};
 use crate::handlers::idempotency::compute_request_hash;
 use crate::handlers::order_events::create_order_event;
 use crate::money::{
@@ -245,12 +248,44 @@ pub async fn place_order(
 
     // Apply coupon if provided, deriving the discounted total in paise and coupon snapshot.
     // Do not increment coupon usage_count here; only on verified payment (Phase 4).
+    // P1: enforce per-customer limit and allowlist/denylist scope before applying.
     let (total_paise, coupon_snapshot) = if let Some(ref code) = req.coupon_code {
         match check_coupon(txn, code, gross_paise, false).await {
-            Ok(result) if result.is_valid => (
-                result.final_amount_paise,
-                Some((result.coupon_id, code.clone(), result.discount_amount_paise)),
-            ),
+            Ok(result) if result.is_valid => {
+                let cart_for_scope: Vec<CartProduct> = order_products
+                    .iter()
+                    .map(|p| CartProduct {
+                        product_id: p.product_id,
+                        category_id: p.category_id,
+                    })
+                    .collect();
+                let ok_per_customer = check_per_customer_limit(txn, result.coupon_id, req.user_id)
+                    .await
+                    .unwrap_or(false);
+                let ok_scope = check_coupon_scope(txn, result.coupon_id, &cart_for_scope)
+                    .await
+                    .unwrap_or(false);
+                if ok_per_customer && ok_scope {
+                    (
+                        result.final_amount_paise,
+                        Some((result.coupon_id, code.clone(), result.discount_amount_paise)),
+                    )
+                } else {
+                    if !ok_per_customer {
+                        log::warn!(
+                            "Coupon '{}' not applied: per-customer usage limit reached",
+                            code
+                        );
+                    }
+                    if !ok_scope {
+                        log::warn!(
+                            "Coupon '{}' not applied: cart does not meet product/category scope",
+                            code
+                        );
+                    }
+                    (gross_paise, None)
+                }
+            }
             Ok(result) => {
                 log::warn!("Coupon '{}' invalid at checkout: {}", code, result.reason);
                 (gross_paise, None)

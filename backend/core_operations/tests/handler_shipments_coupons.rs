@@ -1,8 +1,8 @@
 //! Unit tests for shipments and coupons handlers using SeaORM MockDatabase.
 
 use chrono::Utc;
-use core_db_entities::entity::{coupons, shipments};
 use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType, Status};
+use core_db_entities::entity::{coupons, shipments};
 use proto::proto::core::{ApplyCouponRequest, CreateShipmentRequest};
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
 use tonic::Request;
@@ -37,7 +37,11 @@ async fn create_shipment_success() {
         carrier: Some("DTDC".to_string()),
     });
     let result = create_shipment(&txn, req).await;
-    assert!(result.is_ok(), "create_shipment should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "create_shipment should succeed: {:?}",
+        result.err()
+    );
     let res = result.unwrap().into_inner();
     assert_eq!(res.items.len(), 1);
     assert_eq!(res.items[0].order_id, 100);
@@ -60,6 +64,7 @@ async fn apply_coupon_valid_returns_valid_and_increments_usage() {
         min_order_value_paise: Some(1000),
         usage_limit: Some(100),
         usage_count: Some(5),
+        max_uses_per_customer: None,
         coupon_status: Some(CouponStatus::Active),
         starts_at: now - chrono::Duration::days(1),
         ends_at: Some(now + chrono::Duration::days(7)),
@@ -86,7 +91,11 @@ async fn apply_coupon_valid_returns_valid_and_increments_usage() {
         order_amount_paise: 50_000, // 500 INR; 10% = 5000 paise discount
     });
     let result = apply_coupon(&txn, req).await;
-    assert!(result.is_ok(), "apply_coupon should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "apply_coupon should succeed: {:?}",
+        result.err()
+    );
     let res = result.unwrap().into_inner();
     assert_eq!(res.items.len(), 1);
     assert!(res.items[0].is_valid, "coupon should be valid");

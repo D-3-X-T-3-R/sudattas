@@ -17,6 +17,7 @@ pub struct Model {
     pub min_order_value_paise: Option<i32>,
     pub usage_limit: Option<i32>,
     pub usage_count: Option<i32>,
+    pub max_uses_per_customer: Option<i32>,
     pub coupon_status: Option<CouponStatus>,
     pub starts_at: DateTimeUtc,
     pub ends_at: Option<DateTimeUtc>,
@@ -27,11 +28,27 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::orders::Entity")]
     Orders,
+    #[sea_orm(has_many = "super::coupon_redemptions::Entity")]
+    CouponRedemptions,
+    #[sea_orm(has_many = "super::coupon_scope::Entity")]
+    CouponScope,
 }
 
 impl Related<super::orders::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Orders.def()
+    }
+}
+
+impl Related<super::coupon_redemptions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CouponRedemptions.def()
+    }
+}
+
+impl Related<super::coupon_scope::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CouponScope.def()
     }
 }
 
