@@ -2,7 +2,7 @@
 //!
 //! Parses body, checks query depth, then executes via Juniper and returns JSON.
 
-use crate::graphql_limits::{check_query_depth, DEFAULT_MAX_QUERY_DEPTH};
+use crate::graphql_limits::{check_query_complexity, check_query_depth, DEFAULT_MAX_QUERY_DEPTH};
 use crate::query_handler::Context;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -28,6 +28,13 @@ fn max_query_depth() -> u32 {
         .unwrap_or(DEFAULT_MAX_QUERY_DEPTH)
 }
 
+/// Max query complexity from env. If not set, complexity check is skipped (optional).
+fn max_query_complexity() -> Option<u64> {
+    std::env::var("GRAPHQL_MAX_QUERY_COMPLEXITY")
+        .ok()
+        .and_then(|s| s.parse().ok())
+}
+
 /// Handles a GraphQL request: parse body, check depth, execute, return JSON response.
 pub async fn handle_graphql_request(
     ctx: Context,
@@ -49,6 +56,12 @@ pub async fn handle_graphql_request(
     let max_depth = max_query_depth();
     if let Err(msg) = check_query_depth(query, max_depth) {
         return Ok(depth_limit_error_response(400, &msg));
+    }
+
+    if let Some(max_complexity) = max_query_complexity() {
+        if let Err(msg) = check_query_complexity(query, max_complexity) {
+            return Ok(depth_limit_error_response(400, &msg));
+        }
     }
 
     let operation_name = req.operation_name.as_deref();

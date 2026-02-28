@@ -479,3 +479,38 @@ async fn integration_handler_rejects_deep_query_with_400() {
         "deep query should return 400"
     );
 }
+
+/// Integration test (no server): when GRAPHQL_MAX_QUERY_COMPLEXITY is set, handler returns 400 for high-complexity query.
+#[tokio::test]
+async fn integration_handler_rejects_high_complexity_with_400_when_limit_set() {
+    use graphql::graphql_handler;
+    use std::sync::Arc;
+
+    // Query with complexity 1+2+3+4+5 = 15 (five nesting levels)
+    let complex_query = "{ a { b { c { d { e } } } } }";
+    assert_eq!(
+        graphql::graphql_limits::compute_query_complexity(complex_query),
+        15
+    );
+
+    std::env::set_var("GRAPHQL_MAX_QUERY_COMPLEXITY", "10");
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("u".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+    let body =
+        warp::hyper::body::Bytes::from(serde_json::json!({ "query": complex_query }).to_string());
+    let response = graphql_handler::handle_graphql_request(ctx, body, Arc::new(schema()))
+        .await
+        .expect("handler should not reject");
+    std::env::remove_var("GRAPHQL_MAX_QUERY_COMPLEXITY");
+
+    assert_eq!(
+        response.status(),
+        warp::http::StatusCode::BAD_REQUEST,
+        "high-complexity query should return 400 when GRAPHQL_MAX_QUERY_COMPLEXITY is set"
+    );
+}
