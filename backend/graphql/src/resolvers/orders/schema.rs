@@ -1,5 +1,6 @@
 use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 
+use crate::resolvers::money::{money_from_major_string, Money};
 use crate::resolvers::order_details::schema::{OrderDetails, SearchOrderDetails};
 
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -27,8 +28,14 @@ impl Order {
         &self.shipping_address_id
     }
 
+    /// Legacy string (major units); prefer total_amount_money for integer paise + formatted.
     async fn total_amount(&self) -> &String {
         &self.total_amount
+    }
+
+    /// Money type: amount_paise (integer), currency, formatted string (avoids float).
+    async fn total_amount_money(&self) -> Money {
+        money_from_major_string(&self.total_amount)
     }
 
     async fn status_id(&self) -> &String {
