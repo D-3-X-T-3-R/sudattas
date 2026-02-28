@@ -10,6 +10,7 @@ use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
     payment_intents::create_payment_intent, products::get_products_by_id,
 };
+use crate::order_state_machine;
 
 use core_db_entities::entity::prelude::IdempotencyKeys;
 use core_db_entities::entity::{
@@ -265,11 +266,16 @@ pub async fn place_order(
 
     let discount_total_minor = gross_paise - total_paise;
 
+    let pending_status_id = order_state_machine::get_status_id(txn, "pending")
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?
+        .ok_or_else(|| Status::internal("OrderStatus 'pending' not found"))?;
+
     let create_order = create_order(
         txn,
         Request::new(CreateOrderRequest {
             shipping_address_id: req.shipping_address_id,
-            status_id: 2, // Always start with order status is processing
+            status_id: pending_status_id,
             user_id: req.user_id,
             total_amount: paise_to_major_f64(total_paise),
             subtotal_minor: Some(gross_paise),

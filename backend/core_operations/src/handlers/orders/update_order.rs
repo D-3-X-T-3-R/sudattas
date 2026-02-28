@@ -1,5 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
+use crate::order_state_machine;
 use chrono::Utc;
 use core_db_entities::entity::{order_details, order_status, orders};
 use proto::proto::core::{
@@ -22,12 +23,22 @@ pub async fn update_order(
 ) -> Result<Response<OrdersResponse>, Status> {
     let req = request.into_inner();
 
-    // Fetch existing order to capture previous status for audit event.
     let existing = orders::Entity::find_by_id(req.order_id)
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?;
-    let prev_status_id = existing.as_ref().map(|o| o.status_id);
+    let existing = existing.ok_or_else(|| Status::not_found("Order not found"))?;
+    let prev_status_id = existing.status_id;
+
+    let allowed = order_state_machine::can_transition_by_ids(txn, prev_status_id, req.status_id)
+        .await
+        .map_err(|e: tonic::Status| Status::internal(e.message().to_string()))?;
+    if !allowed {
+        return Err(Status::invalid_argument(format!(
+            "Illegal order state transition from status_id {} to {}",
+            prev_status_id, req.status_id
+        )));
+    }
 
     let orders = orders::ActiveModel {
         order_id: ActiveValue::Set(req.order_id),
@@ -78,15 +89,24 @@ pub async fn update_order(
                 }
             }
 
-            // Emit a status-change event if status_id changed.
-            if prev_status_id.map(|p| p != model.status_id).unwrap_or(true) {
+            if prev_status_id != model.status_id {
+                let from_name = order_state_machine::get_status_name(txn, prev_status_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| prev_status_id.to_string());
+                let to_name = order_state_machine::get_status_name(txn, model.status_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| model.status_id.to_string());
                 let _ = create_order_event(
                     txn,
                     tonic::Request::new(CreateOrderEventRequest {
                         order_id: model.order_id,
                         event_type: "status_changed".to_string(),
-                        from_status: prev_status_id.map(|s| s.to_string()),
-                        to_status: Some(model.status_id.to_string()),
+                        from_status: Some(from_name),
+                        to_status: Some(to_name),
                         actor_type: "system".to_string(),
                         message: Some(format!(
                             "Order {} status changed to {}",
