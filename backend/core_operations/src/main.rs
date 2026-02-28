@@ -3,6 +3,9 @@ use dotenvy::dotenv;
 use tonic::transport::Server;
 
 pub mod handlers;
+pub mod order_state_machine {
+    pub use core_operations::order_state_machine::*;
+}
 pub use core_operations::auth;
 
 use proto::proto::core::grpc_services_server::GrpcServicesServer;
