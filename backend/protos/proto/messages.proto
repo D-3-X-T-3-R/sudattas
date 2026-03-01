@@ -367,7 +367,7 @@ message CreateOrderRequest {
 
 message SearchOrderRequest {
     optional int64 order_id = 1;
-    int64 user_id = 2;
+    optional int64 user_id = 2;  // when unset, admin search (all orders)
     optional int64 order_date_start = 3;
     optional int64 order_date_end = 4;
     optional int64 status_id = 5;
@@ -384,6 +384,24 @@ message UpdateOrderRequest {
 }
 
 message DeleteOrderRequest {
+    int64 order_id = 1;
+}
+
+// P1 Admin: mark order shipped/delivered with enforced transitions
+message AdminMarkOrderShippedRequest {
+    int64 order_id = 1;
+    optional string awb_code = 2;
+    optional string carrier = 3;
+}
+message AdminMarkOrderShippedResponse {
+    int64 order_id = 1;
+    int64 shipment_id = 2;  // 0 if none created
+}
+
+message AdminMarkOrderDeliveredRequest {
+    int64 order_id = 1;
+}
+message AdminMarkOrderDeliveredResponse {
     int64 order_id = 1;
 }
 
@@ -1172,6 +1190,9 @@ message CreateInventoryLogRequest {
     int64 product_id = 1;
     int64 change_quantity = 2;
     string reason = 3;
+    optional string actor_id = 4;       // P1 admin audit: who changed
+    optional int64 quantity_before = 5; // P1 admin audit
+    optional int64 quantity_after = 6;  // P1 admin audit
 }
 
 message SearchInventoryLogRequest {
@@ -1294,6 +1315,40 @@ message CouponResponse {
 
 message CouponsResponse {
     repeated CouponResponse items = 1;
+}
+
+// P1 Admin coupon management
+message CreateCouponRequest {
+    string code = 1;
+    string discount_type = 2;   // percentage | fixed_amount
+    int32 discount_value = 3;
+    optional int32 min_order_value_paise = 4;
+    optional int32 usage_limit = 5;
+    optional int32 max_uses_per_customer = 6;
+    string starts_at = 7;      // RFC3339
+    optional string ends_at = 8;
+}
+message UpdateCouponRequest {
+    int64 coupon_id = 1;
+    optional string status = 2;   // active | inactive
+    optional int32 usage_limit = 3;
+    optional string ends_at = 4;  // RFC3339
+}
+message CouponAdminResponse {
+    int64 coupon_id = 1;
+    string code = 2;
+    string discount_type = 3;
+    int32 discount_value = 4;
+    optional int32 min_order_value_paise = 5;
+    optional int32 usage_limit = 6;
+    optional int32 usage_count = 7;
+    optional int32 max_uses_per_customer = 8;
+    string status = 9;
+    string starts_at = 10;
+    optional string ends_at = 11;
+}
+message CouponsAdminResponse {
+    repeated CouponAdminResponse items = 1;
 }
 
 // Shipments
@@ -1438,6 +1493,13 @@ message CreateOrderEventRequest {
 
 message GetOrderEventsRequest {
     int64 order_id = 1;
+}
+
+// P1 Admin audit log viewer (optional order_id = all recent events)
+message SearchOrderEventsRequest {
+    optional int64 order_id = 1;
+    optional int64 limit = 2;
+    optional int64 offset = 3;
 }
 
 message OrderEventResponse {

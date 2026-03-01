@@ -16,6 +16,9 @@ pub async fn create_inventory_log(
         change_quantity: ActiveValue::Set(req.change_quantity),
         log_time: ActiveValue::Set(Utc::now()),
         reason: ActiveValue::Set(Some(req.reason)),
+        actor_id: ActiveValue::Set(req.actor_id),
+        quantity_before: ActiveValue::Set(req.quantity_before),
+        quantity_after: ActiveValue::Set(req.quantity_after),
     };
 
     match model.insert(txn).await {
