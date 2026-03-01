@@ -20,5 +20,6 @@ pub mod shipping_addresses;
 pub mod shipping_methods;
 pub mod shipping_zones;
 pub mod state;
+pub mod user_pii;
 pub mod utils;
 pub mod wishlist;

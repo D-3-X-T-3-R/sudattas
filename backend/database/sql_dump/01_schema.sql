@@ -54,6 +54,7 @@ DROP TABLE IF EXISTS `Cities`;
 DROP TABLE IF EXISTS `States`;
 DROP TABLE IF EXISTS `Countries`;
 DROP TABLE IF EXISTS `OrderStatus`;
+DROP TABLE IF EXISTS `security_audit_log`;
 DROP TABLE IF EXISTS `Users`;
 
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -722,6 +723,16 @@ CREATE TABLE `idempotency_keys` (
     `expires_at` TIMESTAMP NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE INDEX `idx_idempotency_scope_key` (`scope`, `key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P2 Security: audit log for secrets rotation and other security events
+CREATE TABLE `security_audit_log` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `event_type` VARCHAR(100) NOT NULL COMMENT 'e.g. secrets_rotation, config_reload',
+    `details` TEXT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `idx_security_audit_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- P1 Outbox for transactional notifications (emails/SMS); worker publishes pending idempotently

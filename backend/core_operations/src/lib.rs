@@ -44,19 +44,20 @@ use proto::proto::core::{
     EventLogsResponse, GetCartItemsRequest, GetOrderEventsRequest, GetPaymentIntentRequest,
     GetPresignedUploadUrlRequest, GetProductsByIdRequest, GetRelatedProductsRequest,
     GetShipmentRequest, GetShippingAddressRequest, GetSitemapProductUrlsRequest,
-    GetSitemapProductUrlsResponse, IngestWebhookRequest, InventoryItemsResponse,
-    InventoryLogsResponse, NewsletterSubscribersResponse, OrderDetailsResponse,
-    OrderEventsResponse, OrdersResponse, PaymentIntentsResponse, PaymentMethodsResponse,
-    PlaceOrderRequest, PresignedUploadUrlResponse, ProductAttributeMappingsResponse,
-    ProductAttributesResponse, ProductCategoryMappingsResponse, ProductColorMappingsResponse,
-    ProductImagesResponse, ProductRatingsResponse, ProductSizeMappingsResponse,
-    ProductVariantsResponse, ProductsResponse, PromotionsResponse, ReadinessRequest,
-    ReadinessResponse, RefundsResponse, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
-    ReviewsResponse, SearchCategoryRequest, SearchCityRequest, SearchColorRequest,
-    SearchCountryRequest, SearchCountryStateMappingRequest, SearchDiscountRequest,
-    SearchEventLogRequest, SearchInventoryItemRequest, SearchInventoryLogRequest,
-    SearchNewsletterSubscriberRequest, SearchOrderDetailRequest, SearchOrderEventsRequest,
-    SearchOrderRequest, SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
+    GetSitemapProductUrlsResponse, GetUserPiiExportRequest, GetUserPiiExportResponse,
+    IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
+    NewsletterSubscribersResponse, OrderDetailsResponse, OrderEventsResponse, OrdersResponse,
+    PaymentIntentsResponse, PaymentMethodsResponse, PlaceOrderRequest, PresignedUploadUrlResponse,
+    ProductAttributeMappingsResponse, ProductAttributesResponse, ProductCategoryMappingsResponse,
+    ProductColorMappingsResponse, ProductImagesResponse, ProductRatingsResponse,
+    ProductSizeMappingsResponse, ProductVariantsResponse, ProductsResponse, PromotionsResponse,
+    ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
+    RefundsResponse, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ReviewsResponse,
+    SearchCategoryRequest, SearchCityRequest, SearchColorRequest, SearchCountryRequest,
+    SearchCountryStateMappingRequest, SearchDiscountRequest, SearchEventLogRequest,
+    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterSubscriberRequest,
+    SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
+    SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
     SearchProductAttributeRequest, SearchProductCategoryMappingRequest,
     SearchProductColorMappingRequest, SearchProductImageRequest, SearchProductRatingRequest,
     SearchProductRequest, SearchProductSizeMappingRequest, SearchProductVariantRequest,
@@ -865,6 +866,38 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::users::delete_user(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_user_pii_export(
+        &self,
+        request: Request<GetUserPiiExportRequest>,
+    ) -> Result<Response<GetUserPiiExportResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::users::get_user_pii_export(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn record_security_audit_event(
+        &self,
+        request: Request<RecordSecurityAuditRequest>,
+    ) -> Result<Response<RecordSecurityAuditResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::security::record_security_audit_event(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
