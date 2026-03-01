@@ -30,6 +30,7 @@ pub mod product_category_mapping;
 pub mod product_color_mapping;
 pub mod product_images;
 pub mod product_ratings;
+pub mod product_related;
 pub mod product_size_mapping;
 pub mod product_statuses;
 pub mod product_variants;

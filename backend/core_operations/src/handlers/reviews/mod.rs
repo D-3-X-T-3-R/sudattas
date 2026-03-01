@@ -1,3 +1,6 @@
+pub mod admin_update_review_status;
+pub use admin_update_review_status::*;
+
 pub mod create_review;
 pub use create_review::*;
 

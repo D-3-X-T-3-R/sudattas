@@ -46,6 +46,7 @@ service GRPCServices {
     rpc GetCartItems(GetCartItemsRequest) returns (CartItemsResponse);
     rpc UpdateCartItem(UpdateCartItemRequest) returns (CartItemsResponse);
     rpc DeleteCartItem(DeleteCartItemRequest) returns (CartItemsResponse);
+    rpc EnqueueAbandonedCart(EnqueueAbandonedCartRequest) returns (EnqueueAbandonedCartResponse);
 
     // Product
     rpc CreateProduct(CreateProductRequest) returns (ProductsResponse);
@@ -53,7 +54,9 @@ service GRPCServices {
     rpc UpdateProduct(UpdateProductRequest) returns (ProductsResponse);
     rpc DeleteProduct(DeleteProductRequest) returns (ProductsResponse);
     rpc GetProductsById(GetProductsByIdRequest) returns (ProductsResponse);
-    
+    rpc GetRelatedProducts(GetRelatedProductsRequest) returns (ProductsResponse);
+    rpc GetSitemapProductUrls(GetSitemapProductUrlsRequest) returns (GetSitemapProductUrlsResponse);
+
     // Users
     rpc CreateUser(CreateUserRequest) returns (UsersResponse);
     rpc SearchUser(SearchUserRequest) returns (UsersResponse);
@@ -85,6 +88,7 @@ service GRPCServices {
     rpc SearchReview(SearchReviewRequest) returns (ReviewsResponse);
     rpc UpdateReview(UpdateReviewRequest) returns (ReviewsResponse);
     rpc DeleteReview(DeleteReviewRequest) returns (ReviewsResponse);
+    rpc AdminUpdateReviewStatus(AdminUpdateReviewStatusRequest) returns (AdminUpdateReviewStatusResponse);
 
     // ProductImages
     // AddProductImage removed — use GetPresignedUploadUrl + ConfirmImageUpload instead

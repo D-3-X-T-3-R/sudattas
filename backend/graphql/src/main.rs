@@ -7,6 +7,7 @@ use graphql::schema;
 use graphql::security::jwks_loader::load_jwks;
 use graphql::security::jwt_validator::validate_token;
 use graphql::security::session_validator;
+use graphql::seo;
 use graphql::webhooks;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use reqwest::StatusCode;
@@ -288,12 +289,40 @@ async fn main() {
             warp::reply::with_header(body, "content-type", "text/plain; charset=utf-8")
         });
 
+    // P2 SEO: robots.txt and sitemap.xml (no auth)
+    let robots_route = warp::get()
+        .and(warp::path("robots.txt"))
+        .and(warp::path::end())
+        .map(|| {
+            let body = seo::robots_txt();
+            warp::reply::with_header(body, "content-type", "text/plain; charset=utf-8")
+        });
+    let sitemap_route = warp::get()
+        .and(warp::path("sitemap.xml"))
+        .and(warp::path::end())
+        .and_then(|| async move {
+            let reply: warp::reply::Response = match seo::sitemap_xml().await {
+                Ok(xml) => {
+                    warp::reply::with_header(xml, "content-type", "application/xml; charset=utf-8")
+                        .into_response()
+                }
+                Err(_) => warp::reply::with_status(
+                    "Internal error generating sitemap",
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+                .into_response(),
+            };
+            Ok::<_, Rejection>(reply)
+        });
+
     info!(listen_addr = %listen_addr, "GraphQL service starting");
 
     // No catch-all route: unmatched paths reject. Top-level recover turns NotFound -> 404.
     let routes = load_balancer_health_check
         .or(readiness_check)
         .or(metrics_route)
+        .or(robots_route)
+        .or(sitemap_route)
         .or(graphql_copy)
         .or(webhook_route)
         .or(options_routes)

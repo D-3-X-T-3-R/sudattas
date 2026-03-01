@@ -480,6 +480,7 @@ message SearchReviewRequest {
     optional int64 user_id = 3;
     optional int64 limit = 4;
     optional int64 offset = 5;
+    optional string status_filter = 6;  // P2: "approved" | "pending" | "rejected" (default: all)
 }
 
 message UpdateReviewRequest {
@@ -504,6 +505,41 @@ message ReviewResponse {
 
 message ReviewsResponse {
     repeated ReviewResponse items = 1;
+}
+
+// P2 Review moderation: admin approve/reject
+message AdminUpdateReviewStatusRequest {
+    int64 review_id = 1;
+    string status = 2;  // "approved" | "rejected"
+}
+message AdminUpdateReviewStatusResponse {
+    bool success = 1;
+}
+
+// P2 Abandoned cart: scheduler enqueues events (call periodically, e.g. every hour)
+message EnqueueAbandonedCartRequest {
+    optional int64 delay_hours = 1;  // carts older than this (default 24)
+}
+message EnqueueAbandonedCartResponse {
+    int32 enqueued_count = 1;
+}
+
+// P2 Recommendations: manual related products
+message GetRelatedProductsRequest {
+    int64 product_id = 1;
+    optional int64 limit = 2;
+}
+
+// P2 SEO: sitemap entries (slug + lastmod for products)
+message GetSitemapProductUrlsRequest {
+    optional int64 limit = 1;  // max entries (default 5000)
+}
+message SitemapEntry {
+    string slug = 1;       // product slug for URL path
+    string lastmod = 2;    // RFC3339 date
+}
+message GetSitemapProductUrlsResponse {
+    repeated SitemapEntry entries = 1;
 }
 
 // ProductImages
