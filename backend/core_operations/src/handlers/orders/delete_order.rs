@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::decimal_to_paise;
 use core_db_entities::entity::orders;
 use proto::proto::core::{DeleteOrderRequest, OrderResponse, OrdersResponse};
-use rust_decimal::{prelude::ToPrimitive, Decimal};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
@@ -22,12 +22,15 @@ pub async fn delete_order(
             {
                 Ok(delete_result) => {
                     if delete_result.rows_affected > 0 {
+                        let total_amount_paise = model
+                            .grand_total_minor
+                            .unwrap_or_else(|| decimal_to_paise(&model.total_amount));
                         let response = OrdersResponse {
                             items: vec![OrderResponse {
                                 user_id: model.user_id,
                                 order_id: model.order_id,
                                 order_date: model.order_date.to_string(),
-                                total_amount: Decimal::to_f64(&model.total_amount).unwrap(),
+                                total_amount_paise,
                                 status_id: model.status_id,
                                 shipping_address_id: model.shipping_address_id,
                             }],

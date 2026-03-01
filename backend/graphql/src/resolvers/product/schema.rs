@@ -10,7 +10,9 @@ pub struct Product {
     pub product_id: String,
     pub name: String,
     pub description: Option<String>,
-    pub price: String,
+    /// Price in minor units (paise); use formatted for display.
+    pub amount_paise: i64,
+    pub formatted: String,
     pub stock_quantity: Option<String>,
     pub category_id: Option<String>,
 }
@@ -30,8 +32,13 @@ impl Product {
         &self.description
     }
 
-    async fn price(&self) -> &String {
-        &self.price
+    /// Price in paise (integer minor units). Use formatted for display.
+    async fn amount_paise(&self) -> String {
+        self.amount_paise.to_string()
+    }
+
+    async fn formatted(&self) -> &String {
+        &self.formatted
     }
 
     async fn stock_quantity(&self) -> &Option<String> {
@@ -67,7 +74,8 @@ impl Product {
 pub struct NewProduct {
     pub name: String,
     pub description: String,
-    pub price: String,
+    /// Price in paise (e.g. 49900 = ₹499.00)
+    pub price_paise: String,
     pub stock_quantity: String,
     pub category_id: String,
 }
@@ -77,8 +85,10 @@ pub struct SearchProduct {
     pub product_id: Option<String>,
     pub name: Option<String>,
     pub description: Option<String>,
-    pub starting_price: Option<String>,
-    pub ending_price: Option<String>,
+    /// Min price in paise (inclusive)
+    pub starting_price_paise: Option<String>,
+    /// Max price in paise (inclusive)
+    pub ending_price_paise: Option<String>,
     pub stock_quantity: Option<String>,
     pub category_id: Option<String>,
     /// Maximum number of results to return (default: all)
@@ -92,7 +102,7 @@ pub struct ProductMutation {
     pub product_id: String,
     pub name: String,
     pub description: String,
-    pub price: String,
+    pub price_paise: String,
     pub stock_quantity: String,
     pub category_id: String,
 }

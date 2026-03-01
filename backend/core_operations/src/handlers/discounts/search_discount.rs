@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::percentage_decimal_to_basis_points;
 use core_db_entities::entity::discounts;
 use proto::proto::core::{DiscountResponse, DiscountsResponse, SearchDiscountRequest};
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
@@ -28,11 +28,9 @@ pub async fn search_discount(
                 .map(|m| DiscountResponse {
                     discount_id: m.discount_id,
                     product_id: m.product_id.unwrap_or(0),
-                    discount_percentage: m
-                        .discount_percentage
-                        .as_ref()
-                        .and_then(ToPrimitive::to_f64)
-                        .unwrap_or(0.0),
+                    discount_percentage_basis_points: percentage_decimal_to_basis_points(
+                        m.discount_percentage.as_ref(),
+                    ),
                     start_date: date_to_string(m.start_date),
                     end_date: date_to_string(m.end_date),
                 })

@@ -1,10 +1,9 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::{decimal_to_paise, paise_to_decimal};
 use core_db_entities::entity::shipping_methods;
 use proto::proto::core::{
     ShippingMethodResponse, ShippingMethodsResponse, UpdateShippingMethodRequest,
 };
-use rust_decimal::prelude::ToPrimitive;
-use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
@@ -25,10 +24,7 @@ pub async fn update_shipping_method(
             ))
         })?;
 
-    let cost = req
-        .cost
-        .and_then(Decimal::from_f64_retain)
-        .or(existing.cost);
+    let cost = req.cost_paise.map(paise_to_decimal).or(existing.cost);
 
     let model = shipping_methods::ActiveModel {
         method_id: ActiveValue::Set(existing.method_id),
@@ -45,11 +41,7 @@ pub async fn update_shipping_method(
             items: vec![ShippingMethodResponse {
                 method_id: updated.method_id,
                 method_name: updated.method_name.unwrap_or_default(),
-                cost: updated
-                    .cost
-                    .as_ref()
-                    .and_then(ToPrimitive::to_f64)
-                    .unwrap_or(0.0),
+                cost_paise: updated.cost.as_ref().map(decimal_to_paise).unwrap_or(0),
                 estimated_delivery_time: updated.estimated_delivery_time.unwrap_or_default(),
             }],
         })),

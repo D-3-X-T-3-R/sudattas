@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::percentage_decimal_to_basis_points;
 use core_db_entities::entity::discounts;
 use proto::proto::core::{DeleteDiscountRequest, DiscountResponse, DiscountsResponse};
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
@@ -30,11 +30,9 @@ pub async fn delete_discount(
                     items: vec![DiscountResponse {
                         discount_id: model.discount_id,
                         product_id: model.product_id.unwrap_or(0),
-                        discount_percentage: model
-                            .discount_percentage
-                            .as_ref()
-                            .and_then(ToPrimitive::to_f64)
-                            .unwrap_or(0.0),
+                        discount_percentage_basis_points: percentage_decimal_to_basis_points(
+                            model.discount_percentage.as_ref(),
+                        ),
                         start_date: date_to_string(model.start_date),
                         end_date: date_to_string(model.end_date),
                     }],

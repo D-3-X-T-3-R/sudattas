@@ -1,8 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::{decimal_to_paise, paise_to_decimal};
 use core_db_entities::entity::transactions;
 use proto::proto::core::{TransactionResponse, TransactionsResponse, UpdateTransactionRequest};
-use rust_decimal::prelude::ToPrimitive;
-use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
@@ -24,8 +23,8 @@ pub async fn update_transaction(
         })?;
 
     let amount = req
-        .amount
-        .and_then(Decimal::from_f64_retain)
+        .amount_paise
+        .map(paise_to_decimal)
         .unwrap_or(existing.amount);
 
     let model = transactions::ActiveModel {
@@ -41,7 +40,7 @@ pub async fn update_transaction(
             items: vec![TransactionResponse {
                 transaction_id: updated.transaction_id,
                 user_id: updated.user_id,
-                amount: updated.amount.to_f64().unwrap_or(0.0),
+                amount_paise: decimal_to_paise(&updated.amount),
                 transaction_date: updated.transaction_date.to_rfc3339(),
                 r#type: updated.r#type,
             }],

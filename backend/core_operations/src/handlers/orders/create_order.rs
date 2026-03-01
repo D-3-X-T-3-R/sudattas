@@ -1,9 +1,8 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::{decimal_to_paise, paise_to_decimal};
 use chrono::Utc;
 use core_db_entities::entity::orders;
 use proto::proto::core::{CreateOrderRequest, OrderResponse, OrdersResponse};
-use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
-use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
@@ -18,7 +17,7 @@ pub async fn create_order(
         user_id: ActiveValue::Set(req.user_id),
         order_date: ActiveValue::Set(Utc::now()),
         shipping_address_id: ActiveValue::Set(req.shipping_address_id),
-        total_amount: ActiveValue::Set(Decimal::from_f64(req.total_amount).unwrap()),
+        total_amount: ActiveValue::Set(paise_to_decimal(req.total_amount_paise)),
         status_id: ActiveValue::Set(req.status_id),
         order_number: ActiveValue::NotSet,
         payment_status: ActiveValue::NotSet,
@@ -67,13 +66,16 @@ pub async fn create_order(
     };
     match order.insert(txn).await {
         Ok(model) => {
+            let total_amount_paise = model
+                .grand_total_minor
+                .unwrap_or_else(|| decimal_to_paise(&model.total_amount));
             let response = OrdersResponse {
                 items: vec![OrderResponse {
                     order_id: model.order_id,
                     user_id: model.user_id,
                     order_date: model.order_date.to_string(),
                     shipping_address_id: model.shipping_address_id,
-                    total_amount: Decimal::to_f64(&model.total_amount).unwrap(),
+                    total_amount_paise,
                     status_id: model.status_id,
                 }],
             };

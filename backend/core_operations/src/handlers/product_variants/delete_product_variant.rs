@@ -1,9 +1,9 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::decimal_to_paise;
 use core_db_entities::entity::product_variants;
 use proto::proto::core::{
     DeleteProductVariantRequest, ProductVariantResponse, ProductVariantsResponse,
 };
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
@@ -29,10 +29,10 @@ pub async fn delete_product_variant(
                         product_id: model.product_id,
                         size_id: model.size_id,
                         color_id: model.color_id,
-                        additional_price: model
+                        additional_price_paise: model
                             .additional_price
                             .as_ref()
-                            .and_then(ToPrimitive::to_f64),
+                            .map(decimal_to_paise),
                     }],
                 })),
                 Err(e) => Err(map_db_error_to_status(e)),

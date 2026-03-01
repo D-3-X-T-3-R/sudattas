@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::decimal_to_paise;
 use core_db_entities::entity::transactions;
 use proto::proto::core::{SearchTransactionRequest, TransactionResponse, TransactionsResponse};
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
@@ -23,7 +23,7 @@ pub async fn search_transaction(
                 .map(|m| TransactionResponse {
                     transaction_id: m.transaction_id,
                     user_id: m.user_id,
-                    amount: m.amount.to_f64().unwrap_or(0.0),
+                    amount_paise: decimal_to_paise(&m.amount),
                     transaction_date: m.transaction_date.to_rfc3339(),
                     r#type: m.r#type.clone(),
                 })

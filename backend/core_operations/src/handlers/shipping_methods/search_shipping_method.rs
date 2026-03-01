@@ -1,9 +1,9 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::decimal_to_paise;
 use core_db_entities::entity::shipping_methods;
 use proto::proto::core::{
     SearchShippingMethodRequest, ShippingMethodResponse, ShippingMethodsResponse,
 };
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
@@ -25,7 +25,7 @@ pub async fn search_shipping_method(
                 .map(|m| ShippingMethodResponse {
                     method_id: m.method_id,
                     method_name: m.method_name.unwrap_or_default(),
-                    cost: m.cost.as_ref().and_then(ToPrimitive::to_f64).unwrap_or(0.0),
+                    cost_paise: m.cost.as_ref().map(decimal_to_paise).unwrap_or(0),
                     estimated_delivery_time: m.estimated_delivery_time.unwrap_or_default(),
                 })
                 .collect();

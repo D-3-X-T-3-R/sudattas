@@ -6,9 +6,7 @@ use crate::handlers::coupons::{
 use crate::handlers::idempotency::compute_request_hash;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::outbox::{enqueue_outbox_event, ORDER_PLACED};
-use crate::money::{
-    paise_checked_add, paise_checked_mul, paise_from_major_f64, paise_to_major_f64,
-};
+use crate::money::{paise_checked_add, paise_checked_mul};
 
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
@@ -31,7 +29,6 @@ use sea_orm::{
 };
 
 use chrono::Utc;
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::DatabaseTransaction;
 use serde_json::json;
 use std::collections::HashMap;
@@ -117,13 +114,17 @@ pub async fn place_order(
                         user_id = existing_order.user_id,
                         "place_order idempotent replay – returning existing order"
                     );
+                    let total_amount_paise =
+                        existing_order.grand_total_minor.unwrap_or_else(|| {
+                            crate::money::decimal_to_paise(&existing_order.total_amount)
+                        });
                     return Ok(Response::new(OrdersResponse {
                         items: vec![proto::proto::core::OrderResponse {
                             order_id: existing_order.order_id,
                             user_id: existing_order.user_id,
                             order_date: existing_order.order_date.to_string(),
                             shipping_address_id: existing_order.shipping_address_id,
-                            total_amount: existing_order.total_amount.to_f64().unwrap_or(0.0),
+                            total_amount_paise,
                             status_id: existing_order.status_id,
                         }],
                     }));
@@ -234,7 +235,7 @@ pub async fn place_order(
     let mut gross_paise: i64 = 0;
     for product in &order_products {
         if let Some(&quantity) = product_quantity_map.get(&product.product_id) {
-            let price_paise = paise_from_major_f64(product.price);
+            let price_paise = product.price_paise;
             let line_paise = paise_checked_mul(price_paise, quantity).map_err(|e| {
                 Status::internal(format!(
                     "Overflow computing line total for product {}: {}",
@@ -313,7 +314,7 @@ pub async fn place_order(
             shipping_address_id: req.shipping_address_id,
             status_id: pending_status_id,
             user_id: req.user_id,
-            total_amount: paise_to_major_f64(total_paise),
+            total_amount_paise: total_paise,
             subtotal_minor: Some(gross_paise),
             shipping_minor: Some(0),
             tax_total_minor: Some(0),
@@ -344,12 +345,13 @@ pub async fn place_order(
             .get(&product.product_id)
             .unwrap()
             .to_owned();
-        let unit_price_paise = paise_from_major_f64(product.price);
+        let unit_price_paise = product.price_paise;
+        let line_total_paise = paise_checked_mul(unit_price_paise, quantity).unwrap_or(0);
         order_details.push(CreateOrderDetailRequest {
             order_id: create_order.order_id,
             product_id: product.product_id,
             quantity,
-            price: product.price,
+            price_paise: line_total_paise,
             unit_price_minor: Some(unit_price_paise as i32),
             discount_minor: None,
             tax_minor: None,
