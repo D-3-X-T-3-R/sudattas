@@ -15,7 +15,9 @@ pub async fn search_order(
     let req = request.into_inner();
 
     match orders::Entity::find()
-        .filter(orders::Column::UserId.eq(req.user_id))
+        .apply_if(req.user_id, |query, v| {
+            query.filter(orders::Column::UserId.eq(v))
+        })
         .apply_if(req.order_id, |query, _| {
             query.filter(orders::Column::OrderId.eq(req.order_id))
         })

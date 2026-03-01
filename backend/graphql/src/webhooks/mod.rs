@@ -80,7 +80,10 @@ pub async fn handle_webhook(
     let signature_verified =
         match enforce_signature_when_secret_set(&provider, signature_header.as_deref(), &body) {
             Ok(verified) => verified,
-            Err((status, msg)) => return Ok(reply::with_status(msg, status)),
+            Err((status, msg)) => {
+                crate::metrics::record_webhook_invalid_signature_total();
+                return Ok(reply::with_status(msg, status));
+            }
         };
 
     // Derive event_type and idempotency key from payload.
@@ -96,6 +99,8 @@ pub async fn handle_webhook(
     } else {
         format!("{}:{}", provider, entity_id)
     };
+
+    crate::metrics::record_webhook_accepted_total();
 
     let mut client = match connect_grpc_client().await {
         Ok(c) => c,

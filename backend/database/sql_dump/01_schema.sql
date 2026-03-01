@@ -6,6 +6,7 @@ USE `SUDATTAS`;
 -- Dropping existing tables if they exist;
 -- Dropping tables with dependencies first
 
+DROP TABLE IF EXISTS `outbox_events`;
 DROP TABLE IF EXISTS `order_events`;
 DROP TABLE IF EXISTS `webhook_events`;
 DROP TABLE IF EXISTS `shipments`;
@@ -234,7 +235,8 @@ CREATE TABLE `Orders` (
     FOREIGN KEY (`ShippingAddressID`) REFERENCES `ShippingAddresses`(`ShippingAddressID`),
     FOREIGN KEY (`StatusID`) REFERENCES `OrderStatus`(`StatusID`),
     INDEX `idx_order_number` (`order_number`),
-    INDEX `idx_payment_status` (`payment_status`)
+    INDEX `idx_payment_status` (`payment_status`),
+    INDEX `idx_orders_date_status_user` (`OrderDate`, `StatusID`, `UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `OrderDetails` (with line-level snapshot)
@@ -252,7 +254,8 @@ CREATE TABLE `OrderDetails` (
     `line_attrs` JSON NULL DEFAULT NULL,
     PRIMARY KEY (`OrderDetailID`),
     FOREIGN KEY (`OrderID`) REFERENCES `Orders`(`OrderID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
+    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
+    INDEX `idx_order_details_order_id` (`OrderID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Reviews` (Enhanced with moderation)
@@ -334,7 +337,8 @@ CREATE TABLE `Inventory` (
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`InventoryID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`SupplierID`) REFERENCES `Suppliers`(`SupplierID`)
+    FOREIGN KEY (`SupplierID`) REFERENCES `Suppliers`(`SupplierID`),
+    INDEX `idx_inventory_product_id` (`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `ProductAttributes`
@@ -508,13 +512,16 @@ CREATE TABLE `UserActivity` (
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `InventoryLog`
+-- Table structure for table `InventoryLog` (P1: actor + before/after for admin audit)
 CREATE TABLE `InventoryLog` (
     `LogID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint NOT NULL,
     `ChangeQuantity` bigint NOT NULL,
     `LogTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `Reason` varchar(255) DEFAULT NULL,
+    `actor_id` varchar(255) DEFAULT NULL COMMENT 'P1 admin audit: who changed',
+    `quantity_before` bigint DEFAULT NULL COMMENT 'P1 admin audit',
+    `quantity_after` bigint DEFAULT NULL COMMENT 'P1 admin audit',
     PRIMARY KEY (`LogID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -571,13 +578,16 @@ CREATE TABLE `payment_intents` (
     `user_id` BIGINT NULL,
     `amount_paise` INT NOT NULL,
     `currency` VARCHAR(3) DEFAULT 'INR',
-    `status` ENUM('pending', 'processed', 'failed', 'needs_review') DEFAULT NULL,
-    `razorpay_payment_id` VARCHAR(100),
+    `status` ENUM('pending', 'processed', 'failed', 'needs_review') NOT NULL DEFAULT 'pending',
+    `razorpay_payment_id` VARCHAR(100) NULL,
     `metadata` JSON,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `expires_at` TIMESTAMP NOT NULL,
+    `gateway_fee_paise` INT NULL COMMENT 'P1 Settlement: fee from gateway if provided',
+    `gateway_tax_paise` INT NULL COMMENT 'P1 Settlement: tax from gateway if provided',
     FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
     FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`),
+    UNIQUE KEY `uq_razorpay_payment_id` (`razorpay_payment_id`),
     INDEX `idx_razorpay_order` (`razorpay_order_id`),
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -607,11 +617,52 @@ CREATE TABLE `coupons` (
     `min_order_value_paise` INT DEFAULT 0,
     `usage_limit` INT NULL,
     `usage_count` INT DEFAULT 0,
+    `max_uses_per_customer` INT NULL COMMENT 'If set, each user may use this coupon at most this many times',
     `coupon_status` ENUM('active', 'inactive') DEFAULT 'active',
     `starts_at` TIMESTAMP NOT NULL,
     `ends_at` TIMESTAMP NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX `idx_code` (`code`, `coupon_status`)
+    INDEX `idx_code` (`code`, `coupon_status`),
+    INDEX `idx_coupons_code_ends_at` (`code`, `ends_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P1 Coupons & promotions: per-customer redemption tracking (recorded on verified payment).
+CREATE TABLE `coupon_redemptions` (
+    `redemption_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `coupon_id` BIGINT NOT NULL,
+    `user_id` BIGINT NOT NULL,
+    `order_id` BIGINT NOT NULL,
+    `redeemed_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`coupon_id`) REFERENCES `coupons`(`coupon_id`),
+    FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`),
+    FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
+    INDEX `idx_coupon_user` (`coupon_id`, `user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P1 Coupons & promotions: allowlist/denylist product or category applicability.
+CREATE TABLE `coupon_scope` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `coupon_id` BIGINT NOT NULL,
+    `scope_type` ENUM('product', 'category') NOT NULL,
+    `scope_id` BIGINT NOT NULL,
+    `is_allowlist` TINYINT(1) NOT NULL COMMENT '1=allow (cart must match at least one), 0=deny (cart must not match any)',
+    UNIQUE KEY `uq_coupon_scope` (`coupon_id`, `scope_type`, `scope_id`),
+    FOREIGN KEY (`coupon_id`) REFERENCES `coupons`(`coupon_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P1 Payments & refunds: refund records (gateway_refund_id unique for idempotency).
+CREATE TABLE `refunds` (
+    `refund_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `order_id` BIGINT NOT NULL,
+    `gateway_refund_id` VARCHAR(100) UNIQUE NOT NULL COMMENT 'Idempotency: same id returns same refund',
+    `amount_paise` INT NOT NULL,
+    `currency` VARCHAR(3) DEFAULT 'INR',
+    `status` ENUM('pending', 'processed', 'failed') DEFAULT 'pending',
+    `line_items_refunded` JSON NULL COMMENT 'Optional: [{order_detail_id, quantity_refunded, amount_paise}]',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
+    INDEX `idx_refunds_order` (`order_id`),
+    INDEX `idx_refunds_gateway` (`gateway_refund_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Order events for state machine audit trail
@@ -628,16 +679,17 @@ CREATE TABLE `order_events` (
     INDEX `idx_order` (`order_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Webhook events for idempotent webhook processing
+-- Webhook events for idempotent webhook processing (webhook_id unique per provider)
 CREATE TABLE `webhook_events` (
     `event_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `provider` VARCHAR(50) NOT NULL,
     `event_type` VARCHAR(100) NOT NULL,
-    `webhook_id` VARCHAR(255) UNIQUE NOT NULL,
+    `webhook_id` VARCHAR(255) NOT NULL,
     `provider_event_id` VARCHAR(255) NULL UNIQUE COMMENT 'e.g. x-razorpay-event-id for replay protection',
     `payload` JSON NOT NULL,
     `status` ENUM('pending', 'processed', 'failed') DEFAULT 'pending',
     `received_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uq_webhook_provider_id` (`provider`, `webhook_id`),
     INDEX `idx_webhook_id` (`webhook_id`),
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -656,9 +708,29 @@ CREATE TABLE `idempotency_keys` (
     UNIQUE INDEX `idx_idempotency_scope_key` (`scope`, `key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- P1 Outbox for transactional notifications (emails/SMS); worker publishes pending idempotently
+CREATE TABLE `outbox_events` (
+    `event_id` BIGINT NOT NULL AUTO_INCREMENT,
+    `event_type` VARCHAR(50) NOT NULL COMMENT 'OrderPlaced, PaymentCaptured, Shipped, Delivered, Refunded',
+    `aggregate_type` VARCHAR(50) NOT NULL DEFAULT 'order',
+    `aggregate_id` VARCHAR(255) NOT NULL,
+    `payload` JSON NOT NULL,
+    `status` ENUM('pending', 'processed', 'failed') NOT NULL DEFAULT 'pending' COMMENT 'processed = published for delivery',
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `published_at` TIMESTAMP NULL,
+    PRIMARY KEY (`event_id`),
+    INDEX `idx_outbox_status` (`status`),
+    INDEX `idx_outbox_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- ============================================================================
 -- DEFAULT DATA
 -- ============================================================================
+
+-- P1 Data model: FK from Orders to coupons (coupons table created after Orders)
+ALTER TABLE `Orders`
+  ADD CONSTRAINT `fk_orders_applied_coupon`
+  FOREIGN KEY (`applied_coupon_id`) REFERENCES `coupons`(`coupon_id`);
 
 -- Insert default order statuses
 INSERT INTO `OrderStatus` (`StatusName`) VALUES

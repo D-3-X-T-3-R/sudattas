@@ -4,7 +4,7 @@ use crate::order_state_machine;
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status};
 use core_db_entities::entity::webhook_events;
-use core_db_entities::entity::{orders, payment_intents};
+use core_db_entities::entity::{coupon_redemptions, orders, payment_intents};
 use proto::proto::core::{
     CapturePaymentRequest, IngestWebhookRequest, WebhookEventResponse, WebhookEventsResponse,
 };
@@ -93,6 +93,7 @@ pub async fn ingest_webhook(
             Ok(_) => Status::Processed,
             Err(e) => {
                 log::warn!("payment.captured processing failed: {}", e);
+                crate::observability::record_webhook_processing_failed_total();
                 Status::Failed
             }
         }
@@ -174,6 +175,7 @@ async fn process_payment_captured(
     let currency_ok = !webhook_currency.is_empty() && webhook_currency == intent_currency;
 
     if !amount_ok || !currency_ok {
+        crate::observability::record_payment_mismatch_total();
         warn!(
             payment_intent_id = intent.intent_id,
             webhook_amount_paise = webhook_amount_paise,
@@ -228,6 +230,7 @@ async fn process_payment_captured(
     }
 
     // Phase 4: increment coupon usage_count only on verified payment (not on place_order).
+    // P1: record redemption for per-customer usage tracking.
     if let Some(order_id) = intent.order_id {
         if let Ok(Some(order)) = orders::Entity::find_by_id(order_id).one(txn).await {
             if let Some(coupon_id) = order.applied_coupon_id {
@@ -245,6 +248,20 @@ async fn process_payment_captured(
                             coupon_id = coupon_id,
                             "coupon usage_count incremented (within limit)"
                         );
+                        let redemption = coupon_redemptions::ActiveModel {
+                            redemption_id: ActiveValue::NotSet,
+                            coupon_id: ActiveValue::Set(coupon_id),
+                            user_id: ActiveValue::Set(order.user_id),
+                            order_id: ActiveValue::Set(order_id),
+                            redeemed_at: ActiveValue::Set(Some(Utc::now())),
+                        };
+                        if redemption.insert(txn).await.is_err() {
+                            warn!(
+                                coupon_id = coupon_id,
+                                order_id = order_id,
+                                "coupon_redemptions insert failed (non-fatal)"
+                            );
+                        }
                     }
                 }
             }

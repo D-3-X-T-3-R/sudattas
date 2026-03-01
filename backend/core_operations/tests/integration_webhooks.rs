@@ -37,11 +37,11 @@ async fn integration_webhook_triggers_capture_payment() {
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(10_000), // ₹100.00
         currency: ActiveValue::Set(Some("INR".to_string())),
-        status: ActiveValue::Set(Some(
-            core_db_entities::entity::sea_orm_active_enums::Status::Pending,
-        )),
+        status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };
@@ -100,7 +100,7 @@ async fn integration_webhook_triggers_capture_payment() {
     );
     assert_eq!(
         updated_intent.status,
-        Some(core_db_entities::entity::sea_orm_active_enums::Status::Processed),
+        core_db_entities::entity::sea_orm_active_enums::Status::Processed,
         "capture_payment should mark intent as processed"
     );
 
@@ -137,11 +137,11 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(15_000),
         currency: ActiveValue::Set(Some("INR".to_string())),
-        status: ActiveValue::Set(Some(
-            core_db_entities::entity::sea_orm_active_enums::Status::Pending,
-        )),
+        status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };
@@ -200,7 +200,7 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
     );
     assert_eq!(
         updated.status,
-        Some(core_db_entities::entity::sea_orm_active_enums::Status::Processed),
+        core_db_entities::entity::sea_orm_active_enums::Status::Processed,
         "intent should be processed"
     );
 
@@ -232,11 +232,11 @@ async fn integration_webhook_out_of_order_same_payment_second_idempotent() {
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(20_000),
         currency: ActiveValue::Set(Some("INR".to_string())),
-        status: ActiveValue::Set(Some(
-            core_db_entities::entity::sea_orm_active_enums::Status::Pending,
-        )),
+        status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };
@@ -332,11 +332,11 @@ async fn integration_webhook_amount_mismatch_marked_needs_review_not_paid() {
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(25_000),
         currency: ActiveValue::Set(Some("INR".to_string())),
-        status: ActiveValue::Set(Some(
-            core_db_entities::entity::sea_orm_active_enums::Status::Pending,
-        )),
+        status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };
@@ -436,11 +436,11 @@ async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(30_000),
         currency: ActiveValue::Set(Some("INR".to_string())),
-        status: ActiveValue::Set(Some(
-            core_db_entities::entity::sea_orm_active_enums::Status::Pending,
-        )),
+        status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
         razorpay_payment_id: ActiveValue::Set(None),
         metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
         created_at: ActiveValue::Set(None),
         expires_at: ActiveValue::Set(chrono::Utc::now()),
     };

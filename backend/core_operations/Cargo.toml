@@ -56,6 +56,8 @@ base64 = "0.21.7"
 core_db_entities = {path = "../core_db_entities/"}
 proto = {path = "../protos/"}
 tracing = "0.1.44"
+metrics = "0.21"
+metrics-exporter-prometheus = "0.13"
 
 [dev-dependencies]
 # Test dependencies

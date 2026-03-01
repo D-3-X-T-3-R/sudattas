@@ -48,7 +48,7 @@ pub(crate) async fn search_order(search: SearchOrder) -> Result<Vec<Order>, GqlE
 
     let response = client
         .search_order(SearchOrderRequest {
-            user_id: to_i64(search.user_id),
+            user_id: to_option_i64(search.user_id),
             order_id: to_option_i64(search.order_id),
             order_date_start: to_option_i64(search.order_date_start),
             order_date_end: to_option_i64(search.order_date_end),
