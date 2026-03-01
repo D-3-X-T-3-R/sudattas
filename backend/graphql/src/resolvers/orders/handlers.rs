@@ -8,7 +8,7 @@ use crate::resolvers::{
     convert,
     error::GqlError,
     grpc_client,
-    utils::{connect_grpc_client, to_f64, to_i64, to_option_i64},
+    utils::{connect_grpc_client, parse_i64, to_i64, to_option_i64},
 };
 
 #[instrument(skip(user_id))]
@@ -94,7 +94,7 @@ pub(crate) async fn update_order(order: OrderMutation) -> Result<Vec<Order>, Gql
             user_id: to_i64(order.user_id),
             status_id: to_i64(order.status_id),
             shipping_address_id: to_i64(order.shipping_address_id),
-            total_amount: to_f64(order.total_amount),
+            total_amount_paise: parse_i64(&order.total_amount_paise, "total_amount_paise")?,
         })
         .await?;
 

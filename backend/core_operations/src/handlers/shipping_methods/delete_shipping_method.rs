@@ -1,9 +1,9 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::decimal_to_paise;
 use core_db_entities::entity::shipping_methods;
 use proto::proto::core::{
     DeleteShippingMethodRequest, ShippingMethodResponse, ShippingMethodsResponse,
 };
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
@@ -27,11 +27,7 @@ pub async fn delete_shipping_method(
                     items: vec![ShippingMethodResponse {
                         method_id: model.method_id,
                         method_name: model.method_name.unwrap_or_default(),
-                        cost: model
-                            .cost
-                            .as_ref()
-                            .and_then(ToPrimitive::to_f64)
-                            .unwrap_or(0.0),
+                        cost_paise: model.cost.as_ref().map(decimal_to_paise).unwrap_or(0),
                         estimated_delivery_time: model.estimated_delivery_time.unwrap_or_default(),
                     }],
                 })),

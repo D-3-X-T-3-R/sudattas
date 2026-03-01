@@ -1,6 +1,6 @@
 use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 
-use crate::resolvers::money::{money_from_major_string, Money};
+use crate::resolvers::money::{money_from_paise, Money};
 use crate::resolvers::order_details::schema::{OrderDetails, SearchOrderDetails};
 
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -8,7 +8,8 @@ pub struct Order {
     pub user_id: String,
     pub order_date: String,
     pub shipping_address_id: String,
-    pub total_amount: String,
+    pub total_amount_paise: i64,
+    pub total_amount_formatted: String,
     pub status_id: String,
     pub order_id: String,
 }
@@ -28,14 +29,19 @@ impl Order {
         &self.shipping_address_id
     }
 
-    /// Legacy string (major units); prefer total_amount_money for integer paise + formatted.
-    async fn total_amount(&self) -> &String {
-        &self.total_amount
+    /// Total in paise (integer minor units).
+    async fn total_amount_paise(&self) -> String {
+        self.total_amount_paise.to_string()
     }
 
-    /// Money type: amount_paise (integer), currency, formatted string (avoids float).
+    /// Formatted display string (e.g. "₹499.00").
+    async fn total_amount_formatted(&self) -> &String {
+        &self.total_amount_formatted
+    }
+
+    /// Money type: amount_paise, currency, formatted (avoids float).
     async fn total_amount_money(&self) -> Money {
-        money_from_major_string(&self.total_amount)
+        money_from_paise(self.total_amount_paise, Some("INR"))
     }
 
     async fn status_id(&self) -> &String {
@@ -52,8 +58,8 @@ impl Order {
             order_detail_id: None,
             product_id: None,
             quantity: None,
-            price_start: None,
-            price_end: None,
+            price_start_paise: None,
+            price_end_paise: None,
         })
         .await
         .map_err(|e| e.into())
@@ -88,7 +94,8 @@ pub struct OrderMutation {
     pub user_id: String,
     pub order_date: String,
     pub shipping_address_id: String,
-    pub total_amount: String,
+    /// Total in paise
+    pub total_amount_paise: String,
     pub status_id: String,
     pub order_id: String,
 }

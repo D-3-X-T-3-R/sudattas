@@ -117,13 +117,13 @@ async fn integration_place_order() {
         "place_order response should contain at least one order"
     );
 
-    // Sanity check: total_amount should be non-negative and stable when recomputed.
+    // Sanity check: total_amount_paise should be non-negative and stable when recomputed.
     let order = &orders[0];
-    let stored_total = order.total_amount;
+    let stored_total_paise = order.total_amount_paise;
     assert!(
-        stored_total >= 0.0,
-        "order.total_amount should be non-negative, got {}",
-        stored_total
+        stored_total_paise >= 0,
+        "order.total_amount_paise should be non-negative, got {}",
+        stored_total_paise
     );
 }
 
@@ -167,7 +167,7 @@ async fn integration_place_order_affects_inventory() {
         Request::new(CreateProductRequest {
             name: "Inventory Test Product".to_string(),
             description: None,
-            price: 10.0,
+            price_paise: 1000, // ₹10.00
             stock_quantity: Some(10),
             category_id: Some(category_id),
         }),
@@ -341,7 +341,7 @@ async fn integration_cancel_order_restores_inventory() {
         Request::new(CreateProductRequest {
             name: "Inventory Test Product".to_string(),
             description: None,
-            price: 10.0,
+            price_paise: 1000, // ₹10.00
             stock_quantity: Some(10),
             category_id: Some(category_id),
         }),
@@ -472,7 +472,7 @@ async fn integration_cancel_order_restores_inventory() {
         order_id: order.order_id,
         user_id: order.user_id,
         shipping_address_id: order.shipping_address_id,
-        total_amount: order.total_amount,
+        total_amount_paise: order.total_amount_paise,
         status_id: cancelled_status.status_id,
     });
 
@@ -525,7 +525,7 @@ async fn integration_order_state_machine_illegal_transition_fails() {
         order_id: order.order_id,
         user_id: order.user_id,
         shipping_address_id: order.shipping_address_id,
-        total_amount: order.total_amount,
+        total_amount_paise: order.total_amount_paise,
         status_id: delivered_status.status_id,
     });
 
@@ -574,7 +574,7 @@ async fn integration_order_state_machine_valid_transition_emits_event() {
         order_id: order.order_id,
         user_id: order.user_id,
         shipping_address_id: order.shipping_address_id,
-        total_amount: order.total_amount,
+        total_amount_paise: order.total_amount_paise,
         status_id: confirmed_status.status_id,
     });
 
@@ -609,12 +609,12 @@ async fn integration_order_state_machine_valid_transition_emits_event() {
 }
 
 /// Minimal setup: supplier, category, product, inventory, address, user, cart item, place_order.
-/// Returns the first order from the response (order_id, user_id, shipping_address_id, total_amount).
+/// Returns the first order from the response (order_id, user_id, shipping_address_id, total_amount_paise).
 struct MinimalOrder {
     order_id: i64,
     user_id: i64,
     shipping_address_id: i64,
-    total_amount: f64,
+    total_amount_paise: i64,
 }
 
 async fn place_order_minimal_setup(txn: &sea_orm::DatabaseTransaction) -> MinimalOrder {
@@ -645,7 +645,7 @@ async fn place_order_minimal_setup(txn: &sea_orm::DatabaseTransaction) -> Minima
         Request::new(CreateProductRequest {
             name: "SM Product".to_string(),
             description: None,
-            price: 10.0,
+            price_paise: 1000, // ₹10.00
             stock_quantity: Some(10),
             category_id: Some(category_id),
         }),
@@ -760,7 +760,7 @@ async fn place_order_minimal_setup(txn: &sea_orm::DatabaseTransaction) -> Minima
         order_id: o.order_id,
         user_id: o.user_id,
         shipping_address_id: o.shipping_address_id,
-        total_amount: o.total_amount,
+        total_amount_paise: o.total_amount_paise,
     }
 }
 
@@ -805,7 +805,7 @@ async fn integration_concurrent_checkouts_last_unit_exactly_one_succeeds() {
         Request::new(CreateProductRequest {
             name: "Last Unit Product".to_string(),
             description: None,
-            price: 5.0,
+            price_paise: 500, // ₹5.00
             stock_quantity: Some(1),
             category_id: Some(category_id),
         }),
@@ -1042,7 +1042,7 @@ async fn integration_order_snapshot_unchanged_after_price_change() {
         Request::new(CreateProductRequest {
             name: "Snapshot Product".to_string(),
             description: None,
-            price: 100.0,
+            price_paise: 10000, // ₹100.00
             stock_quantity: Some(5),
             category_id: Some(category_id),
         }),
@@ -1245,7 +1245,7 @@ async fn integration_coupon_usage_count_not_incremented_by_place_order() {
         Request::new(CreateProductRequest {
             name: "Coupon Product".to_string(),
             description: None,
-            price: 20.0,
+            price_paise: 2000, // ₹20.00
             stock_quantity: Some(10),
             category_id: Some(cat.into_inner().items[0].category_id),
         }),
@@ -1416,7 +1416,7 @@ async fn integration_coupon_usage_not_incremented_by_failed_payment() {
         Request::new(CreateProductRequest {
             name: "Fail Product".to_string(),
             description: None,
-            price: 20.0,
+            price_paise: 2000, // ₹20.00
             stock_quantity: Some(10),
             category_id: Some(cat.into_inner().items[0].category_id),
         }),
@@ -1657,7 +1657,7 @@ async fn integration_coupon_limit_enforced_under_concurrency() {
         Request::new(CreateProductRequest {
             name: "Conc Product".to_string(),
             description: None,
-            price: 15.0,
+            price_paise: 1500, // ₹15.00
             stock_quantity: Some(20),
             category_id: Some(cat.into_inner().items[0].category_id),
         }),
@@ -1924,7 +1924,7 @@ async fn integration_apply_coupon_then_place_order_with_discount() {
         Request::new(CreateProductRequest {
             name: "Discount Product".to_string(),
             description: None,
-            price: 25.0,
+            price_paise: 2500, // ₹25.00
             stock_quantity: Some(10),
             category_id: Some(cat.into_inner().items[0].category_id),
         }),
@@ -2151,7 +2151,7 @@ async fn integration_per_customer_coupon_limit_enforced() {
         Request::new(CreateProductRequest {
             name: "PC Product".to_string(),
             description: None,
-            price: 15.0,
+            price_paise: 1500, // ₹15.00
             stock_quantity: Some(10),
             category_id: Some(cat.into_inner().items[0].category_id),
         }),

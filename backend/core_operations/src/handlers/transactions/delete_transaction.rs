@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::decimal_to_paise;
 use core_db_entities::entity::transactions;
 use proto::proto::core::{DeleteTransactionRequest, TransactionResponse, TransactionsResponse};
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
@@ -25,7 +25,7 @@ pub async fn delete_transaction(
                     items: vec![TransactionResponse {
                         transaction_id: model.transaction_id,
                         user_id: model.user_id,
-                        amount: model.amount.to_f64().unwrap_or(0.0),
+                        amount_paise: decimal_to_paise(&model.amount),
                         transaction_date: model.transaction_date.to_rfc3339(),
                         r#type: model.r#type,
                     }],

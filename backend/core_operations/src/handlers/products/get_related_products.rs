@@ -1,9 +1,9 @@
 //! P2 Recommendations: return manually linked related products for a product.
 
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::decimal_to_paise;
 use core_db_entities::entity::{product_related, products};
 use proto::proto::core::{GetRelatedProductsRequest, ProductResponse, ProductsResponse};
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{
     ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
 };
@@ -54,13 +54,19 @@ pub async fn get_related_products(
     let items: Vec<ProductResponse> = related_ids
         .into_iter()
         .filter_map(|id| by_id.get(&id))
-        .map(|model| ProductResponse {
-            name: model.name.clone(),
-            product_id: model.product_id,
-            description: model.description.clone(),
-            price: rust_decimal::Decimal::to_f64(&model.price).unwrap_or(0.0),
-            stock_quantity: model.stock_quantity,
-            category_id: model.category_id,
+        .map(|model| {
+            let price_paise = model
+                .price_paise
+                .map(i64::from)
+                .unwrap_or_else(|| decimal_to_paise(&model.price));
+            ProductResponse {
+                name: model.name.clone(),
+                product_id: model.product_id,
+                description: model.description.clone(),
+                price_paise,
+                stock_quantity: model.stock_quantity,
+                category_id: model.category_id,
+            }
         })
         .collect();
 

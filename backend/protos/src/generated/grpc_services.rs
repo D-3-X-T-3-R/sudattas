@@ -373,8 +373,9 @@ pub struct CreateProductRequest {
     pub name: ::prost::alloc::string::String,
     #[prost(string, optional, tag = "2")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(double, tag = "3")]
-    pub price: f64,
+    /// Price in minor units (e.g. 49900 = ₹499.00)
+    #[prost(int64, tag = "3")]
+    pub price_paise: i64,
     #[prost(int64, optional, tag = "4")]
     pub stock_quantity: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "5")]
@@ -388,14 +389,14 @@ pub struct SearchProductRequest {
     pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "2")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(double, optional, tag = "3")]
-    pub starting_price: ::core::option::Option<f64>,
+    #[prost(int64, optional, tag = "3")]
+    pub starting_price_paise: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "4")]
     pub stock_quantity: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "5")]
     pub category_id: ::core::option::Option<i64>,
-    #[prost(double, optional, tag = "6")]
-    pub ending_price: ::core::option::Option<f64>,
+    #[prost(int64, optional, tag = "6")]
+    pub ending_price_paise: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "7")]
     pub product_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "8")]
@@ -418,8 +419,8 @@ pub struct UpdateProductRequest {
     pub name: ::prost::alloc::string::String,
     #[prost(string, optional, tag = "2")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(double, tag = "3")]
-    pub price: f64,
+    #[prost(int64, tag = "3")]
+    pub price_paise: i64,
     #[prost(int64, optional, tag = "4")]
     pub stock_quantity: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "5")]
@@ -442,8 +443,8 @@ pub struct ProductResponse {
     pub name: ::prost::alloc::string::String,
     #[prost(string, optional, tag = "2")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(double, tag = "3")]
-    pub price: f64,
+    #[prost(int64, tag = "3")]
+    pub price_paise: i64,
     #[prost(int64, optional, tag = "4")]
     pub stock_quantity: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "5")]
@@ -649,8 +650,9 @@ pub struct CreateOrderRequest {
     pub shipping_address_id: i64,
     #[prost(int64, tag = "3")]
     pub status_id: i64,
-    #[prost(double, tag = "4")]
-    pub total_amount: f64,
+    /// Legacy total in paise; prefer grand_total_minor when set
+    #[prost(int64, tag = "4")]
+    pub total_amount_paise: i64,
     #[prost(int64, optional, tag = "5")]
     pub subtotal_minor: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "6")]
@@ -698,8 +700,8 @@ pub struct UpdateOrderRequest {
     pub user_id: i64,
     #[prost(int64, tag = "3")]
     pub shipping_address_id: i64,
-    #[prost(double, tag = "4")]
-    pub total_amount: f64,
+    #[prost(int64, tag = "4")]
+    pub total_amount_paise: i64,
     #[prost(int64, tag = "5")]
     pub status_id: i64,
 }
@@ -758,8 +760,8 @@ pub struct OrderResponse {
     pub order_date: ::prost::alloc::string::String,
     #[prost(int64, tag = "4")]
     pub shipping_address_id: i64,
-    #[prost(double, tag = "5")]
-    pub total_amount: f64,
+    #[prost(int64, tag = "5")]
+    pub total_amount_paise: i64,
     #[prost(int64, tag = "6")]
     pub status_id: i64,
 }
@@ -780,8 +782,8 @@ pub struct CreateOrderDetailRequest {
     pub product_id: i64,
     #[prost(int64, tag = "3")]
     pub quantity: i64,
-    #[prost(double, tag = "4")]
-    pub price: f64,
+    #[prost(int64, tag = "4")]
+    pub price_paise: i64,
     #[prost(int32, optional, tag = "5")]
     pub unit_price_minor: ::core::option::Option<i32>,
     #[prost(int32, optional, tag = "6")]
@@ -812,10 +814,10 @@ pub struct SearchOrderDetailRequest {
     pub product_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "4")]
     pub quantity: ::core::option::Option<i64>,
-    #[prost(double, optional, tag = "5")]
-    pub price_start: ::core::option::Option<f64>,
-    #[prost(double, optional, tag = "6")]
-    pub price_end: ::core::option::Option<f64>,
+    #[prost(int64, optional, tag = "5")]
+    pub price_start_paise: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "6")]
+    pub price_end_paise: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -829,8 +831,8 @@ pub struct UpdateOrderDetailRequest {
     pub product_id: i64,
     #[prost(int64, tag = "4")]
     pub quantity: i64,
-    #[prost(double, tag = "5")]
-    pub price: f64,
+    #[prost(int64, tag = "5")]
+    pub price_paise: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -844,8 +846,8 @@ pub struct OrderDetailResponse {
     pub product_id: i64,
     #[prost(int64, tag = "4")]
     pub quantity: i64,
-    #[prost(double, tag = "5")]
-    pub price: f64,
+    #[prost(int64, tag = "5")]
+    pub price_paise: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -1334,8 +1336,9 @@ pub struct ProductAttributesResponse {
 pub struct CreateDiscountRequest {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
-    #[prost(double, tag = "2")]
-    pub discount_percentage: f64,
+    /// 100 = 1%, 1050 = 10.5%
+    #[prost(int32, tag = "2")]
+    pub discount_percentage_basis_points: i32,
     #[prost(string, tag = "3")]
     pub start_date: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
@@ -1356,8 +1359,8 @@ pub struct UpdateDiscountRequest {
     pub discount_id: i64,
     #[prost(int64, optional, tag = "2")]
     pub product_id: ::core::option::Option<i64>,
-    #[prost(double, optional, tag = "3")]
-    pub discount_percentage: ::core::option::Option<f64>,
+    #[prost(int32, optional, tag = "3")]
+    pub discount_percentage_basis_points: ::core::option::Option<i32>,
     #[prost(string, optional, tag = "4")]
     pub start_date: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "5")]
@@ -1378,8 +1381,8 @@ pub struct DiscountResponse {
     pub discount_id: i64,
     #[prost(int64, tag = "2")]
     pub product_id: i64,
-    #[prost(double, tag = "3")]
-    pub discount_percentage: f64,
+    #[prost(int32, tag = "3")]
+    pub discount_percentage_basis_points: i32,
     #[prost(string, tag = "4")]
     pub start_date: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
@@ -1398,8 +1401,8 @@ pub struct DiscountsResponse {
 pub struct CreateShippingMethodRequest {
     #[prost(string, tag = "1")]
     pub method_name: ::prost::alloc::string::String,
-    #[prost(double, tag = "2")]
-    pub cost: f64,
+    #[prost(int64, tag = "2")]
+    pub cost_paise: i64,
     #[prost(string, tag = "3")]
     pub estimated_delivery_time: ::prost::alloc::string::String,
 }
@@ -1418,8 +1421,8 @@ pub struct UpdateShippingMethodRequest {
     pub method_id: i64,
     #[prost(string, optional, tag = "2")]
     pub method_name: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(double, optional, tag = "3")]
-    pub cost: ::core::option::Option<f64>,
+    #[prost(int64, optional, tag = "3")]
+    pub cost_paise: ::core::option::Option<i64>,
     #[prost(string, optional, tag = "4")]
     pub estimated_delivery_time: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -1438,8 +1441,8 @@ pub struct ShippingMethodResponse {
     pub method_id: i64,
     #[prost(string, tag = "2")]
     pub method_name: ::prost::alloc::string::String,
-    #[prost(double, tag = "3")]
-    pub cost: f64,
+    #[prost(int64, tag = "3")]
+    pub cost_paise: i64,
     #[prost(string, tag = "4")]
     pub estimated_delivery_time: ::prost::alloc::string::String,
 }
@@ -1502,8 +1505,8 @@ pub struct UserRolesResponse {
 pub struct CreateTransactionRequest {
     #[prost(int64, tag = "1")]
     pub user_id: i64,
-    #[prost(double, tag = "2")]
-    pub amount: f64,
+    #[prost(int64, tag = "2")]
+    pub amount_paise: i64,
     #[prost(string, tag = "3")]
     pub r#type: ::prost::alloc::string::String,
 }
@@ -1522,8 +1525,8 @@ pub struct UpdateTransactionRequest {
     pub transaction_id: i64,
     #[prost(int64, optional, tag = "2")]
     pub user_id: ::core::option::Option<i64>,
-    #[prost(double, optional, tag = "3")]
-    pub amount: ::core::option::Option<f64>,
+    #[prost(int64, optional, tag = "3")]
+    pub amount_paise: ::core::option::Option<i64>,
     #[prost(string, optional, tag = "4")]
     pub r#type: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -1542,8 +1545,8 @@ pub struct TransactionResponse {
     pub transaction_id: i64,
     #[prost(int64, tag = "2")]
     pub user_id: i64,
-    #[prost(double, tag = "3")]
-    pub amount: f64,
+    #[prost(int64, tag = "3")]
+    pub amount_paise: i64,
     #[prost(string, tag = "4")]
     pub transaction_date: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
@@ -1979,8 +1982,8 @@ pub struct CreateProductVariantRequest {
     pub size_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "3")]
     pub color_id: ::core::option::Option<i64>,
-    #[prost(double, optional, tag = "4")]
-    pub additional_price: ::core::option::Option<f64>,
+    #[prost(int64, optional, tag = "4")]
+    pub additional_price_paise: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2001,8 +2004,8 @@ pub struct UpdateProductVariantRequest {
     pub size_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "4")]
     pub color_id: ::core::option::Option<i64>,
-    #[prost(double, optional, tag = "5")]
-    pub additional_price: ::core::option::Option<f64>,
+    #[prost(int64, optional, tag = "5")]
+    pub additional_price_paise: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2023,8 +2026,8 @@ pub struct ProductVariantResponse {
     pub size_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "4")]
     pub color_id: ::core::option::Option<i64>,
-    #[prost(double, optional, tag = "5")]
-    pub additional_price: ::core::option::Option<f64>,
+    #[prost(int64, optional, tag = "5")]
+    pub additional_price_paise: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

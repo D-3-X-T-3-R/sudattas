@@ -1,8 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::{basis_points_to_percentage_decimal, percentage_decimal_to_basis_points};
 use core_db_entities::entity::discounts;
 use proto::proto::core::{CreateDiscountRequest, DiscountResponse, DiscountsResponse};
-use rust_decimal::prelude::ToPrimitive;
-use rust_decimal::Decimal;
 use sea_orm::entity::prelude::Date;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
@@ -21,7 +20,7 @@ pub async fn create_discount(
     request: Request<CreateDiscountRequest>,
 ) -> Result<Response<DiscountsResponse>, Status> {
     let req = request.into_inner();
-    let discount_pct = Decimal::from_f64_retain(req.discount_percentage).unwrap_or(Decimal::ZERO);
+    let discount_pct = basis_points_to_percentage_decimal(req.discount_percentage_basis_points);
     let start = parse_date(&req.start_date);
     let end = parse_date(&req.end_date);
 
@@ -38,11 +37,9 @@ pub async fn create_discount(
             items: vec![DiscountResponse {
                 discount_id: inserted.discount_id,
                 product_id: inserted.product_id.unwrap_or(0),
-                discount_percentage: inserted
-                    .discount_percentage
-                    .as_ref()
-                    .and_then(ToPrimitive::to_f64)
-                    .unwrap_or(0.0),
+                discount_percentage_basis_points: percentage_decimal_to_basis_points(
+                    inserted.discount_percentage.as_ref(),
+                ),
                 start_date: date_to_string(inserted.start_date),
                 end_date: date_to_string(inserted.end_date),
             }],

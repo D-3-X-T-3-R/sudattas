@@ -14,7 +14,7 @@ fn discount_response_to_gql(d: DiscountResponse) -> Discount {
     Discount {
         discount_id: d.discount_id.to_string(),
         product_id: d.product_id.to_string(),
-        discount_percentage: d.discount_percentage,
+        discount_percentage_basis_points: d.discount_percentage_basis_points,
         start_date: d.start_date,
         end_date: d.end_date,
     }
@@ -46,7 +46,7 @@ pub(crate) async fn create_discount(input: NewDiscount) -> Result<Vec<Discount>,
     let response = client
         .create_discount(CreateDiscountRequest {
             product_id: parse_i64(&input.product_id, "product id")?,
-            discount_percentage: input.discount_percentage,
+            discount_percentage_basis_points: input.discount_percentage_basis_points,
             start_date: input.start_date,
             end_date: input.end_date,
         })
@@ -70,7 +70,7 @@ pub(crate) async fn update_discount(input: DiscountMutation) -> Result<Vec<Disco
                 .as_deref()
                 .map(|s| parse_i64(s, "product id"))
                 .transpose()?,
-            discount_percentage: input.discount_percentage,
+            discount_percentage_basis_points: input.discount_percentage_basis_points,
             start_date: input.start_date,
             end_date: input.end_date,
         })
