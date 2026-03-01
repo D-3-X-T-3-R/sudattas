@@ -14,13 +14,9 @@ async fn razorpay_connectivity() {
     let _ = dotenvy::from_path(".env");
     let _ = dotenvy::from_path("../.env");
 
-    let order_id = core_operations::razorpay::create_order(
-        100,
-        "INR",
-        "test_sudattas_check",
-    )
-    .await
-    .expect("Razorpay create_order should succeed when keys are set");
+    let order_id = core_operations::razorpay::create_order(100, "INR", "test_sudattas_check")
+        .await
+        .expect("Razorpay create_order should succeed when keys are set");
 
     assert!(
         order_id.starts_with("order_"),
