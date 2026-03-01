@@ -8,9 +8,7 @@ use super::schema::{NewProduct, Product, ProductMutation, SearchProduct};
 use crate::resolvers::{
     convert,
     error::GqlError,
-    utils::{
-        connect_grpc_client, parse_f64, parse_i64, to_f64, to_i64, to_option_f64, to_option_i64,
-    },
+    utils::{connect_grpc_client, parse_i64, to_i64, to_option_i64},
 };
 
 #[instrument]
@@ -19,7 +17,7 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
 
     let name = product.name;
     let stock_quantity = parse_i64(&product.stock_quantity, "stock quantity")?;
-    let price = parse_f64(&product.price, "price")?;
+    let price_paise = parse_i64(&product.price_paise, "price_paise")?;
     let description = product.description;
     let category_id = parse_i64(&product.category_id, "category id")?;
 
@@ -27,7 +25,7 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
         .create_product(CreateProductRequest {
             name,
             description: Some(description),
-            price,
+            price_paise,
             stock_quantity: Some(stock_quantity),
             category_id: Some(category_id),
         })
@@ -50,8 +48,14 @@ pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>
         .search_product(SearchProductRequest {
             name: search.name,
             description: search.description,
-            starting_price: to_option_f64(search.starting_price),
-            ending_price: to_option_f64(search.ending_price),
+            starting_price_paise: search
+                .starting_price_paise
+                .as_ref()
+                .and_then(|s| s.parse().ok()),
+            ending_price_paise: search
+                .ending_price_paise
+                .as_ref()
+                .and_then(|s| s.parse().ok()),
             stock_quantity: to_option_i64(search.stock_quantity),
             category_id: to_option_i64(search.category_id),
             product_id: to_option_i64(search.product_id),
@@ -94,7 +98,7 @@ pub(crate) async fn update_product(product: ProductMutation) -> Result<Vec<Produ
         .update_product(UpdateProductRequest {
             name: product.name,
             description: Some(product.description),
-            price: to_f64(product.price),
+            price_paise: parse_i64(&product.price_paise, "price_paise")?,
             stock_quantity: to_option_i64(product.stock_quantity),
             category_id: to_option_i64(product.category_id),
             product_id: to_i64(product.product_id),

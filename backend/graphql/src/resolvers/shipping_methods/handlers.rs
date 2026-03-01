@@ -16,7 +16,7 @@ fn method_response_to_gql(m: ShippingMethodResponse) -> ShippingMethod {
     ShippingMethod {
         method_id: m.method_id.to_string(),
         method_name: m.method_name,
-        cost: m.cost,
+        cost_paise: m.cost_paise,
         estimated_delivery_time: m.estimated_delivery_time,
     }
 }
@@ -51,7 +51,7 @@ pub(crate) async fn create_shipping_method(
     let response = client
         .create_shipping_method(CreateShippingMethodRequest {
             method_name: input.method_name,
-            cost: input.cost,
+            cost_paise: parse_i64(&input.cost_paise, "cost_paise")?,
             estimated_delivery_time: input.estimated_delivery_time,
         })
         .await?;
@@ -72,7 +72,11 @@ pub(crate) async fn update_shipping_method(
         .update_shipping_method(UpdateShippingMethodRequest {
             method_id: parse_i64(&input.method_id, "method id")?,
             method_name: input.method_name,
-            cost: input.cost,
+            cost_paise: input
+                .cost_paise
+                .as_ref()
+                .map(|s| parse_i64(s, "cost_paise"))
+                .transpose()?,
             estimated_delivery_time: input.estimated_delivery_time,
         })
         .await?;

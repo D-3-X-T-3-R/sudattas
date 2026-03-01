@@ -1,8 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::{basis_points_to_percentage_decimal, percentage_decimal_to_basis_points};
 use core_db_entities::entity::discounts;
 use proto::proto::core::{DiscountResponse, DiscountsResponse, UpdateDiscountRequest};
-use rust_decimal::prelude::ToPrimitive;
-use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 
@@ -30,8 +29,8 @@ pub async fn update_discount(
         })?;
 
     let discount_pct = req
-        .discount_percentage
-        .and_then(Decimal::from_f64_retain)
+        .discount_percentage_basis_points
+        .map(basis_points_to_percentage_decimal)
         .or(existing.discount_percentage);
     let start = req
         .start_date
@@ -57,11 +56,9 @@ pub async fn update_discount(
             items: vec![DiscountResponse {
                 discount_id: updated.discount_id,
                 product_id: updated.product_id.unwrap_or(0),
-                discount_percentage: updated
-                    .discount_percentage
-                    .as_ref()
-                    .and_then(ToPrimitive::to_f64)
-                    .unwrap_or(0.0),
+                discount_percentage_basis_points: percentage_decimal_to_basis_points(
+                    updated.discount_percentage.as_ref(),
+                ),
                 start_date: date_to_string(updated.start_date),
                 end_date: date_to_string(updated.end_date),
             }],

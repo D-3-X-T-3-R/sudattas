@@ -65,8 +65,8 @@ async fn integration_search_product() {
     let req = Request::new(SearchProductRequest {
         name: None,
         description: None,
-        starting_price: None,
-        ending_price: None,
+        starting_price_paise: None,
+        ending_price_paise: None,
         stock_quantity: None,
         category_id: None,
         product_id: None,
@@ -110,7 +110,7 @@ async fn integration_cart_by_session() {
         Request::new(CreateProductRequest {
             name: "Integration Test Product".to_string(),
             description: None,
-            price: 9.99,
+            price_paise: 999, // ₹9.99
             stock_quantity: Some(10),
             category_id: Some(category_id),
         }),

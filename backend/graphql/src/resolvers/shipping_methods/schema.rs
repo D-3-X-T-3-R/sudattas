@@ -4,7 +4,7 @@ use juniper::{graphql_object, GraphQLInputObject};
 pub struct ShippingMethod {
     pub method_id: String,
     pub method_name: String,
-    pub cost: f64,
+    pub cost_paise: i64,
     pub estimated_delivery_time: String,
 }
 
@@ -17,8 +17,9 @@ impl ShippingMethod {
     async fn method_name(&self) -> &String {
         &self.method_name
     }
-    async fn cost(&self) -> f64 {
-        self.cost
+    /// Cost in paise (integer minor units)
+    async fn cost_paise(&self) -> String {
+        self.cost_paise.to_string()
     }
     async fn estimated_delivery_time(&self) -> &String {
         &self.estimated_delivery_time
@@ -29,7 +30,7 @@ impl ShippingMethod {
 #[graphql(description = "Create a shipping method")]
 pub struct NewShippingMethod {
     pub method_name: String,
-    pub cost: f64,
+    pub cost_paise: String,
     pub estimated_delivery_time: String,
 }
 
@@ -38,7 +39,7 @@ pub struct NewShippingMethod {
 pub struct ShippingMethodMutation {
     pub method_id: String,
     pub method_name: Option<String>,
-    pub cost: Option<f64>,
+    pub cost_paise: Option<String>,
     pub estimated_delivery_time: Option<String>,
 }
 

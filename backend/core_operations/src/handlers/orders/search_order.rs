@@ -1,8 +1,8 @@
 // SearchOrderRequest Proto message
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::decimal_to_paise;
 use core_db_entities::entity::orders;
 use proto::proto::core::{OrderResponse, OrdersResponse, SearchOrderRequest};
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{
     ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect, QueryTrait,
 };
@@ -38,13 +38,18 @@ pub async fn search_order(
         Ok(models) => {
             let items = models
                 .into_iter()
-                .map(|model| OrderResponse {
-                    order_id: model.order_id,
-                    user_id: model.user_id,
-                    order_date: model.order_date.to_string(),
-                    shipping_address_id: model.shipping_address_id,
-                    total_amount: model.total_amount.to_f64().unwrap(),
-                    status_id: model.status_id,
+                .map(|model| {
+                    let total_amount_paise = model
+                        .grand_total_minor
+                        .unwrap_or_else(|| decimal_to_paise(&model.total_amount));
+                    OrderResponse {
+                        order_id: model.order_id,
+                        user_id: model.user_id,
+                        order_date: model.order_date.to_string(),
+                        shipping_address_id: model.shipping_address_id,
+                        total_amount_paise,
+                        status_id: model.status_id,
+                    }
                 })
                 .collect();
 
