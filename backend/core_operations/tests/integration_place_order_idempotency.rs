@@ -141,7 +141,7 @@ async fn seed_product_inventory_and_cart(
         Request::new(CreateProductRequest {
             name: "Idem Product".to_string(),
             description: None,
-            price: 10.0,
+            price_paise: 1000, // ₹10.00
             stock_quantity: Some(10),
             category_id: Some(category_id),
         }),

@@ -1,9 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-
+use crate::money::{decimal_to_paise, paise_to_decimal};
 use core_db_entities::entity::order_details;
 use proto::proto::core::{CreateOrderDetailsRequest, OrderDetailResponse, OrderDetailsResponse};
-use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
-use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
@@ -22,7 +20,7 @@ pub async fn create_order_details(
             order_id: ActiveValue::Set(details.order_id),
             product_id: ActiveValue::Set(details.product_id),
             quantity: ActiveValue::Set(details.quantity),
-            price: ActiveValue::Set(Decimal::from_f64(details.price).unwrap()),
+            price: ActiveValue::Set(paise_to_decimal(details.price_paise)),
             unit_price_minor: details
                 .unit_price_minor
                 .map(ActiveValue::Set)
@@ -60,7 +58,7 @@ pub async fn create_order_details(
                     order_id: model.order_id,
                     product_id: model.product_id,
                     quantity: model.quantity,
-                    price: Decimal::to_f64(&model.price).unwrap(),
+                    price_paise: decimal_to_paise(&model.price),
                 });
             }
             Err(e) => {

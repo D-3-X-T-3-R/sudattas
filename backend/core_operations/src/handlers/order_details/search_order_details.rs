@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::money::{decimal_to_paise, paise_to_decimal};
 use core_db_entities::entity::order_details;
 use proto::proto::core::{OrderDetailResponse, OrderDetailsResponse, SearchOrderDetailRequest};
-use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
 use tonic::{Request, Response, Status};
 
@@ -24,11 +24,11 @@ pub async fn search_order_detail(
         .apply_if(req.quantity, |query, _| {
             query.filter(order_details::Column::Quantity.eq(req.quantity))
         })
-        .apply_if(req.price_start, |query, _| {
-            query.filter(order_details::Column::Price.gte(req.price_start))
+        .apply_if(req.price_start_paise, |query, v| {
+            query.filter(order_details::Column::Price.gte(paise_to_decimal(v)))
         })
-        .apply_if(req.price_end, |query, _| {
-            query.filter(order_details::Column::Price.lte(req.price_end))
+        .apply_if(req.price_end_paise, |query, v| {
+            query.filter(order_details::Column::Price.lte(paise_to_decimal(v)))
         })
         .all(txn)
         .await
@@ -41,7 +41,7 @@ pub async fn search_order_detail(
                     order_id: model.order_id,
                     product_id: model.product_id,
                     quantity: model.quantity,
-                    price: model.price.to_f64().unwrap(),
+                    price_paise: decimal_to_paise(&model.price),
                 })
                 .collect();
 

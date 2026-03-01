@@ -261,8 +261,8 @@ async fn test_search_product_empty() {
     let req = Request::new(SearchProductRequest {
         name: Some("nonexistent".to_string()),
         description: None,
-        starting_price: None,
-        ending_price: None,
+        starting_price_paise: None,
+        ending_price_paise: None,
         stock_quantity: None,
         category_id: None,
         product_id: None,
@@ -284,8 +284,8 @@ async fn test_search_product_with_limit_offset() {
     let req = Request::new(SearchProductRequest {
         name: None,
         description: None,
-        starting_price: None,
-        ending_price: None,
+        starting_price_paise: None,
+        ending_price_paise: None,
         stock_quantity: None,
         category_id: None,
         product_id: None,

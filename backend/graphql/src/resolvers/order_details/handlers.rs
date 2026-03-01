@@ -9,7 +9,7 @@ use super::schema::{NewOrderDetails, OrderDetails, OrderDetailsMutation, SearchO
 use crate::resolvers::{
     convert,
     error::GqlError,
-    utils::{connect_grpc_client, to_f64, to_i64, to_option_f64, to_option_i64},
+    utils::{connect_grpc_client, parse_i64, to_i64, to_option_i64},
 };
 
 #[instrument]
@@ -18,21 +18,24 @@ pub(crate) async fn create_order_detail(
 ) -> Result<Vec<OrderDetails>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
-    let order_details = order_detail
+    let order_details: Vec<CreateOrderDetailRequest> = order_detail
         .order_details
         .into_iter()
-        .map(|details| CreateOrderDetailRequest {
-            order_id: to_i64(details.order_id),
-            product_id: to_i64(details.product_id),
-            quantity: to_i64(details.quantity),
-            price: to_f64(details.price),
-            unit_price_minor: None,
-            discount_minor: None,
-            tax_minor: None,
-            sku: None,
-            title: None,
+        .map(|details| {
+            let price_paise = parse_i64(&details.price_paise, "price_paise")?;
+            Ok(CreateOrderDetailRequest {
+                order_id: to_i64(details.order_id),
+                product_id: to_i64(details.product_id),
+                quantity: to_i64(details.quantity),
+                price_paise,
+                unit_price_minor: None,
+                discount_minor: None,
+                tax_minor: None,
+                sku: None,
+                title: None,
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, GqlError>>()?;
     let response = client
         .create_order_details(CreateOrderDetailsRequest { order_details })
         .await?;
@@ -57,8 +60,11 @@ pub(crate) async fn search_order_detail(
             order_id: to_option_i64(search.order_id),
             product_id: to_option_i64(search.product_id),
             quantity: to_option_i64(search.quantity),
-            price_start: to_option_f64(search.price_start),
-            price_end: to_option_f64(search.price_end),
+            price_start_paise: search
+                .price_start_paise
+                .as_ref()
+                .and_then(|s| s.parse().ok()),
+            price_end_paise: search.price_end_paise.as_ref().and_then(|s| s.parse().ok()),
         })
         .await?;
 
@@ -82,7 +88,7 @@ pub(crate) async fn update_order_detail(
             order_id: to_i64(order_detail.order_id),
             product_id: to_i64(order_detail.product_id),
             quantity: to_i64(order_detail.quantity),
-            price: to_f64(order_detail.price),
+            price_paise: parse_i64(&order_detail.price_paise, "price_paise")?,
         })
         .await?;
 
