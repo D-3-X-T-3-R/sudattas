@@ -28,6 +28,7 @@ pub async fn create_cart_item(
         quantity: ActiveValue::Set(req.quantity),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
+        abandoned_email_sent_at: ActiveValue::NotSet,
     };
     match cart.insert(txn).await {
         Ok(cart_model) => {

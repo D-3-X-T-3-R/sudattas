@@ -4,9 +4,11 @@ use graphql::graphql_handler;
 use graphql::health;
 use graphql::query_handler::{AuthSource, Context};
 use graphql::schema;
+use graphql::security::csrf;
 use graphql::security::jwks_loader::load_jwks;
 use graphql::security::jwt_validator::validate_token;
 use graphql::security::session_validator;
+use graphql::seo;
 use graphql::webhooks;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use reqwest::StatusCode;
@@ -26,6 +28,11 @@ impl warp::reject::Reject for Unauthorized {}
 struct RateLimited {}
 impl warp::reject::Reject for RateLimited {}
 
+/// P2 Security: CSRF — request with session auth from disallowed origin.
+#[derive(Debug)]
+struct CsrfRejected {}
+impl warp::reject::Reject for CsrfRejected {}
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
@@ -44,6 +51,19 @@ async fn main() {
     let jwks = load_jwks().await.expect("Failed to load JWKS");
 
     let redis_url = std::env::var("REDIS_URL").ok();
+
+    // P2 Security: when set, session-authenticated POSTs must have Origin/Referer in this list.
+    let allowed_origins: Vec<String> = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let allowed_origins = if allowed_origins.is_empty() {
+        None
+    } else {
+        Some(Arc::new(allowed_origins))
+    };
 
     let rate_limit_per_minute: u32 = std::env::var("RATE_LIMIT_PER_MINUTE")
         .ok()
@@ -155,17 +175,22 @@ async fn main() {
     // full login (e.g. checkout / place_order).
     let jwks_c = jwks.clone();
     let redis_url_c = redis_url.clone();
+    let allowed_origins_c = allowed_origins.clone();
     let context_filter = warp::header::optional::<String>("authorization")
         .and(warp::header::optional::<String>("x-session-id"))
+        .and(warp::header::optional::<String>("origin"))
+        .and(warp::header::optional::<String>("referer"))
         .and(warp::header::optional::<String>("x-request-id"))
         .and(warp::header::optional::<String>("idempotency-key"))
-        .and(warp::any().map(move || (jwks_c.clone(), redis_url_c.clone())))
+        .and(warp::any().map(move || (jwks_c.clone(), redis_url_c.clone(), allowed_origins_c.clone())))
         .and_then(
             |token: Option<String>,
              session_id: Option<String>,
+             origin: Option<String>,
+             referer: Option<String>,
              x_request_id: Option<String>,
              idempotency_key: Option<String>,
-             (jwks, redis_url): (_, Option<String>)| async move {
+             (jwks, redis_url, allowed_origins): (_, Option<String>, Option<Arc<Vec<String>>>)| async move {
                 let mut auth: Option<AuthSource> = None;
 
                 // --- JWT path ---
@@ -208,6 +233,28 @@ async fn main() {
                         "Request rejected: no valid authentication credentials"
                     );
                     return Err(warp::reject::custom(Unauthorized {}));
+                }
+
+                // --- P2 CSRF: session auth must come from an allowed origin when ALLOWED_ORIGINS is set ---
+                if matches!(&auth, Some(AuthSource::Session(_))) {
+                    if let Some(ref allowed) = allowed_origins {
+                        let request_origin = origin
+                            .as_ref()
+                            .map(|o| o.trim().to_lowercase())
+                            .or_else(|| {
+                                referer.as_ref().and_then(|r| {
+                                    csrf::parse_origin_from_referer(r).map(|s| s.to_lowercase())
+                                })
+                            });
+                        let allowed = match request_origin {
+                            Some(ref o) if !o.is_empty() => allowed.iter().any(|a| o == a),
+                            _ => false,
+                        };
+                        if !allowed {
+                            warn!("CSRF: session auth rejected — Origin/Referer missing or not in ALLOWED_ORIGINS");
+                            return Err(warp::reject::custom(CsrfRejected {}));
+                        }
+                    }
                 }
 
                 let request_id =
@@ -288,12 +335,40 @@ async fn main() {
             warp::reply::with_header(body, "content-type", "text/plain; charset=utf-8")
         });
 
+    // P2 SEO: robots.txt and sitemap.xml (no auth)
+    let robots_route = warp::get()
+        .and(warp::path("robots.txt"))
+        .and(warp::path::end())
+        .map(|| {
+            let body = seo::robots_txt();
+            warp::reply::with_header(body, "content-type", "text/plain; charset=utf-8")
+        });
+    let sitemap_route = warp::get()
+        .and(warp::path("sitemap.xml"))
+        .and(warp::path::end())
+        .and_then(|| async move {
+            let reply: warp::reply::Response = match seo::sitemap_xml().await {
+                Ok(xml) => {
+                    warp::reply::with_header(xml, "content-type", "application/xml; charset=utf-8")
+                        .into_response()
+                }
+                Err(_) => warp::reply::with_status(
+                    "Internal error generating sitemap",
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+                .into_response(),
+            };
+            Ok::<_, Rejection>(reply)
+        });
+
     info!(listen_addr = %listen_addr, "GraphQL service starting");
 
     // No catch-all route: unmatched paths reject. Top-level recover turns NotFound -> 404.
     let routes = load_balancer_health_check
         .or(readiness_check)
         .or(metrics_route)
+        .or(robots_route)
+        .or(sitemap_route)
         .or(graphql_copy)
         .or(webhook_route)
         .or(options_routes)
@@ -307,6 +382,9 @@ async fn handle_auth_rejection(err: Rejection) -> Result<impl Reply, std::conver
     // adds MethodNotAllowed; we must return 401 not 404 for POST /v2 with bad auth.
     if err.find::<Unauthorized>().is_some() {
         return Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED));
+    }
+    if err.find::<CsrfRejected>().is_some() {
+        return Ok(reply::with_status("FORBIDDEN", StatusCode::FORBIDDEN));
     }
     if err.find::<RateLimited>().is_some() {
         return Ok(reply::with_status(

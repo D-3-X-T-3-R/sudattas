@@ -30,6 +30,7 @@ pub async fn update_user(
         email_verified_at: ActiveValue::Set(existing.email_verified_at),
         user_status_id: ActiveValue::Set(existing.user_status_id),
         last_login_at: ActiveValue::Set(existing.last_login_at),
+        marketing_opt_out: ActiveValue::Set(existing.marketing_opt_out),
         updated_at: ActiveValue::NotSet,
     };
 

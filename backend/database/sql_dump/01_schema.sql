@@ -23,6 +23,7 @@ DROP TABLE IF EXISTS `UserRolesMapping`;
 DROP TABLE IF EXISTS `Transactions`;
 DROP TABLE IF EXISTS `NewsletterSubscribers`;
 DROP TABLE IF EXISTS `ProductRatings`;
+DROP TABLE IF EXISTS `product_related`;
 DROP TABLE IF EXISTS `ProductCategoryMapping`;
 DROP TABLE IF EXISTS `ProductAttributeMapping`;
 DROP TABLE IF EXISTS `UserRoleMapping`;
@@ -53,6 +54,7 @@ DROP TABLE IF EXISTS `Cities`;
 DROP TABLE IF EXISTS `States`;
 DROP TABLE IF EXISTS `Countries`;
 DROP TABLE IF EXISTS `OrderStatus`;
+DROP TABLE IF EXISTS `security_audit_log`;
 DROP TABLE IF EXISTS `Users`;
 
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -88,6 +90,7 @@ CREATE TABLE `Users` (
     `Phone` varchar(20) DEFAULT NULL,
     `user_status_id` BIGINT DEFAULT NULL,
     `last_login_at` TIMESTAMP NULL,
+    `marketing_opt_out` BOOLEAN DEFAULT FALSE COMMENT 'P2: do not send abandoned-cart / marketing emails',
     `CreateDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`UserID`),
@@ -283,6 +286,7 @@ CREATE TABLE `Cart` (
     `Quantity` bigint NOT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `abandoned_email_sent_at` TIMESTAMP NULL COMMENT 'P2: when set, do not send another abandoned-cart email',
     PRIMARY KEY (`CartID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
@@ -404,6 +408,7 @@ CREATE TABLE `NewsletterSubscribers` (
     `SubscriberID` bigint NOT NULL AUTO_INCREMENT,
     `Email` varchar(255) NOT NULL UNIQUE,
     `SubscriptionDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `unsubscribed_at` TIMESTAMP NULL COMMENT 'P2: when set, do not send newsletters',
     PRIMARY KEY (`SubscriberID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -425,6 +430,18 @@ CREATE TABLE `ProductCategoryMapping` (
     PRIMARY KEY (`ProductID`, `CategoryID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
     FOREIGN KEY (`CategoryID`) REFERENCES `Categories`(`CategoryID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P2: Manual related products (display order for recommendations)
+CREATE TABLE `product_related` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `product_id` bigint NOT NULL,
+    `related_product_id` bigint NOT NULL,
+    `display_order` int NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_product_related` (`product_id`, `related_product_id`),
+    FOREIGN KEY (`product_id`) REFERENCES `Products`(`ProductID`),
+    FOREIGN KEY (`related_product_id`) REFERENCES `Products`(`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `ProductAttributeMapping`
@@ -706,6 +723,16 @@ CREATE TABLE `idempotency_keys` (
     `expires_at` TIMESTAMP NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE INDEX `idx_idempotency_scope_key` (`scope`, `key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- P2 Security: audit log for secrets rotation and other security events
+CREATE TABLE `security_audit_log` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `event_type` VARCHAR(100) NOT NULL COMMENT 'e.g. secrets_rotation, config_reload',
+    `details` TEXT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `idx_security_audit_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- P1 Outbox for transactional notifications (emails/SMS); worker publishes pending idempotently

@@ -16,6 +16,7 @@ pub async fn create_newsletter_subscriber(
         subscriber_id: ActiveValue::NotSet,
         email: ActiveValue::Set(req.email),
         subscription_date: ActiveValue::Set(Utc::now()),
+        unsubscribed_at: ActiveValue::NotSet,
     };
 
     match model.insert(txn).await {

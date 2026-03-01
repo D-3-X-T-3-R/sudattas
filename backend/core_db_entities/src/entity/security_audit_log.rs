@@ -4,15 +4,14 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "NewsletterSubscribers")]
+#[sea_orm(table_name = "security_audit_log")]
 pub struct Model {
-    #[sea_orm(column_name = "SubscriberID", primary_key)]
-    pub subscriber_id: i64,
-    #[sea_orm(column_name = "Email", unique)]
-    pub email: String,
-    #[sea_orm(column_name = "SubscriptionDate")]
-    pub subscription_date: DateTimeUtc,
-    pub unsubscribed_at: Option<DateTimeUtc>,
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub event_type: String,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub details: Option<String>,
+    pub created_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
