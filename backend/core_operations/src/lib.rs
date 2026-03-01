@@ -9,11 +9,13 @@ pub mod observability;
 pub mod services;
 
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, AddWishlistItemRequest, ApplyCouponRequest,
-    CapturePaymentRequest, CartItemsResponse, CategoriesResponse, CitiesResponse, ColorsResponse,
-    ConfirmImageUploadRequest, CountriesResponse, CountryStateMappingsResponse, CouponsResponse,
-    CreateCartItemRequest, CreateCategoryRequest, CreateCityRequest, CreateColorRequest,
-    CreateCountryRequest, CreateCountryStateMappingRequest, CreateDiscountRequest,
+    grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkOrderDeliveredRequest,
+    AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse,
+    ApplyCouponRequest, CapturePaymentRequest, CartItemsResponse, CategoriesResponse,
+    CitiesResponse, ColorsResponse, ConfirmImageUploadRequest, CountriesResponse,
+    CountryStateMappingsResponse, CouponsAdminResponse, CouponsResponse, CreateCartItemRequest,
+    CreateCategoryRequest, CreateCityRequest, CreateColorRequest, CreateCountryRequest,
+    CreateCountryStateMappingRequest, CreateCouponRequest, CreateDiscountRequest,
     CreateEventLogRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
     CreateNewsletterSubscriberRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
     CreateOrderRequest, CreatePaymentIntentRequest, CreatePaymentMethodRequest,
@@ -50,8 +52,8 @@ use proto::proto::core::{
     ReviewsResponse, SearchCategoryRequest, SearchCityRequest, SearchColorRequest,
     SearchCountryRequest, SearchCountryStateMappingRequest, SearchDiscountRequest,
     SearchEventLogRequest, SearchInventoryItemRequest, SearchInventoryLogRequest,
-    SearchNewsletterSubscriberRequest, SearchOrderDetailRequest, SearchOrderRequest,
-    SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
+    SearchNewsletterSubscriberRequest, SearchOrderDetailRequest, SearchOrderEventsRequest,
+    SearchOrderRequest, SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
     SearchProductAttributeRequest, SearchProductCategoryMappingRequest,
     SearchProductColorMappingRequest, SearchProductImageRequest, SearchProductRatingRequest,
     SearchProductRequest, SearchProductSizeMappingRequest, SearchProductVariantRequest,
@@ -63,7 +65,7 @@ use proto::proto::core::{
     ShippingMethodsResponse, ShippingZonesResponse, SizesResponse, StateCityMappingsResponse,
     StatesResponse, SuppliersResponse, TransactionsResponse, UpdateCartItemRequest,
     UpdateCategoryRequest, UpdateColorRequest, UpdateCountryStateMappingRequest,
-    UpdateDiscountRequest, UpdateEventLogRequest, UpdateInventoryItemRequest,
+    UpdateCouponRequest, UpdateDiscountRequest, UpdateEventLogRequest, UpdateInventoryItemRequest,
     UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOrderDetailRequest,
     UpdateOrderRequest, UpdatePaymentMethodRequest, UpdateProductAttributeRequest,
     UpdateProductImageRequest, UpdateProductRatingRequest, UpdateProductRequest,
@@ -952,6 +954,38 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::update_order(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn admin_mark_order_shipped(
+        &self,
+        request: Request<AdminMarkOrderShippedRequest>,
+    ) -> Result<Response<AdminMarkOrderShippedResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::admin_mark_order_shipped(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn admin_mark_order_delivered(
+        &self,
+        request: Request<AdminMarkOrderDeliveredRequest>,
+    ) -> Result<Response<AdminMarkOrderDeliveredResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::admin_mark_order_delivered(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2645,6 +2679,38 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
+    async fn create_coupon(
+        &self,
+        request: Request<CreateCouponRequest>,
+    ) -> Result<Response<CouponsAdminResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::create_coupon(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn update_coupon(
+        &self,
+        request: Request<UpdateCouponRequest>,
+    ) -> Result<Response<CouponsAdminResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::update_coupon(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
     async fn create_order_event(
         &self,
         request: Request<CreateOrderEventRequest>,
@@ -2673,6 +2739,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::order_events::get_order_events(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_order_events(
+        &self,
+        request: Request<SearchOrderEventsRequest>,
+    ) -> Result<Response<OrderEventsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::order_events::search_order_events(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

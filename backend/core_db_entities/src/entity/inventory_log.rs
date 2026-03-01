@@ -16,6 +16,9 @@ pub struct Model {
     pub log_time: DateTimeUtc,
     #[sea_orm(column_name = "Reason")]
     pub reason: Option<String>,
+    pub actor_id: Option<String>,
+    pub quantity_before: Option<i64>,
+    pub quantity_after: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

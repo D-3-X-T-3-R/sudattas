@@ -512,13 +512,16 @@ CREATE TABLE `UserActivity` (
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `InventoryLog`
+-- Table structure for table `InventoryLog` (P1: actor + before/after for admin audit)
 CREATE TABLE `InventoryLog` (
     `LogID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint NOT NULL,
     `ChangeQuantity` bigint NOT NULL,
     `LogTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `Reason` varchar(255) DEFAULT NULL,
+    `actor_id` varchar(255) DEFAULT NULL COMMENT 'P1 admin audit: who changed',
+    `quantity_before` bigint DEFAULT NULL COMMENT 'P1 admin audit',
+    `quantity_after` bigint DEFAULT NULL COMMENT 'P1 admin audit',
     PRIMARY KEY (`LogID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

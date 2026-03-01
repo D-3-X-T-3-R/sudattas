@@ -72,6 +72,8 @@ service GRPCServices {
     rpc UpdateOrder(UpdateOrderRequest) returns (OrdersResponse);
     rpc DeleteOrder(DeleteOrderRequest) returns (OrdersResponse);
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
+    rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);
+    rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);
 
     // OrderDetails
     rpc CreateOrderDetails(CreateOrderDetailsRequest) returns (OrderDetailsResponse);
@@ -240,6 +242,8 @@ service GRPCServices {
     // Coupons
     rpc ValidateCoupon(ValidateCouponRequest) returns (CouponsResponse);
     rpc ApplyCoupon(ApplyCouponRequest) returns (CouponsResponse);
+    rpc CreateCoupon(CreateCouponRequest) returns (CouponsAdminResponse);
+    rpc UpdateCoupon(UpdateCouponRequest) returns (CouponsAdminResponse);
 
     // Webhooks
     rpc IngestWebhook(IngestWebhookRequest) returns (WebhookEventsResponse);
@@ -247,6 +251,7 @@ service GRPCServices {
     // OrderEvents
     rpc CreateOrderEvent(CreateOrderEventRequest) returns (OrderEventsResponse);
     rpc GetOrderEvents(GetOrderEventsRequest) returns (OrderEventsResponse);
+    rpc SearchOrderEvents(SearchOrderEventsRequest) returns (OrderEventsResponse);
 
     // P1 Refunds
     rpc CreateRefund(CreateRefundRequest) returns (RefundsResponse);
