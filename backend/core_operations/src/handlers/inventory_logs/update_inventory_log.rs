@@ -24,6 +24,9 @@ pub async fn update_inventory_log(
         change_quantity: ActiveValue::Set(req.change_quantity.unwrap_or(existing.change_quantity)),
         log_time: ActiveValue::Set(existing.log_time),
         reason: ActiveValue::Set(req.reason.or(existing.reason)),
+        actor_id: ActiveValue::Set(existing.actor_id),
+        quantity_before: ActiveValue::Set(existing.quantity_before),
+        quantity_after: ActiveValue::Set(existing.quantity_after),
     };
 
     match model.update(txn).await {

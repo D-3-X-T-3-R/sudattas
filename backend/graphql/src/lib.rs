@@ -4,6 +4,7 @@ pub mod graphql_handler;
 pub mod graphql_limits;
 pub mod health;
 pub mod idempotency;
+pub mod metrics;
 pub mod query_handler;
 pub mod resolvers;
 pub mod security;

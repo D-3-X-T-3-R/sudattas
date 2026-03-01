@@ -44,6 +44,14 @@ pub enum PaymentStatus {
     NeedsReview,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "scope_type")]
+pub enum ScopeType {
+    #[sea_orm(string_value = "product")]
+    Product,
+    #[sea_orm(string_value = "category")]
+    Category,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "status")]
 pub enum Status {
     #[sea_orm(string_value = "pending")]

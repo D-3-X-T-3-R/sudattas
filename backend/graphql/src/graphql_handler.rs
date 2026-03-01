@@ -1,11 +1,14 @@
 //! Phase 8: Custom GraphQL handler with depth/complexity limits.
 //!
 //! Parses body, checks query depth, then executes via Juniper and returns JSON.
+//! P1: Records request duration and outcome for Prometheus.
 
 use crate::graphql_limits::{check_query_complexity, check_query_depth, DEFAULT_MAX_QUERY_DEPTH};
+use crate::metrics;
 use crate::query_handler::Context;
 use serde::Deserialize;
 use std::sync::Arc;
+use std::time::Instant;
 use warp::http::StatusCode;
 use warp::hyper::body::Bytes;
 use warp::reply::Response;
@@ -67,8 +70,16 @@ pub async fn handle_graphql_request(
     let operation_name = req.operation_name.as_deref();
     let variables = juniper::Variables::new();
 
+    let start = Instant::now();
     let result =
         juniper::execute(query, operation_name, schema_ref.as_ref(), &variables, &ctx).await;
+    let duration_sec = start.elapsed().as_secs_f64();
+    metrics::record_graphql_request_duration_seconds(duration_sec);
+    let success = result
+        .as_ref()
+        .map(|(_, errs)| errs.is_empty())
+        .unwrap_or(false);
+    metrics::record_graphql_request_total(success);
 
     let (status, body_json) = match result {
         Ok((value, errors)) => {

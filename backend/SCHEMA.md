@@ -178,6 +178,20 @@ Idempotent inbound webhook records.
 | status | ENUM(pending, processed, failed) | Processing state |
 | received_at | TIMESTAMP | |
 
+### outbox_events (P1)
+Transactional notification outbox: worker publishes pending events (emails/SMS) idempotently.
+
+| Column | Type | Notes |
+|---|---|---|
+| event_id | BIGINT PK | |
+| event_type | VARCHAR | OrderPlaced, PaymentCaptured, Shipped, Delivered, Refunded |
+| aggregate_type | VARCHAR | e.g. `order` |
+| aggregate_id | VARCHAR | e.g. order_id |
+| payload | JSON | Template variables |
+| status | ENUM(pending, processed, failed) | processed = published |
+| created_at | TIMESTAMP | |
+| published_at | TIMESTAMP | Set when status = processed |
+
 ---
 
 ## Promotions & Discounts
@@ -279,8 +293,21 @@ Stock management per product.
 
 The database schema is maintained only in SQL files (no Rust migrations):
 
-- **`backend/database/sql_dump/01_schema.sql`** — creates database `SUDATTAS`, drops existing tables if present, and creates all tables (Orders, OrderDetails, payment_intents, coupons, idempotency_keys, webhook_events, etc.).
+- **`backend/database/sql_dump/01_schema.sql`** — single schema file: creates database `SUDATTAS`, drops existing tables if present, and creates all tables (Orders, OrderDetails, payment_intents, coupons, idempotency_keys, webhook_events, etc.) with P1 constraints and indexes.
 - **`backend/database/sql_dump/02_data.sql`** — optional seed/reference data.
+
+### P1 Data model: constraints and indexes (stop relying on code)
+
+**Uniques:** Products.`sku`, Products.`slug`, coupons.`code`, webhook_events (`provider`, `webhook_id`), payment_intents.`razorpay_payment_id` (nullable; multiple NULLs allowed).  
+**Foreign keys:** Orders → Users, ShippingAddresses, OrderStatus, coupons (applied_coupon_id); OrderDetails → Orders, Products; payment_intents → Orders, Users; etc.  
+**Not-null:** payment_intents.`status` NOT NULL DEFAULT 'pending'; other required fields as in 01_schema.  
+**Indexes (high-volume):** Orders (`OrderDate`, `StatusID`, `UserID`); OrderDetails (`OrderID`); Inventory (`ProductID`); coupons (`code`, `ends_at`).
+
+### Migrations safety
+
+- **Forward-only:** Schema changes are additive (new constraints, new indexes, new tables). No destructive ALTERs without backfill.
+- **CI:** Backend CI loads `01_schema.sql` on an empty MySQL and runs entity generation + tests; this validates that the schema loads and matches committed entities.
+- After changing 01_schema, regenerate entities and commit: `cd backend/core_db_entities && ./regenerate_entities.ps1` (or the shell equivalent).
 
 ### Loading the schema
 

@@ -164,7 +164,7 @@ impl MutationRoot {
 
         let request_id = context.request_id().map(|s| s.to_string());
         let idempotency_key = context.idempotency_key().map(|s| s.to_string());
-        crate::idempotency::with_idempotency(
+        let result = crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "place_order",
             context.idempotency_key(),
@@ -178,8 +178,19 @@ impl MutationRoot {
                 .await
             },
         )
-        .await
-        .map_err(|e| e.into_field_error())
+        .await;
+        let reason = result.as_ref().err().map(|e| {
+            let s = e.to_string();
+            if s.contains("Insufficient stock") || s.contains("inventory") {
+                "insufficient_stock"
+            } else if s.contains("Unavailable") || s.contains("idempotency") {
+                "idempotency"
+            } else {
+                "error"
+            }
+        });
+        crate::metrics::record_place_order_total(result.is_ok(), reason);
+        result.map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
@@ -273,7 +284,7 @@ impl MutationRoot {
         input: CapturePayment,
     ) -> FieldResult<Vec<PaymentIntent>> {
         let request_id = context.request_id().map(|s| s.to_string());
-        crate::idempotency::with_idempotency(
+        let result = crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "capture_payment",
             context.idempotency_key(),
@@ -281,8 +292,9 @@ impl MutationRoot {
                 payment_intents::handlers::capture_payment(input, request_id.as_deref()).await
             },
         )
-        .await
-        .map_err(|e| e.into_field_error())
+        .await;
+        crate::metrics::record_capture_payment_total(result.is_ok());
+        result.map_err(|e| e.into_field_error())
     }
 
     // ProductImage

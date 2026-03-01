@@ -33,10 +33,7 @@ pub async fn get_payment_intent(
             user_id: model.user_id,
             amount_paise: model.amount_paise as i64,
             currency: model.currency,
-            status: model
-                .status
-                .map(|s| format!("{:?}", s).to_lowercase())
-                .unwrap_or_else(|| "pending".to_string()),
+            status: format!("{:?}", model.status).to_lowercase(),
             razorpay_payment_id: model.razorpay_payment_id,
             created_at: model.created_at.map(|t| t.to_string()).unwrap_or_default(),
             expires_at: model.expires_at.to_string(),
