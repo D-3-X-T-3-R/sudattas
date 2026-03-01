@@ -59,6 +59,7 @@ use crate::resolvers::{
         self,
         schema::{SearchState, State},
     },
+    user_pii::{self, schema::UserPiiExport},
     wishlist::{
         self,
         schema::{SearchWishlistItem, WishlistItem},
@@ -258,6 +259,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn get_shipping_addresses() -> FieldResult<Vec<ShippingAddress>> {
         shipping_addresses::handlers::get_shipping_addresses()
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // P2 Data retention: export current user's PII (no password)
+    #[instrument(err, ret)]
+    async fn export_my_pii(context: &Context) -> FieldResult<UserPiiExport> {
+        user_pii::handlers::export_my_pii(context)
             .await
             .map_err(|e| e.into_field_error())
     }

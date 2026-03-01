@@ -36,6 +36,7 @@ pub use super::products::Entity as Products;
 pub use super::promotions::Entity as Promotions;
 pub use super::refunds::Entity as Refunds;
 pub use super::reviews::Entity as Reviews;
+pub use super::security_audit_log::Entity as SecurityAuditLog;
 pub use super::sessions::Entity as Sessions;
 pub use super::shipments::Entity as Shipments;
 pub use super::shipping_addresses::Entity as ShippingAddresses;

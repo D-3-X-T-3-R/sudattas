@@ -314,6 +314,28 @@ message UsersResponse {
     repeated UserResponse items = 1;
 }
 
+// P2 Security: audit log for secrets rotation etc.
+message RecordSecurityAuditRequest {
+    string event_type = 1;  // e.g. secrets_rotation, config_reload
+    optional string details = 2;
+}
+message RecordSecurityAuditResponse {
+    bool success = 1;
+}
+
+// P2 Data retention: export PII for the user (no password); caller must be self or admin.
+message GetUserPiiExportRequest {
+    int64 user_id = 1;
+}
+message GetUserPiiExportResponse {
+    int64 user_id = 1;
+    string email = 2;
+    optional string full_name = 3;
+    optional string address = 4;
+    optional string phone = 5;
+    string create_date = 6;
+}
+
 // Categories
 
 message CreateCategoryRequest {

@@ -39,6 +39,7 @@ pub mod promotions;
 pub mod refunds;
 pub mod reviews;
 pub mod sea_orm_active_enums;
+pub mod security_audit_log;
 pub mod sessions;
 pub mod shipments;
 pub mod shipping_addresses;
