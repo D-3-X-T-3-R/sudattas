@@ -137,6 +137,12 @@ pub async fn place_order(
                 IdempotencyStatus::Failed => {
                     // Allow retry; fall through to place order and update row later.
                 }
+                IdempotencyStatus::ClientVerified | IdempotencyStatus::NeedsReview => {
+                    // Not used for idempotency_keys; treat like Pending if ever seen.
+                    return Err(Status::unavailable(
+                        "Idempotent place_order still in progress; retry later",
+                    ));
+                }
             }
         }
     }
@@ -388,10 +394,7 @@ pub async fn place_order(
         }
     }
 
-    // Auto-create a pending payment intent for the new order.
-    // razorpay_order_id must be obtained from Razorpay; here we generate a placeholder
-    // that callers must replace via CreatePaymentIntent when they have a real Razorpay ID.
-    let razorpay_order_id = format!("rzp_pending_{}", create_order.order_id);
+    // Auto-create a pending payment intent: backend creates Razorpay order via API (server-authoritative).
     let amount_paise = total_paise;
     if let Err(e) = create_payment_intent(
         txn,
@@ -400,7 +403,7 @@ pub async fn place_order(
             user_id: req.user_id,
             amount_paise,
             currency: Some("INR".to_string()),
-            razorpay_order_id,
+            razorpay_order_id: None, // Backend will call Razorpay Orders API and store returned id.
         }),
     )
     .await

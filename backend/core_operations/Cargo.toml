@@ -52,6 +52,14 @@ warp = "0.3"
 
 base64 = "0.21.7"
 
+# Razorpay API (server-authoritative order creation)
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+# Payment signature verification (HMAC SHA256, constant-time compare)
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+subtle = "2.5"
+
 # Path Dependencies
 core_db_entities = {path = "../core_db_entities/"}
 proto = {path = "../protos/"}

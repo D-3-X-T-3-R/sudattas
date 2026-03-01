@@ -6,6 +6,7 @@ use std::time::Duration;
 pub mod auth;
 pub mod money;
 pub mod observability;
+pub mod razorpay;
 pub mod services;
 
 use proto::proto::core::{
@@ -78,7 +79,8 @@ use proto::proto::core::{
     UpdateShippingZoneRequest, UpdateSizeRequest, UpdateStateCityMappingRequest,
     UpdateSupplierRequest, UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest,
     UpdateUserRoleRequest, UserActivitiesResponse, UserRoleMappingsResponse, UserRolesResponse,
-    UsersResponse, ValidateCouponRequest, WebhookEventsResponse, WishlistItemsResponse,
+    UsersResponse, ValidateCouponRequest, VerifyRazorpayPaymentRequest,
+    VerifyRazorpayPaymentResponse, WebhookEventsResponse, WishlistItemsResponse,
 };
 
 use sea_orm::TransactionTrait;
@@ -2687,6 +2689,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::payment_intents::get_payment_intent(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn verify_razorpay_payment(
+        &self,
+        request: Request<VerifyRazorpayPaymentRequest>,
+    ) -> Result<Response<VerifyRazorpayPaymentResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::payment_intents::verify_razorpay_payment(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

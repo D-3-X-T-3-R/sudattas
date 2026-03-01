@@ -1,4 +1,5 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::razorpay;
 use core_db_entities::entity::payment_intents;
 use proto::proto::core::{GetPaymentIntentRequest, PaymentIntentResponse, PaymentIntentsResponse};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
@@ -24,6 +25,7 @@ pub async fn get_payment_intent(
 
     let results = query.all(txn).await.map_err(map_db_error_to_status)?;
 
+    let key_id = razorpay::key_id_for_frontend();
     let items = results
         .into_iter()
         .map(|model| PaymentIntentResponse {
@@ -37,6 +39,7 @@ pub async fn get_payment_intent(
             razorpay_payment_id: model.razorpay_payment_id,
             created_at: model.created_at.map(|t| t.to_string()).unwrap_or_default(),
             expires_at: model.expires_at.to_string(),
+            razorpay_key_id: key_id.clone(),
         })
         .collect();
 

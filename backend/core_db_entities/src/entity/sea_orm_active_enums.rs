@@ -60,4 +60,8 @@ pub enum Status {
     Processed,
     #[sea_orm(string_value = "failed")]
     Failed,
+    #[sea_orm(string_value = "needs_review")]
+    NeedsReview,
+    #[sea_orm(string_value = "client_verified")]
+    ClientVerified,
 }

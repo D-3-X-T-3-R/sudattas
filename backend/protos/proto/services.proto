@@ -240,6 +240,7 @@ service GRPCServices {
     rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (PaymentIntentsResponse);
     rpc CapturePayment(CapturePaymentRequest) returns (PaymentIntentsResponse);
     rpc GetPaymentIntent(GetPaymentIntentRequest) returns (PaymentIntentsResponse);
+    rpc VerifyRazorpayPayment(VerifyRazorpayPaymentRequest) returns (VerifyRazorpayPaymentResponse);
 
     // ProductImages (R2)
     rpc GetPresignedUploadUrl(GetPresignedUploadUrlRequest) returns (PresignedUploadUrlResponse);
