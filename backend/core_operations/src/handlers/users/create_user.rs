@@ -29,6 +29,7 @@ pub async fn create_user(
         email_verified_at: ActiveValue::NotSet,
         user_status_id: ActiveValue::NotSet,
         last_login_at: ActiveValue::NotSet,
+        marketing_opt_out: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };
 

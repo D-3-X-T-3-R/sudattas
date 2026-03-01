@@ -25,6 +25,7 @@ pub struct Model {
     pub phone: Option<String>,
     pub user_status_id: Option<i64>,
     pub last_login_at: Option<DateTimeUtc>,
+    pub marketing_opt_out: Option<i8>,
     #[sea_orm(column_name = "CreateDate")]
     pub create_date: DateTimeUtc,
     pub updated_at: Option<DateTimeUtc>,

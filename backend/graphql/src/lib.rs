@@ -8,6 +8,7 @@ pub mod metrics;
 pub mod query_handler;
 pub mod resolvers;
 pub mod security;
+pub mod seo;
 pub mod validation;
 pub mod webhooks;
 

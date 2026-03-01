@@ -4,7 +4,6 @@ use proto::proto::core::grpc_services_server::GrpcServicesServer;
 use tonic::transport::Server;
 use warp::Filter;
 
-pub mod handlers;
 pub mod order_state_machine {
     pub use core_operations::order_state_machine::*;
 }

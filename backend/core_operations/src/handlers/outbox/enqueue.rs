@@ -14,6 +14,8 @@ pub const PAYMENT_CAPTURED: &str = "PaymentCaptured";
 pub const SHIPPED: &str = "Shipped";
 pub const DELIVERED: &str = "Delivered";
 pub const REFUNDED: &str = "Refunded";
+/// P2: Abandoned cart reminder (payload: cart_id, user_id?, session_id?, email?)
+pub const ABANDONED_CART: &str = "AbandonedCart";
 
 /// Enqueue a notification event into the outbox. Same transaction as the business operation.
 pub async fn enqueue_outbox_event(
