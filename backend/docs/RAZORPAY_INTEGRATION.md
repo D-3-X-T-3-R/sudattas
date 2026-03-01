@@ -48,7 +48,17 @@ See `backend/.env.example` for a template.
 - **Webhook (source of truth)**  
   Razorpay sends `payment.captured` (and `payment.failed`) to your `POST /webhook/razorpay` URL. The graphql service verifies `x-razorpay-signature` when `RAZORPAY_WEBHOOK_SECRET` is set, then forwards to core; the handler updates the payment intent and order (e.g. marks paid). Webhooks are the authority for final payment status.
 
-## 4. Frontend checklist
+## 4. Test from the storefront
+
+The storefront has a **"Test Razorpay (₹100)"** button in the cart drawer. It:
+
+1. Calls `createPaymentIntent` with `orderId: "1"`, `userId: "1"`, `amountPaise: "10000"` (requires auth: set `REACT_APP_GRAPHQL_SESSION_ID` or `REACT_APP_GRAPHQL_TOKEN` in the frontend `.env`).
+2. Opens Razorpay Checkout with the returned key and order id.
+3. On success, calls `verifyRazorpayPayment` with the payment id and signature.
+
+**Requirements:** Order with ID `1` must exist in the DB (e.g. from a previous `placeOrder` or created via backend). GraphQL URL: set `REACT_APP_GRAPHQL_URL` in the frontend if not using `http://localhost:8080/v2`.
+
+## 5. Frontend checklist
 
 1. **Create payment intent (server-authoritative)**  
    Don’t create the Razorpay order on the client. After place-order, get the payment intent from your API (e.g. `createPaymentIntent` with only `orderId`, `userId`, `amountPaise`, `currency`; leave `razorpayOrderId` unset so the backend creates the Razorpay order).
@@ -65,12 +75,25 @@ See `backend/.env.example` for a template.
 4. **UI state**  
    Treat “paid” or “order confirmed” only after your backend says so (e.g. order status from your API or webhook-driven update), not only from the Checkout success callback.
 
-## 5. Test vs live
+## 6. Check if Razorpay is working (backend)
+
+From the backend directory, with `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` set (e.g. in `.env`):
+
+```bash
+cd backend
+cargo test -p core_operations razorpay_connectivity -- --ignored
+```
+
+- **OK:** Test passes and prints nothing (or "test result: ok"). Razorpay API accepted your keys and created a test order.
+- **FAIL:** Missing env vars → "RAZORPAY_KEY_ID not set" (or similar). Set both keys in `.env` and run again.
+- **FAIL:** API error → Check key ID/secret (use Test keys from Dashboard), network, and [Razorpay status](https://status.razorpay.com/).
+
+## 7. Test vs live
 
 - **Test mode:** Use **Test** API keys (`rzp_test_...`) and Test mode in the Dashboard. No real money.
 - **Live mode:** Use **Live** keys (`rzp_live_...`), complete KYC if required, and set the webhook URL to your production GraphQL base URL.
 
-## 6. Optional: existing DB migration
+## 8. Optional: existing DB migration
 
 If your database was created before the Razorpay payment-intent status values were added, ensure the `payment_intents.status` enum includes `client_verified`:
 
