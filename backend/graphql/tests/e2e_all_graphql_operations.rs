@@ -679,6 +679,19 @@ async fn e2e_mutation_capture_payment() {
     assert_valid_gql_response(status, &body);
 }
 
+/// E2E: verifyRazorpayPayment mutation (verified + optional payment_intent).
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_mutation_verify_razorpay_payment() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"mutation { verifyRazorpayPayment(input: { orderId: "1", razorpayPaymentId: "pay_1", razorpayOrderId: "order_1", razorpaySignature: "sig" }) { verified paymentIntent { intentId status } } }"#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_mutation_delete_product_image() {

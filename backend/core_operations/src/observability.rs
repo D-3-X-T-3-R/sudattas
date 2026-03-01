@@ -13,6 +13,11 @@ pub fn record_payment_capture_conflict_total() {
     ::metrics::counter!("payment_capture_conflict_total", 1);
 }
 
+/// Client-returned Razorpay signature verification failed (reject, log security event).
+pub fn record_payment_verify_invalid_signature_total() {
+    ::metrics::counter!("payment_verify_invalid_signature_total", 1);
+}
+
 /// Webhook event processing failed (e.g. payment.captured handler error).
 pub fn record_webhook_processing_failed_total() {
     ::metrics::counter!("webhook_processing_failed_total", 1);
@@ -44,6 +49,12 @@ mod tests {
     fn record_payment_capture_conflict_does_not_panic() {
         install_test_recorder();
         record_payment_capture_conflict_total();
+    }
+
+    #[test]
+    fn record_payment_verify_invalid_signature_does_not_panic() {
+        install_test_recorder();
+        record_payment_verify_invalid_signature_total();
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::razorpay;
 use core_db_entities::entity::payment_intents;
 use core_db_entities::entity::sea_orm_active_enums::Status;
 use proto::proto::core::{CapturePaymentRequest, PaymentIntentResponse, PaymentIntentsResponse};
@@ -49,6 +50,7 @@ pub async fn capture_payment(
                 razorpay_payment_id = %req.razorpay_payment_id,
                 "capture_payment idempotent replay"
             );
+            let key_id = razorpay::key_id_for_frontend();
             return Ok(Response::new(PaymentIntentsResponse {
                 items: vec![PaymentIntentResponse {
                     intent_id: intent.intent_id,
@@ -61,6 +63,7 @@ pub async fn capture_payment(
                     razorpay_payment_id: intent.razorpay_payment_id.clone(),
                     created_at: intent.created_at.map(|t| t.to_string()).unwrap_or_default(),
                     expires_at: intent.expires_at.to_string(),
+                    razorpay_key_id: key_id,
                 }],
             }));
         } else {
@@ -105,23 +108,27 @@ pub async fn capture_payment(
     model.razorpay_payment_id = ActiveValue::Set(Some(req.razorpay_payment_id));
 
     match model.update(txn).await {
-        Ok(updated) => Ok(Response::new(PaymentIntentsResponse {
-            items: vec![PaymentIntentResponse {
-                intent_id: updated.intent_id,
-                razorpay_order_id: updated.razorpay_order_id,
-                order_id: updated.order_id,
-                user_id: updated.user_id,
-                amount_paise: updated.amount_paise as i64,
-                currency: updated.currency,
-                status: format!("{:?}", updated.status).to_lowercase(),
-                razorpay_payment_id: updated.razorpay_payment_id,
-                created_at: updated
-                    .created_at
-                    .map(|t| t.to_string())
-                    .unwrap_or_default(),
-                expires_at: updated.expires_at.to_string(),
-            }],
-        })),
+        Ok(updated) => {
+            let key_id = razorpay::key_id_for_frontend();
+            Ok(Response::new(PaymentIntentsResponse {
+                items: vec![PaymentIntentResponse {
+                    intent_id: updated.intent_id,
+                    razorpay_order_id: updated.razorpay_order_id,
+                    order_id: updated.order_id,
+                    user_id: updated.user_id,
+                    amount_paise: updated.amount_paise as i64,
+                    currency: updated.currency,
+                    status: format!("{:?}", updated.status).to_lowercase(),
+                    razorpay_payment_id: updated.razorpay_payment_id,
+                    created_at: updated
+                        .created_at
+                        .map(|t| t.to_string())
+                        .unwrap_or_default(),
+                    expires_at: updated.expires_at.to_string(),
+                    razorpay_key_id: key_id,
+                }],
+            }))
+        }
         Err(e) => Err(map_db_error_to_status(e)),
     }
 }

@@ -1453,7 +1453,7 @@ message CreatePaymentIntentRequest {
     int64 user_id = 2;
     int64 amount_paise = 3;
     optional string currency = 4;  // defaults to "INR"
-    string razorpay_order_id = 5;  // Razorpay order ID from payment provider
+    optional string razorpay_order_id = 5;  // When absent, backend creates Razorpay order via API
 }
 
 message CapturePaymentRequest {
@@ -1477,10 +1477,24 @@ message PaymentIntentResponse {
     optional string razorpay_payment_id = 8;
     string created_at = 9;
     string expires_at = 10;
+    optional string razorpay_key_id = 11;  // For frontend Checkout (key_id only, never secret)
 }
 
 message PaymentIntentsResponse {
     repeated PaymentIntentResponse items = 1;
+}
+
+// Verify client-returned Razorpay signature after checkout (mark ClientVerified; webhook is final authority for Paid).
+message VerifyRazorpayPaymentRequest {
+    int64 order_id = 1;
+    string razorpay_payment_id = 2;
+    string razorpay_order_id = 3;
+    string razorpay_signature = 4;
+}
+
+message VerifyRazorpayPaymentResponse {
+    bool verified = 1;
+    optional PaymentIntentResponse payment_intent = 2;
 }
 
 // PaymentMethods
