@@ -173,7 +173,7 @@ async fn create_payment_intent_success() {
         user_id: 1,
         amount_paise: 50_000,
         currency: Some("INR".to_string()),
-        razorpay_order_id: "rz_order_abc".to_string(),
+        razorpay_order_id: Some("rz_order_abc".to_string()),
     });
     let result = create_payment_intent(&txn, req).await;
     assert!(

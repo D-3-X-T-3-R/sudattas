@@ -2540,9 +2540,9 @@ pub struct CreatePaymentIntentRequest {
     /// defaults to "INR"
     #[prost(string, optional, tag = "4")]
     pub currency: ::core::option::Option<::prost::alloc::string::String>,
-    /// Razorpay order ID from payment provider
-    #[prost(string, tag = "5")]
-    pub razorpay_order_id: ::prost::alloc::string::String,
+    /// When absent, backend creates Razorpay order via API
+    #[prost(string, optional, tag = "5")]
+    pub razorpay_order_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2587,6 +2587,9 @@ pub struct PaymentIntentResponse {
     pub created_at: ::prost::alloc::string::String,
     #[prost(string, tag = "10")]
     pub expires_at: ::prost::alloc::string::String,
+    /// For frontend Checkout (key_id only, never secret)
+    #[prost(string, optional, tag = "11")]
+    pub razorpay_key_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2594,6 +2597,29 @@ pub struct PaymentIntentResponse {
 pub struct PaymentIntentsResponse {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<PaymentIntentResponse>,
+}
+/// Verify client-returned Razorpay signature after checkout (mark ClientVerified; webhook is final authority for Paid).
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VerifyRazorpayPaymentRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+    #[prost(string, tag = "2")]
+    pub razorpay_payment_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub razorpay_order_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub razorpay_signature: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VerifyRazorpayPaymentResponse {
+    #[prost(bool, tag = "1")]
+    pub verified: bool,
+    #[prost(message, optional, tag = "2")]
+    pub payment_intent: ::core::option::Option<PaymentIntentResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -7053,6 +7079,36 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn verify_razorpay_payment(
+            &mut self,
+            request: impl tonic::IntoRequest<super::VerifyRazorpayPaymentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::VerifyRazorpayPaymentResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/VerifyRazorpayPayment",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "VerifyRazorpayPayment",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         /// ProductImages (R2)
         pub async fn get_presigned_upload_url(
             &mut self,
@@ -8518,6 +8574,13 @@ pub mod grpc_services_server {
             request: tonic::Request<super::GetPaymentIntentRequest>,
         ) -> std::result::Result<
             tonic::Response<super::PaymentIntentsResponse>,
+            tonic::Status,
+        >;
+        async fn verify_razorpay_payment(
+            &self,
+            request: tonic::Request<super::VerifyRazorpayPaymentRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::VerifyRazorpayPaymentResponse>,
             tonic::Status,
         >;
         /// ProductImages (R2)
@@ -16049,6 +16112,56 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetPaymentIntentSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/VerifyRazorpayPayment" => {
+                    #[allow(non_camel_case_types)]
+                    struct VerifyRazorpayPaymentSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::VerifyRazorpayPaymentRequest>
+                    for VerifyRazorpayPaymentSvc<T> {
+                        type Response = super::VerifyRazorpayPaymentResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::VerifyRazorpayPaymentRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::verify_razorpay_payment(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = VerifyRazorpayPaymentSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

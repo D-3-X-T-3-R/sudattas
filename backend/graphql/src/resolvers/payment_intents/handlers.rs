@@ -1,10 +1,13 @@
 use proto::proto::core::{
     CapturePaymentRequest, CreatePaymentIntentRequest, GetPaymentIntentRequest,
-    PaymentIntentResponse,
+    PaymentIntentResponse, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
 };
 use tracing::instrument;
 
-use super::schema::{CapturePayment, GetPaymentIntent, NewPaymentIntent, PaymentIntent};
+use super::schema::{
+    CapturePayment, GetPaymentIntent, NewPaymentIntent, PaymentIntent, VerifyRazorpayPaymentInput,
+    VerifyRazorpayPaymentResult,
+};
 use crate::resolvers::{
     error::GqlError,
     grpc_client,
@@ -15,6 +18,7 @@ fn payment_intent_response_to_gql(p: PaymentIntentResponse) -> PaymentIntent {
     PaymentIntent {
         intent_id: p.intent_id.to_string(),
         razorpay_order_id: p.razorpay_order_id,
+        razorpay_key_id: p.razorpay_key_id,
         order_id: p.order_id.map(|v| v.to_string()),
         user_id: p.user_id.map(|v| v.to_string()),
         amount_paise: p.amount_paise.to_string(),
@@ -37,7 +41,7 @@ pub(crate) async fn create_payment_intent(
             user_id: parse_i64(&input.user_id, "user id")?,
             amount_paise: parse_i64(&input.amount_paise, "amount_paise")?,
             currency: input.currency,
-            razorpay_order_id: input.razorpay_order_id,
+            razorpay_order_id: input.razorpay_order_id.filter(|s| !s.is_empty()),
         })
         .await?;
     Ok(response
@@ -85,4 +89,24 @@ pub(crate) async fn get_payment_intent(
         .into_iter()
         .map(payment_intent_response_to_gql)
         .collect())
+}
+
+#[instrument]
+pub(crate) async fn verify_razorpay_payment(
+    input: VerifyRazorpayPaymentInput,
+) -> Result<VerifyRazorpayPaymentResult, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response: VerifyRazorpayPaymentResponse = client
+        .verify_razorpay_payment(VerifyRazorpayPaymentRequest {
+            order_id: parse_i64(&input.order_id, "order id")?,
+            razorpay_payment_id: input.razorpay_payment_id,
+            razorpay_order_id: input.razorpay_order_id,
+            razorpay_signature: input.razorpay_signature,
+        })
+        .await?
+        .into_inner();
+    Ok(VerifyRazorpayPaymentResult {
+        verified: response.verified,
+        payment_intent: response.payment_intent.map(payment_intent_response_to_gql),
+    })
 }

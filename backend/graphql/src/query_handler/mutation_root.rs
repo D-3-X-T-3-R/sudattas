@@ -38,7 +38,10 @@ use crate::resolvers::{
     },
     payment_intents::{
         self,
-        schema::{CapturePayment, NewPaymentIntent, PaymentIntent},
+        schema::{
+            CapturePayment, NewPaymentIntent, PaymentIntent, VerifyRazorpayPaymentInput,
+            VerifyRazorpayPaymentResult,
+        },
     },
     product::{
         self,
@@ -295,6 +298,15 @@ impl MutationRoot {
         .await;
         crate::metrics::record_capture_payment_total(result.is_ok());
         result.map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn verify_razorpay_payment(
+        input: VerifyRazorpayPaymentInput,
+    ) -> FieldResult<VerifyRazorpayPaymentResult> {
+        payment_intents::handlers::verify_razorpay_payment(input)
+            .await
+            .map_err(|e| e.into_field_error())
     }
 
     // ProductImage
