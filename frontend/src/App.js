@@ -10,6 +10,7 @@ import {
   X,
   Star,
 } from "lucide-react";
+import { gql } from "./api";
 
 /**
  * LV-style design cues:
@@ -400,6 +401,8 @@ export default function App() {
 
   const [wishlist, setWishlist] = useState({});
   const [cart, setCart] = useState({});
+  const [paymentMessage, setPaymentMessage] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   const [slide, setSlide] = useState(0);
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
@@ -476,6 +479,88 @@ export default function App() {
       if (!line) return prev;
       return { ...prev, [id]: { ...line, qty: line.qty + 1 } };
     });
+  }
+
+  function loadRazorpayScript() {
+    if (window.Razorpay) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://checkout.razorpay.com/v1/checkout.js";
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("Failed to load Razorpay"));
+      document.body.appendChild(s);
+    });
+  }
+
+  async function handleTestRazorpay() {
+    setPaymentMessage(null);
+    setPaymentLoading(true);
+    try {
+      const data = await gql(
+        `mutation CreatePaymentIntent($input: NewPaymentIntent!) {
+          createPaymentIntent(input: $input) {
+            intentId
+            razorpayOrderId
+            razorpayKeyId
+            orderId
+            amountPaise
+            currency
+          }
+        }`,
+        {
+          input: {
+            orderId: "1",
+            userId: "1",
+            amountPaise: "10000",
+            currency: "INR",
+          },
+        }
+      );
+      const intent = data?.createPaymentIntent?.[0];
+      if (!intent?.razorpayKeyId || !intent?.razorpayOrderId) {
+        setPaymentMessage("No Razorpay key/order returned. Check backend RAZORPAY_KEY_ID and order 1 exists.");
+        return;
+      }
+      await loadRazorpayScript();
+      const orderId = intent.orderId || "1";
+      const options = {
+        key: intent.razorpayKeyId,
+        amount: intent.amountPaise,
+        currency: intent.currency || "INR",
+        order_id: intent.razorpayOrderId,
+        name: "Sudatta's",
+        description: "Test payment (₹100)",
+        handler: async function (response) {
+          try {
+            await gql(
+              `mutation VerifyRazorpay($input: VerifyRazorpayPaymentInput!) {
+                verifyRazorpayPayment(input: $input) { verified paymentIntent { status } }
+              }`,
+              {
+                input: {
+                  orderId,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpaySignature: response.razorpay_signature,
+                },
+              }
+            );
+            setPaymentMessage("Payment verified successfully.");
+          } catch (e) {
+            setPaymentMessage("Verify failed: " + (e.message || String(e)));
+          }
+        },
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", () => {
+        setPaymentMessage("Payment failed or was closed.");
+      });
+      rzp.open();
+    } catch (e) {
+      setPaymentMessage("Error: " + (e.message || String(e)));
+    } finally {
+      setPaymentLoading(false);
+    }
   }
 
   function nextSlide() {
@@ -1067,6 +1152,20 @@ export default function App() {
               >
                 Checkout
               </button>
+              <button
+                type="button"
+                onClick={handleTestRazorpay}
+                disabled={paymentLoading}
+                className="mt-3 w-full rounded-full border px-5 py-3 text-sm font-semibold disabled:opacity-50"
+                style={{ borderColor: THEME.line, color: THEME.accentBrown }}
+              >
+                {paymentLoading ? "Opening Razorpay…" : "Test Razorpay (₹100)"}
+              </button>
+              {paymentMessage && (
+                <p className="mt-3 text-xs" style={{ color: THEME.muted }}>
+                  {paymentMessage}
+                </p>
+              )}
             </div>
           </div>
         )}
