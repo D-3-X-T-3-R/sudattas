@@ -1,0 +1,6 @@
+{
+  "name": "sudattas-admin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Admin panel for Sudatta's (consumed by frontend)"
+}
