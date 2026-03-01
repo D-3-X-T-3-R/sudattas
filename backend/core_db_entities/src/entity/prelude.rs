@@ -28,6 +28,7 @@ pub use super::product_category_mapping::Entity as ProductCategoryMapping;
 pub use super::product_color_mapping::Entity as ProductColorMapping;
 pub use super::product_images::Entity as ProductImages;
 pub use super::product_ratings::Entity as ProductRatings;
+pub use super::product_related::Entity as ProductRelated;
 pub use super::product_size_mapping::Entity as ProductSizeMapping;
 pub use super::product_statuses::Entity as ProductStatuses;
 pub use super::product_variants::Entity as ProductVariants;

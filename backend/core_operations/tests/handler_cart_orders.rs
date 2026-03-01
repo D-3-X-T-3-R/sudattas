@@ -23,6 +23,7 @@ async fn test_create_cart_item_requires_user_or_session() {
             quantity: 2,
             created_at: None,
             updated_at: None,
+            abandoned_email_sent_at: None,
         }]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
@@ -59,6 +60,7 @@ async fn test_create_cart_item_with_session_id() {
             quantity: 1,
             created_at: None,
             updated_at: None,
+            abandoned_email_sent_at: None,
         }]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
@@ -93,6 +95,7 @@ async fn test_create_cart_item_with_user_id() {
             quantity: 2,
             created_at: None,
             updated_at: None,
+            abandoned_email_sent_at: None,
         }]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
@@ -140,6 +143,7 @@ async fn test_get_cart_items_returns_items_for_session() {
                 quantity: 1,
                 created_at: None,
                 updated_at: None,
+                abandoned_email_sent_at: None,
             },
             cart::Model {
                 cart_id: 2,
@@ -149,6 +153,7 @@ async fn test_get_cart_items_returns_items_for_session() {
                 quantity: 3,
                 created_at: None,
                 updated_at: None,
+                abandoned_email_sent_at: None,
             },
         ]])
         .into_connection();
@@ -197,6 +202,7 @@ async fn test_update_cart_item_success() {
             quantity: 1,
             created_at: None,
             updated_at: None,
+            abandoned_email_sent_at: None,
         }]])
         .append_exec_results(vec![MockExecResult {
             last_insert_id: 0,
@@ -210,6 +216,7 @@ async fn test_update_cart_item_success() {
             quantity: 5,
             created_at: None,
             updated_at: None,
+            abandoned_email_sent_at: None,
         }]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
@@ -313,6 +320,7 @@ async fn test_create_user_success() {
             phone: None,
             user_status_id: None,
             last_login_at: None,
+            marketing_opt_out: None,
             create_date: Utc::now(),
             updated_at: None,
         }]])
@@ -357,6 +365,7 @@ async fn test_create_user_with_optional_fields() {
             phone: Some("+1234567890".to_string()),
             user_status_id: None,
             last_login_at: None,
+            marketing_opt_out: None,
             create_date: Utc::now(),
             updated_at: None,
         }]])
@@ -443,6 +452,7 @@ async fn test_create_user_password_eight_chars_succeeds() {
             phone: None,
             user_status_id: None,
             last_login_at: None,
+            marketing_opt_out: None,
             create_date: Utc::now(),
             updated_at: None,
         }]])

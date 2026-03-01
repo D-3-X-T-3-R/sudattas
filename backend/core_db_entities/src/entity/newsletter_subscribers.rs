@@ -12,6 +12,7 @@ pub struct Model {
     pub email: String,
     #[sea_orm(column_name = "SubscriptionDate")]
     pub subscription_date: DateTimeUtc,
+    pub unsubscribed_at: Option<DateTimeUtc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

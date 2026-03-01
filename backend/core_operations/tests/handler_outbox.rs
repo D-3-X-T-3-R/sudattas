@@ -37,9 +37,16 @@ async fn integration_outbox_enqueue_and_worker() {
 #[test]
 fn outbox_event_types_are_defined() {
     use core_operations::handlers::outbox::{
-        DELIVERED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
+        ABANDONED_CART, DELIVERED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
     };
-    let types = [ORDER_PLACED, PAYMENT_CAPTURED, SHIPPED, DELIVERED, REFUNDED];
+    let types = [
+        ORDER_PLACED,
+        PAYMENT_CAPTURED,
+        SHIPPED,
+        DELIVERED,
+        REFUNDED,
+        ABANDONED_CART,
+    ];
     for t in &types {
         assert!(!t.is_empty(), "event type must not be empty");
     }

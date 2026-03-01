@@ -27,6 +27,7 @@ pub async fn update_newsletter_subscriber(
         subscriber_id: ActiveValue::Set(existing.subscriber_id),
         email: ActiveValue::Set(req.email),
         subscription_date: ActiveValue::Set(existing.subscription_date),
+        unsubscribed_at: ActiveValue::Set(existing.unsubscribed_at),
     };
 
     match model.update(txn).await {

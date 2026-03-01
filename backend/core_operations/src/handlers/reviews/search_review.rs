@@ -1,8 +1,12 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::reviews;
 use proto::proto::core::{ReviewResponse, ReviewsResponse, SearchReviewRequest};
+use sea_orm::sea_query::Expr;
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect};
 use tonic::{Request, Response, Status};
+
+/// Allowed review status_filter values (DB enum: pending, approved, rejected).
+const ALLOWED_STATUS: &[&str] = &["pending", "approved", "rejected"];
 
 pub async fn search_review(
     txn: &DatabaseTransaction,
@@ -19,6 +23,12 @@ pub async fn search_review(
     }
     if let Some(uid) = req.user_id {
         query = query.filter(reviews::Column::UserId.eq(uid));
+    }
+    if let Some(ref s) = req.status_filter {
+        let s = s.trim().to_lowercase();
+        if ALLOWED_STATUS.contains(&s.as_str()) {
+            query = query.filter(Expr::cust(format!("status = '{}'", s)));
+        }
     }
     if let Some(lim) = req.limit {
         query = query.limit(lim as u64);
