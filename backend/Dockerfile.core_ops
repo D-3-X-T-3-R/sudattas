@@ -4,8 +4,12 @@ FROM rust:slim as builder
 # Argument to invalidate cache
 ARG CACHEBUST=1
 
-# Install protobuf compiler
-RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
+# Install protobuf compiler, OpenSSL dev, and pkg-config (required by openssl-sys)
+RUN apt-get update && apt-get install -y \
+    protobuf-compiler \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a new empty shell project
 WORKDIR /usr/src/app
@@ -22,8 +26,8 @@ COPY ./graphql ./graphql
 # Build the core_operations binary
 RUN cargo build --release --package core_operations
 
-# Start another stage for the core_operations binary
-FROM debian:bookworm-slim as core-operations-runner
+# Start another stage (trixie has glibc 2.38+; bookworm has 2.36 and is too old for rust:slim-built binary)
+FROM debian:trixie-slim as core-operations-runner
 
 # Set environment variables for core-operations-runner
 ENV GRPC_SERVER=0.0.0.0:50051
