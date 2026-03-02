@@ -1,21 +1,45 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import {
-  Search,
-  ShoppingBag,
-  Heart,
-  ChevronRight,
-  ChevronLeft,
-  Menu,
-  X,
-  Star,
-} from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { useAuth0 } from "@auth0/auth0-react";
+import { ChevronLeft, Star } from "lucide-react";
 import { gql } from "./api";
 import { ensureGuestSession } from "./session";
 import AuthSync from "./AuthSync";
-import AuthButtons from "./AuthButtons";
+import Header from "./components/Header";
+import CartDrawer from "./components/CartDrawer";
+import WishlistDrawer from "./components/WishlistDrawer";
+import Drawer from "./components/Drawer";
+import Modal from "./components/Modal";
 
 const AUTH0_ENABLED = !!(process.env.REACT_APP_AUTH0_DOMAIN && process.env.REACT_APP_AUTH0_CLIENT_ID);
+
+function CheckoutButton({ onCheckout }) {
+  const { isAuthenticated, loginWithRedirect } = useAuth0();
+
+  const handleClick = () => {
+    if (!isAuthenticated) {
+      loginWithRedirect({
+        authorizationParams: {
+          redirect_uri:
+            process.env.REACT_APP_AUTH0_REDIRECT_URI || window.location.origin,
+        },
+      });
+      return;
+    }
+    if (onCheckout) onCheckout();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="mt-4 w-full rounded-full px-5 py-3 text-sm font-semibold text-white"
+      style={{ background: THEME.ink }}
+    >
+      Checkout
+    </button>
+  );
+}
 
 /**
  * LV-style design cues:
@@ -210,51 +234,6 @@ function Rating({ value }) {
   );
 }
 
-function Drawer({ open, title, children, onClose, side = "left" }) {
-  const fromX = side === "left" ? -420 : 420;
-  return (
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/40"
-          />
-          <motion.div
-            initial={{ x: fromX }}
-            animate={{ x: 0 }}
-            exit={{ x: fromX }}
-            transition={{ type: "spring", stiffness: 320, damping: 30 }}
-            className={classNames(
-              "fixed top-0 z-50 h-full w-full max-w-md bg-[var(--ivory)] shadow-2xl",
-              side === "left" ? "left-0 border-r" : "right-0 border-l",
-              "border-[var(--line)]"
-            )}
-            style={{ "--ivory": THEME.ivory, "--line": THEME.line }}
-          >
-            <div className="flex items-center justify-between border-b border-[var(--line)] p-4">
-              <div className="text-xs font-semibold tracking-[0.18em] text-[#111]">
-                {title}
-              </div>
-              <button
-                onClick={onClose}
-                className="grid h-10 w-10 place-items-center rounded-full border border-[var(--line)] bg-[var(--ivory)] text-[#111] hover:bg-white"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="h-[calc(100%-64px)] overflow-auto p-5">{children}</div>
-          </motion.div>
-        </>
-      ) : null}
-    </AnimatePresence>
-  );
-}
-
 function ProductCard({
   product,
   wished,
@@ -323,44 +302,6 @@ function ProductCard({
         </div>
       </div>
     </motion.div>
-  );
-}
-
-function Modal({ open, title, children, onClose }) {
-  return (
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/40"
-          />
-          <motion.div
-            initial={{ opacity: 0, y: 18, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 18, scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 320, damping: 26 }}
-            className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden bg-[var(--ivory)] shadow-2xl"
-            style={{ "--ivory": THEME.ivory }}
-          >
-            <div className="flex items-center justify-between border-b border-[var(--line)] p-4" style={{ "--line": THEME.line }}>
-              <div className="text-xs font-semibold tracking-[0.18em] text-[#111]">{title}</div>
-              <button
-                onClick={onClose}
-                className="grid h-10 w-10 place-items-center rounded-full border border-[var(--line)] bg-[var(--ivory)] text-[#111] hover:bg-white"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-5">{children}</div>
-          </motion.div>
-        </>
-      ) : null}
-    </AnimatePresence>
   );
 }
 
@@ -597,110 +538,19 @@ export default function App() {
       </div>
 
       {/* Header */}
-      <header
-        className="sticky top-0 z-30 backdrop-blur"
-        style={{ background: "rgba(247,245,240,0.8)", borderBottom: `1px solid ${THEME.line}` }}
-      >
-        <div className="mx-auto grid max-w-7xl grid-cols-3 items-center px-4 py-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setMenuOpen(true)}
-              className="grid h-11 w-11 place-items-center rounded-full border bg-[var(--ivory)] hover:bg-white"
-              style={{ "--ivory": THEME.ivory, borderColor: THEME.line }}
-              aria-label="Open menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <button
-              onClick={() => goTo("shop", !!reduceMotion)}
-              className="hidden md:inline-flex items-center gap-2 text-xs font-semibold tracking-[0.18em]"
-            >
-              SHOP
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-
-          <button
-            onClick={() => goTo("top", !!reduceMotion)}
-            className="mx-auto flex items-center justify-center"
-            aria-label="Go to top"
-          >
-            <div className="flex flex-col items-center">
-              <div className="text-sm font-semibold tracking-[0.35em]">SUDATTA'S</div>
-              <div className="text-[10px] tracking-[0.22em] text-[#6B7280]">DESIGNER BOUTIQUE</div>
-            </div>
-          </button>
-
-          <div className="ml-auto flex items-center justify-end gap-2">
-            {AUTH0_ENABLED && (
-              <div className="hidden items-center sm:flex">
-                <AuthButtons />
-              </div>
-            )}
-            <div className="hidden md:flex items-center">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search sarees, fabric, occasion"
-                  className="w-[320px] rounded-full border bg-white/60 py-2.5 pl-10 pr-4 text-sm outline-none focus:bg-white"
-                  style={{ borderColor: THEME.line }}
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={() => setWishOpen(true)}
-              className="relative grid h-11 w-11 place-items-center rounded-full border bg-[var(--ivory)] hover:bg-white"
-              style={{ "--ivory": THEME.ivory, borderColor: THEME.line }}
-              aria-label="Wishlist"
-            >
-              <Heart className="h-5 w-5" />
-              {wishCount > 0 ? (
-                <span
-                  className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full text-xs font-semibold text-white"
-                  style={{ background: THEME.ink }}
-                >
-                  {wishCount}
-                </span>
-              ) : null}
-            </button>
-
-            <button
-              onClick={() => setCartOpen(true)}
-              className="relative grid h-11 w-11 place-items-center rounded-full border bg-[var(--ivory)] hover:bg-white"
-              style={{ "--ivory": THEME.ivory, borderColor: THEME.line }}
-              aria-label="Bag"
-            >
-              <ShoppingBag className="h-5 w-5" />
-              {cartCount > 0 ? (
-                <span
-                  className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full text-xs font-semibold text-white"
-                  style={{ background: THEME.ink }}
-                >
-                  {cartCount}
-                </span>
-              ) : null}
-            </button>
-          </div>
-        </div>
-
-        <div className="md:hidden border-t" style={{ borderColor: THEME.line }}>
-          <div className="mx-auto max-w-7xl px-4 py-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search sarees, fabric, occasion"
-                className="w-full rounded-full border bg-white/60 py-3 pl-10 pr-4 text-sm outline-none focus:bg-white"
-                style={{ borderColor: THEME.line }}
-              />
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header
+        reduceMotion={reduceMotion}
+        query={query}
+        setQuery={setQuery}
+        cartCount={cartCount}
+        wishCount={wishCount}
+        setMenuOpen={setMenuOpen}
+        setCartOpen={setCartOpen}
+        setWishOpen={setWishOpen}
+        goTo={goTo}
+        theme={THEME}
+        authEnabled={AUTH0_ENABLED}
+      />
 
       {/* Hero */}
       <section className="relative">
@@ -1069,116 +919,42 @@ export default function App() {
       </Drawer>
 
       {/* Wishlist drawer */}
-      <Drawer open={wishOpen} title={`WISHLIST (${wishCount})`} onClose={() => setWishOpen(false)} side="right">
-        {wishedProducts.length === 0 ? (
-          <div className="rounded-2xl bg-white p-6 text-sm text-[#374151]">No items yet.</div>
-        ) : (
-          <div className="space-y-4">
-            {wishedProducts.map((p) => (
-              <div key={p.id} className="border-b pb-4" style={{ borderColor: THEME.line }}>
-                <div className="text-[11px] tracking-[0.18em] text-[#6B7280]">{p.collection.toUpperCase()}</div>
-                <div className="mt-1 text-sm font-semibold text-[#111]">{p.name}</div>
-                <div className="mt-2 flex items-center justify-between">
-                  <div className="text-sm font-semibold">{INR.format(p.price)}</div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setQuickView(p)}
-                      className="rounded-full border bg-white px-4 py-2 text-xs font-semibold hover:bg-white/80"
-                      style={{ borderColor: THEME.line }}
-                    >
-                      Quick view
-                    </button>
-                    <button
-                      onClick={() => addToCart(p)}
-                      className="rounded-full px-4 py-2 text-xs font-semibold text-white"
-                      style={{ background: THEME.ink }}
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-                <button
-                  onClick={() => toggleWish(p)}
-                  className="mt-3 text-xs font-semibold tracking-[0.18em] text-[#6B7280] hover:text-[#111]"
-                >
-                  REMOVE
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Drawer>
+      <WishlistDrawer
+        open={wishOpen}
+        onClose={() => setWishOpen(false)}
+        wishCount={wishCount}
+        wishedProducts={wishedProducts}
+        onQuickView={setQuickView}
+        onAddToCart={addToCart}
+        onToggleWish={toggleWish}
+        theme={THEME}
+        INR={INR}
+      />
 
       {/* Cart drawer */}
-      <Drawer open={cartOpen} title={`BAG (${cartCount})`} onClose={() => setCartOpen(false)} side="right">
-        {cartLines.length === 0 ? (
-          <div className="rounded-2xl bg-white p-6 text-sm text-[#374151]">Your bag is empty.</div>
-        ) : (
-          <div className="space-y-5">
-            {cartLines.map(({ product, qty }) => (
-              <div key={product.id} className="border-b pb-5" style={{ borderColor: THEME.line }}>
-                <div className="text-[11px] tracking-[0.18em] text-[#6B7280]">{product.collection.toUpperCase()}</div>
-                <div className="mt-1 text-sm font-semibold text-[#111]">{product.name}</div>
-                <div className="mt-1 text-xs text-[#6B7280]">{product.fabric} • {product.occasion}</div>
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => decCart(product.id)}
-                      className="grid h-10 w-10 place-items-center rounded-full border bg-white hover:bg-white/80"
-                      style={{ borderColor: THEME.line }}
-                      aria-label="Decrease"
-                    >
-                      −
-                    </button>
-                    <div className="min-w-10 text-center text-sm font-semibold">{qty}</div>
-                    <button
-                      onClick={() => incCart(product.id)}
-                      className="grid h-10 w-10 place-items-center rounded-full border bg-white hover:bg-white/80"
-                      style={{ borderColor: THEME.line }}
-                      aria-label="Increase"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <div className="text-sm font-semibold">{INR.format(qty * product.price)}</div>
-                </div>
-              </div>
-            ))}
-
-            <div className="rounded-2xl bg-white p-5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-[#6B7280]">Subtotal</span>
-                <span className="font-semibold">{INR.format(cartSubtotal)}</span>
-              </div>
-              <div className="mt-2 text-xs text-[#6B7280]">Shipping and taxes calculated at checkout.</div>
-              <button
-                onClick={() => alert("Mock: connect to checkout later")}
-                className="mt-4 w-full rounded-full px-5 py-3 text-sm font-semibold text-white"
-                style={{ background: THEME.ink }}
-              >
-                Checkout
-              </button>
-              <button
-                type="button"
-                onClick={handleTestRazorpay}
-                disabled={paymentLoading}
-                className="mt-3 w-full rounded-full border px-5 py-3 text-sm font-semibold disabled:opacity-50"
-                style={{ borderColor: THEME.line, color: THEME.accentBrown }}
-              >
-                {paymentLoading ? "Opening Razorpay…" : "Test Razorpay (₹100)"}
-              </button>
-              {paymentMessage && (
-                <p className="mt-3 text-xs" style={{ color: THEME.muted }}>
-                  {paymentMessage}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </Drawer>
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        cartLines={cartLines}
+        cartSubtotal={cartSubtotal}
+        onDecCart={decCart}
+        onIncCart={incCart}
+        paymentLoading={paymentLoading}
+        paymentMessage={paymentMessage}
+        onTestRazorpay={handleTestRazorpay}
+        onCheckout={() => alert("Checkout flow not wired yet")}
+        theme={THEME}
+        INR={INR}
+        authEnabled={AUTH0_ENABLED}
+      />
 
       {/* Quick view modal */}
-      <Modal open={!!quickView} title={quickView ? quickView.name.toUpperCase() : ""} onClose={() => setQuickView(null)}>
+      <Modal
+        open={!!quickView}
+        title={quickView ? quickView.name.toUpperCase() : ""}
+        onClose={() => setQuickView(null)}
+        theme={THEME}
+      >
         {quickView ? (
           <div className="grid gap-8 md:grid-cols-2">
             <div className="bg-white">
