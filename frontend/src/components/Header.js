@@ -1,6 +1,8 @@
 import React from "react";
-import { Search, ShoppingBag, Heart, ChevronRight, Menu } from "lucide-react";
+import { Search, ChevronRight, Menu, Heart } from "lucide-react";
 import AuthButtons from "../AuthButtons";
+import cartImg from "../images/cart.png";
+import logoImg from "../images/logo.jpg";
 
 export default function Header({
   reduceMotion,
@@ -44,10 +46,11 @@ export default function Header({
           className="mx-auto flex items-center justify-center"
           aria-label="Go to top"
         >
-          <div className="flex flex-col items-center">
-            <div className="text-sm font-semibold tracking-[0.35em]">SUDATTA'S</div>
-            <div className="text-[10px] tracking-[0.22em] text-[#6B7280]">DESIGNER BOUTIQUE</div>
-          </div>
+          <img
+            src={logoImg}
+            alt="Sudatta's logo"
+            className="h-11 w-auto rounded-full object-cover"
+          />
         </button>
 
         <div className="ml-auto flex items-center justify-end gap-2">
@@ -92,7 +95,11 @@ export default function Header({
             style={{ "--ivory": theme.ivory, borderColor: theme.line }}
             aria-label="Bag"
           >
-            <ShoppingBag className="h-5 w-5" />
+            <img
+              src={cartImg}
+              alt="Cart"
+              className="h-5 w-5 object-contain"
+            />
             {cartCount > 0 ? (
               <span
                 className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full text-xs font-semibold text-white"

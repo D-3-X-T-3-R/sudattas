@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
-import { useAuth0 } from "@auth0/auth0-react";
-import { ChevronLeft, Star } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { ChevronLeft, ChevronRight, Heart, ShoppingBag, Star } from "lucide-react";
 import { gql } from "./api";
 import { ensureGuestSession } from "./session";
 import AuthSync from "./AuthSync";
@@ -11,35 +10,11 @@ import WishlistDrawer from "./components/WishlistDrawer";
 import Drawer from "./components/Drawer";
 import Modal from "./components/Modal";
 
+import heroOne from "./images/cms-banner.jpg";
+import heroTwo from "./images/category_1.png";
+import categoryHero from "./images/category-image3.jpg";
+
 const AUTH0_ENABLED = !!(process.env.REACT_APP_AUTH0_DOMAIN && process.env.REACT_APP_AUTH0_CLIENT_ID);
-
-function CheckoutButton({ onCheckout }) {
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
-
-  const handleClick = () => {
-    if (!isAuthenticated) {
-      loginWithRedirect({
-        authorizationParams: {
-          redirect_uri:
-            process.env.REACT_APP_AUTH0_REDIRECT_URI || window.location.origin,
-        },
-      });
-      return;
-    }
-    if (onCheckout) onCheckout();
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="mt-4 w-full rounded-full px-5 py-3 text-sm font-semibold text-white"
-      style={{ background: THEME.ink }}
-    >
-      Checkout
-    </button>
-  );
-}
 
 /**
  * LV-style design cues:
@@ -79,8 +54,7 @@ const heroSlides = [
     eyebrow: "NEW DROP",
     title: "Sudatta's Signature Sarees",
     cta: "Discover the collection",
-    image:
-      "https://images.unsplash.com/photo-1520975869011-7c1b3b0a4c7b?auto=format&fit=crop&w=2400&q=80",
+    image: heroOne,
     imageAlt: "Editorial fashion hero image",
     tone: "dark",
   },
@@ -88,8 +62,7 @@ const heroSlides = [
     eyebrow: "CRAFT • MODERN",
     title: "Borders that feel like jewellery",
     cta: "Shop best sellers",
-    image:
-      "https://images.unsplash.com/photo-1520975682038-6c155b610bdb?auto=format&fit=crop&w=2400&q=80",
+    image: heroTwo,
     imageAlt: "Luxury editorial fabric detail",
     tone: "dark",
   },
@@ -107,10 +80,8 @@ const productsSeed = [
     occasion: "Festive",
     description:
       "Clean ivory body with a statement border. Designed to look expensive without being loud.",
-    image:
-      "https://images.unsplash.com/photo-1520975682038-6c155b610bdb?auto=format&fit=crop&w=1200&q=80",
-    hoverImage:
-      "https://images.unsplash.com/photo-1520975681764-3c4a77d2d3e0?auto=format&fit=crop&w=1200&q=80",
+    image: categoryHero,
+    hoverImage: categoryHero,
     imageAlt: "Saree product image",
   },
   {
@@ -325,12 +296,7 @@ function goTo(id, reduceMotion) {
   el?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
 }
 
-const COLLECTION_IMAGES = [
-  "https://images.unsplash.com/photo-1520975869011-7c1b3b0a4c7b?auto=format&fit=crop&w=1600&q=80",
-  "https://images.unsplash.com/photo-1520975682038-6c155b610bdb?auto=format&fit=crop&w=1600&q=80",
-  "https://images.unsplash.com/photo-1520975761338-fc4c7a8d3c3b?auto=format&fit=crop&w=1600&q=80",
-  "https://images.unsplash.com/photo-1520975745262-3c41b4fe2b47?auto=format&fit=crop&w=1600&q=80",
-];
+const COLLECTION_IMAGES = [heroOne, heroTwo, categoryHero, heroOne];
 
 export default function App() {
   const reduceMotion = useReducedMotion();
