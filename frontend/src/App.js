@@ -11,6 +11,11 @@ import {
   Star,
 } from "lucide-react";
 import { gql } from "./api";
+import { ensureGuestSession } from "./session";
+import AuthSync from "./AuthSync";
+import AuthButtons from "./AuthButtons";
+
+const AUTH0_ENABLED = !!(process.env.REACT_APP_AUTH0_DOMAIN && process.env.REACT_APP_AUTH0_CLIENT_ID);
 
 /**
  * LV-style design cues:
@@ -409,6 +414,11 @@ export default function App() {
 
   useLockBodyScroll(menuOpen || cartOpen || wishOpen || !!quickView);
 
+  // Ensure guest session for cart (no login); backend POST /session/guest when REDIS_URL is set
+  useEffect(() => {
+    ensureGuestSession();
+  }, []);
+
   const occasions = useMemo(() => {
     const set = new Set(productsSeed.map((p) => p.occasion));
     return ["All", ...Array.from(set)];
@@ -497,8 +507,8 @@ export default function App() {
     setPaymentLoading(true);
     try {
       const data = await gql(
-        `mutation CreatePaymentIntent($input: NewPaymentIntent!) {
-          createPaymentIntent(input: $input) {
+        `mutation CreatePaymentIntent {
+          createPaymentIntent(input: { orderId: "1", userId: "1", amountPaise: "10000", currency: "INR" }) {
             intentId
             razorpayOrderId
             razorpayKeyId
@@ -506,15 +516,7 @@ export default function App() {
             amountPaise
             currency
           }
-        }`,
-        {
-          input: {
-            orderId: "1",
-            userId: "1",
-            amountPaise: "10000",
-            currency: "INR",
-          },
-        }
+        }`
       );
       const intent = data?.createPaymentIntent?.[0];
       if (!intent?.razorpayKeyId || !intent?.razorpayOrderId) {
@@ -532,18 +534,16 @@ export default function App() {
         description: "Test payment (₹100)",
         handler: async function (response) {
           try {
+            const esc = (s) => JSON.stringify(String(s ?? ""));
             await gql(
-              `mutation VerifyRazorpay($input: VerifyRazorpayPaymentInput!) {
-                verifyRazorpayPayment(input: $input) { verified paymentIntent { status } }
-              }`,
-              {
-                input: {
-                  orderId,
-                  razorpayPaymentId: response.razorpay_payment_id,
-                  razorpayOrderId: response.razorpay_order_id,
-                  razorpaySignature: response.razorpay_signature,
-                },
-              }
+              `mutation VerifyRazorpay {
+                verifyRazorpayPayment(input: {
+                  orderId: ${esc(orderId)},
+                  razorpayPaymentId: ${esc(response.razorpay_payment_id)},
+                  razorpayOrderId: ${esc(response.razorpay_order_id)},
+                  razorpaySignature: ${esc(response.razorpay_signature)}
+                }) { verified paymentIntent { status } }
+              }`
             );
             setPaymentMessage("Payment verified successfully.");
           } catch (e) {
@@ -584,6 +584,7 @@ export default function App() {
       className="min-h-screen"
       style={{ background: THEME.ivory, color: THEME.ink }}
     >
+      {AUTH0_ENABLED && <AuthSync />}
       {/* Announcement bar */}
       <div
         className="border-b text-[11px]"
@@ -631,6 +632,11 @@ export default function App() {
           </button>
 
           <div className="ml-auto flex items-center justify-end gap-2">
+            {AUTH0_ENABLED && (
+              <div className="hidden items-center sm:flex">
+                <AuthButtons />
+              </div>
+            )}
             <div className="hidden md:flex items-center">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />

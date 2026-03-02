@@ -1,0 +1,108 @@
+# Frontend TODO — Sudatta's Storefront & Admin
+
+## Assumptions — backend
+
+All items below assume **no backend changes** except one:
+
+- **Guest session for cart:** The backend currently has no GraphQL mutation that creates a guest session and returns a session ID. Cart (getCartItems, addCartItem, etc.) requires either JWT or a valid `X-Session-Id` that exists in Redis. To support “cart without login,” the backend would need to expose something like a **createGuestSession** (or **createUser** returning session_id) mutation that writes a session to Redis and returns the id. Until then, guest cart can be skipped or the frontend can use a fixed test session ID if you create one manually in Redis. All other todos (products, checkout with JWT, orders, wishlist, admin, etc.) can be done with the current API.
+
+---
+
+## 1. Backend wiring — Storefront
+
+### 1.1 Products
+- [ ] Replace `productsSeed` with GraphQL `searchProduct` (and optional `searchCategory` for filters).
+- [ ] Map API product shape to UI (productId, name, amount_paise/formatted, category, etc.).
+- [ ] Product images: use `searchProductImage` by product_id or product.images if exposed.
+- [ ] Handle loading and error states (skeleton, error message, retry).
+- [ ] Optional: categories for collection filter from `searchCategory`.
+- [ ] Optional: pagination (searchProduct limit/offset) or infinite scroll.
+
+### 1.2 Cart
+- [ ] Obtain or persist guest session: ensure `X-Session-Id` is sent on all GraphQL requests (create session via backend if needed, store in localStorage/cookie).
+- [ ] On load: call `getCartItems(sessionId)` and hydrate cart state (or merge with local cart once).
+- [ ] Add to cart: call `addCartItem` with productId, quantity, sessionId (and optionally userId when logged in).
+- [ ] Update quantity: `updateCartItem` (cartId/productId, quantity).
+- [ ] Remove line: `deleteCartItem`.
+- [ ] Keep cart drawer UI; drive it from API state and sync optimistically or after success.
+- [ ] Handle 401 when session expired: clear session, optionally prompt to “continue as guest” again.
+
+### 1.3 Wishlist (optional)
+- [ ] If backend wishlist is used: `searchWishlistItem`, `addWishlistItem`, `deleteWishlistItem` (requires user/session as per API).
+- [ ] Sync wishlist state with API; keep current drawer UI.
+
+### 1.4 Checkout & payment
+- [ ] Replace mock “Checkout” button with real flow.
+- [ ] Shipping address: call `getShippingAddresses` (and optionally create/update via mutations if exposed); let user choose or add one.
+- [ ] Place order: call `placeOrder(order: { shippingAddressId })` with JWT (required by backend). Handle errors (e.g. insufficient stock, invalid address).
+- [ ] After place order: get orderId from response; call `createPaymentIntent` with orderId, userId, amountPaise (from order total); do not pass razorpayOrderId so backend creates Razorpay order.
+- [ ] Open Razorpay Checkout with returned razorpayKeyId and razorpayOrderId; on success call `verifyRazorpayPayment` with orderId, razorpayPaymentId, razorpayOrderId, razorpaySignature.
+- [ ] Show success/confirmation (e.g. order ID, “Thank you”); optionally redirect to order status or order history.
+- [ ] Optional: apply coupon at checkout (`validateCoupon`, `applyCoupon` if supported in placeOrder flow).
+
+### 1.5 Orders & account
+- [ ] “My orders” or account section: call `searchOrder` (with user filter when logged in); show list with orderId, date, total, status.
+- [ ] Optional: order detail page using orderId and searchOrder or getOrderEvents.
+- [ ] Optional: “Account” or profile (name, email, addresses) if backend exposes PII export or profile APIs.
+
+## 2. Auth
+
+### 2.1 Guest session (for cart without login)
+- [x] On first visit (or when no session): obtain session ID via `POST /session/guest`; store in localStorage (`sudattas_guest_session`).
+- [x] Send `X-Session-Id` in api.js for all GraphQL requests when no JWT.
+- [ ] Document or handle session expiry (e.g. clear and re-create; backend TTL 30 days).
+
+### 2.2 Login (for checkout and “My orders”)
+- [x] Integrate Auth0: Auth0Provider (when env set), login/logout in header (AuthButtons), redirect/callback.
+- [x] After login: getAccessTokenSilently in AuthSync; api.js sends `Authorization: Bearer <token>` when token present (overrides session).
+- [ ] Optional: protect routes that require JWT (e.g. checkout, orders).
+- [x] “Log in” / “Account” in header; JWT used for placeOrder and searchOrder when logged in.
+
+**Auth0 env (optional):** `REACT_APP_AUTH0_DOMAIN`, `REACT_APP_AUTH0_CLIENT_ID`, `REACT_APP_AUTH0_AUDIENCE` (match backend), `REACT_APP_AUTH0_REDIRECT_URI` (default `window.location.origin`). Backend validates JWT via JWKS; guest session uses REDIS_URL.
+
+## 3. API client & config
+
+- [ ] Keep `api.js` (or move to a small `src/api/` module); ensure all storefront GraphQL goes through it.
+- [ ] Env: document and use `REACT_APP_GRAPHQL_URL` (default http://localhost:8080/v2).
+- [ ] Env: document `REACT_APP_GRAPHQL_SESSION_ID` and `REACT_APP_GRAPHQL_TOKEN` for auth.
+- [ ] Optional: centralise GraphQL queries/mutations in a file or use a client (e.g. Apollo) for consistency and caching.
+
+## 4. UX & design
+
+- [ ] Replace placeholder hero and product images with real assets (hosted e.g. S3/R2); use product image URLs from API when wired.
+- [ ] Loading states: skeletons or spinners for product grid, cart, checkout steps.
+- [ ] Error states: inline messages and retry where appropriate (e.g. “Could not load cart”, “Payment failed”).
+- [ ] Empty states: empty cart, no search results, no orders — clear copy and CTAs.
+- [ ] Footer: “Notify me” (newsletter) — wire to backend if endpoint exists; otherwise remove or leave as mock.
+- [ ] Footer: Shipping & delivery, Returns, Gift cards — implement static pages or links.
+- [ ] Remove or update design note in left menu (“visual mock… connect to Rust + MySQL backend”) once wired.
+- [ ] Mobile: ensure bottom bar and touch targets are comfortable; test cart/checkout on small viewports.
+
+## 5. Admin panel (/imtheboss)
+
+- [ ] Products page: already has “Add product” and “Add category”; ensure REACT_APP_ADMIN_API_KEY or JWT is used if backend requires auth.
+- [ ] Orders: replace placeholder with list from `searchOrder` (admin view); optional filters (date, status, user).
+- [ ] Customers: replace placeholder (e.g. list users or orders by user if API exists).
+- [ ] Settings: replace placeholder (e.g. app config, links to Auth0/Dashboard, or leave as placeholder).
+- [ ] Optional: admin login (Auth0) and use JWT for all admin GraphQL calls instead of admin key.
+
+## 6. Quality & robustness
+
+- [ ] Error boundary: wrap app (or main routes) to catch render errors and show fallback UI.
+- [ ] 404: add a route and page for unknown paths.
+- [ ] Accessibility: labels, focus order, contrast; test with keyboard and screen reader where possible.
+- [ ] Optional: unit or integration tests for api.js, critical flows (e.g. cart add, checkout steps).
+
+## 7. Production & deploy
+
+- [ ] Build: ensure `npm run build` (or craco build) succeeds; env vars set at build time for REACT_APP_*.
+- [ ] Deploy: document or automate deploy (e.g. Vercel, Netlify, or static host); set production REACT_APP_GRAPHQL_URL and auth env.
+- [ ] Optional: analytics or error reporting (e.g. Sentry) if required.
+
+---
+
+## Quick reference — backend GraphQL (storefront-relevant)
+
+- Queries: apiVersion, authInfo, getCartItems, searchProduct, searchProductImage, searchCategory, searchOrder, searchWishlistItem, getPaymentIntent, getShippingAddresses, validateCoupon, searchReview, getOrderEvents.
+- Mutations: addCartItem, updateCartItem, deleteCartItem, placeOrder (JWT), createPaymentIntent, verifyRazorpayPayment, addWishlistItem, deleteWishlistItem, createShippingAddress, applyCoupon, createReview, etc.
+- Auth: every request needs JWT or X-Session-Id; placeOrder requires JWT.

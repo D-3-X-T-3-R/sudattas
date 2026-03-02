@@ -1,8 +1,6 @@
-# Local development: MySQL + Redis for E2E and session auth
-# Run from backend/: docker-compose up -d
-# Load schema: mysql -h 127.0.0.1 -u root -p12345678 < database/sql_dump/01_schema.sql
-# Seed session for E2E: redis-cli SET session:ci-e2e-session 1
-# Then: .\run_e2e_local.ps1 (or run E2E tests manually)
+# Local development: MySQL, Redis, Core Operations (gRPC), GraphQL
+# Run from backend/: docker-compose up -d --build
+# Or use: .\start-services.ps1 / ./start-services.sh
 
 services:
   mysql:
@@ -30,3 +28,40 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  core_operations:
+    build:
+      context: .
+      dockerfile: Dockerfile.core_ops
+    image: sudattas-core-operations:local
+    container_name: sudattas-core-operations
+    ports:
+      - "50051:50051"
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql://root:12345678@mysql:3306/SUDATTAS
+      REDIS_URL: redis://redis:6379
+      GRPC_SERVER: "0.0.0.0:50051"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  graphql:
+    build:
+      context: .
+      dockerfile: Dockerfile.gq
+    image: sudattas-graphql:local
+    container_name: sudattas-graphql
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      GRPC_URL: http://core_operations:50051
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      core_operations:
+        condition: service_started
+      redis:
+        condition: service_healthy

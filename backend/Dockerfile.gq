@@ -4,8 +4,12 @@ FROM rust:slim as builder
 # Argument to invalidate cache
 ARG CACHEBUST=1
 
-# Install protobuf compiler
-RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
+# Install protobuf compiler, OpenSSL dev, and pkg-config (required by openssl-sys)
+RUN apt-get update && apt-get install -y \
+    protobuf-compiler \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a new empty shell project
 WORKDIR /usr/src/app
@@ -25,14 +29,10 @@ RUN cargo build --release --package graphql
 # Build the core_operations binary
 # RUN cargo build --release --package core_operations
 
-# Start a new stage from a minimal Debian image to reduce the final size
-FROM debian:bookworm-slim as graphql-runner
+# Start a new stage (trixie has glibc 2.38+; bookworm has 2.36 and is too old for rust:slim-built binary)
+FROM debian:trixie-slim as graphql-runner
 
-# Set environment variables for graphql-runner
-ENV OAUTH_DOMAIN=https://dev-sudattas.eu.auth0.com/ \
-    OAUTH_AUDIANCE=https://dev-sudattas.eu.auth0.com/api/v2/ \
-    RUST_LOG=info \
-    GRPC_URL=grpc://172.31.32.193:50051 
+# Env comes from .env via docker-compose env_file (and overrides in docker-compose)
 
 # Copy the graphql binary from the builder stage
 COPY --from=builder /usr/src/app/target/release/graphql /usr/local/bin/graphql

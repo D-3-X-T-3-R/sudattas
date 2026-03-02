@@ -78,21 +78,16 @@ pub async fn verify_razorpay_payment(
 
     let intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(req.order_id))
+        .filter(payment_intents::Column::RazorpayOrderId.eq(&req.razorpay_order_id))
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| {
             TonicStatus::not_found(format!(
-                "Payment intent for order {} not found",
-                req.order_id
+                "Payment intent for order {} with razorpay_order_id {} not found",
+                req.order_id, req.razorpay_order_id
             ))
         })?;
-
-    if intent.razorpay_order_id != req.razorpay_order_id {
-        return Err(TonicStatus::invalid_argument(
-            "razorpay_order_id does not match payment intent",
-        ));
-    }
 
     if !verify_signature(
         &req.razorpay_order_id,
