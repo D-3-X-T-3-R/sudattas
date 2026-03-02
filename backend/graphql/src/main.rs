@@ -7,6 +7,7 @@ use graphql::schema;
 use graphql::security::csrf;
 use graphql::security::jwks_loader::load_jwks;
 use graphql::security::jwt_validator::validate_token;
+use graphql::security::guest_session;
 use graphql::security::session_validator;
 use graphql::seo;
 use graphql::webhooks;
@@ -292,7 +293,7 @@ async fn main() {
         .and(graphql_route)
         .map(|_, reply| reply);
 
-    let options_routes = warp::options().map(warp::reply).with(cors);
+    let options_routes = warp::options().map(warp::reply).with(cors.clone());
 
     let webhook_route_inner = warp::post()
         .and(warp::path("webhook"))
@@ -335,6 +336,56 @@ async fn main() {
             warp::reply::with_header(body, "content-type", "text/plain; charset=utf-8")
         });
 
+    // Guest session: POST /session/guest — create session in Redis, return { session_id } (no auth; requires REDIS_URL)
+    // Always responds with JSON: 200 { session_id }, 503 { error }, or 405 { error } for GET.
+    let redis_url_guest = redis_url.clone();
+    let guest_session_get = warp::get()
+        .and(warp::path("session"))
+        .and(warp::path("guest"))
+        .and(warp::path::end())
+        .map(|| {
+            let body = serde_json::json!({ "message": "Use POST to create a guest session" }).to_string();
+            warp::reply::with_header(
+                warp::reply::with_status(body, StatusCode::OK),
+                "content-type",
+                "application/json",
+            )
+        });
+    let guest_session_route = warp::post()
+        .and(warp::path("session"))
+        .and(warp::path("guest"))
+        .and(warp::path::end())
+        .and(warp::any().map(move || redis_url_guest.clone()))
+        .and_then(|redis_url_opt: Option<String>| async move {
+            let (status, body) = match redis_url_opt {
+                Some(rurl) => match guest_session::create_guest_session(&rurl).await {
+                    Ok(session_id) => (
+                        StatusCode::OK,
+                        serde_json::json!({ "session_id": session_id }).to_string(),
+                    ),
+                    Err(e) => {
+                        warn!(error = %e, "Guest session create failed");
+                        (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            serde_json::json!({ "error": e }).to_string(),
+                        )
+                    }
+                }
+                None => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    serde_json::json!({ "error": "Guest sessions disabled (REDIS_URL not set)" }).to_string(),
+                ),
+            };
+            Ok::<_, Rejection>(
+                warp::reply::with_header(
+                    warp::reply::with_status(body, status),
+                    "content-type",
+                    "application/json",
+                )
+                .into_response(),
+            )
+        });
+
     // P2 SEO: robots.txt and sitemap.xml (no auth)
     let robots_route = warp::get()
         .and(warp::path("robots.txt"))
@@ -367,6 +418,8 @@ async fn main() {
     let routes = load_balancer_health_check
         .or(readiness_check)
         .or(metrics_route)
+        .or(guest_session_get.with(cors.clone()))
+        .or(guest_session_route.with(cors.clone()))
         .or(robots_route)
         .or(sitemap_route)
         .or(graphql_copy)
