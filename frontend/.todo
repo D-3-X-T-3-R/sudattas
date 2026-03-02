@@ -2,9 +2,8 @@
 
 ## Assumptions — backend
 
-All items below assume **no backend changes** except one:
-
-- **Guest session for cart:** The backend currently has no GraphQL mutation that creates a guest session and returns a session ID. Cart (getCartItems, addCartItem, etc.) requires either JWT or a valid `X-Session-Id` that exists in Redis. To support “cart without login,” the backend would need to expose something like a **createGuestSession** (or **createUser** returning session_id) mutation that writes a session to Redis and returns the id. Until then, guest cart can be skipped or the frontend can use a fixed test session ID if you create one manually in Redis. All other todos (products, checkout with JWT, orders, wishlist, admin, etc.) can be done with the current API.
+- **Guest session:** Backend exposes `POST /session/guest` (returns `{ session_id }` when REDIS_URL is set). Frontend calls it on first visit and stores in localStorage; api.js sends `X-Session-Id` when no JWT. Cart and other session-based APIs work with this.
+- Other storefront todos (products, checkout with JWT, orders, wishlist, admin) use the current API.
 
 ---
 
@@ -19,7 +18,7 @@ All items below assume **no backend changes** except one:
 - [ ] Optional: pagination (searchProduct limit/offset) or infinite scroll.
 
 ### 1.2 Cart
-- [ ] Obtain or persist guest session: ensure `X-Session-Id` is sent on all GraphQL requests (create session via backend if needed, store in localStorage/cookie).
+- [x] Obtain or persist guest session: `ensureGuestSession()` (POST /session/guest), store in localStorage; api.js sends `X-Session-Id` when no JWT; 401 triggers clear + retry once.
 - [ ] On load: call `getCartItems(sessionId)` and hydrate cart state (or merge with local cart once).
 - [ ] Add to cart: call `addCartItem` with productId, quantity, sessionId (and optionally userId when logged in).
 - [ ] Update quantity: `updateCartItem` (cartId/productId, quantity).
@@ -35,9 +34,8 @@ All items below assume **no backend changes** except one:
 - [ ] Replace mock “Checkout” button with real flow.
 - [ ] Shipping address: call `getShippingAddresses` (and optionally create/update via mutations if exposed); let user choose or add one.
 - [ ] Place order: call `placeOrder(order: { shippingAddressId })` with JWT (required by backend). Handle errors (e.g. insufficient stock, invalid address).
-- [ ] After place order: get orderId from response; call `createPaymentIntent` with orderId, userId, amountPaise (from order total); do not pass razorpayOrderId so backend creates Razorpay order.
-- [ ] Open Razorpay Checkout with returned razorpayKeyId and razorpayOrderId; on success call `verifyRazorpayPayment` with orderId, razorpayPaymentId, razorpayOrderId, razorpaySignature.
-- [ ] Show success/confirmation (e.g. order ID, “Thank you”); optionally redirect to order status or order history.
+- [x] **Razorpay test (cart drawer):** “Test Razorpay (₹100)” — createPaymentIntent (inlined input), open Razorpay Checkout, on success verifyRazorpayPayment (inlined input). Uses orderId "1"; backend finds intent by order_id + razorpay_order_id. Orders table still updated by webhook (not verify).
+- [ ] Full flow: after placeOrder get orderId; createPaymentIntent for that order; Razorpay; verifyRazorpayPayment; show confirmation.
 - [ ] Optional: apply coupon at checkout (`validateCoupon`, `applyCoupon` if supported in placeOrder flow).
 
 ### 1.5 Orders & account
@@ -62,9 +60,8 @@ All items below assume **no backend changes** except one:
 
 ## 3. API client & config
 
-- [ ] Keep `api.js` (or move to a small `src/api/` module); ensure all storefront GraphQL goes through it.
-- [ ] Env: document and use `REACT_APP_GRAPHQL_URL` (default http://localhost:8080/v2).
-- [ ] Env: document `REACT_APP_GRAPHQL_SESSION_ID` and `REACT_APP_GRAPHQL_TOKEN` for auth.
+- [x] api.js: all storefront GraphQL via `gql()`; auth order JWT → env token → env session → guest session; ensure guest session before first gql when no auth; 401 + guest session → clear and retry once; payload always includes `variables`.
+- [x] Env: `REACT_APP_GRAPHQL_URL` (default http://localhost:8080/v2); `REACT_APP_GRAPHQL_SESSION_ID`, `REACT_APP_GRAPHQL_TOKEN`; Auth0 vars (see §2). `.env.example` and `.env` in frontend root.
 - [ ] Optional: centralise GraphQL queries/mutations in a file or use a client (e.g. Apollo) for consistency and caching.
 
 ## 4. UX & design
