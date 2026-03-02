@@ -5,9 +5,9 @@ use graphql::health;
 use graphql::query_handler::{AuthSource, Context};
 use graphql::schema;
 use graphql::security::csrf;
+use graphql::security::guest_session;
 use graphql::security::jwks_loader::load_jwks;
 use graphql::security::jwt_validator::validate_token;
-use graphql::security::guest_session;
 use graphql::security::session_validator;
 use graphql::seo;
 use graphql::webhooks;
@@ -344,7 +344,8 @@ async fn main() {
         .and(warp::path("guest"))
         .and(warp::path::end())
         .map(|| {
-            let body = serde_json::json!({ "message": "Use POST to create a guest session" }).to_string();
+            let body =
+                serde_json::json!({ "message": "Use POST to create a guest session" }).to_string();
             warp::reply::with_header(
                 warp::reply::with_status(body, StatusCode::OK),
                 "content-type",
@@ -370,10 +371,11 @@ async fn main() {
                             serde_json::json!({ "error": e }).to_string(),
                         )
                     }
-                }
+                },
                 None => (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    serde_json::json!({ "error": "Guest sessions disabled (REDIS_URL not set)" }).to_string(),
+                    serde_json::json!({ "error": "Guest sessions disabled (REDIS_URL not set)" })
+                        .to_string(),
                 ),
             };
             Ok::<_, Rejection>(
