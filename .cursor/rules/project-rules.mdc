@@ -116,3 +116,15 @@ The task is **done only when**:
 - All of step 3.3 has been run successfully: clippy passes, all unit tests pass, integration tests pass (with DB running and `TEST_DATABASE_URL` set), and `cargo fmt` has been run.
 
 If any of these fail, fix the issues and re-run until everything passes.
+
+---
+
+## 4. Backend as Source of Truth
+
+- Treat the **backend as the source of truth** for API shape, data model, and workflows.
+- Do **not** introduce large or invasive backend changes solely to accommodate a particular frontend implementation.
+- When the frontend and backend disagree, **adjust the frontend first** (queries, variables, field names, flows) to match the existing backend contracts and conventions.
+- Only evolve backend contracts when there is a clear product/domain reason, and then:
+  - Make changes in a **backwards-compatible** way where possible.
+  - Update backend tests and docs first, then bring the frontend into alignment.
+- Avoid duplicating backend business logic in the frontend; keep complex rules on the server and have the frontend orchestrate via existing APIs.
