@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const ADMIN_BASE = "/imtheboss";
+const STORE_URL =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_STORE_URL) || "/";
 
 const NAV = [
   { href: `${ADMIN_BASE}`, icon: LayoutDashboard, label: "Dashboard" },
@@ -87,11 +89,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 href={href}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors border-l-2",
                   isActive
-                    ? "bg-[var(--color-line)]/40 text-[var(--color-ink)]"
-                    : "text-[var(--color-muted)] hover:bg-[#F5F5F4] hover:text-[var(--color-ink)]"
+                    ? "border-[var(--color-accent-brown)] bg-[var(--color-line)]/40 text-[var(--color-ink)]"
+                    : "border-transparent text-[var(--color-muted)] hover:border-[var(--color-line)]/80 hover:bg-[#F5F5F4] hover:text-[var(--color-ink)]"
                 )}
+                aria-current={isActive ? "page" : undefined}
               >
                 <Icon className="h-5 w-5 shrink-0" />
                 {label}
@@ -101,7 +104,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="border-t border-[var(--color-line)] p-3">
           <Link
-            href="/"
+            href={STORE_URL}
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[#F5F5F4] hover:text-[var(--color-ink)]"
           >
             ← Back to store
