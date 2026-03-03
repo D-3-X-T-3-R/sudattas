@@ -3,16 +3,18 @@ SET character_set_client = utf8mb4;
 CREATE DATABASE IF NOT EXISTS `SUDATTAS`;
 USE `SUDATTAS`;
 
+SET FOREIGN_KEY_CHECKS = 0;
+
 -- Dropping existing tables if they exist;
 -- Dropping tables with dependencies first
 
-DROP TABLE IF EXISTS `outbox_events`;
-DROP TABLE IF EXISTS `order_events`;
-DROP TABLE IF EXISTS `webhook_events`;
-DROP TABLE IF EXISTS `shipments`;
-DROP TABLE IF EXISTS `payment_intents`;
-DROP TABLE IF EXISTS `idempotency_keys`;
-DROP TABLE IF EXISTS `sessions`;
+DROP TABLE IF EXISTS `OutboxEvents`;
+DROP TABLE IF EXISTS `OrderEvents`;
+DROP TABLE IF EXISTS `WebhookEvents`;
+DROP TABLE IF EXISTS `Shipments`;
+DROP TABLE IF EXISTS `PaymentIntents`;
+DROP TABLE IF EXISTS `IdempotencyKeys`;
+DROP TABLE IF EXISTS `Sessions`;
 DROP TABLE IF EXISTS `coupons`;
 DROP TABLE IF EXISTS `OrderDetails`;
 DROP TABLE IF EXISTS `Cart`;
@@ -38,6 +40,13 @@ DROP TABLE IF EXISTS `ShippingAddresses`;
 DROP TABLE IF EXISTS `OrderStatus`;
 DROP TABLE IF EXISTS `security_audit_log`;
 DROP TABLE IF EXISTS `Users`;
+DROP TABLE IF EXISTS `UserStatuses`;
+DROP TABLE IF EXISTS `ProductStatuses`;
+DROP TABLE IF EXISTS `CouponRedemptions`;
+DROP TABLE IF EXISTS `CouponScope`;
+DROP TABLE IF EXISTS `Refunds`;
+
+SET FOREIGN_KEY_CHECKS = 1;
 
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -48,13 +57,13 @@ DROP TABLE IF EXISTS `Users`;
 
 -- Table structure for table `Users` (Enhanced with auth & security)
 -- Lookup table for user statuses
-CREATE TABLE `user_statuses` (
+CREATE TABLE `UserStatuses` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `code` VARCHAR(50) NOT NULL UNIQUE,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-INSERT INTO `user_statuses` (`code`) VALUES
+INSERT IGNORE INTO `UserStatuses` (`code`) VALUES
   ('active'),
   ('inactive'),
   ('suspended');
@@ -62,8 +71,8 @@ INSERT INTO `user_statuses` (`code`) VALUES
 CREATE TABLE `Users` (
     `UserID` bigint NOT NULL AUTO_INCREMENT,
     `Username` varchar(255) NOT NULL,
-    `Password` varchar(255) NOT NULL COMMENT 'Legacy field, use password_hash instead',
-    `password_hash` varchar(255) DEFAULT NULL COMMENT 'Argon2id hash',
+    `Password` varchar(255) NULL COMMENT 'Legacy field, will be removed',
+    `password_hash` varchar(255) NOT NULL COMMENT 'Argon2id hash',
     `Email` varchar(255) NOT NULL UNIQUE,
     `email_verified` BOOLEAN DEFAULT FALSE,
     `email_verified_at` TIMESTAMP NULL,
@@ -81,7 +90,7 @@ CREATE TABLE `Users` (
     INDEX `idx_user_status` (`user_status_id`),
     INDEX `idx_user_role` (`role_id`),
     CONSTRAINT `fk_users_user_status`
-      FOREIGN KEY (`user_status_id`) REFERENCES `user_statuses`(`id`),
+      FOREIGN KEY (`user_status_id`) REFERENCES `UserStatuses`(`id`),
     CONSTRAINT `fk_users_role`
       FOREIGN KEY (`role_id`) REFERENCES `UserRoles`(`RoleID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -95,13 +104,13 @@ CREATE TABLE `ProductCategories` (
 
 -- Table structure for table `Products` (Enhanced for saree e-commerce)
 -- Lookup table for product statuses
-CREATE TABLE `product_statuses` (
+CREATE TABLE `ProductStatuses` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `code` VARCHAR(50) NOT NULL UNIQUE,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-INSERT INTO `product_statuses` (`code`) VALUES
+INSERT IGNORE INTO `ProductStatuses` (`code`) VALUES
   ('draft'),
   ('active'),
   ('archived');
@@ -135,7 +144,7 @@ CREATE TABLE `Products` (
     INDEX `idx_product_status` (`product_status_id`),
     INDEX `idx_fabric` (`fabric`),
     CONSTRAINT `fk_products_product_status`
-      FOREIGN KEY (`product_status_id`) REFERENCES `product_statuses`(`id`)
+      FOREIGN KEY (`product_status_id`) REFERENCES `ProductStatuses`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `OrderStatus`
@@ -386,7 +395,7 @@ CREATE TABLE `InventoryLog` (
 -- ============================================================================
 
 -- Sessions table for Redis-backed session management
-CREATE TABLE `sessions` (
+CREATE TABLE `Sessions` (
     `session_id` VARCHAR(128) PRIMARY KEY,
     `user_id` BIGINT NULL,
     `data` JSON NOT NULL,
@@ -400,7 +409,7 @@ CREATE TABLE `sessions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Payment intents for Razorpay order tracking
-CREATE TABLE `payment_intents` (
+CREATE TABLE `PaymentIntents` (
     `intent_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `razorpay_order_id` VARCHAR(100) UNIQUE NOT NULL,
     `order_id` BIGINT NULL,
@@ -422,7 +431,7 @@ CREATE TABLE `payment_intents` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Shipments for Shiprocket tracking
-CREATE TABLE `shipments` (
+CREATE TABLE `Shipments` (
     `shipment_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `order_id` BIGINT NOT NULL,
     `shiprocket_order_id` VARCHAR(100),
@@ -480,7 +489,7 @@ CREATE TABLE `coupon_scope` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- P1 Payments & refunds: refund records (gateway_refund_id unique for idempotency).
-CREATE TABLE `refunds` (
+CREATE TABLE `Refunds` (
     `refund_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `order_id` BIGINT NOT NULL,
     `gateway_refund_id` VARCHAR(100) UNIQUE NOT NULL COMMENT 'Idempotency: same id returns same refund',
@@ -495,7 +504,7 @@ CREATE TABLE `refunds` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Order events for state machine audit trail
-CREATE TABLE `order_events` (
+CREATE TABLE `OrderEvents` (
     `event_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `order_id` BIGINT NOT NULL,
     `event_type` VARCHAR(50) NOT NULL,
@@ -509,7 +518,7 @@ CREATE TABLE `order_events` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Webhook events for idempotent webhook processing (webhook_id unique per provider)
-CREATE TABLE `webhook_events` (
+CREATE TABLE `WebhookEvents` (
     `event_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `provider` VARCHAR(50) NOT NULL,
     `event_type` VARCHAR(100) NOT NULL,
@@ -524,7 +533,7 @@ CREATE TABLE `webhook_events` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Idempotency keys for durable place_order / capture_payment
-CREATE TABLE `idempotency_keys` (
+CREATE TABLE `IdempotencyKeys` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `scope` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -538,7 +547,7 @@ CREATE TABLE `idempotency_keys` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- P2 Security: audit log for secrets rotation and other security events
-CREATE TABLE `security_audit_log` (
+CREATE TABLE `SecurityAuditLog` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `event_type` VARCHAR(100) NOT NULL COMMENT 'e.g. secrets_rotation, config_reload',
     `details` TEXT NULL,
@@ -548,7 +557,7 @@ CREATE TABLE `security_audit_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- P1 Outbox for transactional notifications (emails/SMS); worker publishes pending idempotently
-CREATE TABLE `outbox_events` (
+CREATE TABLE `OutboxEvents` (
     `event_id` BIGINT NOT NULL AUTO_INCREMENT,
     `event_type` VARCHAR(50) NOT NULL COMMENT 'OrderPlaced, PaymentCaptured, Shipped, Delivered, Refunded',
     `aggregate_type` VARCHAR(50) NOT NULL DEFAULT 'order',
