@@ -19,16 +19,8 @@ DROP TABLE IF EXISTS `Cart`;
 DROP TABLE IF EXISTS `Wishlist`;
 DROP TABLE IF EXISTS `ProductImages`;
 DROP TABLE IF EXISTS `Reviews`;
-DROP TABLE IF EXISTS `UserRolesMapping`;
 DROP TABLE IF EXISTS `Transactions`;
 DROP TABLE IF EXISTS `NewsletterSubscribers`;
-DROP TABLE IF EXISTS `ProductRatings`;
-DROP TABLE IF EXISTS `product_related`;
-DROP TABLE IF EXISTS `ProductCategoryMapping`;
-DROP TABLE IF EXISTS `ProductAttributeMapping`;
-DROP TABLE IF EXISTS `UserRoleMapping`;
-DROP TABLE IF EXISTS `ProductSizeMapping`;
-DROP TABLE IF EXISTS `ProductColorMapping`;
 DROP TABLE IF EXISTS `InventoryLog`;
 DROP TABLE IF EXISTS `UserActivity`;
 DROP TABLE IF EXISTS `EventLogs`;
@@ -36,23 +28,13 @@ DROP TABLE IF EXISTS `Inventory`;
 DROP TABLE IF EXISTS `Orders`;
 DROP TABLE IF EXISTS `ProductVariants`;
 DROP TABLE IF EXISTS `Products`;
-DROP TABLE IF EXISTS `Categories`;
-DROP TABLE IF EXISTS `Suppliers`;
+DROP TABLE IF EXISTS `ProductCategories`;
 DROP TABLE IF EXISTS `ProductAttributes`;
-DROP TABLE IF EXISTS `Discounts`;
 DROP TABLE IF EXISTS `ShippingMethods`;
 DROP TABLE IF EXISTS `UserRoles`;
 DROP TABLE IF EXISTS `Sizes`;
 DROP TABLE IF EXISTS `Colors`;
-DROP TABLE IF EXISTS `ShippingZones`;
-DROP TABLE IF EXISTS `Promotions`;
-DROP TABLE IF EXISTS `PaymentMethods`;
 DROP TABLE IF EXISTS `ShippingAddresses`;
-DROP TABLE IF EXISTS `StateCityMapping`;
-DROP TABLE IF EXISTS `CountryStateMapping`;
-DROP TABLE IF EXISTS `Cities`;
-DROP TABLE IF EXISTS `States`;
-DROP TABLE IF EXISTS `Countries`;
 DROP TABLE IF EXISTS `OrderStatus`;
 DROP TABLE IF EXISTS `security_audit_log`;
 DROP TABLE IF EXISTS `Users`;
@@ -89,6 +71,7 @@ CREATE TABLE `Users` (
     `Address` text,
     `Phone` varchar(20) DEFAULT NULL,
     `user_status_id` BIGINT DEFAULT NULL,
+    `role_id` BIGINT DEFAULT NULL,
     `last_login_at` TIMESTAMP NULL,
     `marketing_opt_out` BOOLEAN DEFAULT FALSE COMMENT 'P2: do not send abandoned-cart / marketing emails',
     `CreateDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -96,12 +79,15 @@ CREATE TABLE `Users` (
     PRIMARY KEY (`UserID`),
     INDEX `idx_email` (`Email`),
     INDEX `idx_user_status` (`user_status_id`),
+    INDEX `idx_user_role` (`role_id`),
     CONSTRAINT `fk_users_user_status`
-      FOREIGN KEY (`user_status_id`) REFERENCES `user_statuses`(`id`)
+      FOREIGN KEY (`user_status_id`) REFERENCES `user_statuses`(`id`),
+    CONSTRAINT `fk_users_role`
+      FOREIGN KEY (`role_id`) REFERENCES `UserRoles`(`RoleID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `Categories`
-CREATE TABLE `Categories` (
+-- Table structure for table `ProductCategories`
+CREATE TABLE `ProductCategories` (
     `CategoryID` bigint NOT NULL AUTO_INCREMENT,
     `Name` varchar(255) NOT NULL,
     PRIMARY KEY (`CategoryID`)
@@ -129,7 +115,8 @@ CREATE TABLE `Products` (
     `Price` decimal(10,2) NOT NULL COMMENT 'Legacy field, use price_paise instead',
     `price_paise` INT DEFAULT NULL COMMENT 'Price in paise (₹499.00 = 49900)',
     `StockQuantity` bigint DEFAULT NULL,
-    `CategoryID` bigint DEFAULT NULL,
+    `CategoryID` bigint NOT NULL,
+    `attribute_ids` JSON NOT NULL COMMENT 'Array of ProductAttributes.AttributeID values, e.g. [1,2] for Katha + Block print',
     -- Saree-specific fields
     `fabric` VARCHAR(100),
     `weave` VARCHAR(100),
@@ -142,7 +129,7 @@ CREATE TABLE `Products` (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`ProductID`),
-    FOREIGN KEY (`CategoryID`) REFERENCES `Categories`(`CategoryID`),
+    FOREIGN KEY (`CategoryID`) REFERENCES `ProductCategories`(`CategoryID`),
     INDEX `idx_sku` (`sku`),
     INDEX `idx_slug` (`slug`),
     INDEX `idx_product_status` (`product_status_id`),
@@ -158,59 +145,16 @@ CREATE TABLE `OrderStatus` (
     PRIMARY KEY (`StatusID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Create the Countries table
-CREATE TABLE `Countries` (
-    `CountryID` BIGINT NOT NULL AUTO_INCREMENT,
-    `CountryName` VARCHAR(100),
-    PRIMARY KEY (`CountryID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Create the States table
-CREATE TABLE `States` (
-    `StateID` BIGINT NOT NULL AUTO_INCREMENT,
-    `StateName` VARCHAR(100),
-    PRIMARY KEY (`StateID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Create the Cities table
-CREATE TABLE `Cities` (
-    `CityID` BIGINT NOT NULL AUTO_INCREMENT,
-    `CityName` VARCHAR(100),
-    PRIMARY KEY (`CityID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Create the CountryStateMapping table
-CREATE TABLE `CountryStateMapping` (
-    `ID` BIGINT NOT NULL AUTO_INCREMENT,
-    `CountryID` BIGINT NOT NULL,
-    `StateID` BIGINT NOT NULL,
-    PRIMARY KEY (`ID`),
-    FOREIGN KEY (`CountryID`) REFERENCES `Countries`(`CountryID`),
-    FOREIGN KEY (`StateID`) REFERENCES `States`(`StateID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Create the StateCityMapping table
-CREATE TABLE `StateCityMapping` (
-    `ID` BIGINT NOT NULL AUTO_INCREMENT,
-    `StateID` BIGINT NOT NULL,
-    `CityID` BIGINT NOT NULL,
-    PRIMARY KEY (`ID`),
-    FOREIGN KEY (`StateID`) REFERENCES `States`(`StateID`),
-    FOREIGN KEY (`CityID`) REFERENCES `Cities`(`CityID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Create the ShippingAddresses table
+-- Create the ShippingAddresses table (flattened for D2C: no country/state/city lookup tables)
 CREATE TABLE `ShippingAddresses` (
     `ShippingAddressID` BIGINT NOT NULL AUTO_INCREMENT,
-    `CountryID` BIGINT NOT NULL,
-    `StateID` BIGINT NOT NULL,
-    `CityID` BIGINT NOT NULL,
+    `Country` VARCHAR(100) NOT NULL,
+    `StateRegion` VARCHAR(100) NOT NULL,
+    `City` VARCHAR(100) NOT NULL,
+    `PostalCode` VARCHAR(20) NOT NULL,
     `Road` VARCHAR(255),
     `ApartmentNoOrName` VARCHAR(255),
-    PRIMARY KEY (`ShippingAddressID`),
-    FOREIGN KEY (`CountryID`) REFERENCES `Countries`(`CountryID`),
-    FOREIGN KEY (`StateID`) REFERENCES `States`(`StateID`),
-    FOREIGN KEY (`CityID`) REFERENCES `Cities`(`CityID`)
+    PRIMARY KEY (`ShippingAddressID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Orders` (Enhanced with payment tracking and order/coupon snapshot)
@@ -223,6 +167,7 @@ CREATE TABLE `Orders` (
     `TotalAmount` DECIMAL(10,2) NOT NULL COMMENT 'Legacy field, use total_paise instead',
     `StatusID` BIGINT NOT NULL,
     `payment_status` ENUM('pending', 'authorized', 'captured', 'failed', 'needs_review') DEFAULT 'pending',
+    `payment_method` VARCHAR(50) NULL DEFAULT NULL,
     `currency` VARCHAR(3) DEFAULT 'INR',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `subtotal_minor` BIGINT NULL DEFAULT NULL,
@@ -246,7 +191,7 @@ CREATE TABLE `Orders` (
 CREATE TABLE `OrderDetails` (
     `OrderDetailID` bigint NOT NULL AUTO_INCREMENT,
     `OrderID` bigint NOT NULL,
-    `ProductID` bigint NOT NULL,
+    `VariantID` bigint NOT NULL,
     `Quantity` bigint NOT NULL,
     `Price` decimal(10,2) NOT NULL,
     `unit_price_minor` INT NULL DEFAULT NULL,
@@ -257,7 +202,7 @@ CREATE TABLE `OrderDetails` (
     `line_attrs` JSON NULL DEFAULT NULL,
     PRIMARY KEY (`OrderDetailID`),
     FOREIGN KEY (`OrderID`) REFERENCES `Orders`(`OrderID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
+    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
     INDEX `idx_order_details_order_id` (`OrderID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -282,14 +227,14 @@ CREATE TABLE `Cart` (
     `CartID` bigint NOT NULL AUTO_INCREMENT,
     `UserID` bigint NULL COMMENT 'NULL for guest carts',
     `session_id` VARCHAR(255) NULL COMMENT 'For guest checkout',
-    `ProductID` bigint NOT NULL,
+    `VariantID` bigint NOT NULL,
     `Quantity` bigint NOT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `abandoned_email_sent_at` TIMESTAMP NULL COMMENT 'P2: when set, do not send another abandoned-cart email',
     PRIMARY KEY (`CartID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
+    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
     INDEX `idx_session` (`session_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -308,62 +253,32 @@ CREATE TABLE `Wishlist` (
 CREATE TABLE `ProductImages` (
     `ImageID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint NOT NULL,
-    `ImageBase64` MEDIUMTEXT NULL COMMENT 'Legacy field, use url instead',
-    `url` VARCHAR(500) COMMENT 'CDN URL: https://cdn.sudattas.com/products/...',
-    `cdn_path` VARCHAR(500) COMMENT 'Path in R2: products/saree-123/hero.webp',
-    `thumbnail_url` VARCHAR(500),
-    `file_size_bytes` INT,
-    `AltText` varchar(255) DEFAULT NULL,
-    `display_order` INT DEFAULT 0,
+    `urls` JSON NOT NULL COMMENT 'JSON array of CDN image URLs for this product, ordered [1,2,3,...]',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`ImageID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    INDEX `idx_product_order` (`ProductID`, `display_order`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `Suppliers`
-CREATE TABLE `Suppliers` (
-    `SupplierID` bigint NOT NULL AUTO_INCREMENT,
-    `Name` varchar(255) DEFAULT NULL,
-    `ContactInfo` varchar(255) DEFAULT NULL,
-    `Address` text,
-    PRIMARY KEY (`SupplierID`)
+    INDEX `idx_product_order` (`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Inventory` (Enhanced with reserved stock)
 CREATE TABLE `Inventory` (
     `InventoryID` bigint NOT NULL AUTO_INCREMENT,
-    `ProductID` bigint DEFAULT NULL,
+    `VariantID` bigint DEFAULT NULL,
     `QuantityAvailable` bigint DEFAULT NULL,
     `quantity_reserved` INT DEFAULT 0 COMMENT 'Reserved for pending orders',
     `ReorderLevel` bigint DEFAULT NULL,
-    `SupplierID` bigint DEFAULT NULL,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`InventoryID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`SupplierID`) REFERENCES `Suppliers`(`SupplierID`),
-    INDEX `idx_inventory_product_id` (`ProductID`)
+    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
+    INDEX `idx_inventory_variant_id` (`VariantID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `ProductAttributes`
 CREATE TABLE `ProductAttributes` (
     `AttributeID` bigint NOT NULL AUTO_INCREMENT,
-    `ProductID` bigint DEFAULT NULL,
     `AttributeName` varchar(255) DEFAULT NULL,
     `AttributeValue` varchar(255) DEFAULT NULL,
-    PRIMARY KEY (`AttributeID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `Discounts`
-CREATE TABLE `Discounts` (
-    `DiscountID` bigint NOT NULL AUTO_INCREMENT,
-    `ProductID` bigint DEFAULT NULL,
-    `DiscountPercentage` decimal(5,2) DEFAULT NULL,
-    `StartDate` date DEFAULT NULL,
-    `EndDate` date DEFAULT NULL,
-    PRIMARY KEY (`DiscountID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
+    PRIMARY KEY (`AttributeID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `ShippingMethods`
@@ -380,16 +295,6 @@ CREATE TABLE `UserRoles` (
     `RoleID` bigint NOT NULL AUTO_INCREMENT,
     `RoleName` varchar(255) NOT NULL,
     PRIMARY KEY (`RoleID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `UserRolesMapping`
-CREATE TABLE `UserRolesMapping` (
-    `ID` bigint NOT NULL AUTO_INCREMENT,
-    `UserID` bigint NOT NULL,
-    `RoleID` bigint DEFAULT NULL,
-    PRIMARY KEY (`ID`),
-    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
-    FOREIGN KEY (`RoleID`) REFERENCES `UserRoles`(`RoleID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Transactions`
@@ -412,56 +317,7 @@ CREATE TABLE `NewsletterSubscribers` (
     PRIMARY KEY (`SubscriberID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `ProductRatings`
-CREATE TABLE `ProductRatings` (
-    `RatingID` bigint NOT NULL AUTO_INCREMENT,
-    `ProductID` bigint DEFAULT NULL,
-    `UserID` bigint DEFAULT NULL,
-    `Rating` bigint DEFAULT NULL,
-    PRIMARY KEY (`RatingID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `ProductCategoryMapping`
-CREATE TABLE `ProductCategoryMapping` (
-    `ProductID` bigint NOT NULL,
-    `CategoryID` bigint NOT NULL,
-    PRIMARY KEY (`ProductID`, `CategoryID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`CategoryID`) REFERENCES `Categories`(`CategoryID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- P2: Manual related products (display order for recommendations)
-CREATE TABLE `product_related` (
-    `id` bigint NOT NULL AUTO_INCREMENT,
-    `product_id` bigint NOT NULL,
-    `related_product_id` bigint NOT NULL,
-    `display_order` int NOT NULL DEFAULT 0,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_product_related` (`product_id`, `related_product_id`),
-    FOREIGN KEY (`product_id`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`related_product_id`) REFERENCES `Products`(`ProductID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `ProductAttributeMapping`
-CREATE TABLE `ProductAttributeMapping` (
-    `ProductID` bigint NOT NULL,
-    `AttributeID` bigint NOT NULL,
-    PRIMARY KEY (`ProductID`, `AttributeID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`AttributeID`) REFERENCES `ProductAttributes`(`AttributeID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
 -- Table structure for table `UserRoleMapping`
-CREATE TABLE `UserRoleMapping` (
-    `UserID` bigint NOT NULL,
-    `RoleID` bigint NOT NULL,
-    PRIMARY KEY (`UserID`, `RoleID`),
-    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
-    FOREIGN KEY (`RoleID`) REFERENCES `UserRoles`(`RoleID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
 -- Table structure for table `Sizes`
 CREATE TABLE `Sizes` (
     `SizeID` bigint NOT NULL AUTO_INCREMENT,
@@ -469,29 +325,11 @@ CREATE TABLE `Sizes` (
     PRIMARY KEY (`SizeID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `ProductSizeMapping`
-CREATE TABLE `ProductSizeMapping` (
-    `ProductID` bigint NOT NULL,
-    `SizeID` bigint NOT NULL,
-    PRIMARY KEY (`ProductID`, `SizeID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`SizeID`) REFERENCES `Sizes`(`SizeID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
 -- Table structure for table `Colors`
 CREATE TABLE `Colors` (
     `ColorID` bigint NOT NULL AUTO_INCREMENT,
     `ColorName` varchar(50) NOT NULL,
     PRIMARY KEY (`ColorID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `ProductColorMapping`
-CREATE TABLE `ProductColorMapping` (
-    `ProductID` bigint NOT NULL,
-    `ColorID` bigint NOT NULL,
-    PRIMARY KEY (`ProductID`, `ColorID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`ColorID`) REFERENCES `Colors`(`ColorID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `ProductVariants`
@@ -541,32 +379,6 @@ CREATE TABLE `InventoryLog` (
     `quantity_after` bigint DEFAULT NULL COMMENT 'P1 admin audit',
     PRIMARY KEY (`LogID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `Promotions`
-CREATE TABLE `Promotions` (
-    `PromotionID` bigint NOT NULL AUTO_INCREMENT,
-    `PromotionName` varchar(255) NOT NULL,
-    `StartDate` datetime NOT NULL,
-    `EndDate` datetime NOT NULL,
-    `Details` text,
-    PRIMARY KEY (`PromotionID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `ShippingZones`
-CREATE TABLE `ShippingZones` (
-    `ZoneID` bigint NOT NULL AUTO_INCREMENT,
-    `ZoneName` varchar(255) NOT NULL,
-    `Description` text,
-    PRIMARY KEY (`ZoneID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `PaymentMethods`
-CREATE TABLE `PaymentMethods` (
-    `MethodID` bigint NOT NULL AUTO_INCREMENT,
-    `MethodName` varchar(255) NOT NULL,
-    `Details` text,
-    PRIMARY KEY (`MethodID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
