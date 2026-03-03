@@ -1,10 +1,26 @@
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 
 const STATS = [
-  { label: "Orders today", value: "—", sub: "Connect backend" },
-  { label: "Revenue (MTD)", value: "—", sub: "Connect backend" },
-  { label: "Products", value: "—", sub: "Connect backend" },
-  { label: "Customers", value: "—", sub: "Connect backend" },
+  {
+    label: "Orders today",
+    value: "—",
+    sub: "Will show today’s orders once GraphQL is connected.",
+  },
+  {
+    label: "Revenue (MTD)",
+    value: "—",
+    sub: "Will show month-to-date revenue from completed orders.",
+  },
+  {
+    label: "Products",
+    value: "—",
+    sub: "Will show total live products in your catalog.",
+  },
+  {
+    label: "Customers",
+    value: "—",
+    sub: "Will show total registered customers.",
+  },
 ];
 
 export default function AdminDashboardPage() {
@@ -26,12 +42,28 @@ export default function AdminDashboardPage() {
         ))}
       </div>
       <Card className="mt-8">
-        <CardTitle>Quick actions</CardTitle>
+        <CardTitle>Get started</CardTitle>
         <CardContent className="mt-2">
-          <p className="text-sm text-[var(--color-muted)]">
-            Wire this panel to your GraphQL backend (orders, products, inventory)
-            to manage Sudatta&apos;s.
-          </p>
+          <div className="space-y-2 text-sm text-[var(--color-muted)]">
+            <p>
+              Wire this dashboard to your GraphQL backend to see live orders,
+              revenue, products, and customers here.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Confirm <code>NEXT_PUBLIC_GRAPHQL_URL</code> points to the
+                GraphQL gateway (e.g. <code>http://localhost:8080/v2</code>).
+              </li>
+              <li>
+                Ensure admin auth is configured (token or session) so metrics
+                queries can run.
+              </li>
+              <li>
+                Once wired, replace these placeholders with real summary
+                queries.
+              </li>
+            </ul>
+          </div>
         </CardContent>
       </Card>
     </>

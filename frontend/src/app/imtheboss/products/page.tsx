@@ -9,21 +9,39 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-async function fetchCategories() {
-  const data = await gqlAdmin<{ searchCategory?: Array<{ categoryId: string; name: string }> }>(
-    `query { searchCategory(search: {}) { categoryId name } }`
-  );
+type ProductFormState = {
+  name: string;
+  description: string;
+  priceRupees: string;
+  stockQuantity: string;
+  categoryId: string;
+};
+
+const DRAFT_KEY = "sudattas_admin_product_draft";
+
+async function fetchCategories(): Promise<
+  Array<{ categoryId: string; name: string }>
+> {
+  const data = await gqlAdmin<{
+    searchCategory?: Array<{ categoryId: string; name: string }>;
+  }>(`query { searchCategory(search: {}) { categoryId name } }`);
   return data?.searchCategory ?? [];
 }
 
 export default function AdminProductsPage() {
   const queryClient = useQueryClient();
-  const { data: categories = [] } = useQuery({
+  const {
+    data: categories = [],
+    isLoading: categoriesLoading,
+    isError: categoriesError,
+    error: categoriesErrorObj,
+    refetch: refetchCategories,
+  } = useQuery<Array<{ categoryId: string; name: string }>, Error>({
     queryKey: ["admin", "categories"],
     queryFn: fetchCategories,
   });
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ProductFormState>({
     name: "",
     description: "",
     priceRupees: "",
@@ -35,6 +53,22 @@ export default function AdminProductsPage() {
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryError, setCategoryError] = useState("");
+
+  // Load draft from sessionStorage on first mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<ProductFormState>;
+      setForm((prev) => ({
+        ...prev,
+        ...parsed,
+      }));
+    } catch {
+      // ignore malformed drafts
+    }
+  }, []);
 
   useEffect(() => {
     if (categories.length > 0 && !form.categoryId) {
@@ -89,22 +123,41 @@ export default function AdminProductsPage() {
       return data?.createProduct?.[0];
     },
     onSuccess: (created) => {
-      setMessage(created ? `Created: ${created.name}${created.formatted ? ` (${created.formatted})` : ""}` : "Product created.");
-      setForm({
+      setMessage(
+        created
+          ? `Created: ${created.name}${
+              created.formatted ? ` (${created.formatted})` : ""
+            }`
+          : "Product created."
+      );
+      setForm((prev) => ({
         name: "",
         description: "",
         priceRupees: "",
         stockQuantity: "0",
-        categoryId: form.categoryId,
-      });
+        categoryId: prev.categoryId,
+      }));
       setError("");
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(DRAFT_KEY);
+      }
     },
     onError: (err: Error) => setError(err.message || "Failed to create product."),
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
     setError("");
     setMessage("");
   };
@@ -146,10 +199,55 @@ export default function AdminProductsPage() {
     });
   };
 
+  // Auto-clear success message after a short delay
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(""), 4000);
+    return () => clearTimeout(t);
+  }, [message]);
+
+  const categoriesAuthLike =
+    categoriesError &&
+    categoriesErrorObj &&
+    /unauthorized|forbidden|admin/i.test(categoriesErrorObj.message);
+
   return (
     <Card className="max-w-xl">
       <CardTitle>Add new product</CardTitle>
       <CardContent className="mt-6">
+        {categoriesError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <p className="font-medium">Can&apos;t load categories.</p>
+            <p className="mt-1 text-xs text-red-800/80">
+              {categoriesAuthLike
+                ? "Admin access was denied. Check NEXT_PUBLIC_ADMIN_API_KEY or your admin auth configuration."
+                : categoriesErrorObj?.message ?? "Failed to load categories."}
+            </p>
+            <button
+              type="button"
+              onClick={() => refetchCategories()}
+              className="mt-2 inline-flex items-center rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-50"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+        {error && (
+          <div
+            className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+            role="alert"
+          >
+            {error}
+          </div>
+        )}
+        {message && (
+          <div
+            className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+            role="status"
+          >
+            {message}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
@@ -162,6 +260,7 @@ export default function AdminProductsPage() {
               onChange={handleChange}
               placeholder="e.g. Ivory Silk Saree"
               className="rounded-lg"
+              autoFocus
             />
           </div>
           <div>
@@ -218,9 +317,12 @@ export default function AdminProductsPage() {
               className={cn(
                 "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
               )}
+              disabled={categoriesLoading || categoriesError}
               required
             >
-              <option value="">Select category</option>
+              <option value="">
+                {categoriesLoading ? "Loading categories…" : "Select category"}
+              </option>
               {categories.map((c) => (
                 <option key={c.categoryId} value={c.categoryId}>
                   {c.name || `Category ${c.categoryId}`}
