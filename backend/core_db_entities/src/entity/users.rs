@@ -8,11 +8,9 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(column_name = "UserID", primary_key)]
     pub user_id: i64,
-    #[sea_orm(column_name = "Username")]
+    #[sea_orm(column_name = "Username", unique)]
     pub username: String,
-    #[sea_orm(column_name = "Password")]
-    pub password: String,
-    pub password_hash: Option<String>,
+    pub password_hash: String,
     #[sea_orm(column_name = "Email", unique)]
     pub email: String,
     pub email_verified: Option<i8>,
@@ -21,9 +19,10 @@ pub struct Model {
     pub full_name: Option<String>,
     #[sea_orm(column_name = "Address", column_type = "Text", nullable)]
     pub address: Option<String>,
-    #[sea_orm(column_name = "Phone")]
+    #[sea_orm(column_name = "Phone", unique)]
     pub phone: Option<String>,
     pub user_status_id: Option<i64>,
+    pub role_id: Option<i64>,
     pub last_login_at: Option<DateTimeUtc>,
     pub marketing_opt_out: Option<i8>,
     #[sea_orm(column_name = "CreateDate")]
@@ -35,30 +34,32 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::cart::Entity")]
     Cart,
+    #[sea_orm(has_many = "super::coupon_redemptions::Entity")]
+    CouponRedemptions,
     #[sea_orm(has_many = "super::event_logs::Entity")]
     EventLogs,
     #[sea_orm(has_many = "super::orders::Entity")]
     Orders,
-    #[sea_orm(has_many = "super::product_ratings::Entity")]
-    ProductRatings,
+    #[sea_orm(has_many = "super::payment_intents::Entity")]
+    PaymentIntents,
     #[sea_orm(has_many = "super::reviews::Entity")]
     Reviews,
+    #[sea_orm(has_many = "super::sessions::Entity")]
+    Sessions,
+    #[sea_orm(has_many = "super::shipping_addresses::Entity")]
+    ShippingAddresses,
     #[sea_orm(has_many = "super::transactions::Entity")]
     Transactions,
     #[sea_orm(has_many = "super::user_activity::Entity")]
     UserActivity,
-    #[sea_orm(has_many = "super::user_role_mapping::Entity")]
-    UserRoleMapping,
-    #[sea_orm(has_many = "super::user_roles_mapping::Entity")]
-    UserRolesMapping,
-    #[sea_orm(has_many = "super::wishlist::Entity")]
-    Wishlist,
-    #[sea_orm(has_many = "super::coupon_redemptions::Entity")]
-    CouponRedemptions,
-    #[sea_orm(has_many = "super::payment_intents::Entity")]
-    PaymentIntents,
-    #[sea_orm(has_many = "super::sessions::Entity")]
-    Sessions,
+    #[sea_orm(
+        belongs_to = "super::user_roles::Entity",
+        from = "Column::RoleId",
+        to = "super::user_roles::Column::RoleId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    UserRoles,
     #[sea_orm(
         belongs_to = "super::user_statuses::Entity",
         from = "Column::UserStatusId",
@@ -67,11 +68,19 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     UserStatuses,
+    #[sea_orm(has_many = "super::wishlist::Entity")]
+    Wishlist,
 }
 
 impl Related<super::cart::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Cart.def()
+    }
+}
+
+impl Related<super::coupon_redemptions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CouponRedemptions.def()
     }
 }
 
@@ -87,15 +96,27 @@ impl Related<super::orders::Entity> for Entity {
     }
 }
 
-impl Related<super::product_ratings::Entity> for Entity {
+impl Related<super::payment_intents::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::ProductRatings.def()
+        Relation::PaymentIntents.def()
     }
 }
 
 impl Related<super::reviews::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Reviews.def()
+    }
+}
+
+impl Related<super::sessions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Sessions.def()
+    }
+}
+
+impl Related<super::shipping_addresses::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ShippingAddresses.def()
     }
 }
 
@@ -111,39 +132,9 @@ impl Related<super::user_activity::Entity> for Entity {
     }
 }
 
-impl Related<super::user_role_mapping::Entity> for Entity {
+impl Related<super::user_roles::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::UserRoleMapping.def()
-    }
-}
-
-impl Related<super::user_roles_mapping::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::UserRolesMapping.def()
-    }
-}
-
-impl Related<super::wishlist::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Wishlist.def()
-    }
-}
-
-impl Related<super::coupon_redemptions::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::CouponRedemptions.def()
-    }
-}
-
-impl Related<super::payment_intents::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::PaymentIntents.def()
-    }
-}
-
-impl Related<super::sessions::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Sessions.def()
+        Relation::UserRoles.def()
     }
 }
 
@@ -153,12 +144,9 @@ impl Related<super::user_statuses::Entity> for Entity {
     }
 }
 
-impl Related<super::user_roles::Entity> for Entity {
+impl Related<super::wishlist::Entity> for Entity {
     fn to() -> RelationDef {
-        super::user_role_mapping::Relation::UserRoles.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(super::user_role_mapping::Relation::Users.def().rev())
+        Relation::Wishlist.def()
     }
 }
 

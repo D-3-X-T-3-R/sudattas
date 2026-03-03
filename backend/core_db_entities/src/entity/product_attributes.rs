@@ -8,26 +8,16 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(column_name = "AttributeID", primary_key)]
     pub attribute_id: i64,
-    #[sea_orm(column_name = "ProductID")]
-    pub product_id: Option<i64>,
     #[sea_orm(column_name = "AttributeName")]
-    pub attribute_name: Option<String>,
+    pub attribute_name: String,
     #[sea_orm(column_name = "AttributeValue")]
-    pub attribute_value: Option<String>,
+    pub attribute_value: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(has_many = "super::product_attribute_mapping::Entity")]
     ProductAttributeMapping,
-    #[sea_orm(
-        belongs_to = "super::products::Entity",
-        from = "Column::ProductId",
-        to = "super::products::Column::ProductId",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Products,
 }
 
 impl Related<super::product_attribute_mapping::Entity> for Entity {

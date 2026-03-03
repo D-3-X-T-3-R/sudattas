@@ -5,7 +5,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "payment_intents")]
+#[sea_orm(table_name = "PaymentIntents")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub intent_id: i64,

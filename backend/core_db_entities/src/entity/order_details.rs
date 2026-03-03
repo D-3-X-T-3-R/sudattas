@@ -10,13 +10,17 @@ pub struct Model {
     pub order_detail_id: i64,
     #[sea_orm(column_name = "OrderID")]
     pub order_id: i64,
-    #[sea_orm(column_name = "ProductID")]
-    pub product_id: i64,
+    #[sea_orm(column_name = "VariantID")]
+    pub variant_id: i64,
     #[sea_orm(column_name = "Quantity")]
     pub quantity: i64,
-    #[sea_orm(column_name = "Price", column_type = "Decimal(Some((10, 2)))")]
-    pub price: Decimal,
-    pub unit_price_minor: Option<i32>,
+    #[sea_orm(
+        column_name = "Price",
+        column_type = "Decimal(Some((10, 2)))",
+        nullable
+    )]
+    pub price: Option<Decimal>,
+    pub unit_price_minor: i32,
     pub discount_minor: Option<i32>,
     pub tax_minor: Option<i32>,
     pub sku: Option<String>,
@@ -35,13 +39,13 @@ pub enum Relation {
     )]
     Orders,
     #[sea_orm(
-        belongs_to = "super::products::Entity",
-        from = "Column::ProductId",
-        to = "super::products::Column::ProductId",
+        belongs_to = "super::product_variants::Entity",
+        from = "Column::VariantId",
+        to = "super::product_variants::Column::VariantId",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Products,
+    ProductVariants,
 }
 
 impl Related<super::orders::Entity> for Entity {
@@ -50,9 +54,9 @@ impl Related<super::orders::Entity> for Entity {
     }
 }
 
-impl Related<super::products::Entity> for Entity {
+impl Related<super::product_variants::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Products.def()
+        Relation::ProductVariants.def()
     }
 }
 

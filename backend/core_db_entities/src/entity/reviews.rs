@@ -14,7 +14,7 @@ pub struct Model {
     #[sea_orm(column_name = "UserID")]
     pub user_id: Option<i64>,
     #[sea_orm(column_name = "Rating")]
-    pub rating: Option<i64>,
+    pub rating: i8,
     #[sea_orm(column_name = "Comment", column_type = "Text", nullable)]
     pub comment: Option<String>,
     pub status: Option<Status>,
