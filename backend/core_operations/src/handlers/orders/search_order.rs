@@ -39,9 +39,7 @@ pub async fn search_order(
             let items = models
                 .into_iter()
                 .map(|model| {
-                    let total_amount_paise = model
-                        .grand_total_minor
-                        .unwrap_or_else(|| decimal_to_paise(&model.total_amount));
+                    let total_amount_paise = model.grand_total_minor;
                     OrderResponse {
                         order_id: model.order_id,
                         user_id: model.user_id,

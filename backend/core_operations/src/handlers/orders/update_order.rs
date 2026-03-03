@@ -42,10 +42,11 @@ pub async fn update_order(
         user_id: ActiveValue::Set(req.user_id),
         order_date: ActiveValue::Set(Utc::now()),
         shipping_address_id: ActiveValue::Set(req.shipping_address_id),
-        total_amount: ActiveValue::Set(paise_to_decimal(req.total_amount_paise)),
+        total_amount: ActiveValue::Set(Some(paise_to_decimal(req.total_amount_paise))),
         status_id: ActiveValue::Set(req.status_id),
         order_number: ActiveValue::NotSet,
         payment_status: ActiveValue::NotSet,
+        payment_method: ActiveValue::NotSet,
         currency: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
         subtotal_minor: ActiveValue::NotSet,
@@ -77,8 +78,8 @@ pub async fn update_order(
                         let _ = txn
                             .execute(Statement::from_sql_and_values(
                                 DbBackend::MySql,
-                                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable + ? WHERE ProductID = ?"#,
-                                [d.quantity.into(), d.product_id.into()],
+                                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable + ? WHERE VariantID = ?"#,
+                                [d.quantity.into(), d.variant_id.into()],
                             ))
                             .await
                             .map_err(map_db_error_to_status)?;
@@ -114,9 +115,7 @@ pub async fn update_order(
                 .await;
             }
 
-            let total_amount_paise = model
-                .grand_total_minor
-                .unwrap_or_else(|| decimal_to_paise(&model.total_amount));
+            let total_amount_paise = model.grand_total_minor;
             let response = OrdersResponse {
                 items: vec![OrderResponse {
                     order_id: model.order_id,

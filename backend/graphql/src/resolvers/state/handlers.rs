@@ -1,63 +1,21 @@
-use proto::proto::core::{CreateStateRequest, DeleteStateRequest, SearchStateRequest};
+//! State resolvers: gRPC State APIs were removed; schema kept for compatibility, returns empty.
 
 use tracing::instrument;
 
 use super::schema::{NewState, SearchState, State};
-use crate::resolvers::{
-    convert,
-    error::GqlError,
-    utils::{connect_grpc_client, parse_i64, to_option_i64},
-};
+use crate::resolvers::error::GqlError;
 
 #[instrument]
-pub(crate) async fn create_state(state: NewState) -> Result<Vec<State>, GqlError> {
-    let mut client = connect_grpc_client().await?;
-
-    let response = client
-        .create_state(CreateStateRequest {
-            state_name: state.state_name,
-        })
-        .await?;
-
-    Ok(response
-        .into_inner()
-        .items
-        .into_iter()
-        .map(convert::state_response_to_gql)
-        .collect())
+pub(crate) async fn create_state(_state: NewState) -> Result<Vec<State>, GqlError> {
+    Ok(vec![])
 }
 
 #[instrument]
-pub(crate) async fn search_state(search: SearchState) -> Result<Vec<State>, GqlError> {
-    let mut client = connect_grpc_client().await?;
-
-    let response = client
-        .search_state(SearchStateRequest {
-            state_name: search.state_name,
-            state_id: to_option_i64(search.state_id),
-        })
-        .await?;
-
-    Ok(response
-        .into_inner()
-        .items
-        .into_iter()
-        .map(convert::state_response_to_gql)
-        .collect())
+pub(crate) async fn search_state(_search: SearchState) -> Result<Vec<State>, GqlError> {
+    Ok(vec![])
 }
 
 #[instrument]
-pub(crate) async fn delete_state(state_id: String) -> Result<Vec<State>, GqlError> {
-    let mut client = connect_grpc_client().await?;
-
-    let state_id = parse_i64(&state_id, "state id")?;
-
-    let response = client.delete_state(DeleteStateRequest { state_id }).await?;
-
-    Ok(response
-        .into_inner()
-        .items
-        .into_iter()
-        .map(convert::state_response_to_gql)
-        .collect())
+pub(crate) async fn delete_state(_state_id: String) -> Result<Vec<State>, GqlError> {
+    Ok(vec![])
 }

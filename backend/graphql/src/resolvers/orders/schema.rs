@@ -56,7 +56,7 @@ impl Order {
         crate::resolvers::order_details::handlers::search_order_detail(SearchOrderDetails {
             order_id: Some(self.order_id.to_string()),
             order_detail_id: None,
-            product_id: None,
+            variant_id: None,
             quantity: None,
             price_start_paise: None,
             price_end_paise: None,

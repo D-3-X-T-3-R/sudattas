@@ -36,7 +36,7 @@ pub async fn update_cart_item(
     };
 
     let mut model: cart::ActiveModel = existing.into();
-    model.product_id = ActiveValue::Set(req.product_id);
+    model.variant_id = ActiveValue::Set(req.variant_id);
     model.quantity = ActiveValue::Set(req.quantity);
 
     match model.update(txn).await {
@@ -44,7 +44,7 @@ pub async fn update_cart_item(
             let response = CartItemsResponse {
                 items: vec![CartItemResponse {
                     cart_id: cart_model.cart_id,
-                    product_id: cart_model.product_id,
+                    variant_id: cart_model.variant_id,
                     quantity: cart_model.quantity,
                     user_id: cart_model.user_id.unwrap_or(0),
                 }],

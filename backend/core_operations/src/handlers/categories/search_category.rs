@@ -1,5 +1,5 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use core_db_entities::entity::categories;
+use core_db_entities::entity::product_categories;
 use proto::proto::core::{CategoriesResponse, CategoryResponse, SearchCategoryRequest};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
 use tonic::{Request, Response, Status};
@@ -10,12 +10,12 @@ pub async fn search_category(
 ) -> Result<Response<CategoriesResponse>, Status> {
     let req = request.into_inner();
 
-    match categories::Entity::find()
+    match product_categories::Entity::find()
         .apply_if(req.category_id, |query, v| {
-            query.filter(categories::Column::CategoryId.eq(v))
+            query.filter(product_categories::Column::CategoryId.eq(v))
         })
         .apply_if(req.name, |query, v| {
-            query.filter(categories::Column::Name.contains(v))
+            query.filter(product_categories::Column::Name.contains(v))
         })
         .all(txn)
         .await

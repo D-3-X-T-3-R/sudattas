@@ -17,17 +17,17 @@ pub async fn create_order(
         user_id: ActiveValue::Set(req.user_id),
         order_date: ActiveValue::Set(Utc::now()),
         shipping_address_id: ActiveValue::Set(req.shipping_address_id),
-        total_amount: ActiveValue::Set(paise_to_decimal(req.total_amount_paise)),
+        total_amount: ActiveValue::Set(Some(paise_to_decimal(req.total_amount_paise))),
         status_id: ActiveValue::Set(req.status_id),
         order_number: ActiveValue::NotSet,
         payment_status: ActiveValue::NotSet,
+        payment_method: ActiveValue::NotSet,
         currency: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
         subtotal_minor: req
             .subtotal_minor
             .map(ActiveValue::Set)
-            .unwrap_or(ActiveValue::NotSet)
-            .into(),
+            .unwrap_or(ActiveValue::NotSet),
         shipping_minor: req
             .shipping_minor
             .map(ActiveValue::Set)
@@ -46,8 +46,7 @@ pub async fn create_order(
         grand_total_minor: req
             .grand_total_minor
             .map(ActiveValue::Set)
-            .unwrap_or(ActiveValue::NotSet)
-            .into(),
+            .unwrap_or(ActiveValue::NotSet),
         applied_coupon_id: req
             .applied_coupon_id
             .map(ActiveValue::Set)
@@ -66,9 +65,7 @@ pub async fn create_order(
     };
     match order.insert(txn).await {
         Ok(model) => {
-            let total_amount_paise = model
-                .grand_total_minor
-                .unwrap_or_else(|| decimal_to_paise(&model.total_amount));
+            let total_amount_paise = model.grand_total_minor;
             let response = OrdersResponse {
                 items: vec![OrderResponse {
                     order_id: model.order_id,

@@ -22,9 +22,7 @@ pub async fn delete_order(
             {
                 Ok(delete_result) => {
                     if delete_result.rows_affected > 0 {
-                        let total_amount_paise = model
-                            .grand_total_minor
-                            .unwrap_or_else(|| decimal_to_paise(&model.total_amount));
+                        let total_amount_paise = model.grand_total_minor;
                         let response = OrdersResponse {
                             items: vec![OrderResponse {
                                 user_id: model.user_id,

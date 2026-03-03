@@ -18,14 +18,10 @@ pub async fn create_order_details(
         let create_order_detail = order_details::ActiveModel {
             order_detail_id: ActiveValue::NotSet,
             order_id: ActiveValue::Set(details.order_id),
-            product_id: ActiveValue::Set(details.product_id),
+            variant_id: ActiveValue::Set(details.variant_id),
             quantity: ActiveValue::Set(details.quantity),
-            price: ActiveValue::Set(paise_to_decimal(details.price_paise)),
-            unit_price_minor: details
-                .unit_price_minor
-                .map(ActiveValue::Set)
-                .unwrap_or(ActiveValue::NotSet)
-                .into(),
+            price: ActiveValue::Set(Some(paise_to_decimal(details.price_paise))),
+            unit_price_minor: ActiveValue::Set(details.unit_price_minor.unwrap_or(0)),
             discount_minor: details
                 .discount_minor
                 .map(ActiveValue::Set)
@@ -56,9 +52,9 @@ pub async fn create_order_details(
                 response.push(OrderDetailResponse {
                     order_detail_id: model.order_detail_id,
                     order_id: model.order_id,
-                    product_id: model.product_id,
+                    variant_id: model.variant_id,
                     quantity: model.quantity,
-                    price_paise: decimal_to_paise(&model.price),
+                    price_paise: model.price.as_ref().map(decimal_to_paise).unwrap_or(0),
                 });
             }
             Err(e) => {

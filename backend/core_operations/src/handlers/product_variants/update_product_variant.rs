@@ -26,7 +26,7 @@ pub async fn update_product_variant(
 
     let additional_price = req
         .additional_price_paise
-        .map(paise_to_decimal)
+        .map(|p| p as i32)
         .or(existing.additional_price);
 
     let model = product_variants::ActiveModel {
@@ -44,7 +44,7 @@ pub async fn update_product_variant(
                 product_id: updated.product_id,
                 size_id: updated.size_id,
                 color_id: updated.color_id,
-                additional_price_paise: updated.additional_price.as_ref().map(decimal_to_paise),
+                additional_price_paise: updated.additional_price.map(i64::from),
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

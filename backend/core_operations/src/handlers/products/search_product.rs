@@ -23,9 +23,6 @@ pub async fn search_product(
         .apply_if(req.description, |query, v| {
             query.filter(products::Column::Description.contains(v))
         })
-        .apply_if(req.stock_quantity, |query, v| {
-            query.filter(products::Column::StockQuantity.gte(v))
-        })
         .apply_if(req.category_id, |query, v| {
             query.filter(products::Column::CategoryId.eq(v))
         })
@@ -44,16 +41,12 @@ pub async fn search_product(
             let items = models
                 .into_iter()
                 .map(|model| {
-                    let price_paise = model
-                        .price_paise
-                        .map(i64::from)
-                        .unwrap_or_else(|| decimal_to_paise(&model.price));
+                    let price_paise = model.price_paise as i64;
                     ProductResponse {
                         name: model.name,
                         product_id: model.product_id,
                         description: model.description,
                         price_paise,
-                        stock_quantity: model.stock_quantity,
                         category_id: model.category_id,
                     }
                 })

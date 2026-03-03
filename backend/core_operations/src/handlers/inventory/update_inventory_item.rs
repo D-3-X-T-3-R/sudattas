@@ -25,12 +25,11 @@ pub async fn update_inventory_item(
 
     let model = inventory::ActiveModel {
         inventory_id: ActiveValue::Set(existing.inventory_id),
-        product_id: ActiveValue::Set(req.product_id.or(existing.product_id)),
+        variant_id: ActiveValue::Set(req.variant_id.or(existing.variant_id)),
         quantity_available: ActiveValue::Set(
             req.quantity_available.or(existing.quantity_available),
         ),
         reorder_level: ActiveValue::Set(req.reorder_level.or(existing.reorder_level)),
-        supplier_id: ActiveValue::Set(req.supplier_id.or(existing.supplier_id)),
         quantity_reserved: ActiveValue::Set(existing.quantity_reserved),
         updated_at: ActiveValue::NotSet,
     };
@@ -39,10 +38,9 @@ pub async fn update_inventory_item(
         Ok(updated) => Ok(Response::new(InventoryItemsResponse {
             items: vec![InventoryItemResponse {
                 inventory_id: updated.inventory_id,
-                product_id: updated.product_id.unwrap_or(0),
+                variant_id: updated.variant_id.unwrap_or(0),
                 quantity_available: updated.quantity_available.unwrap_or(0),
                 reorder_level: updated.reorder_level.unwrap_or(0),
-                supplier_id: updated.supplier_id.unwrap_or(0),
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

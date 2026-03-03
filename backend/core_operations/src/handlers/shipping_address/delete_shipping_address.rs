@@ -25,11 +25,13 @@ pub async fn delete_shipping_address(
                 Ok(_) => Ok(Response::new(ShippingAddressesResponse {
                     items: vec![ShippingAddressResponse {
                         shipping_address_id: model.shipping_address_id,
-                        country_id: model.country_id,
-                        state_id: model.state_id,
-                        city_id: model.city_id,
-                        road: model.road.unwrap_or_default(),
-                        apartment_no_or_name: model.apartment_no_or_name.unwrap_or_default(),
+                        user_id: model.user_id,
+                        country: model.country,
+                        state_region: model.state_region,
+                        city: model.city,
+                        postal_code: model.postal_code,
+                        road: model.road,
+                        apartment_no_or_name: model.apartment_no_or_name,
                     }],
                 })),
                 Err(e) => Err(map_db_error_to_status(e)),

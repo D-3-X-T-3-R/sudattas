@@ -12,19 +12,20 @@ pub async fn create_user(
 ) -> Result<Response<UsersResponse>, Status> {
     let req = request.into_inner();
 
-    auth::validate_password_strength(&req.password).map_err(map_auth_error_to_status)?;
-    let password_hash = auth::hash_password(&req.password).map_err(map_auth_error_to_status)?;
+    auth::validate_password_strength(&req.password_plain).map_err(map_auth_error_to_status)?;
+    let password_hash =
+        auth::hash_password(&req.password_plain).map_err(map_auth_error_to_status)?;
 
     let model = users::ActiveModel {
         user_id: ActiveValue::NotSet,
         username: ActiveValue::Set(req.username),
-        password: ActiveValue::Set(String::new()), // Legacy column; auth uses password_hash only
         email: ActiveValue::Set(req.email),
         full_name: ActiveValue::Set(req.full_name),
         address: ActiveValue::Set(req.address),
         phone: ActiveValue::Set(req.phone),
         create_date: ActiveValue::Set(Utc::now()),
-        password_hash: ActiveValue::Set(Some(password_hash)),
+        password_hash: ActiveValue::Set(password_hash),
+        role_id: ActiveValue::Set(req.role_id),
         email_verified: ActiveValue::NotSet,
         email_verified_at: ActiveValue::NotSet,
         user_status_id: ActiveValue::NotSet,

@@ -40,7 +40,7 @@ pub async fn delete_cart_item(
                 .filter(|m| m.cart_id != cid)
                 .map(|model| CartItemResponse {
                     cart_id: model.cart_id,
-                    product_id: model.product_id,
+                    variant_id: model.variant_id,
                     quantity: model.quantity,
                     user_id: model.user_id.unwrap_or(0),
                 })

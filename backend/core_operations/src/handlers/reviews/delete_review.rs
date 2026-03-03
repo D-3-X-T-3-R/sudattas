@@ -19,7 +19,7 @@ pub async fn delete_review(
                     review_id: model.review_id,
                     product_id: model.product_id.unwrap_or(0),
                     user_id: model.user_id.unwrap_or(0),
-                    rating: model.rating.unwrap_or(0),
+                    rating: model.rating as i32,
                     comment: model.comment.unwrap_or_default(),
                 }],
             })),

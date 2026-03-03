@@ -12,7 +12,7 @@ pub async fn create_inventory_log(
     let req = request.into_inner();
     let model = inventory_log::ActiveModel {
         log_id: ActiveValue::NotSet,
-        product_id: ActiveValue::Set(req.product_id),
+        variant_id: ActiveValue::Set(req.variant_id),
         change_quantity: ActiveValue::Set(req.change_quantity),
         log_time: ActiveValue::Set(Utc::now()),
         reason: ActiveValue::Set(Some(req.reason)),
@@ -25,7 +25,7 @@ pub async fn create_inventory_log(
         Ok(inserted) => Ok(Response::new(InventoryLogsResponse {
             items: vec![InventoryLogResponse {
                 log_id: inserted.log_id,
-                product_id: inserted.product_id,
+                variant_id: inserted.variant_id,
                 change_quantity: inserted.change_quantity,
                 log_time: inserted.log_time.to_rfc3339(),
                 reason: inserted.reason.unwrap_or_default(),
