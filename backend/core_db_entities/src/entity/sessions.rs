@@ -4,7 +4,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "sessions")]
+#[sea_orm(table_name = "Sessions")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub session_id: String,

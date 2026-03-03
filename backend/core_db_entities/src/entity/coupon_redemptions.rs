@@ -4,7 +4,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "coupon_redemptions")]
+#[sea_orm(table_name = "CouponRedemptions")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub redemption_id: i64,
@@ -16,6 +16,14 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::coupons::Entity",
+        from = "Column::CouponId",
+        to = "super::coupons::Column::CouponId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    Coupons,
     #[sea_orm(
         belongs_to = "super::orders::Entity",
         from = "Column::OrderId",
@@ -32,14 +40,12 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Users,
-    #[sea_orm(
-        belongs_to = "super::coupons::Entity",
-        from = "Column::CouponId",
-        to = "super::coupons::Column::CouponId",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Coupons,
+}
+
+impl Related<super::coupons::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Coupons.def()
+    }
 }
 
 impl Related<super::orders::Entity> for Entity {
@@ -51,12 +57,6 @@ impl Related<super::orders::Entity> for Entity {
 impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Users.def()
-    }
-}
-
-impl Related<super::coupons::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Coupons.def()
     }
 }
 

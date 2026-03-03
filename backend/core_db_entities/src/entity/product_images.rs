@@ -8,21 +8,9 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(column_name = "ImageID", primary_key)]
     pub image_id: i64,
-    #[sea_orm(column_name = "ProductID")]
+    #[sea_orm(column_name = "ProductID", unique)]
     pub product_id: i64,
-    #[sea_orm(
-        column_name = "ImageBase64",
-        column_type = "custom(\"MEDIUMTEXT\")",
-        nullable
-    )]
-    pub image_base64: Option<String>,
-    pub url: Option<String>,
-    pub cdn_path: Option<String>,
-    pub thumbnail_url: Option<String>,
-    pub file_size_bytes: Option<i32>,
-    #[sea_orm(column_name = "AltText")]
-    pub alt_text: Option<String>,
-    pub display_order: Option<i32>,
+    pub urls: Json,
     pub created_at: Option<DateTimeUtc>,
 }
 

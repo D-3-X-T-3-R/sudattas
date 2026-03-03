@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(column_name = "StatusID", primary_key)]
     pub status_id: i64,
-    #[sea_orm(column_name = "StatusName")]
+    #[sea_orm(column_name = "StatusName", unique)]
     pub status_name: String,
 }
 

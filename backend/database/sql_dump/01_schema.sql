@@ -3,10 +3,10 @@ SET character_set_client = utf8mb4;
 CREATE DATABASE IF NOT EXISTS `SUDATTAS`;
 USE `SUDATTAS`;
 
-SET FOREIGN_KEY_CHECKS = 0;
-
 -- Dropping existing tables if they exist;
 -- Dropping tables with dependencies first
+
+SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `OutboxEvents`;
 DROP TABLE IF EXISTS `OrderEvents`;
@@ -15,7 +15,7 @@ DROP TABLE IF EXISTS `Shipments`;
 DROP TABLE IF EXISTS `PaymentIntents`;
 DROP TABLE IF EXISTS `IdempotencyKeys`;
 DROP TABLE IF EXISTS `Sessions`;
-DROP TABLE IF EXISTS `coupons`;
+DROP TABLE IF EXISTS `Coupons`;
 DROP TABLE IF EXISTS `OrderDetails`;
 DROP TABLE IF EXISTS `Cart`;
 DROP TABLE IF EXISTS `Wishlist`;
@@ -32,13 +32,14 @@ DROP TABLE IF EXISTS `ProductVariants`;
 DROP TABLE IF EXISTS `Products`;
 DROP TABLE IF EXISTS `ProductCategories`;
 DROP TABLE IF EXISTS `ProductAttributes`;
+DROP TABLE IF EXISTS `ProductAttributeMapping`;
 DROP TABLE IF EXISTS `ShippingMethods`;
 DROP TABLE IF EXISTS `UserRoles`;
 DROP TABLE IF EXISTS `Sizes`;
 DROP TABLE IF EXISTS `Colors`;
 DROP TABLE IF EXISTS `ShippingAddresses`;
 DROP TABLE IF EXISTS `OrderStatus`;
-DROP TABLE IF EXISTS `security_audit_log`;
+DROP TABLE IF EXISTS `SecurityAuditLog`;
 DROP TABLE IF EXISTS `Users`;
 DROP TABLE IF EXISTS `UserStatuses`;
 DROP TABLE IF EXISTS `ProductStatuses`;
@@ -48,14 +49,17 @@ DROP TABLE IF EXISTS `Refunds`;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-
 -- ============================================================================
 -- CORE TABLES (Production-Ready)
 -- ============================================================================
 
--- Table structure for table `Users` (Enhanced with auth & security)
+-- Lookup table for user roles
+CREATE TABLE `UserRoles` (
+    `RoleID` bigint NOT NULL AUTO_INCREMENT,
+    `RoleName` varchar(255) NOT NULL,
+    PRIMARY KEY (`RoleID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- Lookup table for user statuses
 CREATE TABLE `UserStatuses` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -68,10 +72,18 @@ INSERT IGNORE INTO `UserStatuses` (`code`) VALUES
   ('inactive'),
   ('suspended');
 
+-- Lookup table for product ProductCategories
+CREATE TABLE `ProductCategories` (
+    `CategoryID` bigint NOT NULL AUTO_INCREMENT,
+    `Name` varchar(255) NOT NULL,
+    PRIMARY KEY (`CategoryID`),
+    UNIQUE KEY `uq_category_name` (`Name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `Users` (Enhanced with auth & security)
 CREATE TABLE `Users` (
     `UserID` bigint NOT NULL AUTO_INCREMENT,
     `Username` varchar(255) NOT NULL,
-    `Password` varchar(255) NULL COMMENT 'Legacy field, will be removed',
     `password_hash` varchar(255) NOT NULL COMMENT 'Argon2id hash',
     `Email` varchar(255) NOT NULL UNIQUE,
     `email_verified` BOOLEAN DEFAULT FALSE,
@@ -86,6 +98,9 @@ CREATE TABLE `Users` (
     `CreateDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`UserID`),
+    UNIQUE KEY `uq_users_username` (`Username`),
+    UNIQUE KEY `uq_users_phone` (`Phone`),
+    UNIQUE KEY `uq_users_email` (`Email`),
     INDEX `idx_email` (`Email`),
     INDEX `idx_user_status` (`user_status_id`),
     INDEX `idx_user_role` (`role_id`),
@@ -95,14 +110,6 @@ CREATE TABLE `Users` (
       FOREIGN KEY (`role_id`) REFERENCES `UserRoles`(`RoleID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `ProductCategories`
-CREATE TABLE `ProductCategories` (
-    `CategoryID` bigint NOT NULL AUTO_INCREMENT,
-    `Name` varchar(255) NOT NULL,
-    PRIMARY KEY (`CategoryID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `Products` (Enhanced for saree e-commerce)
 -- Lookup table for product statuses
 CREATE TABLE `ProductStatuses` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -115,18 +122,25 @@ INSERT IGNORE INTO `ProductStatuses` (`code`) VALUES
   ('active'),
   ('archived');
 
+-- Table structure for table `ProductAttributes`
+CREATE TABLE `ProductAttributes` (
+    `AttributeID` BIGINT NOT NULL AUTO_INCREMENT,
+    `AttributeName` VARCHAR(255) NOT NULL,
+    `AttributeValue` VARCHAR(255) NOT NULL,
+    PRIMARY KEY (`AttributeID`),
+    UNIQUE KEY `uq_attr` (`AttributeName`, `AttributeValue`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `Products` (Enhanced for saree e-commerce)
 CREATE TABLE `Products` (
     `ProductID` bigint NOT NULL AUTO_INCREMENT,
     `sku` VARCHAR(100) UNIQUE,
     `Name` varchar(255) NOT NULL,
     `slug` VARCHAR(255) UNIQUE,
     `Description` text,
-    `Price` decimal(10,2) NOT NULL COMMENT 'Legacy field, use price_paise instead',
-    `price_paise` INT DEFAULT NULL COMMENT 'Price in paise (₹499.00 = 49900)',
-    `StockQuantity` bigint DEFAULT NULL,
+    `Price` decimal(10,2) NULL COMMENT 'Legacy field, do not use; use price_paise instead',
+    `price_paise` INT NOT NULL COMMENT 'Price in paise (₹499.00 = 49900)',
     `CategoryID` bigint NOT NULL,
-    `attribute_ids` JSON NOT NULL COMMENT 'Array of ProductAttributes.AttributeID values, e.g. [1,2] for Katha + Block print',
-    -- Saree-specific fields
     `fabric` VARCHAR(100),
     `weave` VARCHAR(100),
     `occasion` VARCHAR(100),
@@ -147,23 +161,37 @@ CREATE TABLE `Products` (
       FOREIGN KEY (`product_status_id`) REFERENCES `ProductStatuses`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Many-to-many mapping between products and attributes
+CREATE TABLE `ProductAttributeMapping` (
+    `ProductID` BIGINT NOT NULL,
+    `AttributeID` BIGINT NOT NULL,
+    PRIMARY KEY (`ProductID`, `AttributeID`),
+    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`) ON DELETE CASCADE,
+    FOREIGN KEY (`AttributeID`) REFERENCES `ProductAttributes`(`AttributeID`) ON DELETE CASCADE,
+    INDEX `idx_attr_product` (`AttributeID`, `ProductID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- Table structure for table `OrderStatus`
 CREATE TABLE `OrderStatus` (
     `StatusID` bigint NOT NULL AUTO_INCREMENT,
     `StatusName` varchar(50) NOT NULL,
-    PRIMARY KEY (`StatusID`)
+    PRIMARY KEY (`StatusID`),
+    UNIQUE KEY `uq_order_status_name` (`StatusName`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Create the ShippingAddresses table (flattened for D2C: no country/state/city lookup tables)
 CREATE TABLE `ShippingAddresses` (
     `ShippingAddressID` BIGINT NOT NULL AUTO_INCREMENT,
+    `UserID` BIGINT NULL,
     `Country` VARCHAR(100) NOT NULL,
     `StateRegion` VARCHAR(100) NOT NULL,
     `City` VARCHAR(100) NOT NULL,
     `PostalCode` VARCHAR(20) NOT NULL,
     `Road` VARCHAR(255),
     `ApartmentNoOrName` VARCHAR(255),
-    PRIMARY KEY (`ShippingAddressID`)
+    PRIMARY KEY (`ShippingAddressID`),
+    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
+    INDEX `idx_shipping_user` (`UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Orders` (Enhanced with payment tracking and order/coupon snapshot)
@@ -173,17 +201,17 @@ CREATE TABLE `Orders` (
     `UserID` BIGINT NOT NULL,
     `OrderDate` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `ShippingAddressID` BIGINT NOT NULL,
-    `TotalAmount` DECIMAL(10,2) NOT NULL COMMENT 'Legacy field, use total_paise instead',
+    `TotalAmount` DECIMAL(10,2) NULL COMMENT 'Legacy field, do not use; use *_minor columns instead',
     `StatusID` BIGINT NOT NULL,
     `payment_status` ENUM('pending', 'authorized', 'captured', 'failed', 'needs_review') DEFAULT 'pending',
     `payment_method` VARCHAR(50) NULL DEFAULT NULL,
     `currency` VARCHAR(3) DEFAULT 'INR',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    `subtotal_minor` BIGINT NULL DEFAULT NULL,
+    `subtotal_minor` BIGINT NOT NULL,
     `shipping_minor` BIGINT NULL DEFAULT 0,
     `tax_total_minor` BIGINT NULL DEFAULT 0,
     `discount_total_minor` BIGINT NULL DEFAULT 0,
-    `grand_total_minor` BIGINT NULL DEFAULT NULL,
+    `grand_total_minor` BIGINT NOT NULL,
     `applied_coupon_id` BIGINT NULL DEFAULT NULL,
     `applied_coupon_code` VARCHAR(64) NULL DEFAULT NULL,
     `applied_discount_paise` INT NULL DEFAULT NULL,
@@ -196,137 +224,6 @@ CREATE TABLE `Orders` (
     INDEX `idx_orders_date_status_user` (`OrderDate`, `StatusID`, `UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `OrderDetails` (with line-level snapshot)
-CREATE TABLE `OrderDetails` (
-    `OrderDetailID` bigint NOT NULL AUTO_INCREMENT,
-    `OrderID` bigint NOT NULL,
-    `VariantID` bigint NOT NULL,
-    `Quantity` bigint NOT NULL,
-    `Price` decimal(10,2) NOT NULL,
-    `unit_price_minor` INT NULL DEFAULT NULL,
-    `discount_minor` INT NULL DEFAULT NULL,
-    `tax_minor` INT NULL DEFAULT NULL,
-    `sku` VARCHAR(255) NULL DEFAULT NULL,
-    `title` VARCHAR(512) NULL DEFAULT NULL,
-    `line_attrs` JSON NULL DEFAULT NULL,
-    PRIMARY KEY (`OrderDetailID`),
-    FOREIGN KEY (`OrderID`) REFERENCES `Orders`(`OrderID`),
-    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
-    INDEX `idx_order_details_order_id` (`OrderID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `Reviews` (Enhanced with moderation)
-CREATE TABLE `Reviews` (
-    `ReviewID` bigint NOT NULL AUTO_INCREMENT,
-    `ProductID` bigint DEFAULT NULL,
-    `UserID` bigint DEFAULT NULL,
-    `Rating` bigint DEFAULT NULL,
-    `Comment` text,
-    `status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
-    `is_verified_purchase` BOOLEAN DEFAULT FALSE,
-    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`ReviewID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
-    INDEX `idx_product_status` (`ProductID`, `status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `Cart` (Enhanced with session support)
-CREATE TABLE `Cart` (
-    `CartID` bigint NOT NULL AUTO_INCREMENT,
-    `UserID` bigint NULL COMMENT 'NULL for guest carts',
-    `session_id` VARCHAR(255) NULL COMMENT 'For guest checkout',
-    `VariantID` bigint NOT NULL,
-    `Quantity` bigint NOT NULL,
-    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    `abandoned_email_sent_at` TIMESTAMP NULL COMMENT 'P2: when set, do not send another abandoned-cart email',
-    PRIMARY KEY (`CartID`),
-    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
-    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
-    INDEX `idx_session` (`session_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `Wishlist`
-CREATE TABLE `Wishlist` (
-    `WishlistID` bigint NOT NULL AUTO_INCREMENT,
-    `UserID` bigint DEFAULT NULL,
-    `ProductID` bigint DEFAULT NULL,
-    `DateAdded` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`WishlistID`),
-    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `ProductImages` (Enhanced for CDN)
-CREATE TABLE `ProductImages` (
-    `ImageID` bigint NOT NULL AUTO_INCREMENT,
-    `ProductID` bigint NOT NULL,
-    `urls` JSON NOT NULL COMMENT 'JSON array of CDN image URLs for this product, ordered [1,2,3,...]',
-    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`ImageID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    INDEX `idx_product_order` (`ProductID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `Inventory` (Enhanced with reserved stock)
-CREATE TABLE `Inventory` (
-    `InventoryID` bigint NOT NULL AUTO_INCREMENT,
-    `VariantID` bigint DEFAULT NULL,
-    `QuantityAvailable` bigint DEFAULT NULL,
-    `quantity_reserved` INT DEFAULT 0 COMMENT 'Reserved for pending orders',
-    `ReorderLevel` bigint DEFAULT NULL,
-    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`InventoryID`),
-    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
-    INDEX `idx_inventory_variant_id` (`VariantID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `ProductAttributes`
-CREATE TABLE `ProductAttributes` (
-    `AttributeID` bigint NOT NULL AUTO_INCREMENT,
-    `AttributeName` varchar(255) DEFAULT NULL,
-    `AttributeValue` varchar(255) DEFAULT NULL,
-    PRIMARY KEY (`AttributeID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `ShippingMethods`
-CREATE TABLE `ShippingMethods` (
-    `MethodID` bigint NOT NULL AUTO_INCREMENT,
-    `MethodName` varchar(255) DEFAULT NULL,
-    `Cost` decimal(10,2) DEFAULT NULL,
-    `EstimatedDeliveryTime` varchar(255) DEFAULT NULL,
-    PRIMARY KEY (`MethodID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `UserRoles`
-CREATE TABLE `UserRoles` (
-    `RoleID` bigint NOT NULL AUTO_INCREMENT,
-    `RoleName` varchar(255) NOT NULL,
-    PRIMARY KEY (`RoleID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `Transactions`
-CREATE TABLE `Transactions` (
-    `TransactionID` bigint NOT NULL AUTO_INCREMENT,
-    `UserID` bigint NOT NULL,
-    `Amount` decimal(10,2) NOT NULL,
-    `TransactionDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `Type` varchar(50) NOT NULL,
-    PRIMARY KEY (`TransactionID`),
-    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `NewsletterSubscribers`
-CREATE TABLE `NewsletterSubscribers` (
-    `SubscriberID` bigint NOT NULL AUTO_INCREMENT,
-    `Email` varchar(255) NOT NULL UNIQUE,
-    `SubscriptionDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `unsubscribed_at` TIMESTAMP NULL COMMENT 'P2: when set, do not send newsletters',
-    PRIMARY KEY (`SubscriberID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- Table structure for table `UserRoleMapping`
 -- Table structure for table `Sizes`
 CREATE TABLE `Sizes` (
     `SizeID` bigint NOT NULL AUTO_INCREMENT,
@@ -347,11 +244,134 @@ CREATE TABLE `ProductVariants` (
     `ProductID` bigint NOT NULL,
     `SizeID` bigint DEFAULT NULL,
     `ColorID` bigint DEFAULT NULL,
-    `AdditionalPrice` decimal(10,2) DEFAULT NULL,
+    `AdditionalPrice` INT DEFAULT 0 COMMENT 'Additional price in paise over base product price',
     PRIMARY KEY (`VariantID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
     FOREIGN KEY (`SizeID`) REFERENCES `Sizes`(`SizeID`),
-    FOREIGN KEY (`ColorID`) REFERENCES `Colors`(`ColorID`)
+    FOREIGN KEY (`ColorID`) REFERENCES `Colors`(`ColorID`),
+    UNIQUE KEY `uq_variant_combo` (`ProductID`, `SizeID`, `ColorID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `OrderDetails` (with line-level snapshot)
+CREATE TABLE `OrderDetails` (
+    `OrderDetailID` bigint NOT NULL AUTO_INCREMENT,
+    `OrderID` bigint NOT NULL,
+    `VariantID` bigint NOT NULL,
+    `Quantity` bigint NOT NULL,
+    `Price` decimal(10,2) NULL COMMENT 'Legacy field, do not use; use unit_price_minor instead',
+    `unit_price_minor` INT NOT NULL,
+    `discount_minor` INT NULL DEFAULT NULL,
+    `tax_minor` INT NULL DEFAULT NULL,
+    `sku` VARCHAR(255) NULL DEFAULT NULL,
+    `title` VARCHAR(512) NULL DEFAULT NULL,
+    `line_attrs` JSON NULL DEFAULT NULL,
+    PRIMARY KEY (`OrderDetailID`),
+    FOREIGN KEY (`OrderID`) REFERENCES `Orders`(`OrderID`),
+    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
+    INDEX `idx_order_details_order_id` (`OrderID`),
+    INDEX `idx_order_details_variant` (`VariantID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `Reviews` (Enhanced with moderation)
+CREATE TABLE `Reviews` (
+    `ReviewID` bigint NOT NULL AUTO_INCREMENT,
+    `ProductID` bigint DEFAULT NULL,
+    `UserID` bigint DEFAULT NULL,
+    `Rating` TINYINT NOT NULL,
+    `Comment` text,
+    `status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    `is_verified_purchase` BOOLEAN DEFAULT FALSE COMMENT 'Derived from order history; not user-controlled',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`ReviewID`),
+    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
+    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
+    INDEX `idx_product_status` (`ProductID`, `status`),
+    INDEX `idx_reviews_user` (`UserID`),
+    UNIQUE KEY `uq_reviews_user_product` (`UserID`, `ProductID`),
+    CHECK (`Rating` BETWEEN 1 AND 5)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `Cart` (Enhanced with session support)
+CREATE TABLE `Cart` (
+    `CartID` bigint NOT NULL AUTO_INCREMENT,
+    `UserID` bigint NULL COMMENT 'NULL for guest carts',
+    `session_id` VARCHAR(255) NULL COMMENT 'For guest checkout',
+    `VariantID` bigint NOT NULL,
+    `Quantity` bigint NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `abandoned_email_sent_at` TIMESTAMP NULL COMMENT 'P2: when set, do not send another abandoned-cart email',
+    PRIMARY KEY (`CartID`),
+    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`) ON DELETE CASCADE,
+    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
+    INDEX `idx_session` (`session_id`),
+    UNIQUE KEY `uq_cart_user_variant` (`UserID`, `VariantID`),
+    UNIQUE KEY `uq_cart_session_variant` (`session_id`, `VariantID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `Wishlist`
+CREATE TABLE `Wishlist` (
+    `WishlistID` bigint NOT NULL AUTO_INCREMENT,
+    `UserID` bigint DEFAULT NULL,
+    `ProductID` bigint DEFAULT NULL,
+    `DateAdded` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`WishlistID`),
+    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
+    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `ProductImages` (Enhanced for CDN)
+CREATE TABLE `ProductImages` (
+    `ImageID` bigint NOT NULL AUTO_INCREMENT,
+    `ProductID` bigint NOT NULL,
+    `urls` JSON NOT NULL COMMENT 'JSON object of CDN image URLs for this product, e.g. {\"1\": \"hero_url\", \"2\": \"detail_url\"}',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`ImageID`),
+    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
+    UNIQUE KEY `uq_product_images_product` (`ProductID`),
+    INDEX `idx_product_order` (`ProductID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `Inventory` (Enhanced with reserved stock)
+CREATE TABLE `Inventory` (
+    `InventoryID` bigint NOT NULL AUTO_INCREMENT,
+    `VariantID` bigint DEFAULT NULL,
+    `QuantityAvailable` bigint DEFAULT NULL,
+    `quantity_reserved` INT DEFAULT 0 COMMENT 'Reserved for pending orders',
+    `ReorderLevel` bigint DEFAULT NULL,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`InventoryID`),
+    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
+    INDEX `idx_inventory_variant_id` (`VariantID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `ShippingMethods`
+CREATE TABLE `ShippingMethods` (
+    `MethodID` bigint NOT NULL AUTO_INCREMENT,
+    `MethodName` varchar(255) DEFAULT NULL,
+    `Cost` decimal(10,2) DEFAULT NULL,
+    `EstimatedDeliveryTime` varchar(255) DEFAULT NULL,
+    PRIMARY KEY (`MethodID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `Transactions`
+CREATE TABLE `Transactions` (
+    `TransactionID` bigint NOT NULL AUTO_INCREMENT,
+    `UserID` bigint NOT NULL,
+    `Amount` decimal(10,2) NOT NULL,
+    `TransactionDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `Type` varchar(50) NOT NULL,
+    PRIMARY KEY (`TransactionID`),
+    FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Table structure for table `NewsletterSubscribers`
+CREATE TABLE `NewsletterSubscribers` (
+    `SubscriberID` bigint NOT NULL AUTO_INCREMENT,
+    `Email` varchar(255) NOT NULL UNIQUE,
+    `SubscriptionDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `unsubscribed_at` TIMESTAMP NULL COMMENT 'P2: when set, do not send newsletters',
+    PRIMARY KEY (`SubscriberID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `EventLogs`
@@ -379,7 +399,7 @@ CREATE TABLE `UserActivity` (
 -- Table structure for table `InventoryLog` (P1: actor + before/after for admin audit)
 CREATE TABLE `InventoryLog` (
     `LogID` bigint NOT NULL AUTO_INCREMENT,
-    `ProductID` bigint NOT NULL,
+    `VariantID` bigint NOT NULL,
     `ChangeQuantity` bigint NOT NULL,
     `LogTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `Reason` varchar(255) DEFAULT NULL,
@@ -387,7 +407,7 @@ CREATE TABLE `InventoryLog` (
     `quantity_before` bigint DEFAULT NULL COMMENT 'P1 admin audit',
     `quantity_after` bigint DEFAULT NULL COMMENT 'P1 admin audit',
     PRIMARY KEY (`LogID`),
-    FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
+    FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
@@ -447,7 +467,7 @@ CREATE TABLE `Shipments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Coupons for discount codes
-CREATE TABLE `coupons` (
+CREATE TABLE `Coupons` (
     `coupon_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `code` VARCHAR(50) UNIQUE NOT NULL,
     `discount_type` ENUM('percentage', 'fixed_amount') NOT NULL,
@@ -465,27 +485,27 @@ CREATE TABLE `coupons` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- P1 Coupons & promotions: per-customer redemption tracking (recorded on verified payment).
-CREATE TABLE `coupon_redemptions` (
+CREATE TABLE `CouponRedemptions` (
     `redemption_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `coupon_id` BIGINT NOT NULL,
     `user_id` BIGINT NOT NULL,
     `order_id` BIGINT NOT NULL,
     `redeemed_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (`coupon_id`) REFERENCES `coupons`(`coupon_id`),
+    FOREIGN KEY (`coupon_id`) REFERENCES `Coupons`(`coupon_id`),
     FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`),
     FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
     INDEX `idx_coupon_user` (`coupon_id`, `user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- P1 Coupons & promotions: allowlist/denylist product or category applicability.
-CREATE TABLE `coupon_scope` (
+CREATE TABLE `CouponScope` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `coupon_id` BIGINT NOT NULL,
     `scope_type` ENUM('product', 'category') NOT NULL,
     `scope_id` BIGINT NOT NULL,
     `is_allowlist` TINYINT(1) NOT NULL COMMENT '1=allow (cart must match at least one), 0=deny (cart must not match any)',
     UNIQUE KEY `uq_coupon_scope` (`coupon_id`, `scope_type`, `scope_id`),
-    FOREIGN KEY (`coupon_id`) REFERENCES `coupons`(`coupon_id`)
+    FOREIGN KEY (`coupon_id`) REFERENCES `Coupons`(`coupon_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- P1 Payments & refunds: refund records (gateway_refund_id unique for idempotency).
@@ -578,7 +598,7 @@ CREATE TABLE `OutboxEvents` (
 -- P1 Data model: FK from Orders to coupons (coupons table created after Orders)
 ALTER TABLE `Orders`
   ADD CONSTRAINT `fk_orders_applied_coupon`
-  FOREIGN KEY (`applied_coupon_id`) REFERENCES `coupons`(`coupon_id`);
+  FOREIGN KEY (`applied_coupon_id`) REFERENCES `Coupons`(`coupon_id`);
 
 -- Insert default order statuses
 INSERT INTO `OrderStatus` (`StatusName`) VALUES
@@ -591,3 +611,5 @@ INSERT INTO `OrderStatus` (`StatusName`) VALUES
 ('refunded'),
 ('needs_review')
 ON DUPLICATE KEY UPDATE StatusName = VALUES(StatusName);
+
+SET FOREIGN_KEY_CHECKS = 1;

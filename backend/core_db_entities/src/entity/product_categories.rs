@@ -4,38 +4,23 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "Categories")]
+#[sea_orm(table_name = "ProductCategories")]
 pub struct Model {
     #[sea_orm(column_name = "CategoryID", primary_key)]
     pub category_id: i64,
-    #[sea_orm(column_name = "Name")]
+    #[sea_orm(column_name = "Name", unique)]
     pub name: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::product_category_mapping::Entity")]
-    ProductCategoryMapping,
     #[sea_orm(has_many = "super::products::Entity")]
     Products,
 }
 
-impl Related<super::product_category_mapping::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::ProductCategoryMapping.def()
-    }
-}
-
 impl Related<super::products::Entity> for Entity {
     fn to() -> RelationDef {
-        super::product_category_mapping::Relation::Products.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(
-            super::product_category_mapping::Relation::Categories
-                .def()
-                .rev(),
-        )
+        Relation::Products.def()
     }
 }
 
