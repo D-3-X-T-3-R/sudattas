@@ -1,5 +1,4 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use chrono::Utc;
 use core_db_entities::entity::product_images;
 use proto::proto::core::{ConfirmImageUploadRequest, ProductImageResponse, ProductImagesResponse};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
@@ -24,31 +23,41 @@ pub async fn confirm_image_upload(
         req.key
     );
 
+    let order_key = req.display_order.unwrap_or(1).to_string();
+    let mut urls_map = serde_json::Map::new();
+    urls_map.insert(
+        order_key.clone(),
+        serde_json::Value::String(cdn_url.clone()),
+    );
+    let urls_json = serde_json::Value::Object(urls_map);
     let image = product_images::ActiveModel {
         image_id: ActiveValue::NotSet,
         product_id: ActiveValue::Set(req.product_id),
-        image_base64: ActiveValue::Set(None),
-        url: ActiveValue::Set(Some(cdn_url.clone())),
-        cdn_path: ActiveValue::Set(Some(req.key.clone())),
-        thumbnail_url: ActiveValue::Set(Some(thumbnail_url.clone())),
-        file_size_bytes: ActiveValue::NotSet,
-        alt_text: ActiveValue::Set(req.alt_text),
-        display_order: ActiveValue::Set(req.display_order),
-        created_at: ActiveValue::Set(Some(Utc::now())),
+        urls: ActiveValue::Set(urls_json),
+        created_at: ActiveValue::NotSet,
     };
 
     match image.insert(txn).await {
-        Ok(model) => Ok(Response::new(ProductImagesResponse {
-            items: vec![ProductImageResponse {
-                image_id: model.image_id,
-                product_id: model.product_id,
-                image_base64: String::new(),
-                alt_text: model.alt_text,
-                url: model.url,
-                cdn_path: model.cdn_path,
-                thumbnail_url: model.thumbnail_url,
-            }],
-        })),
+        Ok(model) => {
+            let key = req.display_order.unwrap_or(1).to_string();
+            let url = model
+                .urls
+                .get(key.as_str())
+                .or_else(|| model.urls.get("1"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            Ok(Response::new(ProductImagesResponse {
+                items: vec![ProductImageResponse {
+                    image_id: model.image_id,
+                    product_id: model.product_id,
+                    image_base64: String::new(),
+                    alt_text: req.alt_text,
+                    url,
+                    cdn_path: Some(req.key),
+                    thumbnail_url: Some(thumbnail_url),
+                }],
+            }))
+        }
         Err(e) => Err(map_db_error_to_status(e)),
     }
 }

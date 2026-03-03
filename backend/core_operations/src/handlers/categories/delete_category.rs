@@ -1,5 +1,5 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use core_db_entities::entity::categories;
+use core_db_entities::entity::product_categories;
 use proto::proto::core::{CategoriesResponse, CategoryResponse, DeleteCategoryRequest};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
@@ -10,14 +10,14 @@ pub async fn delete_category(
 ) -> Result<Response<CategoriesResponse>, Status> {
     let req = request.into_inner();
 
-    let category = categories::Entity::find_by_id(req.category_id)
+    let category = product_categories::Entity::find_by_id(req.category_id)
         .one(txn)
         .await;
 
     match category {
         Ok(Some(model)) => {
-            match categories::Entity::delete_many()
-                .filter(categories::Column::CategoryId.eq(req.category_id))
+            match product_categories::Entity::delete_many()
+                .filter(product_categories::Column::CategoryId.eq(req.category_id))
                 .exec(txn)
                 .await
             {

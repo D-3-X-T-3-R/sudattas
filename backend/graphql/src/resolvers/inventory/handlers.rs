@@ -13,10 +13,9 @@ use crate::resolvers::{
 fn inventory_response_to_gql(i: InventoryItemResponse) -> InventoryItem {
     InventoryItem {
         inventory_id: i.inventory_id.to_string(),
-        product_id: i.product_id.to_string(),
+        variant_id: i.variant_id.to_string(),
         quantity_available: i.quantity_available.to_string(),
         reorder_level: i.reorder_level.to_string(),
-        supplier_id: i.supplier_id.to_string(),
     }
 }
 
@@ -27,15 +26,11 @@ pub(crate) async fn search_inventory_item(
     let mut client = connect_grpc_client().await?;
     let response = client
         .search_inventory_item(SearchInventoryItemRequest {
-            inventory_id: input
-                .inventory_id
+            inventory_id: input.inventory_id.as_deref().and_then(|s| s.parse().ok()),
+            variant_id: input
+                .variant_id
                 .as_deref()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0),
-            product_id: input
-                .product_id
-                .as_deref()
-                .map(|s| parse_i64(s, "product id"))
+                .map(|s| parse_i64(s, "variant id"))
                 .transpose()?,
         })
         .await?;
@@ -54,18 +49,12 @@ pub(crate) async fn create_inventory_item(
     let mut client = connect_grpc_client().await?;
     let response = client
         .create_inventory_item(CreateInventoryItemRequest {
-            product_id: parse_i64(&input.product_id, "product id")?,
+            variant_id: parse_i64(&input.variant_id, "variant id")?,
             quantity_available: parse_i64(&input.quantity_available, "quantity_available")?,
             reorder_level: input
                 .reorder_level
                 .as_deref()
                 .map(|s| parse_i64(s, "reorder_level"))
-                .transpose()?
-                .unwrap_or(0),
-            supplier_id: input
-                .supplier_id
-                .as_deref()
-                .map(|s| parse_i64(s, "supplier id"))
                 .transpose()?
                 .unwrap_or(0),
         })
@@ -86,10 +75,10 @@ pub(crate) async fn update_inventory_item(
     let response = client
         .update_inventory_item(UpdateInventoryItemRequest {
             inventory_id: parse_i64(&input.inventory_id, "inventory id")?,
-            product_id: input
-                .product_id
+            variant_id: input
+                .variant_id
                 .as_deref()
-                .map(|s| parse_i64(s, "product id"))
+                .map(|s| parse_i64(s, "variant id"))
                 .transpose()?,
             quantity_available: input
                 .quantity_available
@@ -100,11 +89,6 @@ pub(crate) async fn update_inventory_item(
                 .reorder_level
                 .as_deref()
                 .map(|s| parse_i64(s, "reorder_level"))
-                .transpose()?,
-            supplier_id: input
-                .supplier_id
-                .as_deref()
-                .map(|s| parse_i64(s, "supplier id"))
                 .transpose()?,
         })
         .await?;

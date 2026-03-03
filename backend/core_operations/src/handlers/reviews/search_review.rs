@@ -45,7 +45,7 @@ pub async fn search_review(
                     review_id: m.review_id,
                     product_id: m.product_id.unwrap_or(0),
                     user_id: m.user_id.unwrap_or(0),
-                    rating: m.rating.unwrap_or(0),
+                    rating: m.rating as i32,
                     comment: m.comment.unwrap_or_default(),
                 })
                 .collect();

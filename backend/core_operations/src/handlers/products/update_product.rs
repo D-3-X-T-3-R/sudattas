@@ -14,13 +14,12 @@ pub async fn update_product(
     let products = products::ActiveModel {
         name: ActiveValue::Set(req.name),
         description: ActiveValue::Set(req.description),
-        price: ActiveValue::Set(paise_to_decimal(req.price_paise)),
+        price: ActiveValue::Set(Some(paise_to_decimal(req.price_paise))),
         product_id: ActiveValue::Set(req.product_id),
-        stock_quantity: ActiveValue::Set(req.stock_quantity),
         category_id: ActiveValue::Set(req.category_id),
         sku: ActiveValue::NotSet,
         slug: ActiveValue::NotSet,
-        price_paise: ActiveValue::Set(Some(req.price_paise as i32)),
+        price_paise: ActiveValue::Set(req.price_paise as i32),
         fabric: ActiveValue::NotSet,
         weave: ActiveValue::NotSet,
         occasion: ActiveValue::NotSet,
@@ -33,17 +32,13 @@ pub async fn update_product(
     };
     match products.update(txn).await {
         Ok(model) => {
-            let price_paise = model
-                .price_paise
-                .map(i64::from)
-                .unwrap_or_else(|| decimal_to_paise(&model.price));
+            let price_paise = model.price_paise as i64;
             let response = ProductsResponse {
                 items: vec![ProductResponse {
                     name: model.name,
                     product_id: model.product_id,
                     description: model.description,
                     price_paise,
-                    stock_quantity: model.stock_quantity,
                     category_id: model.category_id,
                 }],
             };

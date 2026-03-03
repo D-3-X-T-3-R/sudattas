@@ -13,11 +13,13 @@ pub async fn search_inventory_item(
     let req = request.into_inner();
 
     let mut query = inventory::Entity::find();
-    if req.inventory_id != 0 {
-        query = query.filter(inventory::Column::InventoryId.eq(req.inventory_id));
+    if let Some(inventory_id) = req.inventory_id {
+        if inventory_id != 0 {
+            query = query.filter(inventory::Column::InventoryId.eq(inventory_id));
+        }
     }
-    if let Some(product_id) = req.product_id {
-        query = query.filter(inventory::Column::ProductId.eq(product_id));
+    if let Some(variant_id) = req.variant_id {
+        query = query.filter(inventory::Column::VariantId.eq(variant_id));
     }
 
     match query.all(txn).await {
@@ -26,10 +28,9 @@ pub async fn search_inventory_item(
                 .into_iter()
                 .map(|m| InventoryItemResponse {
                     inventory_id: m.inventory_id,
-                    product_id: m.product_id.unwrap_or(0),
+                    variant_id: m.variant_id.unwrap_or(0),
                     quantity_available: m.quantity_available.unwrap_or(0),
                     reorder_level: m.reorder_level.unwrap_or(0),
-                    supplier_id: m.supplier_id.unwrap_or(0),
                 })
                 .collect();
             Ok(Response::new(InventoryItemsResponse { items }))

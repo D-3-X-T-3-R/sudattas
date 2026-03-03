@@ -15,7 +15,7 @@ fn review_response_to_gql(r: ReviewResponse) -> Review {
         review_id: r.review_id.to_string(),
         product_id: r.product_id.to_string(),
         user_id: r.user_id.to_string(),
-        rating: r.rating as i32,
+        rating: r.rating,
         comment: r.comment,
     }
 }
@@ -27,7 +27,7 @@ pub(crate) async fn create_review(input: NewReview) -> Result<Vec<Review>, GqlEr
         .create_review(CreateReviewRequest {
             product_id: parse_i64(&input.product_id, "product id")?,
             user_id: parse_i64(&input.user_id, "user id")?,
-            rating: input.rating as i64,
+            rating: input.rating,
             comment: input.comment,
         })
         .await?;
@@ -82,7 +82,7 @@ pub(crate) async fn update_review(input: ReviewMutation) -> Result<Vec<Review>, 
                 .as_deref()
                 .map(|s| parse_i64(s, "user id"))
                 .transpose()?,
-            rating: input.rating.map(|r| r as i64),
+            rating: input.rating,
             comment: input.comment,
         })
         .await?;

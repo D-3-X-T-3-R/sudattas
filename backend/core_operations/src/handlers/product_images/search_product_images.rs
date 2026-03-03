@@ -17,23 +17,28 @@ pub async fn search_product_image(
         .apply_if(req.product_id, |query, v| {
             query.filter(product_images::Column::ProductId.eq(v))
         })
-        .apply_if(req.alt_text, |query, v| {
-            query.filter(product_images::Column::AltText.starts_with(v))
-        })
         .all(txn)
         .await
     {
         Ok(models) => {
             let items = models
                 .into_iter()
-                .map(|model| ProductImageResponse {
-                    image_id: model.image_id,
-                    product_id: model.product_id,
-                    image_base64: model.image_base64.unwrap_or_default(),
-                    alt_text: model.alt_text,
-                    url: model.url,
-                    cdn_path: model.cdn_path,
-                    thumbnail_url: model.thumbnail_url,
+                .map(|model| {
+                    let url = model
+                        .urls
+                        .get("1")
+                        .or_else(|| model.urls.get("0"))
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                    ProductImageResponse {
+                        image_id: model.image_id,
+                        product_id: model.product_id,
+                        image_base64: String::new(),
+                        alt_text: None,
+                        url,
+                        cdn_path: None,
+                        thumbnail_url: None,
+                    }
                 })
                 .collect();
 

@@ -9,14 +9,15 @@ use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64},
 };
-use crate::validation;
 
 fn address_response_to_gql(a: ShippingAddressResponse) -> ShippingAddress {
     ShippingAddress {
         shipping_address_id: a.shipping_address_id.to_string(),
-        country_id: a.country_id.to_string(),
-        state_id: a.state_id.to_string(),
-        city_id: a.city_id.to_string(),
+        user_id: a.user_id.map(|u| u.to_string()),
+        country: a.country,
+        state_region: a.state_region,
+        city: a.city,
+        postal_code: a.postal_code,
         road: a.road,
         apartment_no_or_name: a.apartment_no_or_name,
     }
@@ -40,13 +41,14 @@ pub(crate) async fn get_shipping_addresses() -> Result<Vec<ShippingAddress>, Gql
 pub(crate) async fn create_shipping_address(
     input: NewShippingAddress,
 ) -> Result<Vec<ShippingAddress>, GqlError> {
-    validation::validate_address_road(&input.road)?;
     let mut client = connect_grpc_client().await?;
     let response = client
         .create_shipping_address(CreateShippingAddressRequest {
-            country_id: parse_i64(&input.country_id, "country id")?,
-            state_id: parse_i64(&input.state_id, "state id")?,
-            city_id: parse_i64(&input.city_id, "city id")?,
+            user_id: input.user_id.as_deref().and_then(|s| s.parse().ok()),
+            country: input.country,
+            state_region: input.state_region,
+            city: input.city,
+            postal_code: input.postal_code,
             road: input.road,
             apartment_no_or_name: input.apartment_no_or_name,
         })
@@ -63,14 +65,15 @@ pub(crate) async fn create_shipping_address(
 pub(crate) async fn update_shipping_address(
     input: ShippingAddressMutation,
 ) -> Result<Vec<ShippingAddress>, GqlError> {
-    validation::validate_address_road(&input.road)?;
     let mut client = connect_grpc_client().await?;
     let response = client
         .update_shipping_address(UpdateShippingAddressRequest {
             shipping_address_id: parse_i64(&input.shipping_address_id, "shipping address id")?,
-            country_id: parse_i64(&input.country_id, "country id")?,
-            state_id: parse_i64(&input.state_id, "state id")?,
-            city_id: parse_i64(&input.city_id, "city id")?,
+            user_id: input.user_id.as_deref().and_then(|s| s.parse().ok()),
+            country: input.country,
+            state_region: input.state_region,
+            city: input.city,
+            postal_code: input.postal_code,
             road: input.road,
             apartment_no_or_name: input.apartment_no_or_name,
         })

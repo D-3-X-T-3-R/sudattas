@@ -32,9 +32,7 @@ pub async fn create_payment_intent(
                     TonicStatus::not_found(format!("Order {} not found", req.order_id))
                 })?;
 
-            let amount_paise = order
-                .grand_total_minor
-                .unwrap_or_else(|| decimal_to_paise(&order.total_amount));
+            let amount_paise = order.grand_total_minor;
             let currency = order.currency.as_deref().unwrap_or("INR").to_string();
             let receipt = format!("ord_{}", req.order_id);
             if receipt.len() > 40 {

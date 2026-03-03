@@ -29,7 +29,7 @@ pub(crate) async fn add_cart_item(cart_item: NewCart) -> Result<Vec<Cart>, GqlEr
     let response = client
         .create_cart_item(CreateCartItemRequest {
             user_id,
-            product_id: to_i64(cart_item.product_id),
+            variant_id: to_i64(cart_item.variant_id),
             quantity: qty,
             session_id,
         })
@@ -102,7 +102,7 @@ pub(crate) async fn update_cart_item(cart_item: CartMutation) -> Result<Vec<Cart
     let mut client = connect_grpc_client().await?;
 
     let cart_id = parse_i64(&cart_item.cart_id, "cart id")?;
-    let product_id = parse_i64(&cart_item.product_id, "product id")?;
+    let variant_id = parse_i64(&cart_item.variant_id, "variant id")?;
     let quantity = parse_i64(&cart_item.quantity, "quantity")?;
     validation::validate_quantity(quantity, "quantity")?;
     let user_id = to_option_i64(Some(cart_item.user_id.clone()));
@@ -117,7 +117,7 @@ pub(crate) async fn update_cart_item(cart_item: CartMutation) -> Result<Vec<Cart
         .update_cart_item(UpdateCartItemRequest {
             cart_id,
             user_id,
-            product_id,
+            variant_id,
             quantity,
             session_id,
         })

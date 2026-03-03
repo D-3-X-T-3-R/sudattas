@@ -22,17 +22,13 @@ pub async fn delete_product(
             {
                 Ok(delete_result) => {
                     if delete_result.rows_affected > 0 {
-                        let price_paise = model
-                            .price_paise
-                            .map(i64::from)
-                            .unwrap_or_else(|| decimal_to_paise(&model.price));
+                        let price_paise = model.price_paise as i64;
                         let response = ProductsResponse {
                             items: vec![ProductResponse {
                                 name: model.name,
                                 product_id: model.product_id,
                                 description: model.description,
                                 price_paise,
-                                stock_quantity: model.stock_quantity,
                                 category_id: model.category_id,
                             }],
                         };

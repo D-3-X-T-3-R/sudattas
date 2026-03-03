@@ -1,12 +1,12 @@
 use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 
 use crate::resolvers::money::{money_from_paise, Money};
-use crate::resolvers::product::schema::{Product, SearchProduct};
+use crate::resolvers::product::schema::Product;
 
 #[derive(Default, Debug, Clone)]
 pub struct OrderDetails {
     pub order_id: String,
-    pub product_id: String,
+    pub variant_id: String,
     pub quantity: String,
     pub price_paise: i64,
     pub price_formatted: String,
@@ -20,8 +20,8 @@ impl OrderDetails {
         &self.order_id
     }
 
-    async fn product_id(&self) -> &String {
-        &self.product_id
+    async fn variant_id(&self) -> &String {
+        &self.variant_id
     }
 
     async fn quantity(&self) -> &String {
@@ -47,19 +47,9 @@ impl OrderDetails {
     }
 
     async fn product_details(&self) -> FieldResult<Vec<Product>> {
-        crate::resolvers::product::handlers::search_product(SearchProduct {
-            product_id: Some(self.product_id.to_string()),
-            name: None,
-            description: None,
-            starting_price_paise: None,
-            ending_price_paise: None,
-            stock_quantity: None,
-            category_id: None,
-            limit: None,
-            offset: None,
-        })
-        .await
-        .map_err(|e| e.into())
+        crate::resolvers::product::handlers::get_products_for_variant(&self.variant_id)
+            .await
+            .map_err(|e| e.into())
     }
 }
 
@@ -67,7 +57,7 @@ impl OrderDetails {
 #[graphql(description = "New Order Details Data")]
 pub struct NewOrderDetail {
     pub order_id: String,
-    pub product_id: String,
+    pub variant_id: String,
     pub quantity: String,
     /// Line total in paise
     pub price_paise: String,
@@ -83,7 +73,7 @@ pub struct NewOrderDetails {
 pub struct SearchOrderDetails {
     pub order_detail_id: Option<String>,
     pub order_id: Option<String>,
-    pub product_id: Option<String>,
+    pub variant_id: Option<String>,
     pub quantity: Option<String>,
     pub price_start_paise: Option<String>,
     pub price_end_paise: Option<String>,
@@ -92,7 +82,7 @@ pub struct SearchOrderDetails {
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
 pub struct OrderDetailsMutation {
     pub order_id: String,
-    pub product_id: String,
+    pub variant_id: String,
     pub quantity: String,
     pub price_paise: String,
     pub order_detail_id: String,
