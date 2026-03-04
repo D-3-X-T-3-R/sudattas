@@ -233,11 +233,15 @@ jobs:
       working-directory: ./backend
       env:
         TEST_DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/SUDATTAS
+        # For payment verification tests (optional; tests set their own for P2/P3)
+        RAZORPAY_KEY_SECRET: ""
       run: |
-        cargo test -p core_operations --test integration_users_and_cart --all-features -- --ignored
-        cargo test -p core_operations --test integration_orders_and_inventory --all-features -- --ignored
-        cargo test -p core_operations --test integration_place_order_idempotency --all-features -- --ignored
-        cargo test -p core_operations --test integration_webhooks --all-features -- --ignored
+        for test_binary in integration_abandoned_cart_outbox integration_cart integration_coupons integration_order_state integration_payments integration_products integration_refunds integration_reviews integration_shipping integration_users integration_users_carts_orders_products integration_webhooks integration_wishlist; do
+          cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored
+        done
+        for test_binary in handler_outbox handler_p2 handler_refunds_resolve handler_security; do
+          cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored
+        done
 
   test-e2e-graphql:
     name: E2E GraphQL Tests
