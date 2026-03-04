@@ -4,6 +4,7 @@ use core_db_entities::entity::payment_intents;
 use core_db_entities::entity::sea_orm_active_enums::Status as PaymentStatus;
 use proto::proto::core::{
     CapturePaymentRequest, CreatePaymentIntentRequest, GetPaymentIntentRequest,
+    VerifyRazorpayPaymentRequest,
 };
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
 use tonic::Request;
@@ -245,3 +246,93 @@ async fn get_payment_intent_requires_intent_id_or_order_id() {
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
 }
+
+#[tokio::test]
+async fn verify_razorpay_payment_missing_fields_returns_invalid_argument() {
+    use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
+
+    std::env::set_var("RAZORPAY_KEY_SECRET", "secret");
+    let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(VerifyRazorpayPaymentRequest {
+        order_id: 10,
+        razorpay_order_id: "".to_string(),
+        razorpay_payment_id: "".to_string(),
+        razorpay_signature: "".to_string(),
+    });
+    let result = verify_razorpay_payment(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+}
+
+#[tokio::test]
+async fn verify_razorpay_payment_not_configured_returns_failed_precondition() {
+    use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
+
+    std::env::remove_var("RAZORPAY_KEY_SECRET");
+    let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(VerifyRazorpayPaymentRequest {
+        order_id: 10,
+        razorpay_order_id: "order_123".to_string(),
+        razorpay_payment_id: "pay_abc".to_string(),
+        razorpay_signature: "sig".to_string(),
+    });
+    let result = verify_razorpay_payment(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::FailedPrecondition);
+}
+
+#[tokio::test]
+async fn verify_razorpay_payment_not_found_returns_not_found() {
+    use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
+
+    std::env::set_var("RAZORPAY_KEY_SECRET", "secret");
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<payment_intents::Model>::new()])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(VerifyRazorpayPaymentRequest {
+        order_id: 10,
+        razorpay_order_id: "order_123".to_string(),
+        razorpay_payment_id: "pay_abc".to_string(),
+        razorpay_signature: "sig".to_string(),
+    });
+    let result = verify_razorpay_payment(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
+}
+
+#[tokio::test]
+async fn verify_razorpay_payment_invalid_signature_returns_false_and_does_not_update() {
+    use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
+
+    std::env::set_var("RAZORPAY_KEY_SECRET", "secret");
+
+    let intent = make_intent(
+        1,
+        "order_123",
+        None,
+        PaymentStatus::Pending,
+    );
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![intent]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(VerifyRazorpayPaymentRequest {
+        order_id: 10,
+        razorpay_order_id: "order_123".to_string(),
+        razorpay_payment_id: "pay_abc".to_string(),
+        razorpay_signature: "invalid_sig".to_string(),
+    });
+    let result = verify_razorpay_payment(&txn, req).await;
+    assert!(result.is_ok());
+    let resp = result.unwrap().into_inner();
+    assert!(!resp.verified);
+    assert!(resp.payment_intent.is_none());
+}
+
