@@ -218,6 +218,195 @@ async fn search_product_filters_by_multiple_fields_and_pagination() {
 }
 
 #[tokio::test]
+async fn search_product_filters_by_product_id_only() {
+    use core_operations::handlers::products::search_product;
+
+    let model = products::Model {
+        product_id: 20,
+        sku: Some("SKU-20".to_string()),
+        name: "Single".to_string(),
+        slug: Some("single".to_string()),
+        description: Some("Only product".to_string()),
+        price: Some(Decimal::new(2000, 2)),
+        price_paise: 2_000,
+        category_id: 2,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        length_meters: None,
+        has_blouse_piece: None,
+        care_instructions: None,
+        product_status_id: None,
+        created_at: None,
+        updated_at: None,
+    };
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![model]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchProductRequest {
+        product_id: Some(20),
+        name: None,
+        description: None,
+        category_id: None,
+        starting_price_paise: None,
+        ending_price_paise: None,
+        limit: None,
+        offset: None,
+    });
+
+    let result = search_product(&txn, req).await;
+    assert!(result.is_ok());
+    let ProductsResponse { items } = result.unwrap().into_inner();
+    assert_eq!(items.len(), 1);
+    let p = &items[0];
+    assert_eq!(p.product_id, 20);
+}
+
+#[tokio::test]
+async fn search_product_filters_by_name_only() {
+    use core_operations::handlers::products::search_product;
+
+    let model = products::Model {
+        product_id: 21,
+        sku: Some("SKU-21".to_string()),
+        name: "Cotton Dress".to_string(),
+        slug: Some("cotton-dress".to_string()),
+        description: Some("Light cotton dress".to_string()),
+        price: Some(Decimal::new(3000, 2)),
+        price_paise: 3_000,
+        category_id: 3,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        length_meters: None,
+        has_blouse_piece: None,
+        care_instructions: None,
+        product_status_id: None,
+        created_at: None,
+        updated_at: None,
+    };
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![model]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchProductRequest {
+        product_id: None,
+        name: Some("Dress".to_string()),
+        description: None,
+        category_id: None,
+        starting_price_paise: None,
+        ending_price_paise: None,
+        limit: None,
+        offset: None,
+    });
+
+    let result = search_product(&txn, req).await;
+    assert!(result.is_ok());
+    let ProductsResponse { items } = result.unwrap().into_inner();
+    assert_eq!(items.len(), 1);
+    assert!(items[0].name.contains("Dress"));
+}
+
+#[tokio::test]
+async fn search_product_filters_by_category_only() {
+    use core_operations::handlers::products::search_product;
+
+    let model = products::Model {
+        product_id: 22,
+        sku: Some("SKU-22".to_string()),
+        name: "CategoryOnly".to_string(),
+        slug: Some("category-only".to_string()),
+        description: Some("Belongs to category 4".to_string()),
+        price: Some(Decimal::new(4000, 2)),
+        price_paise: 4_000,
+        category_id: 4,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        length_meters: None,
+        has_blouse_piece: None,
+        care_instructions: None,
+        product_status_id: None,
+        created_at: None,
+        updated_at: None,
+    };
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![model]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchProductRequest {
+        product_id: None,
+        name: None,
+        description: None,
+        category_id: Some(4),
+        starting_price_paise: None,
+        ending_price_paise: None,
+        limit: None,
+        offset: None,
+    });
+
+    let result = search_product(&txn, req).await;
+    assert!(result.is_ok());
+    let ProductsResponse { items } = result.unwrap().into_inner();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].category_id, 4);
+}
+
+#[tokio::test]
+async fn search_product_filters_by_price_range_only() {
+    use core_operations::handlers::products::search_product;
+
+    let model = products::Model {
+        product_id: 23,
+        sku: Some("SKU-23".to_string()),
+        name: "PriceRange".to_string(),
+        slug: Some("price-range".to_string()),
+        description: Some("Within range".to_string()),
+        price: Some(Decimal::new(7500, 2)),
+        price_paise: 7_500,
+        category_id: 6,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        length_meters: None,
+        has_blouse_piece: None,
+        care_instructions: None,
+        product_status_id: None,
+        created_at: None,
+        updated_at: None,
+    };
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![model]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchProductRequest {
+        product_id: None,
+        name: None,
+        description: None,
+        category_id: None,
+        starting_price_paise: Some(5_000),
+        ending_price_paise: Some(10_000),
+        limit: None,
+        offset: None,
+    });
+
+    let result = search_product(&txn, req).await;
+    assert!(result.is_ok());
+    let ProductsResponse { items } = result.unwrap().into_inner();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].price_paise, 7_500);
+}
+
+#[tokio::test]
 async fn get_products_by_id_returns_matching_products() {
     use core_operations::handlers::products::get_product_by_ids::get_products_by_id;
 
