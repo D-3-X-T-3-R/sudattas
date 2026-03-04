@@ -24,6 +24,8 @@ async fn enqueue_abandoned_cart_events_no_stale_carts_returns_zero() {
     assert_eq!(result.unwrap(), 0);
 }
 
+// Additional scenarios (eligible users, opt-out, idempotency) are covered at a higher level in integration tests.
+
 // ---------- Reviews moderation ----------
 
 #[tokio::test]
