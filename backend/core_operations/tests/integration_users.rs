@@ -18,7 +18,8 @@ use proto::proto::core::{
     SearchUserRequest, UpdateUserRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use tonic::{Code, Request};
 
@@ -30,10 +31,7 @@ async fn integration_user_create_and_search() {
         .expect("connect to test DB");
     let txn = db.begin().await.expect("begin transaction");
 
-    let role_name = format!(
-        "itest_role_search_{}",
-        Utc::now().timestamp_millis()
-    );
+    let role_name = format!("itest_role_search_{}", Utc::now().timestamp_millis());
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(role_name),
@@ -59,7 +57,12 @@ async fn integration_user_create_and_search() {
     )
     .await
     .expect("create_user should succeed");
-    let created = user_res.into_inner().items.into_iter().next().expect("one user");
+    let created = user_res
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .expect("one user");
     let user_id = created.user_id;
 
     let search_res = core_operations::handlers::users::search_user(
@@ -85,10 +88,7 @@ async fn integration_user_create_update_search() {
         .expect("connect to test DB");
     let txn = db.begin().await.expect("begin transaction");
 
-    let role_name = format!(
-        "itest_role_upd_{}",
-        Utc::now().timestamp_millis()
-    );
+    let role_name = format!("itest_role_upd_{}", Utc::now().timestamp_millis());
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(role_name),
@@ -358,7 +358,11 @@ async fn integration_user_delete_cascades_to_cart() {
         .all(&txn)
         .await
         .expect("query cart");
-    assert_eq!(cart_before.len(), 1, "cart should have one item before delete");
+    assert_eq!(
+        cart_before.len(),
+        1,
+        "cart should have one item before delete"
+    );
 
     let _ = core_operations::handlers::users::delete_user(
         &txn,
@@ -449,10 +453,7 @@ async fn integration_user_update_password_invalidates_old_credentials() {
         !old_valid.unwrap_or(false),
         "old password should no longer verify"
     );
-    assert!(
-        new_valid.unwrap_or(false),
-        "new password should verify"
-    );
+    assert!(new_valid.unwrap_or(false), "new password should verify");
 
     txn.rollback().await.ok();
 }
@@ -514,4 +515,3 @@ async fn integration_user_get_pii_export_returns_full_snapshot() {
 
     txn.rollback().await.ok();
 }
-

@@ -12,7 +12,7 @@ mod integration_common;
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use core_db_entities::entity::{
-    inventory, order_status, orders, refunds, product_categories, product_variants, products,
+    inventory, order_status, orders, product_categories, product_variants, products, refunds,
     shipping_addresses, user_roles,
 };
 use core_operations::order_state_machine;
@@ -20,10 +20,11 @@ use core_operations::procedures::orders::place_order;
 use integration_common::test_db_url;
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateCartItemRequest,
-    CreateUserRequest, CreateRefundRequest, PlaceOrderRequest, UpdateOrderRequest,
+    CreateRefundRequest, CreateUserRequest, PlaceOrderRequest, UpdateOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use tonic::{Code, Request};
 

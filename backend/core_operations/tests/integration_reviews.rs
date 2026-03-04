@@ -20,10 +20,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue, Database, TransactionTrait};
 use tonic::Request;
 
 /// Create user + category + product; return (user_id, product_id).
-async fn reviews_test_setup(
-    txn: &sea_orm::DatabaseTransaction,
-    now_tag: i64,
-) -> (i64, i64) {
+async fn reviews_test_setup(txn: &sea_orm::DatabaseTransaction, now_tag: i64) -> (i64, i64) {
     let role = core_db_entities::entity::user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(format!("itest_rv_{}", now_tag)),
@@ -116,7 +113,10 @@ async fn integration_create_review_search_by_product_id_returns_review() {
     .expect("search_review should succeed");
     let items = search_res.into_inner().items;
     assert!(!items.is_empty());
-    let found = items.iter().find(|r| r.review_id == created.review_id).expect("review in results");
+    let found = items
+        .iter()
+        .find(|r| r.review_id == created.review_id)
+        .expect("review in results");
     assert_eq!(found.product_id, product_id);
     assert_eq!(found.rating, 4);
     assert_eq!(found.comment, "Great product.");
@@ -176,7 +176,10 @@ async fn integration_update_review_search_reflects_updated_content() {
     .await
     .expect("search_review should succeed");
     let items = search_res.into_inner().items;
-    let found = items.iter().find(|r| r.review_id == review_id).expect("review in results");
+    let found = items
+        .iter()
+        .find(|r| r.review_id == review_id)
+        .expect("review in results");
     assert_eq!(found.rating, 5);
     assert_eq!(found.comment, "Updated: excellent!");
 
@@ -288,7 +291,10 @@ async fn integration_admin_update_review_status_persists() {
     .expect("search_review should succeed");
     let items = search_res.into_inner().items;
     let found = items.iter().find(|r| r.review_id == review_id);
-    assert!(found.is_some(), "search with status_filter=approved should return the review after admin approval");
+    assert!(
+        found.is_some(),
+        "search with status_filter=approved should return the review after admin approval"
+    );
 
     txn.rollback().await.ok();
 }

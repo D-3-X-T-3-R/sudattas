@@ -16,10 +16,10 @@ use core_db_entities::entity::{
     inventory, order_status, outbox_events, product_categories, product_variants, products,
     shipping_addresses, user_roles, users,
 };
-use core_operations::handlers::outbox::{ORDER_PLACED, SHIPPED, DELIVERED};
+use core_operations::handlers::outbox::{DELIVERED, ORDER_PLACED, SHIPPED};
 use core_operations::order_state_machine;
-use core_operations::procedures::orders::place_order;
 use core_operations::procedures::abandoned_cart::enqueue_abandoned_cart_events;
+use core_operations::procedures::orders::place_order;
 use integration_common::test_db_url;
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateCartItemRequest,
@@ -154,7 +154,9 @@ async fn integration_abandoned_cart_opt_in_enqueues_one_event() {
 
     txn.commit().await.expect("commit setup");
 
-    let count = enqueue_abandoned_cart_events(&db, 24).await.expect("enqueue_abandoned_cart_events");
+    let count = enqueue_abandoned_cart_events(&db, 24)
+        .await
+        .expect("enqueue_abandoned_cart_events");
     assert!(
         count >= 1,
         "at least one user with stale cart and opt-in should enqueue (count may be >1 from prior runs)"
@@ -215,7 +217,10 @@ async fn integration_abandoned_cart_opt_out_no_events() {
         .expect("user exists");
     let mut active = user.into_active_model();
     active.marketing_opt_out = ActiveValue::Set(Some(1));
-    active.update(&txn).await.expect("set marketing_opt_out = 1");
+    active
+        .update(&txn)
+        .await
+        .expect("set marketing_opt_out = 1");
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
@@ -283,7 +288,9 @@ async fn integration_abandoned_cart_opt_out_no_events() {
 
     txn.commit().await.expect("commit setup");
 
-    let _count = enqueue_abandoned_cart_events(&db, 24).await.expect("enqueue_abandoned_cart_events");
+    let _count = enqueue_abandoned_cart_events(&db, 24)
+        .await
+        .expect("enqueue_abandoned_cart_events");
 
     let txn2 = db.begin().await.expect("begin");
     let events = outbox_events::Entity::find()
@@ -422,7 +429,12 @@ async fn place_order_setup(
     .await
     .expect("place_order");
     let order = place_res.into_inner().items[0].clone();
-    (order.order_id, user_id, shipping_id, order.total_amount_paise)
+    (
+        order.order_id,
+        user_id,
+        shipping_id,
+        order.total_amount_paise,
+    )
 }
 
 /// OB1 – place_order enqueues an OrderPlaced outbox event with correct payload.
@@ -446,11 +458,15 @@ async fn integration_place_order_enqueues_order_placed_outbox() {
     assert_eq!(events.len(), 1);
     let payload = &events[0].payload;
     assert_eq!(
-        payload.get("order_id").and_then(|v: &serde_json::Value| v.as_i64()),
+        payload
+            .get("order_id")
+            .and_then(|v: &serde_json::Value| v.as_i64()),
         Some(order_id)
     );
     assert_eq!(
-        payload.get("user_id").and_then(|v: &serde_json::Value| v.as_i64()),
+        payload
+            .get("user_id")
+            .and_then(|v: &serde_json::Value| v.as_i64()),
         Some(user_id)
     );
 

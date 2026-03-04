@@ -22,17 +22,13 @@ use proto::proto::core::{
     CreateUserRequest, PlaceOrderRequest, UpdateOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use tonic::{Code, Request};
 
-async fn ensure_order_status(
-    txn: &sea_orm::DatabaseTransaction,
-    name: &str,
-) -> i64 {
-    if let Ok(Some(id)) =
-        core_operations::order_state_machine::get_status_id(txn, name).await
-    {
+async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
+    if let Ok(Some(id)) = core_operations::order_state_machine::get_status_id(txn, name).await {
         return id;
     }
     let m = order_status::ActiveModel {
@@ -167,7 +163,13 @@ async fn place_order_minimal(
     .await
     .expect("place_order");
     let order = place_res.into_inner().items[0].clone();
-    (order.order_id, user_id, shipping_id, variant.variant_id, order.total_amount_paise)
+    (
+        order.order_id,
+        user_id,
+        shipping_id,
+        variant.variant_id,
+        order.total_amount_paise,
+    )
 }
 
 /// O1 – update_order transitions pending → confirmed; order row updated and order_events entry created.
@@ -211,7 +213,9 @@ async fn integration_order_update_pending_to_confirmed_and_order_event() {
         .await
         .expect("query order_events");
     assert!(
-        events.iter().any(|e| e.to_status.as_deref() == Some("confirmed")),
+        events
+            .iter()
+            .any(|e| e.to_status.as_deref() == Some("confirmed")),
         "order_events should contain transition to confirmed"
     );
 
@@ -360,7 +364,10 @@ async fn integration_admin_mark_shipped_creates_shipment() {
     )
     .await
     .expect("admin_mark_order_shipped should succeed");
-    assert!(ship_res.into_inner().shipment_id > 0, "shipment should be created");
+    assert!(
+        ship_res.into_inner().shipment_id > 0,
+        "shipment should be created"
+    );
 
     let order = orders::Entity::find_by_id(order_id)
         .one(&txn)
@@ -611,10 +618,7 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
         .all(&txn)
         .await
         .expect("query order_events");
-    let to_statuses: Vec<Option<&str>> = events
-        .iter()
-        .map(|e| e.to_status.as_deref())
-        .collect();
+    let to_statuses: Vec<Option<&str>> = events.iter().map(|e| e.to_status.as_deref()).collect();
     assert!(to_statuses.contains(&Some("confirmed")));
     assert!(to_statuses.contains(&Some("processing")));
     assert!(to_statuses.contains(&Some("shipped")));

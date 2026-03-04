@@ -13,11 +13,12 @@ use chrono::Utc;
 use core_db_entities::entity::{product_categories, product_variants, products};
 use integration_common::test_db_url;
 use proto::proto::core::{
-    CreateProductRequest, CreateProductVariantRequest, DeleteProductRequest, GetProductsByIdRequest,
-    SearchProductRequest, UpdateProductRequest,
+    CreateProductRequest, CreateProductVariantRequest, DeleteProductRequest,
+    GetProductsByIdRequest, SearchProductRequest, UpdateProductRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use tonic::Request;
 
@@ -72,8 +73,14 @@ async fn integration_create_product_search_by_name_and_category_returns_product(
     .await
     .expect("search_product should succeed");
     let items = search_res.into_inner().items;
-    assert!(!items.is_empty(), "search by name and category should return the created product");
-    let found = items.iter().find(|p| p.product_id == created.product_id).expect("product in results");
+    assert!(
+        !items.is_empty(),
+        "search by name and category should return the created product"
+    );
+    let found = items
+        .iter()
+        .find(|p| p.product_id == created.product_id)
+        .expect("product in results");
     assert_eq!(found.name, product_name);
     assert_eq!(found.category_id, cat.category_id);
 
@@ -204,7 +211,10 @@ async fn integration_update_product_price_get_by_id_reflects_new_price() {
     .expect("get_products_by_id should succeed");
     let items = get_res.into_inner().items;
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].price_paise, new_price, "get_products_by_id should reflect updated price");
+    assert_eq!(
+        items[0].price_paise, new_price,
+        "get_products_by_id should reflect updated price"
+    );
 
     txn.rollback().await.ok();
 }
@@ -256,13 +266,19 @@ async fn integration_delete_product_get_by_id_returns_empty() {
     .await
     .expect("get_products_by_id should succeed");
     let items = get_res.into_inner().items;
-    assert!(items.is_empty(), "get_products_by_id should return empty for deleted product ID");
+    assert!(
+        items.is_empty(),
+        "get_products_by_id should return empty for deleted product ID"
+    );
 
     let db_product = products::Entity::find_by_id(product_id)
         .one(&txn)
         .await
         .expect("query product");
-    assert!(db_product.is_none(), "product row should be removed from DB");
+    assert!(
+        db_product.is_none(),
+        "product row should be removed from DB"
+    );
 
     txn.rollback().await.ok();
 }

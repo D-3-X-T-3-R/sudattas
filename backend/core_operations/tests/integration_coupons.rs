@@ -22,7 +22,8 @@ use proto::proto::core::{
     PlaceOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use tonic::Request;
 
@@ -41,7 +42,10 @@ async fn ensure_pending_and_place_order_setup(
             status_id: ActiveValue::NotSet,
             status_name: ActiveValue::Set("pending".to_string()),
         };
-        let _ = status.insert(txn).await.expect("insert pending OrderStatus");
+        let _ = status
+            .insert(txn)
+            .await
+            .expect("insert pending OrderStatus");
     }
 
     let role = user_roles::ActiveModel {
@@ -254,7 +258,10 @@ async fn integration_expired_coupon_ignored_at_checkout() {
     .await
     .expect("place_order should succeed");
     let order = place_res.into_inner().items[0].clone();
-    assert_eq!(order.total_amount_paise, cart_total, "full price when coupon expired");
+    assert_eq!(
+        order.total_amount_paise, cart_total,
+        "full price when coupon expired"
+    );
 
     let db_order = orders::Entity::find_by_id(order.order_id)
         .one(&txn)
@@ -415,7 +422,10 @@ async fn integration_coupon_min_order_not_met_not_applied() {
     .await
     .expect("place_order should succeed");
     let order = place_res.into_inner().items[0].clone();
-    assert_eq!(order.total_amount_paise, cart_total, "total undiscounted when min not met");
+    assert_eq!(
+        order.total_amount_paise, cart_total,
+        "total undiscounted when min not met"
+    );
 
     let db_order = orders::Entity::find_by_id(order.order_id)
         .one(&txn)
