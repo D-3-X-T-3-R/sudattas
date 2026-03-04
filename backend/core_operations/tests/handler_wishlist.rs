@@ -81,4 +81,3 @@ async fn search_wishlist_item_filters_by_user_and_optional_ids() {
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].wishlist_id, 3);
 }
-

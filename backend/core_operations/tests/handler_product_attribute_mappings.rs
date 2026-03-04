@@ -79,4 +79,3 @@ async fn search_product_attribute_mapping_filters_by_product_and_attribute() {
     assert_eq!(res.items[0].product_id, 20);
     assert_eq!(res.items[0].attribute_id, 8);
 }
-

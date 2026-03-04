@@ -173,4 +173,3 @@ async fn update_product_variant_updates_fields_and_preserves_existing_when_missi
     assert_eq!(v.color_id, Some(5));
     assert_eq!(v.additional_price_paise, Some(250));
 }
-

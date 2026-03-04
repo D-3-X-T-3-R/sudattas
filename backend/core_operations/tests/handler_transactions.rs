@@ -74,9 +74,7 @@ async fn delete_transaction_not_found_yields_not_found_status() {
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let req = Request::new(DeleteTransactionRequest {
-        transaction_id: 77,
-    });
+    let req = Request::new(DeleteTransactionRequest { transaction_id: 77 });
     let result = delete_transaction(&txn, req).await;
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
@@ -92,13 +90,10 @@ async fn search_transaction_filters_by_id_when_nonzero() {
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let req = Request::new(SearchTransactionRequest {
-        transaction_id: 3,
-    });
+    let req = Request::new(SearchTransactionRequest { transaction_id: 3 });
     let result = search_transaction(&txn, req).await;
     assert!(result.is_ok());
     let TransactionsResponse { items } = result.unwrap().into_inner();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].transaction_id, 3);
 }
-

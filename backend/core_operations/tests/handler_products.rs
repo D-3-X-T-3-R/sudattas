@@ -2,8 +2,8 @@
 
 use core_db_entities::entity::products;
 use proto::proto::core::{
-    CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest, ProductResponse,
-    ProductsResponse, SearchProductRequest, UpdateProductRequest,
+    CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest, ProductsResponse,
+    SearchProductRequest, UpdateProductRequest,
 };
 use rust_decimal::Decimal;
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
@@ -450,4 +450,3 @@ async fn get_products_by_id_returns_matching_products() {
     assert!(ids.contains(&10));
     assert!(ids.contains(&11));
 }
-

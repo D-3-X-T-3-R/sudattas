@@ -96,4 +96,3 @@ async fn search_product_attribute_filters_by_id_and_name() {
     assert_eq!(res.items.len(), 1);
     assert_eq!(res.items[0].attribute_id, 3);
 }
-

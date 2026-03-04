@@ -151,9 +151,7 @@ async fn update_order_illegal_state_transition_returns_invalid_argument() {
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(
-        status
-            .message()
-            .contains("Illegal order state transition"),
+        status.message().contains("Illegal order state transition"),
         "expected illegal transition message, got {}",
         status.message()
     );
@@ -257,4 +255,3 @@ async fn admin_mark_order_delivered_order_not_found_propagates_not_found() {
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::NotFound);
 }
-

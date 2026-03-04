@@ -189,4 +189,3 @@ async fn search_user_by_user_id_filters_correctly() {
     assert_eq!(u.user_id, 20);
     assert_eq!(u.username, "user20");
 }
-

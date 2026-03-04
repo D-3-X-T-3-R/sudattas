@@ -112,4 +112,3 @@ async fn search_inventory_log_filters_by_log_id_and_variant() {
     assert_eq!(res.items[0].log_id, 2);
     assert_eq!(res.items[0].variant_id, 11);
 }
-
