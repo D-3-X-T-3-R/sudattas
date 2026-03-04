@@ -1,6 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
-use crate::money::{decimal_to_paise, paise_to_decimal};
+use crate::money::paise_to_decimal;
 use crate::order_state_machine;
 use chrono::Utc;
 use core_db_entities::entity::{order_details, order_status, orders};
