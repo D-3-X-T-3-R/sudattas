@@ -1,6 +1,3 @@
-// Re-exports are used by gRPC server; lint sees them unused within this crate
-#![allow(unused_imports)]
-
 pub mod cart;
 pub mod categories;
 pub mod colors;

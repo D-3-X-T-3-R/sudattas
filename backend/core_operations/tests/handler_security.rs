@@ -72,8 +72,7 @@ async fn get_user_pii_export_returns_pii_no_password() {
     let user = users::Model {
         user_id: 1,
         username: "u".to_string(),
-        password: "secret".to_string(),
-        password_hash: None,
+        password_hash: "secret".to_string(),
         email: "u@example.com".to_string(),
         email_verified: None,
         email_verified_at: None,
@@ -81,6 +80,7 @@ async fn get_user_pii_export_returns_pii_no_password() {
         address: Some("123 St".to_string()),
         phone: Some("+123".to_string()),
         user_status_id: None,
+        role_id: None,
         last_login_at: None,
         marketing_opt_out: None,
         create_date: now,

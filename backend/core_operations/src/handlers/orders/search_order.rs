@@ -1,6 +1,5 @@
 // SearchOrderRequest Proto message
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::money::decimal_to_paise;
 use core_db_entities::entity::orders;
 use proto::proto::core::{OrderResponse, OrdersResponse, SearchOrderRequest};
 use sea_orm::{

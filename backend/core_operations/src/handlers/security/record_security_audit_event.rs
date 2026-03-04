@@ -3,7 +3,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::security_audit_log;
 use proto::proto::core::{RecordSecurityAuditRequest, RecordSecurityAuditResponse};
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
 
 pub async fn record_security_audit_event(

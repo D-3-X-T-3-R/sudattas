@@ -1,5 +1,4 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::money::decimal_to_paise;
 use core_db_entities::entity::product_variants;
 use proto::proto::core::{
     DeleteProductVariantRequest, ProductVariantResponse, ProductVariantsResponse,

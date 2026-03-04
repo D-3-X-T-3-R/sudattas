@@ -1,5 +1,4 @@
 use aws_sdk_s3::presigning::PresigningConfig;
-use chrono::Utc;
 use proto::proto::core::{GetPresignedUploadUrlRequest, PresignedUploadUrlResponse};
 use std::time::Duration;
 use tonic::{Request, Response, Status};
@@ -44,10 +43,4 @@ pub async fn get_presigned_upload_url(
         key,
         cdn_url,
     }))
-}
-
-/// Unused but kept to satisfy the import of Utc if needed elsewhere.
-#[allow(dead_code)]
-fn _unused() {
-    let _ = Utc::now();
 }

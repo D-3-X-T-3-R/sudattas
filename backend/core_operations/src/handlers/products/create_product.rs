@@ -1,5 +1,5 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::money::{decimal_to_paise, paise_to_decimal};
+use crate::money::paise_to_decimal;
 use core_db_entities::entity::products;
 use proto::proto::core::{CreateProductRequest, ProductResponse, ProductsResponse};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};

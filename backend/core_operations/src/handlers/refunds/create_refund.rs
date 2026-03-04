@@ -9,9 +9,7 @@ use core_db_entities::entity::{order_status, orders, refunds};
 use proto::proto::core::{
     CreateOrderEventRequest, CreateRefundRequest, RefundResponse, RefundsResponse,
 };
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, TransactionTrait,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn create_refund(
