@@ -96,4 +96,3 @@ async fn search_shipping_method_filters_by_id_when_nonzero() {
     assert_eq!(res.items.len(), 1);
     assert_eq!(res.items[0].method_id, 3);
 }
-

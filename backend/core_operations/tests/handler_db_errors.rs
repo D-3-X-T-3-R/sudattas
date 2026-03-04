@@ -36,4 +36,3 @@ fn map_db_error_to_status_maps_not_found_and_custom() {
     let status = map_db_error_to_status(DbErr::Custom("boom".into()));
     assert_eq!(status.code(), tonic::Code::Internal);
 }
-

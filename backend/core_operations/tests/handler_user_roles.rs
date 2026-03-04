@@ -69,4 +69,3 @@ async fn search_user_role_filters_by_id_when_nonzero() {
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].role_id, 3);
 }
-

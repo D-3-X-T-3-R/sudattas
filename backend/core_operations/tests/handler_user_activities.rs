@@ -73,9 +73,7 @@ async fn delete_user_activity_not_found_yields_not_found_status() {
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let req = Request::new(DeleteUserActivityRequest {
-        activity_id: 77,
-    });
+    let req = Request::new(DeleteUserActivityRequest { activity_id: 77 });
     let result = delete_user_activity(&txn, req).await;
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
@@ -98,4 +96,3 @@ async fn search_user_activity_filters_by_id_when_nonzero() {
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].activity_id, 3);
 }
-

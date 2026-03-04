@@ -114,4 +114,3 @@ async fn delete_shipping_address_not_found_yields_not_found_status() {
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
 }
-

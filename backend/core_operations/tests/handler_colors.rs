@@ -102,4 +102,3 @@ async fn search_color_filters_by_id_when_nonzero() {
     assert_eq!(*color_id, 7);
     assert_eq!(color_name, "Green");
 }
-

@@ -100,4 +100,3 @@ async fn search_category_filters_by_id_when_provided() {
     assert_eq!(res.items.len(), 1);
     assert_eq!(res.items[0].category_id, 5);
 }
-

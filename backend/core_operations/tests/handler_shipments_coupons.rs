@@ -275,7 +275,10 @@ async fn validate_coupon_valid_percentage_discount() {
         order_amount_paise: 10_000,
     });
     let result = validate_coupon(&txn, req).await;
-    assert!(result.is_ok(), "validate_coupon should succeed for valid coupon");
+    assert!(
+        result.is_ok(),
+        "validate_coupon should succeed for valid coupon"
+    );
     let res = result.unwrap().into_inner();
     assert_eq!(res.items.len(), 1);
     let c = &res.items[0];
@@ -310,7 +313,6 @@ async fn validate_coupon_not_found_returns_invalid() {
 
 #[tokio::test]
 async fn check_coupon_inactive_returns_not_active_reason() {
-
     let now = Utc::now();
     let coupon_model = coupons::Model {
         coupon_id: 2,
@@ -332,9 +334,10 @@ async fn check_coupon_inactive_returns_not_active_reason() {
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let result =
-        core_operations::handlers::coupons::validate_coupon::check_coupon(&txn, "INACTIVE", 10_000, false)
-            .await;
+    let result = core_operations::handlers::coupons::validate_coupon::check_coupon(
+        &txn, "INACTIVE", 10_000, false,
+    )
+    .await;
     assert!(result.is_ok());
     let c = result.unwrap();
     assert!(!c.is_valid);
@@ -343,7 +346,6 @@ async fn check_coupon_inactive_returns_not_active_reason() {
 
 #[tokio::test]
 async fn check_coupon_not_started_yet_returns_reason() {
-
     let now = Utc::now();
     let coupon_model = coupons::Model {
         coupon_id: 3,
@@ -365,9 +367,10 @@ async fn check_coupon_not_started_yet_returns_reason() {
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let result =
-        core_operations::handlers::coupons::validate_coupon::check_coupon(&txn, "FUTURE", 10_000, false)
-            .await;
+    let result = core_operations::handlers::coupons::validate_coupon::check_coupon(
+        &txn, "FUTURE", 10_000, false,
+    )
+    .await;
     assert!(result.is_ok());
     let c = result.unwrap();
     assert!(!c.is_valid);
@@ -376,7 +379,6 @@ async fn check_coupon_not_started_yet_returns_reason() {
 
 #[tokio::test]
 async fn check_coupon_expired_returns_expired_reason() {
-
     let now = Utc::now();
     let coupon_model = coupons::Model {
         coupon_id: 4,
@@ -398,9 +400,10 @@ async fn check_coupon_expired_returns_expired_reason() {
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let result =
-        core_operations::handlers::coupons::validate_coupon::check_coupon(&txn, "OLD", 10_000, false)
-            .await;
+    let result = core_operations::handlers::coupons::validate_coupon::check_coupon(
+        &txn, "OLD", 10_000, false,
+    )
+    .await;
     assert!(result.is_ok());
     let c = result.unwrap();
     assert!(!c.is_valid);
@@ -409,7 +412,6 @@ async fn check_coupon_expired_returns_expired_reason() {
 
 #[tokio::test]
 async fn check_coupon_usage_limit_reached_returns_reason() {
-
     let now = Utc::now();
     let coupon_model = coupons::Model {
         coupon_id: 5,
@@ -431,9 +433,10 @@ async fn check_coupon_usage_limit_reached_returns_reason() {
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let result =
-        core_operations::handlers::coupons::validate_coupon::check_coupon(&txn, "MAXED", 10_000, false)
-            .await;
+    let result = core_operations::handlers::coupons::validate_coupon::check_coupon(
+        &txn, "MAXED", 10_000, false,
+    )
+    .await;
     assert!(result.is_ok());
     let c = result.unwrap();
     assert!(!c.is_valid);
@@ -442,7 +445,6 @@ async fn check_coupon_usage_limit_reached_returns_reason() {
 
 #[tokio::test]
 async fn check_coupon_min_order_not_met_returns_reason() {
-
     let now = Utc::now();
     let coupon_model = coupons::Model {
         coupon_id: 6,
@@ -465,10 +467,7 @@ async fn check_coupon_min_order_not_met_returns_reason() {
     let txn = db.begin().await.expect("begin");
 
     let result = core_operations::handlers::coupons::validate_coupon::check_coupon(
-        &txn,
-        "MIN5000",
-        4_000,
-        false,
+        &txn, "MIN5000", 4_000, false,
     )
     .await;
     assert!(result.is_ok());

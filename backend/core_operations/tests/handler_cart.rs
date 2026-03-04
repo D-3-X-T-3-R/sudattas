@@ -23,7 +23,10 @@ async fn create_cart_item_requires_user_or_session() {
     });
 
     let result = create_cart_item(&txn, req).await;
-    assert!(result.is_err(), "expected invalid_argument when both user_id and session_id are missing");
+    assert!(
+        result.is_err(),
+        "expected invalid_argument when both user_id and session_id are missing"
+    );
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
 }
@@ -58,7 +61,10 @@ async fn create_cart_item_with_user_id_succeeds() {
     });
 
     let result = create_cart_item(&txn, req).await;
-    assert!(result.is_ok(), "create_cart_item should succeed for valid user_id");
+    assert!(
+        result.is_ok(),
+        "create_cart_item should succeed for valid user_id"
+    );
     let resp = result.unwrap().into_inner();
     assert_eq!(resp.items.len(), 1);
     let item = &resp.items[0];
@@ -99,7 +105,10 @@ async fn create_cart_item_with_session_only_succeeds_and_sets_user_id_zero() {
     });
 
     let result = create_cart_item(&txn, req).await;
-    assert!(result.is_ok(), "create_cart_item should succeed for session-only cart");
+    assert!(
+        result.is_ok(),
+        "create_cart_item should succeed for session-only cart"
+    );
     let resp = result.unwrap().into_inner();
     assert_eq!(resp.items.len(), 1);
     let item = &resp.items[0];
@@ -427,4 +436,3 @@ async fn update_cart_item_updates_variant_and_quantity_for_user() {
     assert_eq!(item.variant_id, 99);
     assert_eq!(item.quantity, 10);
 }
-

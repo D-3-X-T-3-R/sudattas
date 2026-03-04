@@ -156,4 +156,3 @@ async fn search_product_image_filters_by_image_and_product_id() {
     assert_eq!(img.product_id, 9);
     assert!(img.url.is_some());
 }
-

@@ -26,12 +26,21 @@ async fn create_order_details_inserts_multiple_lines_and_returns_responses() {
         title: None,
         line_attrs: None,
     };
-    let model2 = order_details::Model { order_detail_id: 2, ..model1.clone() };
+    let model2 = order_details::Model {
+        order_detail_id: 2,
+        ..model1.clone()
+    };
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
         .append_exec_results(vec![
-            MockExecResult { last_insert_id: 1, rows_affected: 1 },
-            MockExecResult { last_insert_id: 2, rows_affected: 1 },
+            MockExecResult {
+                last_insert_id: 1,
+                rows_affected: 1,
+            },
+            MockExecResult {
+                last_insert_id: 2,
+                rows_affected: 1,
+            },
         ])
         .append_query_results(vec![vec![model1], vec![model2]])
         .into_connection();
@@ -86,7 +95,10 @@ async fn update_order_detail_updates_single_line() {
         title: None,
         line_attrs: None,
     };
-    let updated = order_details::Model { quantity: 2, ..existing.clone() };
+    let updated = order_details::Model {
+        quantity: 2,
+        ..existing.clone()
+    };
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
         .append_exec_results(vec![MockExecResult {
@@ -152,4 +164,3 @@ async fn search_order_detail_filters_by_order_and_price_range() {
     assert_eq!(od.variant_id, 300);
     assert_eq!(od.price_paise, 2_500);
 }
-

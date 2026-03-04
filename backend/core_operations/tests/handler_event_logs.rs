@@ -131,4 +131,3 @@ async fn update_event_log_not_found_yields_not_found_status() {
 }
 
 // Additional happy-path update scenarios (field-specific and multi-field) are exercised via higher-level flows.
-

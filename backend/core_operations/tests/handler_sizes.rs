@@ -24,7 +24,9 @@ async fn create_size_inserts_and_returns_created_model() {
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let req = Request::new(CreateSizeRequest { size_name: "M".into() });
+    let req = Request::new(CreateSizeRequest {
+        size_name: "M".into(),
+    });
     let result = create_size(&txn, req).await;
     assert!(result.is_ok());
     let SizesResponse { items } = result.unwrap().into_inner();
@@ -95,4 +97,3 @@ async fn search_size_filters_by_id_when_nonzero() {
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].size_id, 3);
 }
-

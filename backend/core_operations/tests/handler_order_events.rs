@@ -134,4 +134,3 @@ async fn get_order_events_returns_events_for_order_id() {
     assert_eq!(items.len(), 2);
     assert!(items.iter().all(|ev| ev.order_id == 200));
 }
-
