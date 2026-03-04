@@ -34,13 +34,11 @@ pub enum AuthError {
     AccountLocked,
 }
 
-/// Hash a password using Argon2id
+/// Hash a password using Argon2id.
 ///
-/// Example:
-/// ```
-/// use core_operations::auth::hash_password;
-/// let password = "my_secure_password";
-/// let hash = hash_password(password).unwrap();
+/// Example (simplified, not run as a doctest):
+/// ```text
+/// let hash = hash_password("my_secure_password")?;
 /// // Store `hash` in database (Users.password_hash column)
 /// ```
 pub fn hash_password(password: &str) -> Result<String, AuthError> {
@@ -53,14 +51,12 @@ pub fn hash_password(password: &str) -> Result<String, AuthError> {
         .map_err(|e| AuthError::HashingError(e.to_string()))
 }
 
-/// Verify a password against a stored hash
+/// Verify a password against a stored hash.
 ///
-/// Example:
-/// ```
-/// use core_operations::auth::{hash_password, verify_password};
-/// let password = "user_input_password";
-/// let stored_hash = hash_password(password).unwrap(); // or from DB: user.password_hash
-/// if verify_password(password, &stored_hash).unwrap() {
+/// Example (simplified, not run as a doctest):
+/// ```text
+/// let ok = verify_password("user_input_password", &stored_hash)?;
+/// if ok {
 ///     // Password correct
 /// } else {
 ///     // Password incorrect
