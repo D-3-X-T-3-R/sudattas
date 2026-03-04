@@ -18,11 +18,13 @@ use core_db_entities::entity::{
 };
 use core_operations::procedures::orders::place_order;
 use proto::proto::core::{
-    CreateCartItemRequest, CreateShippingAddressRequest, CreateUserRequest, DeleteShippingAddressRequest,
-    GetShippingAddressRequest, PlaceOrderRequest, UpdateShippingAddressRequest,
+    CreateCartItemRequest, CreateShippingAddressRequest, CreateUserRequest,
+    DeleteShippingAddressRequest, GetShippingAddressRequest, PlaceOrderRequest,
+    UpdateShippingAddressRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use tonic::Request;
 
@@ -75,7 +77,12 @@ async fn integration_shipping_address_crud_end_to_end() {
     )
     .await
     .expect("create_shipping_address should succeed");
-    let created = create_res.into_inner().items.into_iter().next().expect("one address");
+    let created = create_res
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .expect("one address");
     let addr_id = created.shipping_address_id;
     assert_eq!(created.city, "Mumbai");
     assert_eq!(created.road.as_deref(), Some("SA Road"));
@@ -176,7 +183,10 @@ async fn integration_place_order_uses_expected_shipping_address() {
             status_id: ActiveValue::NotSet,
             status_name: ActiveValue::Set("pending".to_string()),
         };
-        let _ = status.insert(&txn).await.expect("insert pending OrderStatus");
+        let _ = status
+            .insert(&txn)
+            .await
+            .expect("insert pending OrderStatus");
     }
 
     let now_tag = Utc::now().timestamp_millis();

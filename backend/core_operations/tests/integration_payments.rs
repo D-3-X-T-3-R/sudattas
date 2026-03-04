@@ -20,11 +20,11 @@ use core_operations::procedures::orders::place_order;
 use hmac::{Hmac, Mac};
 use integration_common::test_db_url;
 use proto::proto::core::{
-    CreateCartItemRequest, CreateUserRequest, PlaceOrderRequest,
-    VerifyRazorpayPaymentRequest,
+    CreateCartItemRequest, CreateUserRequest, PlaceOrderRequest, VerifyRazorpayPaymentRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use sha2::Sha256;
 use tonic::Request;
@@ -54,7 +54,10 @@ async fn place_order_setup(
             status_id: ActiveValue::NotSet,
             status_name: ActiveValue::Set("pending".to_string()),
         };
-        let _ = status.insert(txn).await.expect("insert pending OrderStatus");
+        let _ = status
+            .insert(txn)
+            .await
+            .expect("insert pending OrderStatus");
     }
 
     let role = user_roles::ActiveModel {
@@ -194,7 +197,11 @@ async fn integration_place_order_creates_payment_intent() {
         .all(&txn)
         .await
         .expect("query payment_intents");
-    assert_eq!(intents.len(), 1, "place_order should create exactly one payment intent");
+    assert_eq!(
+        intents.len(),
+        1,
+        "place_order should create exactly one payment intent"
+    );
     let intent = &intents[0];
     assert_eq!(intent.order_id, Some(order_id));
     assert_eq!(intent.amount_paise, cart_total as i32);
@@ -226,7 +233,8 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
     let intent = intents.into_iter().next().expect("one intent");
     let razorpay_order_id = intent.razorpay_order_id.clone();
     let razorpay_payment_id = "pay_test_verified_123".to_string();
-    let signature = compute_razorpay_signature(&razorpay_order_id, &razorpay_payment_id, TEST_SECRET);
+    let signature =
+        compute_razorpay_signature(&razorpay_order_id, &razorpay_payment_id, TEST_SECRET);
 
     std::env::set_var("RAZORPAY_KEY_SECRET", TEST_SECRET);
     let verify_res = core_operations::handlers::payment_intents::verify_razorpay_payment(
@@ -252,7 +260,10 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
         .expect("query intent")
         .expect("intent exists");
     assert_eq!(updated.status, PaymentIntentStatus::ClientVerified);
-    assert_eq!(updated.razorpay_payment_id.as_deref(), Some(razorpay_payment_id.as_str()));
+    assert_eq!(
+        updated.razorpay_payment_id.as_deref(),
+        Some(razorpay_payment_id.as_str())
+    );
 
     txn.rollback().await.ok();
 }

@@ -22,7 +22,8 @@ use proto::proto::core::{
     PlaceOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use tonic::{Code, Request};
 
@@ -292,10 +293,12 @@ async fn integration_guest_cart_not_used_for_place_order() {
         }),
     )
     .await;
-    let err = result.expect_err("place_order should fail: user's cart is empty, guest cart is not used");
+    let err =
+        result.expect_err("place_order should fail: user's cart is empty, guest cart is not used");
     assert_eq!(err.code(), Code::FailedPrecondition);
     assert!(
-        err.message().to_lowercase().contains("cart") && err.message().to_lowercase().contains("empty"),
+        err.message().to_lowercase().contains("cart")
+            && err.message().to_lowercase().contains("empty"),
         "error should mention empty cart, got: {}",
         err.message()
     );
@@ -322,7 +325,10 @@ async fn integration_place_order_clears_all_user_cart_items() {
             status_id: ActiveValue::NotSet,
             status_name: ActiveValue::Set("pending".to_string()),
         };
-        let _ = status.insert(&txn).await.expect("insert pending OrderStatus");
+        let _ = status
+            .insert(&txn)
+            .await
+            .expect("insert pending OrderStatus");
     }
 
     let now_tag = Utc::now().timestamp_millis();
@@ -426,7 +432,11 @@ async fn integration_place_order_clears_all_user_cart_items() {
     .await
     .expect("insert ProductVariants");
 
-    for (vid, _) in [(v1.variant_id, 1_i64), (v2.variant_id, 1), (v3.variant_id, 1)] {
+    for (vid, _) in [
+        (v1.variant_id, 1_i64),
+        (v2.variant_id, 1),
+        (v3.variant_id, 1),
+    ] {
         let _ = inventory::ActiveModel {
             inventory_id: ActiveValue::NotSet,
             variant_id: ActiveValue::Set(Some(vid)),
@@ -483,7 +493,11 @@ async fn integration_place_order_clears_all_user_cart_items() {
     )
     .await
     .expect("get_cart_items");
-    assert_eq!(get_before.get_ref().items.len(), 3, "three items before place_order");
+    assert_eq!(
+        get_before.get_ref().items.len(),
+        3,
+        "three items before place_order"
+    );
 
     let place_res = place_order(
         &txn,

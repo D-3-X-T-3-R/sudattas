@@ -22,7 +22,8 @@ use proto::proto::core::{
     SearchOrderRequest, UpdateCartItemRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    TransactionTrait,
 };
 use tonic::{Code, Request};
 
@@ -188,8 +189,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart() {
     let order = &body.items[0];
     assert_eq!(order.user_id, user_id, "order belongs to user");
     assert_eq!(
-        order.shipping_address_id,
-        shipping.shipping_address_id,
+        order.shipping_address_id, shipping.shipping_address_id,
         "order uses expected shipping address"
     );
     assert_eq!(
@@ -276,11 +276,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     }
 
     // Create role and user as before.
-    let role_name = format!(
-        "itest_role_{}",
-        Utc::now()
-            .timestamp_millis()
-    );
+    let role_name = format!("itest_role_{}", Utc::now().timestamp_millis());
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(role_name),
@@ -289,8 +285,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     .await
     .expect("insert UserRoles");
 
-    let now_tag = Utc::now()
-        .timestamp_millis();
+    let now_tag = Utc::now().timestamp_millis();
     let user_res = core_operations::handlers::users::create_user(
         &txn,
         Request::new(CreateUserRequest {
@@ -459,14 +454,13 @@ async fn integration_place_order_empty_cart_fails() {
             status_id: ActiveValue::NotSet,
             status_name: ActiveValue::Set("pending".to_string()),
         };
-        let _ = status.insert(&txn).await.expect("insert pending OrderStatus");
+        let _ = status
+            .insert(&txn)
+            .await
+            .expect("insert pending OrderStatus");
     }
 
-    let role_name = format!(
-        "itest_role_empty_{}",
-        Utc::now()
-            .timestamp_millis()
-    );
+    let role_name = format!("itest_role_empty_{}", Utc::now().timestamp_millis());
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(role_name),
@@ -475,8 +469,7 @@ async fn integration_place_order_empty_cart_fails() {
     .await
     .expect("insert UserRoles");
 
-    let now_tag = Utc::now()
-        .timestamp_millis();
+    let now_tag = Utc::now().timestamp_millis();
     let user_res = core_operations::handlers::users::create_user(
         &txn,
         Request::new(CreateUserRequest {
@@ -521,7 +514,8 @@ async fn integration_place_order_empty_cart_fails() {
     let err = result.expect_err("place_order should fail when cart is empty");
     assert_eq!(err.code(), Code::FailedPrecondition);
     assert!(
-        err.message().to_lowercase().contains("cart") && err.message().to_lowercase().contains("empty"),
+        err.message().to_lowercase().contains("cart")
+            && err.message().to_lowercase().contains("empty"),
         "error should mention empty cart, got: {}",
         err.message()
     );
@@ -549,14 +543,13 @@ async fn integration_cart_add_get_update_then_place_order() {
             status_id: ActiveValue::NotSet,
             status_name: ActiveValue::Set("pending".to_string()),
         };
-        let _ = status.insert(&txn).await.expect("insert pending OrderStatus");
+        let _ = status
+            .insert(&txn)
+            .await
+            .expect("insert pending OrderStatus");
     }
 
-    let role_name = format!(
-        "itest_role_cartup_{}",
-        Utc::now()
-            .timestamp_millis()
-    );
+    let role_name = format!("itest_role_cartup_{}", Utc::now().timestamp_millis());
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(role_name),
@@ -565,8 +558,7 @@ async fn integration_cart_add_get_update_then_place_order() {
     .await
     .expect("insert UserRoles");
 
-    let now_tag = Utc::now()
-        .timestamp_millis();
+    let now_tag = Utc::now().timestamp_millis();
     let user_res = core_operations::handlers::users::create_user(
         &txn,
         Request::new(CreateUserRequest {
@@ -752,14 +744,13 @@ async fn integration_place_order_multiple_items_two_variants() {
             status_id: ActiveValue::NotSet,
             status_name: ActiveValue::Set("pending".to_string()),
         };
-        let _ = status.insert(&txn).await.expect("insert pending OrderStatus");
+        let _ = status
+            .insert(&txn)
+            .await
+            .expect("insert pending OrderStatus");
     }
 
-    let role_name = format!(
-        "itest_role_multi_{}",
-        Utc::now()
-            .timestamp_millis()
-    );
+    let role_name = format!("itest_role_multi_{}", Utc::now().timestamp_millis());
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(role_name),
@@ -768,8 +759,7 @@ async fn integration_place_order_multiple_items_two_variants() {
     .await
     .expect("insert UserRoles");
 
-    let now_tag = Utc::now()
-        .timestamp_millis();
+    let now_tag = Utc::now().timestamp_millis();
     let user_res = core_operations::handlers::users::create_user(
         &txn,
         Request::new(CreateUserRequest {
@@ -931,7 +921,7 @@ async fn integration_place_order_multiple_items_two_variants() {
     .await
     .expect("place_order should succeed");
     let order = &place_res.into_inner().items[0];
-    let expected_total = 2 * 1_000 + 1 * 2_000;
+    let expected_total = 2 * 1_000 + 2_000;
     assert_eq!(order.total_amount_paise, expected_total, "2*A + 1*B = 4000");
 
     let db_order = orders::Entity::find_by_id(order.order_id)
@@ -984,14 +974,13 @@ async fn integration_place_order_then_search_order() {
             status_id: ActiveValue::NotSet,
             status_name: ActiveValue::Set("pending".to_string()),
         };
-        let _ = status.insert(&txn).await.expect("insert pending OrderStatus");
+        let _ = status
+            .insert(&txn)
+            .await
+            .expect("insert pending OrderStatus");
     }
 
-    let role_name = format!(
-        "itest_role_srch_{}",
-        Utc::now()
-            .timestamp_millis()
-    );
+    let role_name = format!("itest_role_srch_{}", Utc::now().timestamp_millis());
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(role_name),
@@ -1000,8 +989,7 @@ async fn integration_place_order_then_search_order() {
     .await
     .expect("insert UserRoles");
 
-    let now_tag = Utc::now()
-        .timestamp_millis();
+    let now_tag = Utc::now().timestamp_millis();
     let user_res = core_operations::handlers::users::create_user(
         &txn,
         Request::new(CreateUserRequest {
@@ -1131,4 +1119,3 @@ async fn integration_place_order_then_search_order() {
 
     txn.rollback().await.ok();
 }
-

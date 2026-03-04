@@ -20,10 +20,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue, Database, TransactionTrait};
 use tonic::Request;
 
 /// Create user + category + product; return (user_id, product_id).
-async fn wishlist_test_setup(
-    txn: &sea_orm::DatabaseTransaction,
-    now_tag: i64,
-) -> (i64, i64) {
+async fn wishlist_test_setup(txn: &sea_orm::DatabaseTransaction, now_tag: i64) -> (i64, i64) {
     let role = core_db_entities::entity::user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(format!("itest_wl_{}", now_tag)),
@@ -86,7 +83,10 @@ async fn integration_add_wishlist_item_search_returns_expected_items() {
 
     let add_res = core_operations::handlers::wishlist::add_wishlist_item(
         &txn,
-        Request::new(AddWishlistItemRequest { user_id, product_id }),
+        Request::new(AddWishlistItemRequest {
+            user_id,
+            product_id,
+        }),
     )
     .await
     .expect("add_wishlist_item should succeed");
@@ -128,7 +128,10 @@ async fn integration_delete_wishlist_item_search_empty() {
 
     let add_res = core_operations::handlers::wishlist::add_wishlist_item(
         &txn,
-        Request::new(AddWishlistItemRequest { user_id, product_id }),
+        Request::new(AddWishlistItemRequest {
+            user_id,
+            product_id,
+        }),
     )
     .await
     .expect("add_wishlist_item should succeed");
@@ -136,7 +139,10 @@ async fn integration_delete_wishlist_item_search_empty() {
 
     let _ = core_operations::handlers::wishlist::delete_wishlist_item(
         &txn,
-        Request::new(DeleteWishlistItemRequest { wishlist_id, user_id }),
+        Request::new(DeleteWishlistItemRequest {
+            wishlist_id,
+            user_id,
+        }),
     )
     .await
     .expect("delete_wishlist_item should succeed");
@@ -152,7 +158,10 @@ async fn integration_delete_wishlist_item_search_empty() {
     .await
     .expect("search_wishlist_item should succeed");
     let items = search_res.into_inner().items;
-    assert!(items.is_empty(), "search_wishlist after delete should return no items");
+    assert!(
+        items.is_empty(),
+        "search_wishlist after delete should return no items"
+    );
 
     txn.rollback().await.ok();
 }
