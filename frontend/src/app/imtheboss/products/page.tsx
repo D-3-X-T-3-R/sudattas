@@ -8,6 +8,8 @@ import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Section } from "@/components/ui/section";
+import { Kicker, SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 
 type ProductFormState = {
@@ -421,8 +423,13 @@ export default function AdminProductsPage() {
   const [activeTab, setActiveTab] = useState<"view" | "add">("view");
 
   return (
-    <div className="max-w-xl">
-      <div className="mb-4 inline-flex rounded-full border border-[var(--color-line)] bg-white/70 p-1 text-xs">
+    <Section compact className="max-w-6xl">
+      <Kicker className="text-[var(--color-muted)]">Products</Kicker>
+      <SectionHeading size="default" className="mt-2">
+        Product catalog
+      </SectionHeading>
+
+      <div className="mt-6 inline-flex rounded-full border border-[var(--color-line)] bg-white/70 p-1 text-xs">
         <button
           type="button"
           onClick={() => setActiveTab("view")}
@@ -450,8 +457,8 @@ export default function AdminProductsPage() {
       </div>
 
       {activeTab === "view" && (
-        <Card>
-          <CardTitle>View products</CardTitle>
+        <Card className="mt-6 border-[var(--color-line)]">
+          <CardTitle className="text-[var(--color-muted)]">View products</CardTitle>
           <CardContent className="mt-4 space-y-4 text-sm text-[var(--color-muted)]">
             <form
               onSubmit={handleSearchSubmit}
@@ -577,8 +584,8 @@ export default function AdminProductsPage() {
       )}
 
       {activeTab === "add" && (
-        <Card className="mt-4">
-          <CardTitle>Add new product</CardTitle>
+        <Card className="mt-6 border-[var(--color-line)]">
+          <CardTitle className="text-[var(--color-muted)]">Add new product</CardTitle>
           <CardContent className="mt-6">
             {categoriesError && (
               <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -903,6 +910,6 @@ export default function AdminProductsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </Section>
   );
 }
