@@ -17,7 +17,7 @@ pub struct Model {
     pub rating: i8,
     #[sea_orm(column_name = "Comment", column_type = "Text", nullable)]
     pub comment: Option<String>,
-    pub status: Option<ReviewStatus>,
+    pub review_status: Option<ReviewStatus>,
     pub is_verified_purchase: Option<i8>,
     pub created_at: Option<DateTimeUtc>,
 }

@@ -27,7 +27,7 @@ pub async fn search_review(
     if let Some(ref s) = req.status_filter {
         let s = s.trim().to_lowercase();
         if ALLOWED_STATUS.contains(&s.as_str()) {
-            query = query.filter(Expr::cust(format!("status = '{}'", s)));
+            query = query.filter(Expr::cust(format!("review_status = '{}'", s)));
         }
     }
     if let Some(lim) = req.limit {

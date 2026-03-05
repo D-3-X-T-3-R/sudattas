@@ -15,7 +15,7 @@ pub async fn create_review(
         user_id: ActiveValue::Set(Some(req.user_id)),
         rating: ActiveValue::Set(req.rating as i8),
         comment: ActiveValue::Set(Some(req.comment)),
-        status: ActiveValue::NotSet,
+        review_status: ActiveValue::NotSet,
         is_verified_purchase: ActiveValue::NotSet,
         created_at: ActiveValue::NotSet,
     };
