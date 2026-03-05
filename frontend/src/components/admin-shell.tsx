@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   Package,
@@ -11,6 +12,7 @@ import {
   Settings,
   Menu,
   X,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Kicker, SectionHeading } from "@/components/ui/typography";
@@ -103,13 +105,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t border-[var(--color-line)] p-4">
+        <div className="border-t border-[var(--color-line)] space-y-0.5 p-4">
           <Link
             href={STORE_URL}
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)]"
           >
             ← Back to store
           </Link>
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)]"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            Sign out
+          </button>
         </div>
       </aside>
 

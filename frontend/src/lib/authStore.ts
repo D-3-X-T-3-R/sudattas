@@ -1,6 +1,6 @@
 /**
- * Current JWT access token for API calls (set by Auth0 sync).
- * GraphQL client reads this when present so requests use Bearer token.
+ * Current JWT access token for API calls (set by Google OAuth / NextAuth).
+ * Admin panel syncs session token here; GraphQL clients use it as Bearer when present.
  */
 
 let accessToken: string | null = null;
