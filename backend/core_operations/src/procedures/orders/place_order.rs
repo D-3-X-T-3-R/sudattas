@@ -329,6 +329,26 @@ pub async fn place_order(
 
     let discount_total_minor = gross_paise - total_paise;
 
+    // Reserve inventory before creating the order so that on insufficient stock we fail without creating any order.
+    for (variant_id, quantity) in &variant_quantity_map {
+        let qty = *quantity;
+        let result = txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable - ? WHERE VariantID = ? AND QuantityAvailable >= ?"#,
+                [qty.into(), (*variant_id).into(), qty.into()],
+            ))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        if result.rows_affected() == 0 {
+            crate::observability::record_inventory_update_failure_total();
+            return Err(Status::failed_precondition(format!(
+                "Insufficient stock for variant {} (need {}); inventory update had no effect",
+                variant_id, qty
+            )));
+        }
+    }
+
     let pending_status_id = order_state_machine::get_status_id(txn, "pending")
         .await
         .map_err(|e| Status::internal(e.to_string()))?
@@ -400,26 +420,6 @@ pub async fn place_order(
     .await?
     .into_inner()
     .items;
-
-    // Atomic inventory decrement: reserve stock for this order (same transaction).
-    for (variant_id, quantity) in &variant_quantity_map {
-        let qty = *quantity;
-        let result = txn
-            .execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable - ? WHERE VariantID = ? AND QuantityAvailable >= ?"#,
-                [qty.into(), (*variant_id).into(), qty.into()],
-            ))
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-        if result.rows_affected() == 0 {
-            crate::observability::record_inventory_update_failure_total();
-            return Err(Status::failed_precondition(format!(
-                "Insufficient stock for variant {} (need {}); inventory update had no effect",
-                variant_id, qty
-            )));
-        }
-    }
 
     // Auto-create a pending payment intent: backend creates Razorpay order via API (server-authoritative).
     let amount_paise = total_paise;

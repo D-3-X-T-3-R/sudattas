@@ -294,7 +294,7 @@ async fn integration_apply_coupon_increments_usage_count() {
             min_order_value_paise: Some(500),
             usage_limit: Some(5),
             max_uses_per_customer: None,
-            starts_at: Utc::now().to_rfc3339(),
+            starts_at: (Utc::now() - Duration::seconds(1)).to_rfc3339(),
             ends_at: Some((Utc::now() + Duration::days(1)).to_rfc3339()),
         }),
     )
@@ -343,7 +343,7 @@ async fn integration_coupon_usage_limit_second_apply_invalid() {
             min_order_value_paise: Some(0),
             usage_limit: Some(1),
             max_uses_per_customer: None,
-            starts_at: Utc::now().to_rfc3339(),
+            starts_at: (Utc::now() - Duration::seconds(1)).to_rfc3339(),
             ends_at: None,
         }),
     )
