@@ -24,13 +24,6 @@ import { CartDrawer } from "@/components/cart-drawer";
 import { WishlistDrawer } from "@/components/wishlist-drawer";
 import { QuickViewModal } from "@/components/quick-view-modal";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
-import { AuthSync } from "@/components/auth-sync";
-
-const AUTH0_ENABLED = !!(
-  typeof process !== "undefined" &&
-  process.env?.NEXT_PUBLIC_AUTH0_DOMAIN &&
-  process.env?.NEXT_PUBLIC_AUTH0_CLIENT_ID
-);
 
 export function Storefront() {
   const reduceMotion = useReducedMotion();
@@ -134,7 +127,6 @@ export function Storefront() {
       id="top"
       className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]"
     >
-      {AUTH0_ENABLED && <AuthSync />}
       <AnnouncementBar />
       <Header
         query={query}
@@ -145,7 +137,6 @@ export function Storefront() {
         setCartOpen={setCartOpen}
         setWishOpen={setWishOpen}
         goTo={goToWithMotion}
-        authEnabled={AUTH0_ENABLED}
       />
 
       <HeroSection />
@@ -206,7 +197,6 @@ export function Storefront() {
         paymentMessage={paymentMessage}
         onTestRazorpay={runTest}
         onCheckout={() => alert("Checkout flow not wired yet")}
-        authEnabled={AUTH0_ENABLED}
       />
 
       <QuickViewModal

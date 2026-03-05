@@ -1,6 +1,9 @@
 /**
- * GraphQL client for admin panel. Uses NEXT_PUBLIC_ADMIN_API_KEY (or token/session) for auth.
+ * GraphQL client for admin panel. Auth order: session Bearer token (from Google login) >
+ * NEXT_PUBLIC_GRAPHQL_TOKEN > NEXT_PUBLIC_GRAPHQL_SESSION_ID > NEXT_PUBLIC_ADMIN_API_KEY.
  */
+
+import { getAccessToken } from "@/lib/authStore";
 
 const GRAPHQL_URL =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_URL) ||
@@ -10,7 +13,8 @@ function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  const token =
+  const sessionToken = getAccessToken();
+  const envToken =
     typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_TOKEN;
   const sessionId =
     typeof process !== "undefined" &&
@@ -18,6 +22,8 @@ function getAuthHeaders(): Record<string, string> {
   const adminKey =
     typeof process !== "undefined" &&
     process.env?.NEXT_PUBLIC_ADMIN_API_KEY;
+
+  const token = sessionToken || (typeof envToken === "string" ? envToken : null);
   if (typeof token === "string" && token) {
     headers["Authorization"] = token.startsWith("Bearer ")
       ? token

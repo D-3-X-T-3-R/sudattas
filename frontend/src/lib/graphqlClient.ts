@@ -1,6 +1,6 @@
 /**
  * GraphQL client for storefront (and Razorpay test).
- * Auth order: Auth0 token (authStore) > NEXT_PUBLIC_GRAPHQL_TOKEN > NEXT_PUBLIC_GRAPHQL_SESSION_ID > guest session from localStorage.
+ * Auth order: session token (authStore, e.g. from Google OAuth) > NEXT_PUBLIC_GRAPHQL_TOKEN > NEXT_PUBLIC_GRAPHQL_SESSION_ID > guest session from localStorage.
  */
 
 import { getAccessToken } from "@/lib/authStore";
@@ -18,14 +18,14 @@ function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  const auth0Token = getAccessToken();
+  const sessionToken = getAccessToken();
   const envToken =
     typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_TOKEN;
   const envSessionId =
     typeof process !== "undefined" &&
     process.env?.NEXT_PUBLIC_GRAPHQL_SESSION_ID;
   const guestSessionId = getGuestSessionId();
-  const token = auth0Token || (typeof envToken === "string" ? envToken : null);
+  const token = sessionToken || (typeof envToken === "string" ? envToken : null);
   if (token) {
     headers["Authorization"] = token.startsWith("Bearer ")
       ? token
