@@ -56,3 +56,30 @@ pub struct ApplyCoupon {
     pub code: String,
     pub order_amount_paise: String,
 }
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Admin: create a coupon")]
+pub struct CreateCouponInput {
+    pub code: String,
+    /// \"percentage\" | \"fixed_amount\"
+    pub discount_type: String,
+    pub discount_value: i32,
+    pub min_order_value_paise: Option<i32>,
+    pub usage_limit: Option<i32>,
+    pub max_uses_per_customer: Option<i32>,
+    /// RFC3339 timestamp
+    pub starts_at: String,
+    /// RFC3339 timestamp
+    pub ends_at: Option<String>,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Admin: update a coupon")]
+pub struct UpdateCouponInput {
+    pub coupon_id: String,
+    /// \"active\" | \"inactive\"
+    pub status: Option<String>,
+    pub usage_limit: Option<i32>,
+    /// RFC3339 timestamp
+    pub ends_at: Option<String>,
+}

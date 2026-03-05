@@ -1,9 +1,13 @@
 use proto::proto::core::{
+    AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateOrderRequest,
     DeleteOrderRequest, PlaceOrderRequest, SearchOrderRequest, UpdateOrderRequest,
 };
 use tracing::instrument;
 
-use super::schema::{NewOrder, Order, OrderMutation, SearchOrder};
+use super::schema::{
+    AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CreateOrderInput, NewOrder, Order,
+    OrderMutation, SearchOrder,
+};
 use crate::resolvers::{
     convert,
     error::GqlError,
@@ -104,4 +108,69 @@ pub(crate) async fn update_order(order: OrderMutation) -> Result<Vec<Order>, Gql
         .into_iter()
         .map(convert::order_response_to_gql)
         .collect())
+}
+
+#[instrument]
+pub(crate) async fn create_order_admin(input: CreateOrderInput) -> Result<Vec<Order>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .create_order(CreateOrderRequest {
+            user_id: parse_i64(&input.user_id, "user_id")?,
+            shipping_address_id: parse_i64(&input.shipping_address_id, "shipping_address_id")?,
+            status_id: parse_i64(&input.status_id, "status_id")?,
+            total_amount_paise: parse_i64(&input.total_amount_paise, "total_amount_paise")?,
+            subtotal_minor: to_option_i64(input.subtotal_minor),
+            shipping_minor: to_option_i64(input.shipping_minor),
+            tax_total_minor: to_option_i64(input.tax_total_minor),
+            discount_total_minor: to_option_i64(input.discount_total_minor),
+            grand_total_minor: to_option_i64(input.grand_total_minor),
+            applied_coupon_id: to_option_i64(input.applied_coupon_id),
+            applied_coupon_code: input.applied_coupon_code,
+            applied_discount_paise: input
+                .applied_discount_paise
+                .as_deref()
+                .map(|s| s.parse::<i32>())
+                .transpose()
+                .map_err(|_| {
+                    GqlError::new(
+                        "Failed to parse applied_discount_paise",
+                        crate::resolvers::error::Code::InvalidArgument,
+                    )
+                })?,
+        })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::order_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn admin_mark_order_shipped(
+    input: AdminMarkOrderShippedInput,
+) -> Result<bool, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let _ = client
+        .admin_mark_order_shipped(AdminMarkOrderShippedRequest {
+            order_id: parse_i64(&input.order_id, "order_id")?,
+            awb_code: input.awb_code,
+            carrier: input.carrier,
+        })
+        .await?;
+    Ok(true)
+}
+
+#[instrument]
+pub(crate) async fn admin_mark_order_delivered(
+    input: AdminMarkOrderDeliveredInput,
+) -> Result<bool, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let _ = client
+        .admin_mark_order_delivered(AdminMarkOrderDeliveredRequest {
+            order_id: parse_i64(&input.order_id, "order_id")?,
+        })
+        .await?;
+    Ok(true)
 }

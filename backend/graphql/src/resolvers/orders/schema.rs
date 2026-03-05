@@ -99,3 +99,35 @@ pub struct OrderMutation {
     pub status_id: String,
     pub order_id: String,
 }
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Create an order (admin/low-level)")]
+pub struct CreateOrderInput {
+    pub user_id: String,
+    pub shipping_address_id: String,
+    pub status_id: String,
+    /// Legacy total in paise
+    pub total_amount_paise: String,
+    pub subtotal_minor: Option<String>,
+    pub shipping_minor: Option<String>,
+    pub tax_total_minor: Option<String>,
+    pub discount_total_minor: Option<String>,
+    pub grand_total_minor: Option<String>,
+    pub applied_coupon_id: Option<String>,
+    pub applied_coupon_code: Option<String>,
+    pub applied_discount_paise: Option<String>,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Admin: mark order shipped")]
+pub struct AdminMarkOrderShippedInput {
+    pub order_id: String,
+    pub awb_code: Option<String>,
+    pub carrier: Option<String>,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Admin: mark order delivered")]
+pub struct AdminMarkOrderDeliveredInput {
+    pub order_id: String,
+}

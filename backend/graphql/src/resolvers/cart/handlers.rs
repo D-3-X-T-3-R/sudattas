@@ -1,5 +1,6 @@
 use proto::proto::core::{
-    CreateCartItemRequest, DeleteCartItemRequest, GetCartItemsRequest, UpdateCartItemRequest,
+    CreateCartItemRequest, DeleteCartItemRequest, EnqueueAbandonedCartRequest,
+    EnqueueAbandonedCartResponse, GetCartItemsRequest, UpdateCartItemRequest,
 };
 
 use tracing::instrument;
@@ -41,6 +42,23 @@ pub(crate) async fn add_cart_item(cart_item: NewCart) -> Result<Vec<Cart>, GqlEr
         .into_iter()
         .map(convert::cart_item_response_to_gql)
         .collect())
+}
+
+#[instrument]
+pub(crate) async fn enqueue_abandoned_cart(
+    delay_hours: Option<String>,
+) -> Result<EnqueueAbandonedCartResponse, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let delay_hours_parsed = match delay_hours {
+        Some(ref s) => Some(parse_i64(s, "delay_hours")?),
+        None => None,
+    };
+    let response = client
+        .enqueue_abandoned_cart(EnqueueAbandonedCartRequest {
+            delay_hours: delay_hours_parsed,
+        })
+        .await?;
+    Ok(response.into_inner())
 }
 
 pub(crate) async fn get_cart_items(

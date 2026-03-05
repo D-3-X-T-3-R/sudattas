@@ -1,10 +1,12 @@
-use proto::proto::core::{CreateOrderEventRequest, GetOrderEventsRequest, OrderEventResponse};
+use proto::proto::core::{
+    CreateOrderEventRequest, GetOrderEventsRequest, OrderEventResponse, SearchOrderEventsRequest,
+};
 use tracing::instrument;
 
-use super::schema::{NewOrderEvent, OrderEvent};
+use super::schema::{NewOrderEvent, OrderEvent, SearchOrderEvents};
 use crate::resolvers::{
     error::GqlError,
-    utils::{connect_grpc_client, parse_i64},
+    utils::{connect_grpc_client, parse_i64, to_option_i64},
 };
 
 fn event_response_to_gql(e: OrderEventResponse) -> OrderEvent {
@@ -47,6 +49,26 @@ pub(crate) async fn create_order_event(input: NewOrderEvent) -> Result<Vec<Order
             to_status: input.to_status,
             actor_type: input.actor_type,
             message: input.message,
+        })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(event_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn search_order_events(
+    input: SearchOrderEvents,
+) -> Result<Vec<OrderEvent>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .search_order_events(SearchOrderEventsRequest {
+            order_id: to_option_i64(input.order_id),
+            limit: crate::graphql_limits::cap_page_size(to_option_i64(input.limit)),
+            offset: to_option_i64(input.offset),
         })
         .await?;
     Ok(response

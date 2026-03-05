@@ -1,10 +1,12 @@
 use proto::proto::core::{
-    CreateReviewRequest, DeleteReviewRequest, ReviewResponse, SearchReviewRequest,
-    UpdateReviewRequest,
+    AdminUpdateReviewStatusRequest, CreateReviewRequest, DeleteReviewRequest, ReviewResponse,
+    SearchReviewRequest, UpdateReviewRequest,
 };
 use tracing::instrument;
 
-use super::schema::{NewReview, Review, ReviewMutation, SearchReview};
+use super::schema::{
+    AdminUpdateReviewStatusInput, NewReview, Review, ReviewMutation, SearchReview,
+};
 use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64, to_option_i64},
@@ -108,4 +110,18 @@ pub(crate) async fn delete_review(review_id: String) -> Result<Vec<Review>, GqlE
         .into_iter()
         .map(review_response_to_gql)
         .collect())
+}
+
+#[instrument]
+pub(crate) async fn admin_update_review_status(
+    input: AdminUpdateReviewStatusInput,
+) -> Result<bool, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let _ = client
+        .admin_update_review_status(AdminUpdateReviewStatusRequest {
+            review_id: parse_i64(&input.review_id, "review id")?,
+            status: input.status,
+        })
+        .await?;
+    Ok(true)
 }

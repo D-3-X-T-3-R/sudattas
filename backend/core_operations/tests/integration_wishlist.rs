@@ -37,7 +37,9 @@ async fn wishlist_test_setup(txn: &sea_orm::DatabaseTransaction, now_tag: i64) -
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             role_id: Some(role.role_id),
         }),
     )

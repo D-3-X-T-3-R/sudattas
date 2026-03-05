@@ -1,11 +1,11 @@
 use proto::proto::core::{
-    CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest, SearchProductRequest,
-    SearchProductVariantRequest, UpdateProductRequest,
+    CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest, GetRelatedProductsRequest,
+    SearchProductRequest, SearchProductVariantRequest, UpdateProductRequest,
 };
 
 use tracing::instrument;
 
-use super::schema::{NewProduct, Product, ProductMutation, SearchProduct};
+use super::schema::{GetRelatedProducts, NewProduct, Product, ProductMutation, SearchProduct};
 use crate::resolvers::{
     convert,
     error::GqlError,
@@ -125,6 +125,25 @@ pub(crate) async fn get_products_for_variant(variant_id: &str) -> Result<Vec<Pro
     }
     let resp = client
         .get_products_by_id(GetProductsByIdRequest { product_ids })
+        .await?;
+    Ok(resp
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::product_response_to_gql)
+        .collect())
+}
+
+/// P2 Recommendations: fetch related products for a given product.
+#[instrument]
+pub(crate) async fn get_related_products(
+    input: GetRelatedProducts,
+) -> Result<Vec<Product>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let product_id = parse_i64(&input.product_id, "product_id")?;
+    let limit = to_option_i64(input.limit);
+    let resp = client
+        .get_related_products(GetRelatedProductsRequest { product_id, limit })
         .await?;
     Ok(resp
         .into_inner()
