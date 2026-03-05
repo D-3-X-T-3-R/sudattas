@@ -1,6 +1,7 @@
 "use client";
 
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { HeroHeading } from "@/components/ui/typography";
 
 const QUOTE =
   "Craft in every thread. Quiet luxury, not loud labels.";
@@ -16,9 +17,13 @@ export function EditorialStrip() {
           }}
         />
         <div className="relative mx-auto max-w-4xl px-6 text-center">
-          <p className="font-display text-2xl font-medium tracking-tight text-white/95 sm:text-4xl md:text-5xl md:leading-[1.2]">
+          <HeroHeading
+            inverse
+            size="sm"
+            className="text-2xl sm:text-4xl md:text-5xl md:leading-[1.2] text-white/95"
+          >
             {QUOTE}
-          </p>
+          </HeroHeading>
           <span className="mt-6 inline-block h-px w-16 bg-[var(--color-accent-gold)]" />
         </div>
       </section>
