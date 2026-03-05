@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::cart;
 use proto::proto::core::{CartItemResponse, CartItemsResponse, DeleteCartItemRequest};
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn delete_cart_item(
@@ -40,7 +40,7 @@ pub async fn delete_cart_item(
                 .filter(|m| m.cart_id != cid)
                 .map(|model| CartItemResponse {
                     cart_id: model.cart_id,
-                    product_id: model.product_id,
+                    variant_id: model.variant_id,
                     quantity: model.quantity,
                     user_id: model.user_id.unwrap_or(0),
                 })

@@ -11,8 +11,13 @@ pub async fn search_inventory_log(
     let req = request.into_inner();
 
     let mut query = inventory_log::Entity::find();
-    if req.log_id != 0 {
-        query = query.filter(inventory_log::Column::LogId.eq(req.log_id));
+    if let Some(log_id) = req.log_id {
+        if log_id != 0 {
+            query = query.filter(inventory_log::Column::LogId.eq(log_id));
+        }
+    }
+    if let Some(variant_id) = req.variant_id {
+        query = query.filter(inventory_log::Column::VariantId.eq(variant_id));
     }
 
     match query.all(txn).await {
@@ -21,7 +26,7 @@ pub async fn search_inventory_log(
                 .into_iter()
                 .map(|m| InventoryLogResponse {
                     log_id: m.log_id,
-                    product_id: m.product_id,
+                    variant_id: m.variant_id,
                     change_quantity: m.change_quantity,
                     log_time: m.log_time.to_rfc3339(),
                     reason: m.reason.unwrap_or_default(),

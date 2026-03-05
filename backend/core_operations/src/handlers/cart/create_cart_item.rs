@@ -24,7 +24,7 @@ pub async fn create_cart_item(
         cart_id: ActiveValue::NotSet,
         user_id,
         session_id,
-        product_id: ActiveValue::Set(req.product_id),
+        variant_id: ActiveValue::Set(req.variant_id),
         quantity: ActiveValue::Set(req.quantity),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
@@ -35,7 +35,7 @@ pub async fn create_cart_item(
             let response = CartItemsResponse {
                 items: vec![CartItemResponse {
                     cart_id: cart_model.cart_id,
-                    product_id: cart_model.product_id,
+                    variant_id: cart_model.variant_id,
                     quantity: cart_model.quantity,
                     user_id: cart_model.user_id.unwrap_or(0),
                 }],

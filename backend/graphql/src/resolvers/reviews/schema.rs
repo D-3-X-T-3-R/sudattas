@@ -62,3 +62,11 @@ pub struct SearchReview {
     /// Number of results to skip for pagination
     pub offset: Option<String>,
 }
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Admin: update review status (approve/reject)")]
+pub struct AdminUpdateReviewStatusInput {
+    pub review_id: String,
+    /// \"approved\" | \"rejected\"
+    pub status: String,
+}

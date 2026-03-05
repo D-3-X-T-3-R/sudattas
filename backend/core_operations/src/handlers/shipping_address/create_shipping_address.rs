@@ -13,22 +13,26 @@ pub async fn create_shipping_address(
     let req = request.into_inner();
     let model = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
-        country_id: ActiveValue::Set(req.country_id),
-        state_id: ActiveValue::Set(req.state_id),
-        city_id: ActiveValue::Set(req.city_id),
-        road: ActiveValue::Set(Some(req.road)),
-        apartment_no_or_name: ActiveValue::Set(Some(req.apartment_no_or_name)),
+        user_id: ActiveValue::Set(req.user_id),
+        country: ActiveValue::Set(req.country),
+        state_region: ActiveValue::Set(req.state_region),
+        city: ActiveValue::Set(req.city),
+        postal_code: ActiveValue::Set(req.postal_code),
+        road: ActiveValue::Set(req.road),
+        apartment_no_or_name: ActiveValue::Set(req.apartment_no_or_name),
     };
 
     match model.insert(txn).await {
         Ok(inserted) => Ok(Response::new(ShippingAddressesResponse {
             items: vec![ShippingAddressResponse {
                 shipping_address_id: inserted.shipping_address_id,
-                country_id: inserted.country_id,
-                state_id: inserted.state_id,
-                city_id: inserted.city_id,
-                road: inserted.road.unwrap_or_default(),
-                apartment_no_or_name: inserted.apartment_no_or_name.unwrap_or_default(),
+                user_id: inserted.user_id,
+                country: inserted.country,
+                state_region: inserted.state_region,
+                city: inserted.city,
+                postal_code: inserted.postal_code,
+                road: inserted.road,
+                apartment_no_or_name: inserted.apartment_no_or_name,
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

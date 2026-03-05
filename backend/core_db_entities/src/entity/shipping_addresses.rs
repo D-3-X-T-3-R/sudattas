@@ -8,12 +8,16 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(column_name = "ShippingAddressID", primary_key)]
     pub shipping_address_id: i64,
-    #[sea_orm(column_name = "CountryID")]
-    pub country_id: i64,
-    #[sea_orm(column_name = "StateID")]
-    pub state_id: i64,
-    #[sea_orm(column_name = "CityID")]
-    pub city_id: i64,
+    #[sea_orm(column_name = "UserID")]
+    pub user_id: Option<i64>,
+    #[sea_orm(column_name = "Country")]
+    pub country: String,
+    #[sea_orm(column_name = "StateRegion")]
+    pub state_region: String,
+    #[sea_orm(column_name = "City")]
+    pub city: String,
+    #[sea_orm(column_name = "PostalCode")]
+    pub postal_code: String,
     #[sea_orm(column_name = "Road")]
     pub road: Option<String>,
     #[sea_orm(column_name = "ApartmentNoOrName")]
@@ -22,44 +26,16 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::cities::Entity",
-        from = "Column::CityId",
-        to = "super::cities::Column::CityId",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Cities,
-    #[sea_orm(
-        belongs_to = "super::countries::Entity",
-        from = "Column::CountryId",
-        to = "super::countries::Column::CountryId",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Countries,
     #[sea_orm(has_many = "super::orders::Entity")]
     Orders,
     #[sea_orm(
-        belongs_to = "super::states::Entity",
-        from = "Column::StateId",
-        to = "super::states::Column::StateId",
+        belongs_to = "super::users::Entity",
+        from = "Column::UserId",
+        to = "super::users::Column::UserId",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    States,
-}
-
-impl Related<super::cities::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Cities.def()
-    }
-}
-
-impl Related<super::countries::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Countries.def()
-    }
+    Users,
 }
 
 impl Related<super::orders::Entity> for Entity {
@@ -68,9 +44,9 @@ impl Related<super::orders::Entity> for Entity {
     }
 }
 
-impl Related<super::states::Entity> for Entity {
+impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::States.def()
+        Relation::Users.def()
     }
 }
 

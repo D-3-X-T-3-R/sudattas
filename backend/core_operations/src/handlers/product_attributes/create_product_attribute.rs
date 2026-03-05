@@ -13,18 +13,16 @@ pub async fn create_product_attribute(
     let req = request.into_inner();
     let model = product_attributes::ActiveModel {
         attribute_id: ActiveValue::NotSet,
-        product_id: ActiveValue::Set(Some(req.product_id)),
-        attribute_name: ActiveValue::Set(Some(req.attribute_name)),
-        attribute_value: ActiveValue::Set(Some(req.attribute_value)),
+        attribute_name: ActiveValue::Set(req.attribute_name),
+        attribute_value: ActiveValue::Set(req.attribute_value),
     };
 
     match model.insert(txn).await {
         Ok(inserted) => Ok(Response::new(ProductAttributesResponse {
             items: vec![ProductAttributeResponse {
                 attribute_id: inserted.attribute_id,
-                product_id: inserted.product_id.unwrap_or(0),
-                attribute_name: inserted.attribute_name.unwrap_or_default(),
-                attribute_value: inserted.attribute_value.unwrap_or_default(),
+                attribute_name: inserted.attribute_name,
+                attribute_value: inserted.attribute_value,
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

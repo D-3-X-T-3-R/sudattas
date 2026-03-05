@@ -377,7 +377,7 @@ async fn integration_webhook_amount_mismatch_marked_needs_review_not_paid() {
     let row = txn
         .query_one(sea_orm::Statement::from_sql_and_values(
             DbBackend::MySql,
-            "SELECT status FROM payment_intents WHERE intent_id = ?",
+            "SELECT status FROM PaymentIntents WHERE intent_id = ?",
             [inserted.intent_id.into()],
         ))
         .await
@@ -392,7 +392,7 @@ async fn integration_webhook_amount_mismatch_marked_needs_review_not_paid() {
     let row2 = txn
         .query_one(sea_orm::Statement::from_sql_and_values(
             DbBackend::MySql,
-            "SELECT razorpay_payment_id FROM payment_intents WHERE intent_id = ?",
+            "SELECT razorpay_payment_id FROM PaymentIntents WHERE intent_id = ?",
             [inserted.intent_id.into()],
         ))
         .await
@@ -481,7 +481,7 @@ async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
     let row = txn
         .query_one(sea_orm::Statement::from_sql_and_values(
             DbBackend::MySql,
-            "SELECT status FROM payment_intents WHERE intent_id = ?",
+            "SELECT status FROM PaymentIntents WHERE intent_id = ?",
             [inserted.intent_id.into()],
         ))
         .await

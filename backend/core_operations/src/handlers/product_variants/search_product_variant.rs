@@ -1,5 +1,4 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::money::decimal_to_paise;
 use core_db_entities::entity::product_variants;
 use proto::proto::core::{
     ProductVariantResponse, ProductVariantsResponse, SearchProductVariantRequest,
@@ -27,7 +26,7 @@ pub async fn search_product_variant(
                     product_id: m.product_id,
                     size_id: m.size_id,
                     color_id: m.color_id,
-                    additional_price_paise: m.additional_price.as_ref().map(decimal_to_paise),
+                    additional_price_paise: m.additional_price.map(i64::from),
                 })
                 .collect();
             Ok(Response::new(ProductVariantsResponse { items }))

@@ -1,12 +1,12 @@
 use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 
-use crate::resolvers::product::schema::{Product, SearchProduct};
+use crate::resolvers::product::schema::Product;
 
 #[derive(Default, Debug, Clone)]
 pub struct Cart {
     pub cart_id: String,
     pub user_id: String,
-    pub product_id: String,
+    pub variant_id: String,
     pub quantity: String,
 }
 
@@ -21,8 +21,8 @@ impl Cart {
         &self.user_id
     }
 
-    async fn product_id(&self) -> &String {
-        &self.product_id
+    async fn variant_id(&self) -> &String {
+        &self.variant_id
     }
 
     async fn quantity(&self) -> &String {
@@ -30,19 +30,9 @@ impl Cart {
     }
 
     async fn product_details(&self) -> FieldResult<Vec<Product>> {
-        crate::resolvers::product::handlers::search_product(SearchProduct {
-            product_id: Some(self.product_id.to_string()),
-            name: None,
-            description: None,
-            starting_price_paise: None,
-            ending_price_paise: None,
-            stock_quantity: None,
-            category_id: None,
-            limit: None,
-            offset: None,
-        })
-        .await
-        .map_err(|e| e.into())
+        crate::resolvers::product::handlers::get_products_for_variant(&self.variant_id)
+            .await
+            .map_err(|e| e.into())
     }
 }
 
@@ -50,7 +40,7 @@ impl Cart {
 #[graphql(description = "New Cart Data")]
 pub struct NewCart {
     pub user_id: String,
-    pub product_id: String,
+    pub variant_id: String,
     pub quantity: String,
     /// Guest cart: pass session_id from create_user when not logged in
     pub session_id: Option<String>,
@@ -60,7 +50,7 @@ pub struct NewCart {
 pub struct CartMutation {
     pub cart_id: String,
     pub user_id: String,
-    pub product_id: String,
+    pub variant_id: String,
     pub quantity: String,
     pub session_id: Option<String>,
 }

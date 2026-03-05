@@ -5,7 +5,7 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use chrono::{DateTime, Utc};
 use core_db_entities::entity::coupons;
 use core_db_entities::entity::sea_orm_active_enums::CouponStatus;
-use proto::proto::core::{CouponAdminResponse, CouponsAdminResponse, UpdateCouponRequest};
+use proto::proto::core::{CouponsAdminResponse, UpdateCouponRequest};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait, IntoActiveModel};
 use tonic::{Request, Response, Status};
 

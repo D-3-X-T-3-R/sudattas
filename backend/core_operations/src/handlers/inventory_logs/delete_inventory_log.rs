@@ -21,7 +21,7 @@ pub async fn delete_inventory_log(
                 Ok(_) => Ok(Response::new(InventoryLogsResponse {
                     items: vec![InventoryLogResponse {
                         log_id: model.log_id,
-                        product_id: model.product_id,
+                        variant_id: model.variant_id,
                         change_quantity: model.change_quantity,
                         log_time: model.log_time.to_rfc3339(),
                         reason: model.reason.unwrap_or_default(),

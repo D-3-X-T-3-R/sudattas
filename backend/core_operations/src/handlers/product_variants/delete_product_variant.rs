@@ -1,5 +1,4 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::money::decimal_to_paise;
 use core_db_entities::entity::product_variants;
 use proto::proto::core::{
     DeleteProductVariantRequest, ProductVariantResponse, ProductVariantsResponse,
@@ -29,10 +28,7 @@ pub async fn delete_product_variant(
                         product_id: model.product_id,
                         size_id: model.size_id,
                         color_id: model.color_id,
-                        additional_price_paise: model
-                            .additional_price
-                            .as_ref()
-                            .map(decimal_to_paise),
+                        additional_price_paise: model.additional_price.map(i64::from),
                     }],
                 })),
                 Err(e) => Err(map_db_error_to_status(e)),

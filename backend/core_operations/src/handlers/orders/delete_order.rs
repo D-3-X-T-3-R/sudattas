@@ -1,5 +1,4 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::money::decimal_to_paise;
 use core_db_entities::entity::orders;
 use proto::proto::core::{DeleteOrderRequest, OrderResponse, OrdersResponse};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
@@ -22,9 +21,7 @@ pub async fn delete_order(
             {
                 Ok(delete_result) => {
                     if delete_result.rows_affected > 0 {
-                        let total_amount_paise = model
-                            .grand_total_minor
-                            .unwrap_or_else(|| decimal_to_paise(&model.total_amount));
+                        let total_amount_paise = model.grand_total_minor;
                         let response = OrdersResponse {
                             items: vec![OrderResponse {
                                 user_id: model.user_id,

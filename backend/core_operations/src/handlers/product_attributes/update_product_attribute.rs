@@ -25,18 +25,22 @@ pub async fn update_product_attribute(
 
     let model = product_attributes::ActiveModel {
         attribute_id: ActiveValue::Set(existing.attribute_id),
-        product_id: ActiveValue::Set(req.product_id.or(existing.product_id)),
-        attribute_name: ActiveValue::Set(req.attribute_name.or(existing.attribute_name)),
-        attribute_value: ActiveValue::Set(req.attribute_value.or(existing.attribute_value)),
+        attribute_name: ActiveValue::Set(
+            req.attribute_name
+                .unwrap_or_else(|| existing.attribute_name.clone()),
+        ),
+        attribute_value: ActiveValue::Set(
+            req.attribute_value
+                .unwrap_or_else(|| existing.attribute_value.clone()),
+        ),
     };
 
     match model.update(txn).await {
         Ok(updated) => Ok(Response::new(ProductAttributesResponse {
             items: vec![ProductAttributeResponse {
                 attribute_id: updated.attribute_id,
-                product_id: updated.product_id.unwrap_or(0),
-                attribute_name: updated.attribute_name.unwrap_or_default(),
-                attribute_value: updated.attribute_value.unwrap_or_default(),
+                attribute_name: updated.attribute_name,
+                attribute_value: updated.attribute_value,
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

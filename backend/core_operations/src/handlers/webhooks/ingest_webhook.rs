@@ -166,7 +166,7 @@ async fn process_payment_captured(
             .flatten(),
         None => None,
     };
-    let order_grand_paise: Option<i64> = order.as_ref().and_then(|o| o.grand_total_minor);
+    let order_grand_paise: Option<i64> = order.as_ref().map(|o| o.grand_total_minor);
     let intent_currency = intent.currency.as_deref().unwrap_or("").to_uppercase();
 
     // When intent has no order, verify only webhook vs intent; when it has an order, require order grand total to match too.
@@ -188,7 +188,7 @@ async fn process_payment_captured(
         let _ = txn
             .execute(Statement::from_sql_and_values(
                 DbBackend::MySql,
-                "UPDATE payment_intents SET status = 'needs_review' WHERE intent_id = ?",
+                "UPDATE PaymentIntents SET status = 'needs_review' WHERE intent_id = ?",
                 [intent.intent_id.into()],
             ))
             .await;

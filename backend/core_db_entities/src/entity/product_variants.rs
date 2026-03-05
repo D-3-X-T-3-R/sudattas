@@ -14,16 +14,14 @@ pub struct Model {
     pub size_id: Option<i64>,
     #[sea_orm(column_name = "ColorID")]
     pub color_id: Option<i64>,
-    #[sea_orm(
-        column_name = "AdditionalPrice",
-        column_type = "Decimal(Some((10, 2)))",
-        nullable
-    )]
-    pub additional_price: Option<Decimal>,
+    #[sea_orm(column_name = "AdditionalPrice")]
+    pub additional_price: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::cart::Entity")]
+    Cart,
     #[sea_orm(
         belongs_to = "super::colors::Entity",
         from = "Column::ColorId",
@@ -32,6 +30,12 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Colors,
+    #[sea_orm(has_many = "super::inventory::Entity")]
+    Inventory,
+    #[sea_orm(has_many = "super::inventory_log::Entity")]
+    InventoryLog,
+    #[sea_orm(has_many = "super::order_details::Entity")]
+    OrderDetails,
     #[sea_orm(
         belongs_to = "super::products::Entity",
         from = "Column::ProductId",
@@ -50,9 +54,33 @@ pub enum Relation {
     Sizes,
 }
 
+impl Related<super::cart::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Cart.def()
+    }
+}
+
 impl Related<super::colors::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Colors.def()
+    }
+}
+
+impl Related<super::inventory::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Inventory.def()
+    }
+}
+
+impl Related<super::inventory_log::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::InventoryLog.def()
+    }
+}
+
+impl Related<super::order_details::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OrderDetails.def()
     }
 }
 

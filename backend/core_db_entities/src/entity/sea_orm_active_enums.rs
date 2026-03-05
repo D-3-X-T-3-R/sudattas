@@ -14,6 +14,14 @@ pub enum ActorType {
     System,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "auth_provider")]
+pub enum AuthProvider {
+    #[sea_orm(string_value = "email")]
+    Email,
+    #[sea_orm(string_value = "google")]
+    Google,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "coupon_status")]
 pub enum CouponStatus {
     #[sea_orm(string_value = "active")]
@@ -42,6 +50,16 @@ pub enum PaymentStatus {
     Failed,
     #[sea_orm(string_value = "needs_review")]
     NeedsReview,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "review_status")]
+pub enum ReviewStatus {
+    #[sea_orm(string_value = "pending")]
+    Pending,
+    #[sea_orm(string_value = "approved")]
+    Approved,
+    #[sea_orm(string_value = "rejected")]
+    Rejected,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "scope_type")]

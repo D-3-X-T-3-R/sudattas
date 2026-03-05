@@ -25,10 +25,9 @@ pub async fn delete_inventory_item(
                 Ok(_) => Ok(Response::new(InventoryItemsResponse {
                     items: vec![InventoryItemResponse {
                         inventory_id: model.inventory_id,
-                        product_id: model.product_id.unwrap_or(0),
+                        variant_id: model.variant_id.unwrap_or(0),
                         quantity_available: model.quantity_available.unwrap_or(0),
                         reorder_level: model.reorder_level.unwrap_or(0),
-                        supplier_id: model.supplier_id.unwrap_or(0),
                     }],
                 })),
                 Err(e) => Err(map_db_error_to_status(e)),

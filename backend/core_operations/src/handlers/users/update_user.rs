@@ -1,4 +1,6 @@
-use crate::handlers::db_errors::map_db_error_to_status;
+use crate::auth;
+use crate::handlers::db_errors::{map_auth_error_to_status, map_db_error_to_status};
+use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
 use core_db_entities::entity::users;
 use proto::proto::core::{UpdateUserRequest, UserResponse, UsersResponse};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
@@ -16,16 +18,39 @@ pub async fn update_user(
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| Status::not_found(format!("User with ID {} not found", req.user_id)))?;
 
+    let password_hash = match &existing.auth_provider {
+        AuthProvider::Email => match req.password_plain {
+            Some(ref plain) if !plain.trim().is_empty() => {
+                let hash = auth::hash_password(plain).map_err(map_auth_error_to_status)?;
+                Some(hash)
+            }
+            _ => existing.password_hash.clone(),
+        },
+        AuthProvider::Google => None,
+    };
+
+    let google_sub = match &existing.auth_provider {
+        AuthProvider::Google => req.google_sub.or(existing.google_sub.clone()),
+        AuthProvider::Email => None,
+    };
+
+    let auth_provider_str = match &existing.auth_provider {
+        AuthProvider::Email => "email",
+        AuthProvider::Google => "google",
+    };
+
     let model = users::ActiveModel {
         user_id: ActiveValue::Set(existing.user_id),
         username: ActiveValue::Set(req.username.unwrap_or(existing.username)),
-        password: ActiveValue::Set(req.password.unwrap_or(existing.password)),
         email: ActiveValue::Set(req.email.unwrap_or(existing.email)),
+        auth_provider: ActiveValue::Set(existing.auth_provider),
+        password_hash: ActiveValue::Set(password_hash),
+        google_sub: ActiveValue::Set(google_sub),
         full_name: ActiveValue::Set(req.full_name.or(existing.full_name)),
         address: ActiveValue::Set(req.address.or(existing.address)),
         phone: ActiveValue::Set(req.phone.or(existing.phone)),
         create_date: ActiveValue::Set(existing.create_date),
-        password_hash: ActiveValue::Set(existing.password_hash),
+        role_id: ActiveValue::Set(req.role_id.or(existing.role_id)),
         email_verified: ActiveValue::Set(existing.email_verified),
         email_verified_at: ActiveValue::Set(existing.email_verified_at),
         user_status_id: ActiveValue::Set(existing.user_status_id),
@@ -40,6 +65,7 @@ pub async fn update_user(
                 user_id: updated.user_id,
                 username: updated.username,
                 email: updated.email,
+                auth_provider: auth_provider_str.to_string(),
                 full_name: updated.full_name,
                 address: updated.address,
                 phone: updated.phone,

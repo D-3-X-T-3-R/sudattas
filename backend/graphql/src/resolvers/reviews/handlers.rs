@@ -1,10 +1,12 @@
 use proto::proto::core::{
-    CreateReviewRequest, DeleteReviewRequest, ReviewResponse, SearchReviewRequest,
-    UpdateReviewRequest,
+    AdminUpdateReviewStatusRequest, CreateReviewRequest, DeleteReviewRequest, ReviewResponse,
+    SearchReviewRequest, UpdateReviewRequest,
 };
 use tracing::instrument;
 
-use super::schema::{NewReview, Review, ReviewMutation, SearchReview};
+use super::schema::{
+    AdminUpdateReviewStatusInput, NewReview, Review, ReviewMutation, SearchReview,
+};
 use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64, to_option_i64},
@@ -15,7 +17,7 @@ fn review_response_to_gql(r: ReviewResponse) -> Review {
         review_id: r.review_id.to_string(),
         product_id: r.product_id.to_string(),
         user_id: r.user_id.to_string(),
-        rating: r.rating as i32,
+        rating: r.rating,
         comment: r.comment,
     }
 }
@@ -27,7 +29,7 @@ pub(crate) async fn create_review(input: NewReview) -> Result<Vec<Review>, GqlEr
         .create_review(CreateReviewRequest {
             product_id: parse_i64(&input.product_id, "product id")?,
             user_id: parse_i64(&input.user_id, "user id")?,
-            rating: input.rating as i64,
+            rating: input.rating,
             comment: input.comment,
         })
         .await?;
@@ -82,7 +84,7 @@ pub(crate) async fn update_review(input: ReviewMutation) -> Result<Vec<Review>, 
                 .as_deref()
                 .map(|s| parse_i64(s, "user id"))
                 .transpose()?,
-            rating: input.rating.map(|r| r as i64),
+            rating: input.rating,
             comment: input.comment,
         })
         .await?;
@@ -108,4 +110,18 @@ pub(crate) async fn delete_review(review_id: String) -> Result<Vec<Review>, GqlE
         .into_iter()
         .map(review_response_to_gql)
         .collect())
+}
+
+#[instrument]
+pub(crate) async fn admin_update_review_status(
+    input: AdminUpdateReviewStatusInput,
+) -> Result<bool, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let _ = client
+        .admin_update_review_status(AdminUpdateReviewStatusRequest {
+            review_id: parse_i64(&input.review_id, "review id")?,
+            status: input.status,
+        })
+        .await?;
+    Ok(true)
 }

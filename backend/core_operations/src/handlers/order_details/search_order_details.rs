@@ -18,8 +18,8 @@ pub async fn search_order_detail(
         .apply_if(req.order_id, |query, _| {
             query.filter(order_details::Column::OrderId.eq(req.order_id))
         })
-        .apply_if(req.product_id, |query, _| {
-            query.filter(order_details::Column::ProductId.eq(req.product_id))
+        .apply_if(req.variant_id, |query, v| {
+            query.filter(order_details::Column::VariantId.eq(v))
         })
         .apply_if(req.quantity, |query, _| {
             query.filter(order_details::Column::Quantity.eq(req.quantity))
@@ -39,9 +39,9 @@ pub async fn search_order_detail(
                 .map(|model| OrderDetailResponse {
                     order_detail_id: model.order_detail_id,
                     order_id: model.order_id,
-                    product_id: model.product_id,
+                    variant_id: model.variant_id,
                     quantity: model.quantity,
-                    price_paise: decimal_to_paise(&model.price),
+                    price_paise: model.price.as_ref().map(decimal_to_paise).unwrap_or(0),
                 })
                 .collect();
 

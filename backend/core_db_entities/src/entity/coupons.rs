@@ -6,7 +6,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "coupons")]
+#[sea_orm(table_name = "Coupons")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub coupon_id: i64,
@@ -26,18 +26,12 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::orders::Entity")]
-    Orders,
     #[sea_orm(has_many = "super::coupon_redemptions::Entity")]
     CouponRedemptions,
     #[sea_orm(has_many = "super::coupon_scope::Entity")]
     CouponScope,
-}
-
-impl Related<super::orders::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Orders.def()
-    }
+    #[sea_orm(has_many = "super::orders::Entity")]
+    Orders,
 }
 
 impl Related<super::coupon_redemptions::Entity> for Entity {
@@ -49,6 +43,12 @@ impl Related<super::coupon_redemptions::Entity> for Entity {
 impl Related<super::coupon_scope::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::CouponScope.def()
+    }
+}
+
+impl Related<super::orders::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Orders.def()
     }
 }
 

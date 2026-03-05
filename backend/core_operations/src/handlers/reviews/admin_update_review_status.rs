@@ -22,7 +22,7 @@ pub async fn admin_update_review_status(
 
     let stmt = Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::MySql,
-        "UPDATE Reviews SET status = ? WHERE ReviewID = ?",
+        "UPDATE Reviews SET review_status = ? WHERE ReviewID = ?",
         [status.into(), req.review_id.into()],
     );
     let result = txn.execute(stmt).await.map_err(map_db_error_to_status)?;

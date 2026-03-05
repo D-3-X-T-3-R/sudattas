@@ -5,21 +5,17 @@ use crate::resolvers::{
         self,
         schema::{Category, SearchCategory},
     },
-    country::{
-        self,
-        schema::{Country, SearchCountry},
-    },
     coupons::{
         self,
         schema::{Coupon, ValidateCoupon},
     },
-    discounts::{
-        self,
-        schema::{Discount, SearchDiscount},
-    },
     inventory::{
         self,
         schema::{InventoryItem, SearchInventoryItem},
+    },
+    inventory_logs::{
+        self,
+        schema::{InventoryLog, SearchInventoryLogInput},
     },
     order_events::{self, schema::OrderEvent},
     orders::{
@@ -32,7 +28,7 @@ use crate::resolvers::{
     },
     product::{
         self,
-        schema::{Product, SearchProduct},
+        schema::{GetRelatedProducts, Product, SearchProduct},
     },
     product_images::{
         self,
@@ -51,15 +47,11 @@ use crate::resolvers::{
         self,
         schema::{SearchShippingMethod, ShippingMethod},
     },
-    shipping_zones::{
-        self,
-        schema::{SearchShippingZone, ShippingZone},
-    },
-    state::{
-        self,
-        schema::{SearchState, State},
-    },
     user_pii::{self, schema::UserPiiExport},
+    users::{
+        self,
+        schema::{SearchUserInput, User},
+    },
     wishlist::{
         self,
         schema::{SearchWishlistItem, WishlistItem},
@@ -123,6 +115,14 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// P2 Recommendations: get related products for a given product.
+    #[instrument(err, ret)]
+    async fn get_related_products(input: GetRelatedProducts) -> FieldResult<Vec<Product>> {
+        product::handlers::get_related_products(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // ProductImages
     #[instrument(err, ret)]
     async fn search_product_image(search: SearchProductImage) -> FieldResult<Vec<ProductImage>> {
@@ -151,22 +151,6 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_wishlist_item(search: SearchWishlistItem) -> FieldResult<Vec<WishlistItem>> {
         wishlist::handlers::search_wishlist_item(search)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    // Country
-    #[instrument(err, ret)]
-    async fn search_country(search: SearchCountry) -> FieldResult<Vec<Country>> {
-        country::handlers::search_country(search)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    // State
-    #[instrument(err, ret)]
-    async fn search_state(search: SearchState) -> FieldResult<Vec<State>> {
-        state::handlers::search_state(search)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -211,6 +195,16 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    // Inventory logs
+    #[instrument(err, ret)]
+    async fn search_inventory_log(
+        input: SearchInventoryLogInput,
+    ) -> FieldResult<Vec<InventoryLog>> {
+        inventory_logs::handlers::search_inventory_log(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Product Images — R2 presigned upload
     #[instrument(err, ret)]
     async fn get_presigned_upload_url(
@@ -229,12 +223,22 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    // Discounts
+    // Order Events search (admin audit log)
     #[instrument(err, ret)]
-    async fn search_discount(input: SearchDiscount) -> FieldResult<Vec<Discount>> {
-        discounts::handlers::search_discount(input)
-            .await
-            .map_err(|e| e.into_field_error())
+    async fn search_order_events(
+        order_id: Option<String>,
+        limit: Option<String>,
+        offset: Option<String>,
+    ) -> FieldResult<Vec<OrderEvent>> {
+        order_events::handlers::search_order_events(
+            crate::resolvers::order_events::schema::SearchOrderEvents {
+                order_id,
+                limit,
+                offset,
+            },
+        )
+        .await
+        .map_err(|e| e.into_field_error())
     }
 
     // Shipping methods
@@ -243,14 +247,6 @@ impl QueryRoot {
         input: SearchShippingMethod,
     ) -> FieldResult<Vec<ShippingMethod>> {
         shipping_methods::handlers::search_shipping_method(input)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    // Shipping zones
-    #[instrument(err, ret)]
-    async fn search_shipping_zone(input: SearchShippingZone) -> FieldResult<Vec<ShippingZone>> {
-        shipping_zones::handlers::search_shipping_zone(input)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -267,6 +263,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn export_my_pii(context: &Context) -> FieldResult<UserPiiExport> {
         user_pii::handlers::export_my_pii(context)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Users (admin/user lookup)
+    #[instrument(err, ret)]
+    async fn search_user(input: SearchUserInput) -> FieldResult<Vec<User>> {
+        users::handlers::search_user(input)
             .await
             .map_err(|e| e.into_field_error())
     }

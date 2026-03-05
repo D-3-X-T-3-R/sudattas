@@ -19,8 +19,6 @@ use warp::Reply;
 struct GraphQLRequestBody {
     query: Option<String>,
     operation_name: Option<String>,
-    #[allow(dead_code)]
-    variables: Option<serde_json::Value>,
 }
 
 /// Max query depth from env or default.
