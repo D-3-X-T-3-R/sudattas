@@ -7,6 +7,8 @@ export interface SectionProps {
   className?: string;
   /** Use for full-bleed sections that don't need horizontal container (e.g. editorial strip) */
   fullWidth?: boolean;
+  /** Reduced vertical padding (e.g. for admin panels) */
+  compact?: boolean;
   id?: string;
 }
 
@@ -18,13 +20,14 @@ export function Section({
   children,
   className,
   fullWidth,
+  compact,
   id,
 }: SectionProps) {
   return (
     <section
       id={id}
       className={cn(
-        "py-14 sm:py-16 md:py-24 lg:py-28",
+        compact ? "py-8 md:py-10" : "py-14 sm:py-16 md:py-24 lg:py-28",
         !fullWidth && "mx-auto max-w-7xl px-4",
         className
       )}

@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Kicker, SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 
 const ADMIN_BASE = "/imtheboss";
@@ -53,7 +54,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-30 bg-[rgba(247,245,240,0.85)] md:hidden"
+          className="fixed inset-0 z-30 bg-[var(--color-ivory)]/90 backdrop-blur-[2px] md:hidden"
           aria-label="Close menu"
         />
       )}
@@ -65,8 +66,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className="flex h-14 items-center justify-between border-b border-[var(--color-line)] px-4">
-          <span className="text-sm font-semibold tracking-wide">ADMIN</span>
+        <div className="flex h-16 items-center justify-between border-b border-[var(--color-line)] px-5">
+          <Kicker className="text-[var(--color-muted)]">Admin</Kicker>
           <Button
             variant="outline"
             size="icon"
@@ -77,7 +78,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <X className="h-5 w-5" />
           </Button>
         </div>
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-0.5 p-4">
           {NAV.map(({ href, icon: Icon, label }) => {
             const isActive =
               href === ADMIN_BASE
@@ -91,8 +92,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors border-l-2",
                   isActive
-                    ? "border-[var(--color-accent-brown)] bg-[var(--color-line)]/40 text-[var(--color-ink)]"
-                    : "border-transparent text-[var(--color-muted)] hover:border-[var(--color-line)]/80 hover:bg-[#F5F5F4] hover:text-[var(--color-ink)]"
+                    ? "border-[var(--color-accent-gold)] bg-[var(--color-line)]/30 text-[var(--color-ink)]"
+                    : "border-transparent text-[var(--color-muted)] hover:border-[var(--color-line)] hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)]"
                 )}
                 aria-current={isActive ? "page" : undefined}
               >
@@ -102,10 +103,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t border-[var(--color-line)] p-3">
+        <div className="border-t border-[var(--color-line)] p-4">
           <Link
             href={STORE_URL}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[#F5F5F4] hover:text-[var(--color-ink)]"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)]"
           >
             ← Back to store
           </Link>
@@ -113,7 +114,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex flex-1 flex-col min-w-0">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-[var(--color-line)] bg-[var(--color-ivory)]/95 px-4 backdrop-blur">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-ivory)]/95 px-4 md:px-6 backdrop-blur">
           <Button
             variant="outline"
             size="icon"
@@ -123,9 +124,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <h1 className="text-lg font-semibold">{title}</h1>
+          <SectionHeading className="text-xl md:text-2xl">{title}</SectionHeading>
         </header>
-        <div className="flex-1 p-4 md:p-6">{children}</div>
+        <div className="flex-1 p-4 md:p-6 lg:p-8">{children}</div>
       </main>
     </div>
   );
