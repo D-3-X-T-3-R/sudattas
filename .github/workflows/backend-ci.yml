@@ -237,10 +237,10 @@ jobs:
         RAZORPAY_KEY_SECRET: ""
       run: |
         for test_binary in integration_abandoned_cart_outbox integration_cart integration_coupons integration_order_state integration_payments integration_products integration_refunds integration_reviews integration_shipping integration_users integration_users_carts_orders_products integration_webhooks integration_wishlist; do
-          cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored
+          cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored --test-threads=1
         done
         for test_binary in handler_outbox handler_p2 handler_refunds_resolve handler_security; do
-          cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored
+          cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored --test-threads=1
         done
 
   test-e2e-graphql:

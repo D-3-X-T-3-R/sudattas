@@ -8,6 +8,7 @@ pub fn map_auth_error_to_status(auth_error: AuthError) -> Status {
     use AuthError::*;
     match auth_error {
         HashingError(msg) => Status::internal(msg),
+        WeakPassword => Status::invalid_argument("Password does not meet strength requirements"),
         VerificationFailed => Status::unauthenticated("Invalid password"),
         InvalidHashFormat => Status::internal("Invalid password hash format"),
         UserNotFound => Status::not_found("User not found"),
@@ -27,7 +28,14 @@ pub fn map_db_error_to_status(db_error: DbErr) -> Status {
             from, into, source
         )),
         DbErr::Conn(_) => Status::unavailable("Database connection error"),
-        DbErr::Exec(_) => Status::internal("Database execution error"),
+        DbErr::Exec(ref e) => {
+            let msg = e.to_string();
+            if msg.contains("Duplicate entry") || msg.contains("1062") {
+                Status::already_exists("Resource already exists (e.g. duplicate email or username)")
+            } else {
+                Status::internal(format!("Database execution error: {}", msg))
+            }
+        }
         DbErr::Query(_) => Status::internal("Database query error"),
         DbErr::ConvertFromU64(type_str) => {
             Status::internal(format!("Type conversion error from u64: {}", type_str))

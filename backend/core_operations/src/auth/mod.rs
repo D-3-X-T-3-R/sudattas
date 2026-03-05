@@ -15,6 +15,9 @@ pub enum AuthError {
     #[error("Password hashing failed: {0}")]
     HashingError(String),
 
+    #[error("Password does not meet strength requirements")]
+    WeakPassword,
+
     #[error("Password verification failed")]
     VerificationFailed,
 
@@ -122,9 +125,7 @@ pub struct AuthenticatedUser {
 /// Validate password strength
 pub fn validate_password_strength(password: &str) -> Result<(), AuthError> {
     if password.len() < 8 {
-        return Err(AuthError::HashingError(
-            "Password must be at least 8 characters".to_string(),
-        ));
+        return Err(AuthError::WeakPassword);
     }
 
     // Add more checks as needed (uppercase, numbers, special chars, etc.)

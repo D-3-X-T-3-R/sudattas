@@ -188,7 +188,7 @@ async fn process_payment_captured(
         let _ = txn
             .execute(Statement::from_sql_and_values(
                 DbBackend::MySql,
-                "UPDATE payment_intents SET status = 'needs_review' WHERE intent_id = ?",
+                "UPDATE PaymentIntents SET status = 'needs_review' WHERE intent_id = ?",
                 [intent.intent_id.into()],
             ))
             .await;
