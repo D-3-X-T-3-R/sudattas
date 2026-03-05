@@ -8,21 +8,34 @@ use crate::resolvers::{
         self,
         schema::{Category, CategoryMutation, NewCategory},
     },
-    country::{
+    colors::{
         self,
-        schema::{Country, NewCountry},
+        schema::{Color, ColorMutation, DeleteColorInput, NewColor, SearchColorInput},
     },
     coupons::{
         self,
-        schema::{ApplyCoupon, Coupon},
+        schema::{ApplyCoupon, Coupon, CreateCouponInput, UpdateCouponInput},
     },
-    discounts::{
+    event_logs::{
         self,
-        schema::{Discount, DiscountMutation, NewDiscount},
+        schema::{
+            DeleteEventLogInput, EventLog, EventLogMutation, NewEventLog, SearchEventLogInput,
+        },
     },
     inventory::{
         self,
         schema::{InventoryItem, InventoryItemMutation, NewInventoryItem},
+    },
+    inventory_logs::{
+        self,
+        schema::{DeleteInventoryLogInput, InventoryLog, InventoryLogMutation, NewInventoryLog},
+    },
+    newsletter_subscribers::{
+        self,
+        schema::{
+            DeleteNewsletterSubscriberInput, NewNewsletterSubscriber, NewsletterSubscriber,
+            NewsletterSubscriberMutation, SearchNewsletterSubscriberInput,
+        },
     },
     order_details::{
         self,
@@ -34,7 +47,10 @@ use crate::resolvers::{
     },
     orders::{
         self,
-        schema::{NewOrder, Order, OrderMutation},
+        schema::{
+            AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CreateOrderInput, NewOrder,
+            Order, OrderMutation,
+        },
     },
     payment_intents::{
         self,
@@ -47,9 +63,33 @@ use crate::resolvers::{
         self,
         schema::{NewProduct, Product, ProductMutation},
     },
+    product_attribute_mappings::{
+        self,
+        schema::{
+            DeleteProductAttributeMappingInput, NewProductAttributeMapping,
+            ProductAttributeMapping, SearchProductAttributeMappingInput,
+        },
+    },
+    product_attributes::{
+        self,
+        schema::{
+            DeleteProductAttributeInput, NewProductAttribute, ProductAttribute,
+            ProductAttributeMutation, SearchProductAttributeInput,
+        },
+    },
     product_images::{
         self,
         schema::{ConfirmImageUpload, ProductImage, ProductImageMutation},
+    },
+    product_variants::{
+        self,
+        schema::{
+            DeleteProductVariantInput, NewProductVariant, ProductVariant, ProductVariantMutation,
+        },
+    },
+    refunds::{
+        self,
+        schema::{NewRefund, Refund, ResolveNeedsReviewInput},
     },
     reviews::{
         self,
@@ -67,13 +107,33 @@ use crate::resolvers::{
         self,
         schema::{NewShippingMethod, ShippingMethod, ShippingMethodMutation},
     },
-    shipping_zones::{
+    sizes::{
         self,
-        schema::{NewShippingZone, ShippingZone, ShippingZoneMutation},
+        schema::{DeleteSizeInput, NewSize, SearchSizeInput, Size, SizeMutation},
     },
-    state::{
+    transactions::{
         self,
-        schema::{NewState, State},
+        schema::{
+            DeleteTransactionInput, NewTransaction, SearchTransactionInput, Transaction,
+            TransactionMutation,
+        },
+    },
+    user_activities::{
+        self,
+        schema::{
+            DeleteUserActivityInput, NewUserActivity, SearchUserActivityInput, UserActivity,
+            UserActivityMutation,
+        },
+    },
+    user_roles::{
+        self,
+        schema::{
+            DeleteUserRoleInput, NewUserRole, SearchUserRoleInput, UserRole, UserRoleMutation,
+        },
+    },
+    users::{
+        self,
+        schema::{DeleteUserInput, NewUser, RecordSecurityAuditEventInput, UpdateUserInput, User},
     },
     wishlist::{
         self,
@@ -91,6 +151,48 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn add_cart_item(cart_item: NewCart) -> FieldResult<Vec<Cart>> {
         cart::handlers::add_cart_item(cart_item)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// P2 Abandoned cart: enqueue abandoned-cart events (typically from a cron/scheduler).
+    /// Returns the number of events enqueued.
+    #[instrument(err, ret)]
+    async fn enqueue_abandoned_cart(delay_hours: Option<String>) -> FieldResult<i32> {
+        let resp = cart::handlers::enqueue_abandoned_cart(delay_hours)
+            .await
+            .map_err(|e| e.into_field_error())?;
+        Ok(resp.enqueued_count)
+    }
+
+    // Users
+    #[instrument(err, ret)]
+    async fn create_user(input: NewUser) -> FieldResult<Vec<User>> {
+        users::handlers::create_user(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_user(input: UpdateUserInput) -> FieldResult<Vec<User>> {
+        users::handlers::update_user(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_user(input: DeleteUserInput) -> FieldResult<Vec<User>> {
+        users::handlers::delete_user(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// P2 security audit hook (e.g. secrets rotation).
+    #[instrument(err, ret)]
+    async fn record_security_audit_event(
+        input: RecordSecurityAuditEventInput,
+    ) -> FieldResult<bool> {
+        users::handlers::record_security_audit_event(input)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -228,6 +330,30 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Low-level admin order creation (bypasses high-level checkout flow).
+    #[instrument(err, ret)]
+    async fn create_order_admin(input: CreateOrderInput) -> FieldResult<Vec<Order>> {
+        orders::handlers::create_order_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: mark order shipped (creates shipment and updates status with enforced transitions).
+    #[instrument(err, ret)]
+    async fn admin_mark_order_shipped(input: AdminMarkOrderShippedInput) -> FieldResult<bool> {
+        orders::handlers::admin_mark_order_shipped(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: mark order delivered with enforced transitions.
+    #[instrument(err, ret)]
+    async fn admin_mark_order_delivered(input: AdminMarkOrderDeliveredInput) -> FieldResult<bool> {
+        orders::handlers::admin_mark_order_delivered(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Wishlist
     #[instrument(err, ret)]
     async fn add_wishlist_item(wishlist: NewWishlistItem) -> FieldResult<Vec<WishlistItem>> {
@@ -239,36 +365,6 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_wishlist_item(delete: DeleteWishlistItem) -> FieldResult<Vec<WishlistItem>> {
         wishlist::handlers::delete_wishlist_item(delete)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    // Country
-    #[instrument(err, ret)]
-    async fn create_country(country: NewCountry) -> FieldResult<Vec<Country>> {
-        country::handlers::create_country(country)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    #[instrument(err, ret)]
-    async fn delete_country(country_id: String) -> FieldResult<Vec<Country>> {
-        country::handlers::delete_country(country_id)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    // State
-    #[instrument(err, ret)]
-    async fn create_state(state: NewState) -> FieldResult<Vec<State>> {
-        state::handlers::create_state(state)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    #[instrument(err, ret)]
-    async fn delete_state(state_id: String) -> FieldResult<Vec<State>> {
-        state::handlers::delete_state(state_id)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -349,6 +445,305 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Admin: create a coupon.
+    #[instrument(err, ret)]
+    async fn create_coupon_admin(input: CreateCouponInput) -> FieldResult<bool> {
+        coupons::handlers::create_coupon_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: update a coupon.
+    #[instrument(err, ret)]
+    async fn update_coupon_admin(input: UpdateCouponInput) -> FieldResult<bool> {
+        coupons::handlers::update_coupon_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // User roles
+    #[instrument(err, ret)]
+    async fn create_user_role(input: NewUserRole) -> FieldResult<Vec<UserRole>> {
+        user_roles::handlers::create_user_role(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_user_role(input: SearchUserRoleInput) -> FieldResult<Vec<UserRole>> {
+        user_roles::handlers::search_user_role(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_user_role(input: UserRoleMutation) -> FieldResult<Vec<UserRole>> {
+        user_roles::handlers::update_user_role(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_user_role(input: DeleteUserRoleInput) -> FieldResult<Vec<UserRole>> {
+        user_roles::handlers::delete_user_role(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Transactions
+    #[instrument(err, ret)]
+    async fn create_transaction(input: NewTransaction) -> FieldResult<Vec<Transaction>> {
+        transactions::handlers::create_transaction(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_transaction(input: SearchTransactionInput) -> FieldResult<Vec<Transaction>> {
+        transactions::handlers::search_transaction(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_transaction(input: TransactionMutation) -> FieldResult<Vec<Transaction>> {
+        transactions::handlers::update_transaction(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_transaction(input: DeleteTransactionInput) -> FieldResult<Vec<Transaction>> {
+        transactions::handlers::delete_transaction(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Newsletter subscribers
+    #[instrument(err, ret)]
+    async fn create_newsletter_subscriber(
+        input: NewNewsletterSubscriber,
+    ) -> FieldResult<Vec<NewsletterSubscriber>> {
+        newsletter_subscribers::handlers::create_newsletter_subscriber(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_newsletter_subscriber(
+        input: SearchNewsletterSubscriberInput,
+    ) -> FieldResult<Vec<NewsletterSubscriber>> {
+        newsletter_subscribers::handlers::search_newsletter_subscriber(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_newsletter_subscriber(
+        input: NewsletterSubscriberMutation,
+    ) -> FieldResult<Vec<NewsletterSubscriber>> {
+        newsletter_subscribers::handlers::update_newsletter_subscriber(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_newsletter_subscriber(
+        input: DeleteNewsletterSubscriberInput,
+    ) -> FieldResult<Vec<NewsletterSubscriber>> {
+        newsletter_subscribers::handlers::delete_newsletter_subscriber(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Sizes
+    #[instrument(err, ret)]
+    async fn create_size(input: NewSize) -> FieldResult<Vec<Size>> {
+        sizes::handlers::create_size(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_size(input: SearchSizeInput) -> FieldResult<Vec<Size>> {
+        sizes::handlers::search_size(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_size(input: SizeMutation) -> FieldResult<Vec<Size>> {
+        sizes::handlers::update_size(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_size(input: DeleteSizeInput) -> FieldResult<Vec<Size>> {
+        sizes::handlers::delete_size(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Colors
+    #[instrument(err, ret)]
+    async fn create_color(input: NewColor) -> FieldResult<Vec<Color>> {
+        colors::handlers::create_color(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_color(input: SearchColorInput) -> FieldResult<Vec<Color>> {
+        colors::handlers::search_color(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_color(input: ColorMutation) -> FieldResult<Vec<Color>> {
+        colors::handlers::update_color(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_color(input: DeleteColorInput) -> FieldResult<Vec<Color>> {
+        colors::handlers::delete_color(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Event logs
+    #[instrument(err, ret)]
+    async fn create_event_log(input: NewEventLog) -> FieldResult<Vec<EventLog>> {
+        event_logs::handlers::create_event_log(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_event_log(input: SearchEventLogInput) -> FieldResult<Vec<EventLog>> {
+        event_logs::handlers::search_event_log(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_event_log(input: EventLogMutation) -> FieldResult<Vec<EventLog>> {
+        event_logs::handlers::update_event_log(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_event_log(input: DeleteEventLogInput) -> FieldResult<Vec<EventLog>> {
+        event_logs::handlers::delete_event_log(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // User activities
+    #[instrument(err, ret)]
+    async fn create_user_activity(input: NewUserActivity) -> FieldResult<Vec<UserActivity>> {
+        user_activities::handlers::create_user_activity(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_user_activity(
+        input: SearchUserActivityInput,
+    ) -> FieldResult<Vec<UserActivity>> {
+        user_activities::handlers::search_user_activity(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_user_activity(input: UserActivityMutation) -> FieldResult<Vec<UserActivity>> {
+        user_activities::handlers::update_user_activity(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_user_activity(
+        input: DeleteUserActivityInput,
+    ) -> FieldResult<Vec<UserActivity>> {
+        user_activities::handlers::delete_user_activity(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Inventory logs
+    #[instrument(err, ret)]
+    async fn create_inventory_log(input: NewInventoryLog) -> FieldResult<Vec<InventoryLog>> {
+        inventory_logs::handlers::create_inventory_log(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_inventory_log(input: InventoryLogMutation) -> FieldResult<Vec<InventoryLog>> {
+        inventory_logs::handlers::update_inventory_log(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_inventory_log(
+        input: DeleteInventoryLogInput,
+    ) -> FieldResult<Vec<InventoryLog>> {
+        inventory_logs::handlers::delete_inventory_log(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Product attribute mappings
+    #[instrument(err, ret)]
+    async fn create_product_attribute_mapping(
+        input: NewProductAttributeMapping,
+    ) -> FieldResult<Vec<ProductAttributeMapping>> {
+        product_attribute_mappings::handlers::create_product_attribute_mapping(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_product_attribute_mapping(
+        input: SearchProductAttributeMappingInput,
+    ) -> FieldResult<Vec<ProductAttributeMapping>> {
+        product_attribute_mappings::handlers::search_product_attribute_mapping(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_product_attribute_mapping(
+        input: DeleteProductAttributeMappingInput,
+    ) -> FieldResult<Vec<ProductAttributeMapping>> {
+        product_attribute_mappings::handlers::delete_product_attribute_mapping(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Refunds
+    #[instrument(err, ret)]
+    async fn create_refund(input: NewRefund) -> FieldResult<Vec<Refund>> {
+        refunds::handlers::create_refund(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Resolve NeedsReview manually (paid / cancelled / refunded).
+    #[instrument(err, ret)]
+    async fn resolve_needs_review(input: ResolveNeedsReviewInput) -> FieldResult<bool> {
+        refunds::handlers::resolve_needs_review(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Reviews
     #[instrument(err, ret)]
     async fn create_review(input: NewReview) -> FieldResult<Vec<Review>> {
@@ -367,6 +762,16 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_review(review_id: String) -> FieldResult<Vec<Review>> {
         reviews::handlers::delete_review(review_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin review moderation: approve/reject a review.
+    #[instrument(err, ret)]
+    async fn admin_update_review_status(
+        input: crate::resolvers::reviews::schema::AdminUpdateReviewStatusInput,
+    ) -> FieldResult<bool> {
+        reviews::handlers::admin_update_review_status(input)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -395,24 +800,65 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    // Discounts
+    // Product variants
     #[instrument(err, ret)]
-    async fn create_discount(input: NewDiscount) -> FieldResult<Vec<Discount>> {
-        discounts::handlers::create_discount(input)
+    async fn create_product_variant(input: NewProductVariant) -> FieldResult<Vec<ProductVariant>> {
+        product_variants::handlers::create_product_variant(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn update_discount(input: DiscountMutation) -> FieldResult<Vec<Discount>> {
-        discounts::handlers::update_discount(input)
+    async fn update_product_variant(
+        input: ProductVariantMutation,
+    ) -> FieldResult<Vec<ProductVariant>> {
+        product_variants::handlers::update_product_variant(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn delete_discount(discount_id: String) -> FieldResult<Vec<Discount>> {
-        discounts::handlers::delete_discount(discount_id)
+    async fn delete_product_variant(
+        input: DeleteProductVariantInput,
+    ) -> FieldResult<Vec<ProductVariant>> {
+        product_variants::handlers::delete_product_variant(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Product attributes
+    #[instrument(err, ret)]
+    async fn create_product_attribute(
+        input: NewProductAttribute,
+    ) -> FieldResult<Vec<ProductAttribute>> {
+        product_attributes::handlers::create_product_attribute(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_product_attribute(
+        input: SearchProductAttributeInput,
+    ) -> FieldResult<Vec<ProductAttribute>> {
+        product_attributes::handlers::search_product_attribute(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_product_attribute(
+        input: ProductAttributeMutation,
+    ) -> FieldResult<Vec<ProductAttribute>> {
+        product_attributes::handlers::update_product_attribute(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_product_attribute(
+        input: DeleteProductAttributeInput,
+    ) -> FieldResult<Vec<ProductAttribute>> {
+        product_attributes::handlers::delete_product_attribute(input)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -437,28 +883,6 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_shipping_method(method_id: String) -> FieldResult<Vec<ShippingMethod>> {
         shipping_methods::handlers::delete_shipping_method(method_id)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    // Shipping zones
-    #[instrument(err, ret)]
-    async fn create_shipping_zone(input: NewShippingZone) -> FieldResult<Vec<ShippingZone>> {
-        shipping_zones::handlers::create_shipping_zone(input)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    #[instrument(err, ret)]
-    async fn update_shipping_zone(input: ShippingZoneMutation) -> FieldResult<Vec<ShippingZone>> {
-        shipping_zones::handlers::update_shipping_zone(input)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    #[instrument(err, ret)]
-    async fn delete_shipping_zone(zone_id: String) -> FieldResult<Vec<ShippingZone>> {
-        shipping_zones::handlers::delete_shipping_zone(zone_id)
             .await
             .map_err(|e| e.into_field_error())
     }

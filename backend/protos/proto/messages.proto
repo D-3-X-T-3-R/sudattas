@@ -134,16 +134,20 @@ message ProductsResponse {
     repeated ProductResponse items = 1;
 }
 
-// Users (schema: no Password column; password_hash set server-side from password_plain)
+// Users
+// auth_provider = "email" → password_plain required, google_sub omitted
+// auth_provider = "google" → google_sub required, password_plain omitted
 
 message CreateUserRequest {
     string username = 1;
-    string password_plain = 2;  // Server hashes and stores as password_hash; never returned
-    string email = 3;
-    optional string full_name = 4;
-    optional string address = 5;
-    optional string phone = 6;
-    optional int64 role_id = 7;
+    string email = 2;
+    string auth_provider = 3;            // "email" | "google"
+    optional string password_plain = 4;  // Required when auth_provider="email"; server hashes; never returned
+    optional string google_sub = 5;      // Required when auth_provider="google"; stable Google sub claim
+    optional string full_name = 6;
+    optional string address = 7;
+    optional string phone = 8;
+    optional int64 role_id = 9;
 }
 
 message SearchUserRequest {
@@ -153,12 +157,13 @@ message SearchUserRequest {
 message UpdateUserRequest {
     int64 user_id = 1;
     optional string username = 2;
-    optional string password_plain = 3;  // If set, server updates password_hash
-    optional string email = 4;
-    optional string full_name = 5;
-    optional string address = 6;
-    optional string phone = 7;
-    optional int64 role_id = 8;
+    optional string email = 3;
+    optional string password_plain = 4;  // If set, updates password_hash (email accounts only)
+    optional string google_sub = 5;      // If set, updates google_sub (google accounts only)
+    optional string full_name = 6;
+    optional string address = 7;
+    optional string phone = 8;
+    optional int64 role_id = 9;
 }
 
 message DeleteUserRequest {
@@ -169,11 +174,12 @@ message UserResponse {
     int64 user_id = 1;
     string username = 2;
     string email = 3;
-    optional string full_name = 4;
-    optional string address = 5;
-    optional string phone = 6;
-    string create_date = 7;
-    optional string session_id = 8;  // Set on create_user when Redis session is created
+    string auth_provider = 4;            // "email" | "google"
+    optional string full_name = 5;
+    optional string address = 6;
+    optional string phone = 7;
+    string create_date = 8;
+    optional string session_id = 9;      // Set on create_user when Redis session is created
 }
 
 message UsersResponse {

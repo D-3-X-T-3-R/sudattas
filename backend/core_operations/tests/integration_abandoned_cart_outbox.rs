@@ -71,7 +71,9 @@ async fn integration_abandoned_cart_opt_in_enqueues_one_event() {
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             role_id: Some(role.role_id),
         }),
     )
@@ -202,7 +204,9 @@ async fn integration_abandoned_cart_opt_out_no_events() {
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             role_id: Some(role.role_id),
         }),
     )
@@ -329,7 +333,9 @@ async fn place_order_setup(
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             role_id: Some(role.role_id),
         }),
     )

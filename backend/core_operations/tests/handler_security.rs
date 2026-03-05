@@ -72,7 +72,9 @@ async fn get_user_pii_export_returns_pii_no_password() {
     let user = users::Model {
         user_id: 1,
         username: "u".to_string(),
-        password_hash: "secret".to_string(),
+        auth_provider: core_db_entities::entity::sea_orm_active_enums::AuthProvider::Email,
+        password_hash: Some("secret".to_string()),
+        google_sub: None,
         email: "u@example.com".to_string(),
         email_verified: None,
         email_verified_at: None,

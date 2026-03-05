@@ -80,11 +80,17 @@ CREATE TABLE `ProductCategories` (
     UNIQUE KEY `uq_category_name` (`Name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `Users` (Enhanced with auth & security)
+-- Table structure for table `Users`
+-- auth_provider distinguishes the login method for each account.
+-- Exactly one provider path is valid per row, enforced by the check constraint:
+--   email  → password_hash NOT NULL, google_sub IS NULL
+--   google → google_sub NOT NULL,    password_hash IS NULL
 CREATE TABLE `Users` (
     `UserID` bigint NOT NULL AUTO_INCREMENT,
     `Username` varchar(255) NOT NULL,
-    `password_hash` varchar(255) NOT NULL COMMENT 'Argon2id hash',
+    `auth_provider` ENUM('email', 'google') NOT NULL DEFAULT 'email' COMMENT 'Login method for this account',
+    `password_hash` varchar(255) NULL COMMENT 'Argon2id hash; NULL for google accounts',
+    `google_sub` varchar(255) NULL COMMENT 'Google subject ID (sub claim); NULL for email accounts',
     `Email` varchar(255) NOT NULL UNIQUE,
     `email_verified` BOOLEAN DEFAULT FALSE,
     `email_verified_at` TIMESTAMP NULL,
@@ -101,13 +107,18 @@ CREATE TABLE `Users` (
     UNIQUE KEY `uq_users_username` (`Username`),
     UNIQUE KEY `uq_users_phone` (`Phone`),
     UNIQUE KEY `uq_users_email` (`Email`),
+    UNIQUE KEY `uq_users_google_sub` (`google_sub`),
     INDEX `idx_email` (`Email`),
     INDEX `idx_user_status` (`user_status_id`),
     INDEX `idx_user_role` (`role_id`),
     CONSTRAINT `fk_users_user_status`
       FOREIGN KEY (`user_status_id`) REFERENCES `UserStatuses`(`id`),
     CONSTRAINT `fk_users_role`
-      FOREIGN KEY (`role_id`) REFERENCES `UserRoles`(`RoleID`)
+      FOREIGN KEY (`role_id`) REFERENCES `UserRoles`(`RoleID`),
+    CONSTRAINT `chk_users_auth_fields` CHECK (
+        (auth_provider = 'email'  AND password_hash IS NOT NULL AND google_sub IS NULL)
+     OR (auth_provider = 'google' AND google_sub IS NOT NULL    AND password_hash IS NULL)
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Lookup table for product statuses

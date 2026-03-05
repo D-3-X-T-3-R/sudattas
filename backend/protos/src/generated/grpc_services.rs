@@ -241,18 +241,24 @@ pub struct ProductsResponse {
 pub struct CreateUserRequest {
     #[prost(string, tag = "1")]
     pub username: ::prost::alloc::string::String,
-    /// Server hashes and stores as password_hash; never returned
     #[prost(string, tag = "2")]
-    pub password_plain: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
     pub email: ::prost::alloc::string::String,
+    /// "email" | "google"
+    #[prost(string, tag = "3")]
+    pub auth_provider: ::prost::alloc::string::String,
+    /// Required when auth_provider="email"; server hashes; never returned
     #[prost(string, optional, tag = "4")]
-    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
+    pub password_plain: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required when auth_provider="google"; stable Google sub claim
     #[prost(string, optional, tag = "5")]
-    pub address: ::core::option::Option<::prost::alloc::string::String>,
+    pub google_sub: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "6")]
+    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "7")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "8")]
     pub phone: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(int64, optional, tag = "7")]
+    #[prost(int64, optional, tag = "9")]
     pub role_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -270,18 +276,21 @@ pub struct UpdateUserRequest {
     pub user_id: i64,
     #[prost(string, optional, tag = "2")]
     pub username: ::core::option::Option<::prost::alloc::string::String>,
-    /// If set, server updates password_hash
     #[prost(string, optional, tag = "3")]
-    pub password_plain: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "4")]
     pub email: ::core::option::Option<::prost::alloc::string::String>,
+    /// If set, updates password_hash (email accounts only)
+    #[prost(string, optional, tag = "4")]
+    pub password_plain: ::core::option::Option<::prost::alloc::string::String>,
+    /// If set, updates google_sub (google accounts only)
     #[prost(string, optional, tag = "5")]
-    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
+    pub google_sub: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "6")]
-    pub address: ::core::option::Option<::prost::alloc::string::String>,
+    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "7")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "8")]
     pub phone: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(int64, optional, tag = "8")]
+    #[prost(int64, optional, tag = "9")]
     pub role_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -301,16 +310,19 @@ pub struct UserResponse {
     pub username: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub email: ::prost::alloc::string::String,
-    #[prost(string, optional, tag = "4")]
-    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// "email" | "google"
+    #[prost(string, tag = "4")]
+    pub auth_provider: ::prost::alloc::string::String,
     #[prost(string, optional, tag = "5")]
-    pub address: ::core::option::Option<::prost::alloc::string::String>,
+    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "6")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "7")]
     pub phone: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, tag = "7")]
+    #[prost(string, tag = "8")]
     pub create_date: ::prost::alloc::string::String,
     /// Set on create_user when Redis session is created
-    #[prost(string, optional, tag = "8")]
+    #[prost(string, optional, tag = "9")]
     pub session_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]

@@ -48,10 +48,12 @@ async fn integration_user_create_and_search() {
         Request::new(CreateUserRequest {
             username: username.clone(),
             email: email.clone(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             full_name: Some("Search Test User".to_string()),
             address: Some("789 Search St".to_string()),
             phone: Some("5551234567".to_string()),
-            password_plain: "StrongPass123!".to_string(),
             role_id: Some(role.role_id),
         }),
     )
@@ -103,10 +105,12 @@ async fn integration_user_create_update_search() {
         Request::new(CreateUserRequest {
             username: format!("itest_upd_user_{}", now_tag),
             email: format!("itest_upd+{}@example.com", now_tag),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             full_name: Some("Before Update".to_string()),
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
             role_id: Some(role.role_id),
         }),
     )
@@ -119,8 +123,9 @@ async fn integration_user_create_update_search() {
         Request::new(UpdateUserRequest {
             user_id,
             username: None,
-            password_plain: None,
             email: None,
+            password_plain: None,
+            google_sub: None,
             full_name: Some("After Update".to_string()),
             address: None,
             phone: None,
@@ -166,10 +171,12 @@ async fn integration_user_create_rejects_weak_password() {
         Request::new(CreateUserRequest {
             username: format!("itest_weak_{}", now_tag),
             email: format!("itest_weak+{}@example.com", now_tag),
+            auth_provider: "email".to_string(),
+            password_plain: Some("short".to_string()),
+            google_sub: None,
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "short".to_string(),
             role_id: Some(role.role_id),
         }),
     )
@@ -212,10 +219,12 @@ async fn integration_user_create_rejects_duplicate_email_and_username() {
         Request::new(CreateUserRequest {
             username: username.clone(),
             email: email.clone(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
             role_id: Some(role.role_id),
         }),
     )
@@ -227,10 +236,12 @@ async fn integration_user_create_rejects_duplicate_email_and_username() {
         Request::new(CreateUserRequest {
             username: format!("itest_dup_other_{}", now_tag),
             email: email.clone(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
             role_id: Some(role.role_id),
         }),
     )
@@ -247,10 +258,12 @@ async fn integration_user_create_rejects_duplicate_email_and_username() {
         Request::new(CreateUserRequest {
             username: username.clone(),
             email: format!("itest_dup2+{}@example.com", now_tag),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
             role_id: Some(role.role_id),
         }),
     )
@@ -288,10 +301,12 @@ async fn integration_user_delete_cascades_to_cart() {
         Request::new(CreateUserRequest {
             username: format!("itest_del_{}", now_tag),
             email: format!("itest_del+{}@example.com", now_tag),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
             role_id: Some(role.role_id),
         }),
     )
@@ -413,10 +428,12 @@ async fn integration_user_update_password_invalidates_old_credentials() {
         Request::new(CreateUserRequest {
             username: format!("itest_pw_{}", now_tag),
             email: format!("itest_pw+{}@example.com", now_tag),
+            auth_provider: "email".to_string(),
+            password_plain: Some("OldPass123!".to_string()),
+            google_sub: None,
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "OldPass123!".to_string(),
             role_id: Some(role.role_id),
         }),
     )
@@ -429,8 +446,9 @@ async fn integration_user_update_password_invalidates_old_credentials() {
         Request::new(UpdateUserRequest {
             user_id,
             username: None,
-            password_plain: Some("NewPass456!".to_string()),
             email: None,
+            password_plain: Some("NewPass456!".to_string()),
+            google_sub: None,
             full_name: None,
             address: None,
             phone: None,
@@ -446,8 +464,9 @@ async fn integration_user_update_password_invalidates_old_credentials() {
         .expect("query user")
         .expect("user should exist");
 
-    let old_valid = core_operations::auth::verify_password("OldPass123!", &user.password_hash);
-    let new_valid = core_operations::auth::verify_password("NewPass456!", &user.password_hash);
+    let hash = user.password_hash.as_deref().unwrap_or("");
+    let old_valid = core_operations::auth::verify_password("OldPass123!", hash);
+    let new_valid = core_operations::auth::verify_password("NewPass456!", hash);
 
     assert!(
         !old_valid.unwrap_or(false),
@@ -487,10 +506,12 @@ async fn integration_user_get_pii_export_returns_full_snapshot() {
         Request::new(CreateUserRequest {
             username: username.clone(),
             email: email.clone(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             full_name: Some(full_name.clone()),
             address: Some(address.clone()),
             phone: Some(phone.clone()),
-            password_plain: "StrongPass123!".to_string(),
             role_id: Some(role.role_id),
         }),
     )

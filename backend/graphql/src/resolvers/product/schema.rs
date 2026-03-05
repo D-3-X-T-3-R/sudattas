@@ -98,6 +98,14 @@ pub struct SearchProduct {
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
+#[graphql(description = "Get related products for a given product")]
+pub struct GetRelatedProducts {
+    pub product_id: String,
+    /// Maximum number of related products to return (backend applies its own sensible default).
+    pub limit: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, GraphQLInputObject)]
 pub struct ProductMutation {
     pub product_id: String,
     pub name: String,

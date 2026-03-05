@@ -54,7 +54,9 @@ async fn integration_shipping_address_crud_end_to_end() {
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             role_id: Some(role.role_id),
         }),
     )
@@ -206,7 +208,9 @@ async fn integration_place_order_uses_expected_shipping_address() {
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             role_id: Some(role.role_id),
         }),
     )

@@ -53,3 +53,14 @@ pub struct NewOrderEvent {
     pub actor_type: String,
     pub message: Option<String>,
 }
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Search order events (audit log)")]
+pub struct SearchOrderEvents {
+    /// Filter by order ID; omit for all recent events
+    pub order_id: Option<String>,
+    /// Maximum number of results to return
+    pub limit: Option<String>,
+    /// Number of results to skip for pagination
+    pub offset: Option<String>,
+}

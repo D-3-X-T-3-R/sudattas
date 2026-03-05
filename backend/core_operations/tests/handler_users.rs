@@ -1,5 +1,6 @@
 //! Unit tests for user handlers using SeaORM MockDatabase.
 
+use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
 use core_db_entities::entity::users;
 use proto::proto::core::{
     CreateUserRequest, DeleteUserRequest, SearchUserRequest, UpdateUserRequest, UsersResponse,
@@ -11,7 +12,9 @@ fn make_user(id: i64) -> users::Model {
     users::Model {
         user_id: id,
         username: format!("user{}", id),
-        password_hash: "hashed".to_string(),
+        auth_provider: AuthProvider::Email,
+        password_hash: Some("hashed".to_string()),
+        google_sub: None,
         email: format!("user{}@example.com", id),
         email_verified: None,
         email_verified_at: None,
@@ -46,10 +49,12 @@ async fn create_user_inserts_and_returns_created_model() {
     let req = Request::new(CreateUserRequest {
         username: "user1".to_string(),
         email: "user1@example.com".to_string(),
+        auth_provider: "email".to_string(),
+        password_plain: Some("StrongP@ssw0rd".to_string()),
+        google_sub: None,
         full_name: Some("User 1".to_string()),
         address: Some("Address".to_string()),
         phone: Some("1234567890".to_string()),
-        password_plain: "StrongP@ssw0rd".to_string(),
         role_id: Some(1),
     });
     let result = create_user(&txn, req).await;
@@ -115,10 +120,11 @@ async fn update_user_not_found_yields_not_found_status() {
         user_id: 123,
         username: Some("newuser".to_string()),
         email: Some("new@example.com".to_string()),
+        password_plain: None,
+        google_sub: None,
         full_name: None,
         address: None,
         phone: None,
-        password_plain: None,
         role_id: None,
     });
     let result = update_user(&txn, req).await;
@@ -152,10 +158,11 @@ async fn update_user_updates_fields_and_preserves_existing_when_missing() {
         user_id: 5,
         username: Some("user5_new".to_string()),
         email: Some("user5_new@example.com".to_string()),
+        password_plain: None,
+        google_sub: None,
         full_name: Some("User Five".to_string()),
         address: None,
         phone: None,
-        password_plain: None,
         role_id: None,
     });
 

@@ -53,7 +53,9 @@ async fn integration_cart_delete_one_item_returns_remaining() {
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             role_id: Some(role.role_id),
         }),
     )
@@ -196,7 +198,9 @@ async fn integration_guest_cart_not_used_for_place_order() {
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             role_id: Some(role.role_id),
         }),
     )
@@ -348,7 +352,9 @@ async fn integration_place_order_clears_all_user_cart_items() {
             full_name: None,
             address: None,
             phone: None,
-            password_plain: "StrongPass123!".to_string(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
             role_id: Some(role.role_id),
         }),
     )
