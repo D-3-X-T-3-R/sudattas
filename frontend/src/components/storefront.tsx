@@ -14,6 +14,7 @@ import { Header } from "@/components/header";
 import { HeroSection } from "@/components/hero-section";
 import { EditorialStrip } from "@/components/editorial-strip";
 import { CollectionsSection } from "@/components/collections-section";
+import { EditorialBlock } from "@/components/editorial-block";
 import { SectionNav } from "@/components/section-nav";
 import { ShopSection } from "@/components/shop-section";
 import { StorySection } from "@/components/story-section";
@@ -170,6 +171,8 @@ export function Storefront() {
         onAddToCart={addToCart}
         onQuickView={setQuickView}
       />
+
+      <EditorialBlock />
 
       <StorySection />
 

@@ -1,19 +1,19 @@
 "use client";
 
+import { Kicker } from "@/components/ui/typography";
+
 interface FooterProps {
   goTo: (id: string, instant?: boolean) => void;
 }
 
 export function Footer({ goTo }: FooterProps) {
   return (
-    <footer className="border-t border-[var(--color-line)]">
-      <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 md:grid-cols-4">
+    <footer className="border-t border-[var(--color-line)] py-14 sm:py-16 md:py-24">
+      <div className="mx-auto grid max-w-7xl gap-12 px-4 md:grid-cols-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="h-px w-6 bg-[var(--color-accent-gold)]" />
-            <span className="text-sm font-semibold tracking-[0.35em] text-[var(--color-ink)]">
-              SUDATTA&apos;S
-            </span>
+            <Kicker className="text-[var(--color-ink)]">Sudatta&apos;s</Kicker>
           </div>
           <div className="mt-1 text-[10px] tracking-[0.22em] text-[var(--color-muted)]">
             DESIGNER BOUTIQUE
@@ -24,9 +24,7 @@ export function Footer({ goTo }: FooterProps) {
           </p>
         </div>
         <div>
-          <div className="text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]">
-            SHOP
-          </div>
+          <Kicker className="text-[var(--color-ink)]">Shop</Kicker>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-muted)]">
             <li>
               <button
@@ -50,9 +48,7 @@ export function Footer({ goTo }: FooterProps) {
           </ul>
         </div>
         <div>
-          <div className="text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]">
-            SERVICES
-          </div>
+          <Kicker className="text-[var(--color-ink)]">Services</Kicker>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-muted)]">
             <li>Shipping & delivery</li>
             <li>Returns & exchanges</li>
@@ -60,9 +56,7 @@ export function Footer({ goTo }: FooterProps) {
           </ul>
         </div>
         <div>
-          <div className="text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]">
-            CONTACT
-          </div>
+          <Kicker className="text-[var(--color-ink)]">Contact</Kicker>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-muted)]">
             <li>support@sudattas.com</li>
             <li>+91 90000 00000</li>

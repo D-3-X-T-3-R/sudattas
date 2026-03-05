@@ -3,6 +3,8 @@
 import { ProductCard } from "@/components/product-card";
 import type { Product } from "@/lib/schemas";
 import { COLLECTIONS } from "@/lib/constants";
+import { Section } from "@/components/ui/section";
+import { SectionHeading, Kicker } from "@/components/ui/typography";
 import { ScrollReveal } from "@/components/scroll-reveal";
 
 export interface ShopSectionProps {
@@ -34,26 +36,16 @@ export function ShopSection({
   onAddToCart,
   onQuickView,
 }: ShopSectionProps) {
-  const featured = filtered[0];
-  const rest = filtered.slice(1);
-
   return (
-    <section id="shop" className="mx-auto max-w-7xl px-4 pb-24">
+    <Section id="shop">
       <ScrollReveal>
-        <div
-          className="flex flex-col gap-6 border-y border-[var(--color-line)] py-10"
-        >
+        <div className="flex flex-col gap-6 border-y border-[var(--color-line)] py-10">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="h-px w-6 bg-[var(--color-accent-gold)]" />
-                <span className="text-[11px] font-semibold tracking-[0.26em] text-[var(--color-muted)]">
-                  SHOP
-                </span>
-              </div>
-              <h3 className="mt-3 font-display text-3xl font-medium tracking-tight text-[var(--color-ink)] sm:text-4xl">
+              <Kicker className="text-[var(--color-muted)]">Shop</Kicker>
+              <SectionHeading size="lg" className="mt-3">
                 New arrivals
-              </h3>
+              </SectionHeading>
               <p className="mt-2 text-sm text-[var(--color-muted)]">
                 {filtered.length} item{filtered.length === 1 ? "" : "s"} •
                 Collection: {collection} • Occasion: {occasion}
@@ -62,9 +54,7 @@ export function ShopSection({
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold tracking-[0.18em] text-[var(--color-muted)]">
-                  COLLECTION
-                </span>
+                <Kicker className="text-[var(--color-muted)]">Collection</Kicker>
                 <select
                   value={collection}
                   onChange={(e) => setCollection(e.target.value)}
@@ -79,9 +69,7 @@ export function ShopSection({
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold tracking-[0.18em] text-[var(--color-muted)]">
-                  OCCASION
-                </span>
+                <Kicker className="text-[var(--color-muted)]">Occasion</Kicker>
                 <select
                   value={occasion}
                   onChange={(e) => setOccasion(e.target.value)}
@@ -95,9 +83,7 @@ export function ShopSection({
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold tracking-[0.18em] text-[var(--color-muted)]">
-                  SORT
-                </span>
+                <Kicker className="text-[var(--color-muted)]">Sort</Kicker>
                 <select
                   value={sort}
                   onChange={(e) => setSort(e.target.value)}
@@ -121,22 +107,9 @@ export function ShopSection({
       </ScrollReveal>
 
       {filtered.length > 0 && (
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4 lg:grid-rows-2">
-          {featured && (
-            <ScrollReveal className="lg:col-span-2 lg:row-span-2" delay={0.05}>
-              <ProductCard
-                key={featured.id}
-                product={featured}
-                wished={!!wishlist[featured.id]}
-                onToggleWish={onToggleWish}
-                onAddToCart={onAddToCart}
-                onQuickView={onQuickView}
-                featured
-              />
-            </ScrollReveal>
-          )}
-          {rest.map((p, i) => (
-            <ScrollReveal key={p.id} delay={0.1 + i * 0.05}>
+        <div className="mt-14 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((p, i) => (
+            <ScrollReveal key={p.id} delay={i * 0.05}>
               <ProductCard
                 product={p}
                 wished={!!wishlist[p.id]}
@@ -148,6 +121,6 @@ export function ShopSection({
           ))}
         </div>
       )}
-    </section>
+    </Section>
   );
 }

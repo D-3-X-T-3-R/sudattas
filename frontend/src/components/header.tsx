@@ -1,8 +1,17 @@
 "use client";
 
-import { Search, ChevronRight, Menu, Heart, ShoppingBag } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Menu, Heart, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+const NAV_LINKS = [
+  { id: "top", label: "Home" },
+  { id: "collections", label: "Collections" },
+  { id: "shop", label: "Shop" },
+  { id: "story", label: "Story" },
+] as const;
 
 export interface HeaderProps {
   query: string;
@@ -29,83 +38,110 @@ export function Header({
   authEnabled,
   authButtons,
 }: HeaderProps) {
+  const [scrolled, setScrolled] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <header
-      className="sticky top-0 z-30 border-b border-[var(--color-line)] backdrop-blur-md"
-      style={{ background: "rgba(250,248,245,0.92)" }}
+      className={cn(
+        "sticky top-0 z-30 transition-colors duration-300",
+        scrolled
+          ? "border-b border-[var(--color-line)] bg-[var(--color-warm-white)]/95 backdrop-blur-md"
+          : "border-b border-transparent bg-transparent"
+      )}
     >
-      <div className="mx-auto grid max-w-7xl grid-cols-3 items-center px-4 py-4">
-        <div className="flex items-center gap-3">
+      <div className="mx-auto grid max-w-7xl grid-cols-3 items-center gap-4 px-4 py-4">
+        <div className="flex items-center gap-4">
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
-            className="border-[var(--color-line)] bg-[var(--color-ivory)] hover:bg-white"
+            className="md:hidden"
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <button
-            type="button"
-            onClick={() => goTo("shop", false)}
-            className="hidden md:inline-flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-[var(--color-ink)] hover:text-[var(--color-accent-brown)] transition-colors"
-          >
-            SHOP
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          <nav className="hidden md:flex md:items-center md:gap-6">
+            {NAV_LINKS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => goTo(id, false)}
+                className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent-brown)]"
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
         </div>
 
         <button
           type="button"
           onClick={() => goTo("top", false)}
-          className="mx-auto flex flex-col items-center justify-center font-display text-2xl font-medium tracking-[0.12em] text-[var(--color-ink)]"
+          className="justify-self-center font-display text-xl font-medium tracking-[0.12em] text-[var(--color-ink)] md:text-2xl"
           aria-label="Go to top"
         >
-          <span>Sudatta&apos;s</span>
-          <span className="mt-0.5 h-px w-8 bg-[var(--color-accent-gold)]" />
+          Sudatta&apos;s
         </button>
 
-        <div className="ml-auto flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1">
           {authEnabled && authButtons && (
             <div className="hidden items-center sm:flex">{authButtons}</div>
           )}
-          <div className="hidden md:flex items-center">
-            <div className="relative w-[320px]">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+          {searchOpen ? (
+            <div className="absolute right-4 top-full mt-2 w-[280px] md:relative md:right-0 md:mt-0 md:block md:w-[240px]">
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search sarees, fabric, occasion"
-                className="pl-10 w-full"
+                placeholder="Search"
+                className="pl-10 py-2.5"
+                autoFocus
+                onBlur={() => setSearchOpen(false)}
               />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
             </div>
-          </div>
-
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search"
+              className="md:flex"
+            >
+              <Search className="h-5 w-5" />
+            </Button>
+          )}
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={() => setWishOpen(true)}
             aria-label="Wishlist"
-            className="relative border-[var(--color-line)] bg-[var(--color-ivory)] hover:bg-white"
+            className="relative"
           >
             <Heart className="h-5 w-5" />
             {wishCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-white bg-[var(--color-ink)]">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-ink)] text-[10px] font-semibold text-white">
                 {wishCount}
               </span>
             )}
           </Button>
-
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={() => setCartOpen(true)}
             aria-label="Bag"
-            className="relative border-[var(--color-line)] bg-[var(--color-ivory)] hover:bg-white"
+            className="relative"
           >
             <ShoppingBag className="h-5 w-5" />
             {cartCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold text-white bg-[var(--color-ink)]">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-ink)] text-[10px] font-semibold text-white">
                 {cartCount}
               </span>
             )}
@@ -121,7 +157,7 @@ export function Header({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search sarees, fabric, occasion"
-              className="pl-10 w-full py-3"
+              className="w-full py-3 pl-10"
             />
           </div>
         </div>
