@@ -52,6 +52,7 @@ service GRPCServices {
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
     rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);
     rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);
+    rpc SearchOrderStatus(SearchOrderStatusRequest) returns (OrderStatusesResponse);
 
     // OrderDetails
     rpc CreateOrderDetails(CreateOrderDetailsRequest) returns (OrderDetailsResponse);

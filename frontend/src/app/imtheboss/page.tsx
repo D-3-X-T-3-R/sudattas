@@ -1,29 +1,7 @@
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Section } from "@/components/ui/section";
 import { Kicker, SectionHeading } from "@/components/ui/typography";
-
-const STATS = [
-  {
-    label: "Orders today",
-    value: "—",
-    sub: "Will show today's orders once GraphQL is connected.",
-  },
-  {
-    label: "Revenue (MTD)",
-    value: "—",
-    sub: "Will show month-to-date revenue from completed orders.",
-  },
-  {
-    label: "Products",
-    value: "—",
-    sub: "Will show total live products in your catalog.",
-  },
-  {
-    label: "Customers",
-    value: "—",
-    sub: "Will show total registered customers.",
-  },
-];
+import { DashboardStats } from "@/components/dashboard-stats";
 
 export default function AdminDashboardPage() {
   return (
@@ -33,44 +11,28 @@ export default function AdminDashboardPage() {
         At a glance
       </SectionHeading>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {STATS.map((card) => (
-          <Card key={card.label} className="border-[var(--color-line)]">
-            <CardTitle className="text-[var(--color-muted)]">
-              {card.label}
-            </CardTitle>
-            <CardContent className="mt-2">
-              <div className="font-display text-2xl font-medium tracking-tight text-[var(--color-ink)]">
-                {card.value}
-              </div>
-              <div className="mt-1.5 text-xs leading-relaxed text-[var(--color-muted)]">
-                {card.sub}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <DashboardStats />
 
       <Card className="mt-10 border-[var(--color-line)]">
         <CardTitle className="text-[var(--color-muted)]">Get started</CardTitle>
         <CardContent className="mt-2">
           <div className="space-y-3 text-sm leading-relaxed text-[var(--color-muted)]">
             <p>
-              Wire this dashboard to your GraphQL backend to see live orders,
-              revenue, products, and customers here.
+              Stats above are loaded from your GraphQL backend. Ensure{" "}
+              <code className="rounded bg-[var(--color-line)]/50 px-1 py-0.5 font-mono text-xs">
+                NEXT_PUBLIC_GRAPHQL_URL
+              </code>{" "}
+              points to the gateway and you’re signed in with an allowed admin account.
             </p>
             <ul className="list-disc space-y-1 pl-5">
               <li>
-                Confirm <code className="rounded bg-[var(--color-line)]/50 px-1 py-0.5 font-mono text-xs">NEXT_PUBLIC_GRAPHQL_URL</code> points to the
-                GraphQL gateway (e.g. <code className="rounded bg-[var(--color-line)]/50 px-1 py-0.5 font-mono text-xs">http://localhost:8080/v2</code>).
+                Orders today and Revenue (MTD) use <code className="rounded bg-[var(--color-line)]/50 px-1 py-0.5 font-mono text-xs">searchOrder</code> with date filters.
               </li>
               <li>
-                Ensure admin auth is configured (token or session) so metrics
-                queries can run.
+                Products count uses <code className="rounded bg-[var(--color-line)]/50 px-1 py-0.5 font-mono text-xs">searchProduct</code>.
               </li>
               <li>
-                Once wired, replace these placeholders with real summary
-                queries.
+                Customers shows &quot;—&quot; until the API exposes a user count or list.
               </li>
             </ul>
           </div>

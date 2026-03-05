@@ -4,6 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { gqlAdmin } from "@/lib/graphqlAdmin";
 import { adminProductFormSchema } from "@/lib/schemas";
+import {
+  fetchCategories,
+  fetchProductsList,
+  deleteProduct,
+  type ProductListRow,
+  type CategoryRow,
+} from "@/lib/admin-queries";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,46 +29,10 @@ type ProductFormState = {
 
 const DRAFT_KEY = "sudattas_admin_product_draft";
 
-type AdminProductRow = {
-  productId: string;
-  name: string;
-  formatted: string;
-  stockQuantity?: string | null;
-  categoryId?: string | null;
-};
-
-async function fetchCategories(): Promise<
-  Array<{ categoryId: string; name: string }>
-> {
-  const data = await gqlAdmin<{
-    searchCategory?: Array<{ categoryId: string; name: string }>;
-  }>(`query { searchCategory(search: {}) { categoryId name } }`);
-  return data?.searchCategory ?? [];
-}
-
-async function fetchProducts(search: {
-  name?: string;
-  limit?: string;
-}): Promise<AdminProductRow[]> {
-  const input: Record<string, string> = {};
-  if (search.name) input.name = search.name;
-  if (search.limit) input.limit = search.limit;
-
-  const data = await gqlAdmin<{
-    searchProduct?: AdminProductRow[];
-  }>(
-    `query SearchProducts($search: SearchProduct!) {
-      searchProduct(search: $search) {
-        productId
-        name
-        formatted
-        stockQuantity
-        categoryId
-      }
-    }`,
-    { search: input }
-  );
-  return data?.searchProduct ?? [];
+function getCategoryName(categoryId: string | null | undefined, categories: CategoryRow[]): string {
+  if (!categoryId) return "—";
+  const c = categories.find((x) => x.categoryId === categoryId);
+  return c ? c.name : categoryId;
 }
 
 export default function AdminProductsPage() {
@@ -72,15 +43,17 @@ export default function AdminProductsPage() {
     isError: categoriesError,
     error: categoriesErrorObj,
     refetch: refetchCategories,
-  } = useQuery<Array<{ categoryId: string; name: string }>, Error>({
+  } = useQuery<CategoryRow[], Error>({
     queryKey: ["admin", "categories"],
     queryFn: fetchCategories,
   });
 
   const [searchName, setSearchName] = useState("");
+  const [searchCategoryId, setSearchCategoryId] = useState("");
   const [searchLimit, setSearchLimit] = useState("20");
   const [appliedSearch, setAppliedSearch] = useState<{
     name?: string;
+    categoryId?: string;
     limit?: string;
   }>({ limit: "20" });
 
@@ -90,11 +63,20 @@ export default function AdminProductsPage() {
     isError: productsError,
     error: productsErrorObj,
     refetch: refetchProducts,
-  } = useQuery<AdminProductRow[], Error>({
+  } = useQuery<ProductListRow[], Error>({
     queryKey: ["admin", "products", appliedSearch],
-    queryFn: () => fetchProducts(appliedSearch || {}),
-    enabled: !!appliedSearch,
+    queryFn: () => fetchProductsList(appliedSearch),
+    enabled: true,
   });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: deleteProduct,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+
+  const [deleteConfirm, setDeleteConfirm] = useState<{ productId: string; name: string } | null>(null);
 
   const [form, setForm] = useState<ProductFormState>({
     name: "",
@@ -319,18 +301,27 @@ export default function AdminProductsPage() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const next: { name?: string; limit?: string } = {};
+    const next: { name?: string; categoryId?: string; limit?: string } = {};
     const trimmedName = searchName.trim();
     const trimmedLimit = searchLimit.trim();
     if (trimmedName) next.name = trimmedName;
+    if (searchCategoryId) next.categoryId = searchCategoryId;
     if (trimmedLimit) next.limit = trimmedLimit;
     setAppliedSearch(next);
   };
 
   const handleSearchClear = () => {
     setSearchName("");
+    setSearchCategoryId("");
     setSearchLimit("20");
     setAppliedSearch({ limit: "20" });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteConfirm) return;
+    deleteProductMutation.mutate(deleteConfirm.productId, {
+      onSettled: () => setDeleteConfirm(null),
+    });
   };
 
   const uploadImageMutation = useMutation({
@@ -457,130 +448,165 @@ export default function AdminProductsPage() {
       </div>
 
       {activeTab === "view" && (
-        <Card className="mt-6 border-[var(--color-line)]">
-          <CardTitle className="text-[var(--color-muted)]">View products</CardTitle>
-          <CardContent className="mt-4 space-y-4 text-sm text-[var(--color-muted)]">
-            <form
-              onSubmit={handleSearchSubmit}
-              className="flex flex-col gap-3 rounded-lg border border-[var(--color-line)] bg-white/70 p-3 sm:flex-row sm:items-end"
-            >
-              <div className="flex-1">
-                <label className="mb-1 block text-xs font-semibold tracking-[0.18em] text-[var(--color-muted)]">
-                  NAME CONTAINS
-                </label>
-                <Input
-                  type="text"
-                  value={searchName}
-                  onChange={(e) => setSearchName(e.target.value)}
-                  placeholder="e.g. silk, ivory"
-                  className="h-9 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-[0.18em] text-[var(--color-muted)]">
-                  LIMIT
-                </label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={searchLimit}
-                  onChange={(e) => setSearchLimit(e.target.value)}
-                  className="h-9 w-24 rounded-lg"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="submit"
-                  className="h-9 rounded-full bg-[var(--color-ink)] px-4 text-xs hover:bg-[var(--color-ink)]/90"
-                >
-                  Search
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleSearchClear}
-                  className="h-9 rounded-full border-[var(--color-line)] px-4 text-xs"
-                >
-                  Clear
-                </Button>
-              </div>
-            </form>
-
-            {productsError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                <p className="font-medium">Can&apos;t load products.</p>
-                <p className="mt-1 text-xs text-red-800/80">
-                  {productsErrorObj?.message ?? "Failed to load products."}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => refetchProducts()}
-                  className="mt-2 inline-flex items-center rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-50"
-                >
-                  Try again
-                </button>
-              </div>
-            )}
-
-            {productsLoading && !productsError && (
-              <p className="text-xs text-[var(--color-muted)]">
-                Loading products…
-              </p>
-            )}
-
-            {!productsLoading && !productsError && products.length === 0 && (
-              <p className="text-xs text-[var(--color-muted)]">
-                No products match your search yet. Once you create products in
-                the <strong>Add product</strong> tab, they will appear here.
-              </p>
-            )}
-
-            {!productsLoading && !productsError && products.length > 0 && (
-              <div className="overflow-hidden rounded-lg border border-[var(--color-line)] bg-white">
-                <div className="grid grid-cols-[2fr,1fr,1fr] gap-3 border-b border-[var(--color-line)] bg-[var(--color-ivory)] px-3 py-2 text-[10px] font-semibold tracking-[0.16em] text-[var(--color-muted)]">
-                  <span>NAME</span>
-                  <span className="text-right">PRICE</span>
-                  <span className="text-right">STOCK</span>
+        <>
+          <Card className="mt-6 border-[var(--color-line)]">
+            <CardTitle className="text-[var(--color-muted)]">Filters</CardTitle>
+            <CardContent className="mt-3">
+              <form
+                onSubmit={handleSearchSubmit}
+                className="flex flex-wrap items-end gap-3"
+              >
+                <div>
+                  <label htmlFor="products-name" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Name
+                  </label>
+                  <Input
+                    id="products-name"
+                    type="text"
+                    value={searchName}
+                    onChange={(e) => setSearchName(e.target.value)}
+                    placeholder="e.g. silk"
+                    className="h-9 w-40 rounded-md"
+                  />
                 </div>
-                <ul className="divide-y divide-[var(--color-line)]">
-                  {products.map((p) => (
-                    <li key={p.productId} className="px-3 py-2.5">
-                      <div className="grid grid-cols-[2fr,1fr,1fr] items-baseline gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-[var(--color-ink)]">
-                            {p.name}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-[var(--color-muted)]">
-                            ID:{" "}
-                            <span className="font-mono text-[10px]">
-                              {p.productId}
-                            </span>
-                            {p.categoryId && (
-                              <>
-                                {" "}
-                                • Category:{" "}
-                                <span className="font-mono text-[10px]">
-                                  {p.categoryId}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right text-sm font-semibold text-[var(--color-ink)]">
-                          {p.formatted}
-                        </div>
-                        <div className="text-right text-xs text-[var(--color-muted)]">
-                          {p.stockQuantity ?? "—"}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                <div>
+                  <label htmlFor="products-category" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Category
+                  </label>
+                  <select
+                    id="products-category"
+                    className={cn(
+                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+                    )}
+                    value={searchCategoryId}
+                    onChange={(e) => setSearchCategoryId(e.target.value)}
+                  >
+                    <option value="">All categories</option>
+                    {categories.map((c) => (
+                      <option key={c.categoryId} value={c.categoryId}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="products-limit" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Limit
+                  </label>
+                  <Input
+                    id="products-limit"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={searchLimit}
+                    onChange={(e) => setSearchLimit(e.target.value)}
+                    className="h-9 w-20 rounded-md"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button type="submit" size="sm">
+                    Apply
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={handleSearchClear}>
+                    Clear
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => refetchProducts()}>
+                    Refresh
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6 border-[var(--color-line)]">
+            <CardTitle className="text-[var(--color-muted)]">Products</CardTitle>
+            <CardContent className="mt-3">
+              {productsError && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <p className="font-medium">Could not load products.</p>
+                  <p className="mt-1 text-xs">{productsErrorObj?.message ?? "Unknown error"}</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={() => refetchProducts()}>
+                    Try again
+                  </Button>
+                </div>
+              )}
+              {productsLoading && !productsError && (
+                <p className="py-8 text-center text-sm text-[var(--color-muted)]">Loading products…</p>
+              )}
+              {!productsLoading && !productsError && products.length === 0 && (
+                <p className="py-8 text-center text-sm text-[var(--color-muted)]">
+                  No products match. Create some in the <strong>Add product</strong> tab.
+                </p>
+              )}
+              {!productsLoading && !productsError && products.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
+                        <th className="pb-2 pr-4 font-medium">Product ID</th>
+                        <th className="pb-2 pr-4 font-medium">Name</th>
+                        <th className="pb-2 pr-4 font-medium">Category</th>
+                        <th className="pb-2 pr-4 font-medium">Price</th>
+                        <th className="pb-2 pr-4 font-medium">Stock</th>
+                        <th className="pb-2 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products.map((p) => (
+                        <tr
+                          key={p.productId}
+                          className="border-b border-[var(--color-line)] last:border-0 hover:bg-[var(--color-surface)]"
+                        >
+                          <td className="py-3 pr-4 font-mono text-[var(--color-ink)]">{p.productId}</td>
+                          <td className="py-3 pr-4 text-[var(--color-ink)]">{p.name}</td>
+                          <td className="py-3 pr-4 text-[var(--color-ink)]">
+                            {getCategoryName(p.categoryId, categories)}
+                          </td>
+                          <td className="py-3 pr-4 text-[var(--color-ink)]">{p.formatted}</td>
+                          <td className="py-3 pr-4 text-[var(--color-muted)]">{p.stockQuantity ?? "—"}</td>
+                          <td className="py-3">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 border-red-200 hover:bg-red-50"
+                              onClick={() => setDeleteConfirm({ productId: p.productId, name: p.name })}
+                            >
+                              Delete
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {deleteConfirm && (
+            <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+              <DialogContent className="sm:max-w-md">
+                <p className="text-sm text-[var(--color-ink)]">
+                  Delete product <strong>{deleteConfirm.name}</strong> (ID: {deleteConfirm.productId})? This cannot be undone.
+                </p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteConfirm}
+                    disabled={deleteProductMutation.isPending}
+                  >
+                    {deleteProductMutation.isPending ? "Deleting…" : "Delete"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+        </>
       )}
 
       {activeTab === "add" && (
