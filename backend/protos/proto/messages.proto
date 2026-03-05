@@ -312,6 +312,16 @@ message OrdersResponse {
     repeated OrderResponse items = 1;
 }
 
+// OrderStatus (list for admin dropdowns; table OrderStatus)
+message SearchOrderStatusRequest {}
+message OrderStatusResponse {
+    int64 status_id = 1;
+    string status_name = 2;
+}
+message OrderStatusesResponse {
+    repeated OrderStatusResponse items = 1;
+}
+
 // OrderDetails (schema: VariantID not ProductID)
 
 message CreateOrderDetailRequest {

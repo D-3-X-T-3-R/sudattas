@@ -1,12 +1,13 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Kicker, SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const searchParams = useSearchParams();
   const accessDenied = searchParams.get("error") === "AccessDenied";
 
@@ -66,5 +67,19 @@ export default function AdminLoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[var(--color-ivory)]">
+          <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+        </div>
+      }
+    >
+      <AdminLoginForm />
+    </Suspense>
   );
 }

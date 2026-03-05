@@ -35,7 +35,8 @@ use proto::proto::core::{
     GetShipmentRequest, GetShippingAddressRequest, GetSitemapProductUrlsRequest,
     GetSitemapProductUrlsResponse, GetUserPiiExportRequest, GetUserPiiExportResponse,
     IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
-    NewsletterSubscribersResponse, OrderDetailsResponse, OrderEventsResponse, OrdersResponse,
+    NewsletterSubscribersResponse, OrderDetailsResponse, OrderEventsResponse,
+    OrderStatusesResponse, OrdersResponse,
     PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse,
     ProductAttributeMappingsResponse, ProductAttributesResponse, ProductImagesResponse,
     ProductVariantsResponse, ProductsResponse, ReadinessRequest, ReadinessResponse,
@@ -43,7 +44,8 @@ use proto::proto::core::{
     ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ReviewsResponse, SearchCategoryRequest,
     SearchColorRequest, SearchEventLogRequest, SearchInventoryItemRequest,
     SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOrderDetailRequest,
-    SearchOrderEventsRequest, SearchOrderRequest, SearchProductAttributeMappingRequest,
+    SearchOrderEventsRequest, SearchOrderRequest, SearchOrderStatusRequest,
+    SearchProductAttributeMappingRequest,
     SearchProductAttributeRequest, SearchProductImageRequest, SearchProductRequest,
     SearchProductVariantRequest, SearchReviewRequest, SearchShippingMethodRequest,
     SearchSizeRequest, SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
@@ -650,6 +652,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::admin_mark_order_delivered(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_order_status(
+        &self,
+        request: Request<SearchOrderStatusRequest>,
+    ) -> Result<Response<OrderStatusesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::search_order_status(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
