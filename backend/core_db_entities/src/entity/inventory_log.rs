@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(column_name = "LogID", primary_key)]
     pub log_id: i64,
-    #[sea_orm(column_name = "ProductID")]
-    pub product_id: i64,
+    #[sea_orm(column_name = "VariantID")]
+    pub variant_id: i64,
     #[sea_orm(column_name = "ChangeQuantity")]
     pub change_quantity: i64,
     #[sea_orm(column_name = "LogTime")]
@@ -24,18 +24,18 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::products::Entity",
-        from = "Column::ProductId",
-        to = "super::products::Column::ProductId",
+        belongs_to = "super::product_variants::Entity",
+        from = "Column::VariantId",
+        to = "super::product_variants::Column::VariantId",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Products,
+    ProductVariants,
 }
 
-impl Related<super::products::Entity> for Entity {
+impl Related<super::product_variants::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Products.def()
+        Relation::ProductVariants.def()
     }
 }
 

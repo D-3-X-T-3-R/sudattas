@@ -14,9 +14,9 @@ pub async fn update_order_detail(
     let order_details = order_details::ActiveModel {
         order_detail_id: ActiveValue::Set(req.order_detail_id),
         order_id: ActiveValue::Set(req.order_id),
-        product_id: ActiveValue::Set(req.product_id),
+        variant_id: ActiveValue::Set(req.variant_id),
         quantity: ActiveValue::Set(req.quantity),
-        price: ActiveValue::Set(paise_to_decimal(req.price_paise)),
+        price: ActiveValue::Set(Some(paise_to_decimal(req.price_paise))),
         unit_price_minor: ActiveValue::NotSet,
         discount_minor: ActiveValue::NotSet,
         tax_minor: ActiveValue::NotSet,
@@ -30,9 +30,9 @@ pub async fn update_order_detail(
                 items: vec![OrderDetailResponse {
                     order_detail_id: model.order_detail_id,
                     order_id: model.order_id,
-                    product_id: model.product_id,
+                    variant_id: model.variant_id,
                     quantity: model.quantity,
-                    price_paise: decimal_to_paise(&model.price),
+                    price_paise: model.price.as_ref().map(decimal_to_paise).unwrap_or(0),
                 }],
             };
             Ok(Response::new(response))

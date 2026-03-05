@@ -1,4 +1,5 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
 use core_db_entities::entity::users;
 use proto::proto::core::{DeleteUserRequest, UserResponse, UsersResponse};
 use sea_orm::{DatabaseTransaction, EntityTrait};
@@ -14,18 +15,25 @@ pub async fn delete_user(
 
     match found {
         Ok(Some(model)) => match users::Entity::delete_by_id(req.user_id).exec(txn).await {
-            Ok(_) => Ok(Response::new(UsersResponse {
-                items: vec![UserResponse {
-                    user_id: model.user_id,
-                    username: model.username,
-                    email: model.email,
-                    full_name: model.full_name,
-                    address: model.address,
-                    phone: model.phone,
-                    create_date: model.create_date.to_rfc3339(),
-                    session_id: None,
-                }],
-            })),
+            Ok(_) => {
+                let ap = match model.auth_provider {
+                    AuthProvider::Google => "google",
+                    AuthProvider::Email => "email",
+                };
+                Ok(Response::new(UsersResponse {
+                    items: vec![UserResponse {
+                        user_id: model.user_id,
+                        username: model.username,
+                        email: model.email,
+                        auth_provider: ap.to_string(),
+                        full_name: model.full_name,
+                        address: model.address,
+                        phone: model.phone,
+                        create_date: model.create_date.to_rfc3339(),
+                        session_id: None,
+                    }],
+                }))
+            }
             Err(e) => Err(map_db_error_to_status(e)),
         },
         Ok(None) => Err(Status::not_found(format!(

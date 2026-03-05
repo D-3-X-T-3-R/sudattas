@@ -20,7 +20,7 @@ pub async fn update_inventory_log(
 
     let model = inventory_log::ActiveModel {
         log_id: ActiveValue::Set(existing.log_id),
-        product_id: ActiveValue::Set(req.product_id.unwrap_or(existing.product_id)),
+        variant_id: ActiveValue::Set(req.variant_id.unwrap_or(existing.variant_id)),
         change_quantity: ActiveValue::Set(req.change_quantity.unwrap_or(existing.change_quantity)),
         log_time: ActiveValue::Set(existing.log_time),
         reason: ActiveValue::Set(req.reason.or(existing.reason)),
@@ -33,7 +33,7 @@ pub async fn update_inventory_log(
         Ok(updated) => Ok(Response::new(InventoryLogsResponse {
             items: vec![InventoryLogResponse {
                 log_id: updated.log_id,
-                product_id: updated.product_id,
+                variant_id: updated.variant_id,
                 change_quantity: updated.change_quantity,
                 log_time: updated.log_time.to_rfc3339(),
                 reason: updated.reason.unwrap_or_default(),

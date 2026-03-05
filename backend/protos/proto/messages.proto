@@ -3,11 +3,11 @@ syntax = "proto3";
 
 package grpc_services;
 
-// Cart
+// Cart (variant-based: schema Cart uses VariantID)
 
 message CreateCartItemRequest {
     optional int64 user_id = 1;
-    int64 product_id = 2;
+    int64 variant_id = 2;
     int64 quantity = 3;
     optional string session_id = 4;  // Guest cart when user_id not set
 }
@@ -20,7 +20,7 @@ message GetCartItemsRequest {
 message UpdateCartItemRequest {
     int64 cart_id = 1;
     optional int64 user_id = 2;
-    int64 product_id = 3;
+    int64 variant_id = 3;
     int64 quantity = 4;
     optional string session_id = 5;
 }
@@ -34,7 +34,7 @@ message DeleteCartItemRequest {
 message CartItemResponse {
     int64 cart_id = 1;
     int64 user_id = 2;
-    int64 product_id = 3;
+    int64 variant_id = 3;
     int64 quantity = 4;
 }
 
@@ -42,161 +42,27 @@ message CartItemsResponse {
     repeated CartItemResponse items = 1;
 }
 
-// Country
-
-message CreateCountryRequest {
-    string country_name = 1;
-}
-
-message DeleteCountryRequest {
-    int64 country_id = 1;
-}
-
-message SearchCountryRequest {
-    optional int64 country_id = 1;
-    optional string country_name = 2;
-}
-
-message CountryResponse {
-    int64 country_id = 1;
-    string country_name = 2;
-}
-
-message CountriesResponse {
-    repeated CountryResponse items = 1;
-}
-
-// State
-
-message CreateStateRequest {
-    string state_name = 1;
-}
-
-message DeleteStateRequest {
-    int64 state_id = 1;
-}
-
-message SearchStateRequest {
-    optional int64 state_id = 1;
-    optional string state_name = 2;
-}
-
-message StateResponse {
-    int64 state_id = 1;
-    string state_name = 2;
-}
-
-message StatesResponse {
-    repeated StateResponse items = 1;
-}
-
-// City
-
-message CreateCityRequest {
-    string city_name = 1;
-}
-
-message DeleteCityRequest {
-    int64 city_id = 1;
-}
-    
-message SearchCityRequest {
-    optional int64 city_id = 1;
-    optional string city_name = 2;
-}
-
-message CityResponse {
-    int64 city_id = 1;
-    string city_name = 2;
-}
-
-message CitiesResponse {
-    repeated CityResponse items = 1;
-}
-
-// StateCityMapping
-
-message CreateStateCityMappingRequest {
-    int64 state_id = 1;
-    int64 city_id = 2;
-}
-
-message UpdateStateCityMappingRequest {
-    int64 id = 1;
-    int64 state_id = 2;
-    int64 city_id = 3;
-}
-
-message DeleteStateCityMappingRequest {
-    int64 id = 1;
-}
-
-message SearchStateCityMappingRequest {
-    optional int64 id = 1;
-    optional int64 state_id = 2;
-    optional int64 city_id = 3;
-}
-
-message StateCityMappingResponse {
-    int64 id = 1;
-    int64 state_id = 2;
-    int64 city_id = 3;
-}
-
-message StateCityMappingsResponse {
-    repeated StateCityMappingResponse items = 1;
-}
-
-// CountryStateMapping
-
-message CreateCountryStateMappingRequest {
-    int64 country_id = 1;
-    int64 state_id = 2;
-}
-
-message UpdateCountryStateMappingRequest {
-    int64 id = 1;
-    optional int64 country_id = 2;
-    optional int64 state_id = 3;
-}
-
-message DeleteCountryStateMappingRequest {
-    int64 id = 1;
-}
-
-message SearchCountryStateMappingRequest {
-    optional int64 id = 1;
-    optional int64 country_id = 2;
-    optional int64 state_id = 3;
-}
-
-message CountryStateMappingResponse {
-    int64 id = 1;
-    int64 country_id = 2;
-    int64 state_id = 3;
-}
-
-message CountryStateMappingsResponse {
-    repeated CountryStateMappingResponse items = 1;
-}
-
-// ShippingAddress
+// ShippingAddress (flattened: no country/state/city lookup; schema has UserID, Country, StateRegion, City, PostalCode, Road, ApartmentNoOrName)
 
 message CreateShippingAddressRequest {
-    int64 country_id = 1;
-    int64 state_id = 2;
-    int64 city_id = 3;
-    string road = 4;
-    string apartment_no_or_name = 5;
+    optional int64 user_id = 1;
+    string country = 2;
+    string state_region = 3;
+    string city = 4;
+    string postal_code = 5;
+    optional string road = 6;
+    optional string apartment_no_or_name = 7;
 }
 
 message UpdateShippingAddressRequest {
     int64 shipping_address_id = 1;
-    int64 country_id = 2;
-    int64 state_id = 3;
-    int64 city_id = 4;
-    string road = 5;
-    string apartment_no_or_name = 6;
+    optional int64 user_id = 2;
+    string country = 3;
+    string state_region = 4;
+    string city = 5;
+    string postal_code = 6;
+    optional string road = 7;
+    optional string apartment_no_or_name = 8;
 }
 
 message DeleteShippingAddressRequest {
@@ -207,37 +73,37 @@ message GetShippingAddressRequest { }
 
 message ShippingAddressResponse {
     int64 shipping_address_id = 1;
-    int64 country_id = 2;
-    int64 state_id = 3;
-    int64 city_id = 4;
-    string road = 5;
-    string apartment_no_or_name = 6;
+    optional int64 user_id = 2;
+    string country = 3;
+    string state_region = 4;
+    string city = 5;
+    string postal_code = 6;
+    optional string road = 7;
+    optional string apartment_no_or_name = 8;
 }
 
 message ShippingAddressesResponse {
     repeated ShippingAddressResponse items = 1;
 }
 
-// Products
+// Products (schema: no StockQuantity; CategoryID required; inventory per variant)
 
 message CreateProductRequest {
     string name = 1;
     optional string description = 2;
     int64 price_paise = 3;  // Price in minor units (e.g. 49900 = ₹499.00)
-    optional int64 stock_quantity = 4;
-    optional int64 category_id = 5;
+    int64 category_id = 4;   // Required; schema ProductCategories
 }
 
 message SearchProductRequest {
     optional string name = 1;
     optional string description = 2;
     optional int64 starting_price_paise = 3;
-    optional int64 stock_quantity = 4;
-    optional int64 category_id = 5;
-    optional int64 ending_price_paise = 6;
-    optional int64 product_id = 7;
-    optional int64 limit = 8;
-    optional int64 offset = 9;
+    optional int64 category_id = 4;
+    optional int64 ending_price_paise = 5;
+    optional int64 product_id = 6;
+    optional int64 limit = 7;
+    optional int64 offset = 8;
 }
 
 message GetProductsByIdRequest {
@@ -248,9 +114,8 @@ message UpdateProductRequest {
     string name = 1;
     optional string description = 2;
     int64 price_paise = 3;
-    optional int64 stock_quantity = 4;
-    optional int64 category_id = 5;
-    int64 product_id = 6;
+    int64 category_id = 4;
+    int64 product_id = 5;
 }
 
 message DeleteProductRequest {
@@ -261,9 +126,8 @@ message ProductResponse {
     string name = 1;
     optional string description = 2;
     int64 price_paise = 3;
-    optional int64 stock_quantity = 4;
-    optional int64 category_id = 5;
-    int64 product_id = 6;
+    int64 category_id = 4;
+    int64 product_id = 5;
 }
 
 message ProductsResponse {
@@ -271,14 +135,19 @@ message ProductsResponse {
 }
 
 // Users
+// auth_provider = "email" → password_plain required, google_sub omitted
+// auth_provider = "google" → google_sub required, password_plain omitted
 
 message CreateUserRequest {
     string username = 1;
-    string password = 2;
-    string email = 3;
-    optional string full_name = 4;
-    optional string address = 5;
-    optional string phone = 6;
+    string email = 2;
+    string auth_provider = 3;            // "email" | "google"
+    optional string password_plain = 4;  // Required when auth_provider="email"; server hashes; never returned
+    optional string google_sub = 5;      // Required when auth_provider="google"; stable Google sub claim
+    optional string full_name = 6;
+    optional string address = 7;
+    optional string phone = 8;
+    optional int64 role_id = 9;
 }
 
 message SearchUserRequest {
@@ -288,11 +157,13 @@ message SearchUserRequest {
 message UpdateUserRequest {
     int64 user_id = 1;
     optional string username = 2;
-    optional string password = 3;
-    optional string email = 4;
-    optional string full_name = 5;
-    optional string address = 6;
-    optional string phone = 7;
+    optional string email = 3;
+    optional string password_plain = 4;  // If set, updates password_hash (email accounts only)
+    optional string google_sub = 5;      // If set, updates google_sub (google accounts only)
+    optional string full_name = 6;
+    optional string address = 7;
+    optional string phone = 8;
+    optional int64 role_id = 9;
 }
 
 message DeleteUserRequest {
@@ -303,11 +174,12 @@ message UserResponse {
     int64 user_id = 1;
     string username = 2;
     string email = 3;
-    optional string full_name = 4;
-    optional string address = 5;
-    optional string phone = 6;
-    string create_date = 7;
-    optional string session_id = 8;  // Set on create_user when Redis session is created
+    string auth_provider = 4;            // "email" | "google"
+    optional string full_name = 5;
+    optional string address = 6;
+    optional string phone = 7;
+    string create_date = 8;
+    optional string session_id = 9;      // Set on create_user when Redis session is created
 }
 
 message UsersResponse {
@@ -440,11 +312,11 @@ message OrdersResponse {
     repeated OrderResponse items = 1;
 }
 
-// OrderDetails
+// OrderDetails (schema: VariantID not ProductID)
 
 message CreateOrderDetailRequest {
     int64 order_id = 1;
-    int64 product_id = 2;
+    int64 variant_id = 2;
     int64 quantity = 3;
     int64 price_paise = 4;
     optional int32 unit_price_minor = 5;
@@ -461,7 +333,7 @@ message CreateOrderDetailsRequest {
 message SearchOrderDetailRequest {
     optional int64 order_detail_id = 1;
     optional int64 order_id = 2;
-    optional int64 product_id = 3;
+    optional int64 variant_id = 3;
     optional int64 quantity = 4;
     optional int64 price_start_paise = 5;
     optional int64 price_end_paise = 6;
@@ -470,7 +342,7 @@ message SearchOrderDetailRequest {
 message UpdateOrderDetailRequest {
     int64 order_detail_id = 1;
     int64 order_id = 2;
-    int64 product_id = 3;
+    int64 variant_id = 3;
     int64 quantity = 4;
     int64 price_paise = 5;
 }
@@ -478,7 +350,7 @@ message UpdateOrderDetailRequest {
 message OrderDetailResponse {
     int64 order_detail_id = 1;
     int64 order_id = 2;
-    int64 product_id = 3;
+    int64 variant_id = 3;
     int64 quantity = 4;
     int64 price_paise = 5;
 }
@@ -487,12 +359,12 @@ message OrderDetailsResponse {
     repeated OrderDetailResponse items = 1;
 }
 
-// Reviews
+// Reviews (schema: Rating TINYINT 1-5, UNIQUE(UserID, ProductID))
 
 message CreateReviewRequest {
     int64 product_id = 1;
     int64 user_id = 2;
-    int64 rating = 3;
+    int32 rating = 3;  // 1-5
     string comment = 4;
 }
 
@@ -509,7 +381,7 @@ message UpdateReviewRequest {
     int64 review_id = 1;
     optional int64 product_id = 2;
     optional int64 user_id = 3;
-    optional int64 rating = 4;
+    optional int32 rating = 4;  // 1-5
     optional string comment = 5;
 }
 
@@ -521,7 +393,7 @@ message ReviewResponse {
     int64 review_id = 1;
     int64 product_id = 2;
     int64 user_id = 3;
-    int64 rating = 4;
+    int32 rating = 4;  // 1-5
     string comment = 5;
 }
 
@@ -616,60 +488,24 @@ message ConfirmImageUploadRequest {
     optional int32 display_order = 4;
 }
 
-// Suppliers
-
-message CreateSupplierRequest {
-    string name = 1;
-    string contact_info = 2;
-    string address = 3;
-}
-
-message SearchSupplierRequest {
-    int64 supplier_id = 1;
-}
-
-message UpdateSupplierRequest {
-    int64 supplier_id = 1;
-    optional string name = 2;
-    optional string contact_info = 3;
-    optional string address = 4;
-}
-
-message DeleteSupplierRequest {
-    int64 supplier_id = 1;
-}
-
-message SupplierResponse {
-    int64 supplier_id = 1;
-    string name = 2;
-    string contact_info = 3;
-    string address = 4;
-}
-
-message SuppliersResponse {
-    repeated SupplierResponse items = 1;
-}
-
-// Inventory
+// Inventory (schema: VariantID; no supplier)
 
 message CreateInventoryItemRequest {
-    int64 product_id = 1;
+    int64 variant_id = 1;
     int64 quantity_available = 2;
     int64 reorder_level = 3;
-    int64 supplier_id = 4;
 }
 
 message SearchInventoryItemRequest {
-    int64 inventory_id = 1;
-    optional int64 product_id = 2;
+    optional int64 inventory_id = 1;
+    optional int64 variant_id = 2;
 }
 
 message UpdateInventoryItemRequest {
     int64 inventory_id = 1;
-    optional int64 product_id = 2;
+    optional int64 variant_id = 2;
     optional int64 quantity_available = 3;
     optional int64 reorder_level = 4;
-    optional int64 supplier_id = 5;
 }
 
 message DeleteInventoryItemRequest {
@@ -678,10 +514,9 @@ message DeleteInventoryItemRequest {
 
 message InventoryItemResponse {
     int64 inventory_id = 1;
-    int64 product_id = 2;
+    int64 variant_id = 2;
     int64 quantity_available = 3;
     int64 reorder_level = 4;
-    int64 supplier_id = 5;
 }
 
 message InventoryItemsResponse {
@@ -718,23 +553,23 @@ message WishlistItemsResponse {
     repeated WishlistItemResponse items = 1;
 }
 
-// ProductAttributes
+// ProductAttributes (schema: lookup only; UNIQUE(AttributeName, AttributeValue); link products via ProductAttributeMapping)
 
 message CreateProductAttributeRequest {
-    int64 product_id = 1;
-    string attribute_name = 2;
-    string attribute_value = 3;
+    string attribute_name = 1;
+    string attribute_value = 2;
 }
 
 message SearchProductAttributeRequest {
-    int64 attribute_id = 1;
+    optional int64 attribute_id = 1;
+    optional string attribute_name = 2;
+    optional string attribute_value = 3;
 }
 
 message UpdateProductAttributeRequest {
     int64 attribute_id = 1;
-    optional int64 product_id = 2;
-    optional string attribute_name = 3;
-    optional string attribute_value = 4;
+    optional string attribute_name = 2;
+    optional string attribute_value = 3;
 }
 
 message DeleteProductAttributeRequest {
@@ -743,50 +578,12 @@ message DeleteProductAttributeRequest {
 
 message ProductAttributeResponse {
     int64 attribute_id = 1;
-    int64 product_id = 2;
-    string attribute_name = 3;
-    string attribute_value = 4;
+    string attribute_name = 2;
+    string attribute_value = 3;
 }
 
 message ProductAttributesResponse {
     repeated ProductAttributeResponse items = 1;
-}
-
-// Discounts
-
-message CreateDiscountRequest {
-    int64 product_id = 1;
-    int32 discount_percentage_basis_points = 2;  // 100 = 1%, 1050 = 10.5%
-    string start_date = 3;
-    string end_date = 4;
-}
-
-message SearchDiscountRequest {
-    int64 discount_id = 1;
-}
-
-message UpdateDiscountRequest {
-    int64 discount_id = 1;
-    optional int64 product_id = 2;
-    optional int32 discount_percentage_basis_points = 3;
-    optional string start_date = 4;
-    optional string end_date = 5;
-}
-
-message DeleteDiscountRequest {
-    int64 discount_id = 1;
-}
-
-message DiscountResponse {
-    int64 discount_id = 1;
-    int64 product_id = 2;
-    int32 discount_percentage_basis_points = 3;
-    string start_date = 4;
-    string end_date = 5;
-}
-
-message DiscountsResponse {
-    repeated DiscountResponse items = 1;
 }
 
 // ShippingMethods
@@ -915,40 +712,6 @@ message NewsletterSubscribersResponse {
     repeated NewsletterSubscriberResponse items = 1;
 }
 
-// ProductRatings
-
-message CreateProductRatingRequest {
-    int64 product_id = 1;
-    int64 user_id = 2;
-    int64 rating = 3;
-}
-
-message SearchProductRatingRequest {
-    int64 rating_id = 1;
-}
-
-message UpdateProductRatingRequest {
-    int64 rating_id = 1;
-    optional int64 product_id = 2;
-    optional int64 user_id = 3;
-    optional int64 rating = 4;
-}
-
-message DeleteProductRatingRequest {
-    int64 rating_id = 1;
-}
-
-message ProductRatingResponse {
-    int64 rating_id = 1;
-    int64 product_id = 2;
-    int64 user_id = 3;
-    int64 rating = 4;
-}
-
-message ProductRatingsResponse {
-    repeated ProductRatingResponse items = 1;
-}
-
 // Sizes
 
 message CreateSizeRequest {
@@ -1005,33 +768,7 @@ message ColorsResponse {
     repeated ColorResponse items = 1;
 }
 
-// ProductCategoryMapping
-
-message CreateProductCategoryMappingRequest {
-    int64 product_id = 1;
-    int64 category_id = 2;
-}
-
-message SearchProductCategoryMappingRequest {
-    int64 product_id = 1;
-    int64 category_id = 2;
-}
-
-message DeleteProductCategoryMappingRequest {
-    int64 product_id = 1;
-    int64 category_id = 2;
-}
-
-message ProductCategoryMappingResponse {
-    int64 product_id = 1;
-    int64 category_id = 2;
-}
-
-message ProductCategoryMappingsResponse {
-    repeated ProductCategoryMappingResponse items = 1;
-}
-
-// ProductAttributeMapping
+// ProductAttributeMapping (schema: many-to-many Products <-> ProductAttributes)
 
 message CreateProductAttributeMappingRequest {
     int64 product_id = 1;
@@ -1055,84 +792,6 @@ message ProductAttributeMappingResponse {
 
 message ProductAttributeMappingsResponse {
     repeated ProductAttributeMappingResponse items = 1;
-}
-
-// UserRoleMapping
-
-message CreateUserRoleMappingRequest {
-    int64 user_id = 1;
-    int64 role_id = 2;
-}
-
-message SearchUserRoleMappingRequest {
-    int64 user_id = 1;
-    int64 role_id = 2;
-}
-
-message DeleteUserRoleMappingRequest {
-    int64 user_id = 1;
-    int64 role_id = 2;
-}
-
-message UserRoleMappingResponse {
-    int64 user_id = 1;
-    int64 role_id = 2;
-}
-
-message UserRoleMappingsResponse {
-    repeated UserRoleMappingResponse items = 1;
-}
-
-// ProductSizeMapping
-
-message CreateProductSizeMappingRequest {
-    int64 product_id = 1;
-    int64 size_id = 2;
-}
-
-message SearchProductSizeMappingRequest {
-    int64 product_id = 1;
-    int64 size_id = 2;
-}
-
-message DeleteProductSizeMappingRequest {
-    int64 product_id = 1;
-    int64 size_id = 2;
-}
-
-message ProductSizeMappingResponse {
-    int64 product_id = 1;
-    int64 size_id = 2;
-}
-
-message ProductSizeMappingsResponse {
-    repeated ProductSizeMappingResponse items = 1;
-}
-
-// ProductColorMapping
-
-message CreateProductColorMappingRequest {
-    int64 product_id = 1;
-    int64 color_id = 2;
-}
-
-message SearchProductColorMappingRequest {
-    int64 product_id = 1;
-    int64 color_id = 2;
-}
-
-message DeleteProductColorMappingRequest {
-    int64 product_id = 1;
-    int64 color_id = 2;
-}
-
-message ProductColorMappingResponse {
-    int64 product_id = 1;
-    int64 color_id = 2;
-}
-
-message ProductColorMappingsResponse {
-    repeated ProductColorMappingResponse items = 1;
 }
 
 // ProductVariants
@@ -1242,10 +901,10 @@ message UserActivitiesResponse {
     repeated UserActivityResponse items = 1;
 }
 
-// InventoryLog
+// InventoryLog (schema: VariantID)
 
 message CreateInventoryLogRequest {
-    int64 product_id = 1;
+    int64 variant_id = 1;
     int64 change_quantity = 2;
     string reason = 3;
     optional string actor_id = 4;       // P1 admin audit: who changed
@@ -1254,12 +913,13 @@ message CreateInventoryLogRequest {
 }
 
 message SearchInventoryLogRequest {
-    int64 log_id = 1;
+    optional int64 log_id = 1;
+    optional int64 variant_id = 2;
 }
 
 message UpdateInventoryLogRequest {
     int64 log_id = 1;
-    optional int64 product_id = 2;
+    optional int64 variant_id = 2;
     optional int64 change_quantity = 3;
     optional string reason = 4;
 }
@@ -1270,7 +930,7 @@ message DeleteInventoryLogRequest {
 
 message InventoryLogResponse {
     int64 log_id = 1;
-    int64 product_id = 2;
+    int64 variant_id = 2;
     int64 change_quantity = 3;
     string log_time = 4;
     string reason = 5;
@@ -1278,74 +938,6 @@ message InventoryLogResponse {
 
 message InventoryLogsResponse {
     repeated InventoryLogResponse items = 1;
-}
-
-// Promotions
-
-message CreatePromotionRequest {
-    string promotion_name = 1;
-    string start_date = 2;
-    string end_date = 3;
-    string details = 4;
-}
-
-message SearchPromotionRequest {
-    int64 promotion_id = 1;
-}
-
-message UpdatePromotionRequest {
-    int64 promotion_id = 1;
-    optional string promotion_name = 2;
-    optional string start_date = 3;
-    optional string end_date = 4;
-    optional string details = 5;
-}
-
-message DeletePromotionRequest {
-    int64 promotion_id = 1;
-}
-
-message PromotionResponse {
-    int64 promotion_id = 1;
-    string promotion_name = 2;
-    string start_date = 3;
-    string end_date = 4;
-    string details = 5;
-}
-
-message PromotionsResponse {
-    repeated PromotionResponse items = 1;
-}
-
-// ShippingZones
-
-message CreateShippingZoneRequest {
-    string zone_name = 1;
-    string description = 2;
-}
-
-message SearchShippingZoneRequest {
-    int64 zone_id = 1;
-}
-
-message UpdateShippingZoneRequest {
-    int64 zone_id = 1;
-    optional string zone_name = 2;
-    optional string description = 3;
-}
-
-message DeleteShippingZoneRequest {
-    int64 zone_id = 1;
-}
-
-message ShippingZoneResponse {
-    int64 zone_id = 1;
-    string zone_name = 2;
-    string description = 3;
-}
-
-message ShippingZonesResponse {
-    repeated ShippingZoneResponse items = 1;
 }
 
 // Coupons
@@ -1495,37 +1087,6 @@ message VerifyRazorpayPaymentRequest {
 message VerifyRazorpayPaymentResponse {
     bool verified = 1;
     optional PaymentIntentResponse payment_intent = 2;
-}
-
-// PaymentMethods
-
-message CreatePaymentMethodRequest {
-    string method_name = 1;
-    string details = 2;
-}
-
-message SearchPaymentMethodRequest {
-    int64 method_id = 1;
-}
-
-message UpdatePaymentMethodRequest {
-    int64 method_id = 1;
-    optional string method_name = 2;
-    optional string details = 3;
-}
-
-message DeletePaymentMethodRequest {
-    int64 method_id = 1;
-}
-
-message PaymentMethodResponse {
-    int64 method_id = 1;
-    string method_name = 2;
-    string details = 3;
-}
-
-message PaymentMethodsResponse {
-    repeated PaymentMethodResponse items = 1;
 }
 
 // Webhooks

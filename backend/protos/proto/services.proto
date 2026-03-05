@@ -8,33 +8,6 @@ import "proto/messages.proto";
 
 service GRPCServices {
 
-    // Country
-    rpc CreateCountry(CreateCountryRequest) returns (CountriesResponse);
-    rpc SearchCountry(SearchCountryRequest) returns (CountriesResponse);
-    rpc DeleteCountry(DeleteCountryRequest) returns (CountriesResponse);
-
-    // State
-    rpc CreateState(CreateStateRequest) returns (StatesResponse);
-    rpc SearchState(SearchStateRequest) returns (StatesResponse);
-    rpc DeleteState(DeleteStateRequest) returns (StatesResponse);
-
-    // City
-    rpc CreateCity(CreateCityRequest) returns (CitiesResponse);
-    rpc SearchCity(SearchCityRequest) returns (CitiesResponse);
-    rpc DeleteCity(DeleteCityRequest) returns (CitiesResponse);
-
-    // StateCityMapping
-    rpc CreateStateCityMapping(CreateStateCityMappingRequest) returns (StateCityMappingsResponse);
-    rpc UpdateStateCityMapping(UpdateStateCityMappingRequest) returns (StateCityMappingsResponse);
-    rpc DeleteStateCityMapping(DeleteStateCityMappingRequest) returns (StateCityMappingsResponse);
-    rpc SearchStateCityMapping(SearchStateCityMappingRequest) returns (StateCityMappingsResponse);
-
-    // CountryState
-    rpc CreateCountryStateMapping(CreateCountryStateMappingRequest) returns (CountryStateMappingsResponse);
-    rpc UpdateCountryStateMapping(UpdateCountryStateMappingRequest) returns (CountryStateMappingsResponse);
-    rpc DeleteCountryStateMapping(DeleteCountryStateMappingRequest) returns (CountryStateMappingsResponse);
-    rpc SearchCountryStateMapping(SearchCountryStateMappingRequest) returns (CountryStateMappingsResponse);
-
     // ShippingAddress
     rpc CreateShippingAddress(CreateShippingAddressRequest) returns (ShippingAddressesResponse);
     rpc UpdateShippingAddress(UpdateShippingAddressRequest) returns (ShippingAddressesResponse);
@@ -98,12 +71,6 @@ service GRPCServices {
     rpc UpdateProductImage(UpdateProductImageRequest) returns (ProductImagesResponse);
     rpc DeleteProductImage(DeleteProductImageRequest) returns (ProductImagesResponse);
 
-    // Suppliers
-    rpc CreateSupplier(CreateSupplierRequest) returns (SuppliersResponse);
-    rpc SearchSupplier(SearchSupplierRequest) returns (SuppliersResponse);
-    rpc UpdateSupplier(UpdateSupplierRequest) returns (SuppliersResponse);
-    rpc DeleteSupplier(DeleteSupplierRequest) returns (SuppliersResponse);
-
     // Inventory
     rpc CreateInventoryItem(CreateInventoryItemRequest) returns (InventoryItemsResponse);
     rpc SearchInventoryItem(SearchInventoryItemRequest) returns (InventoryItemsResponse);
@@ -120,12 +87,6 @@ service GRPCServices {
     rpc SearchProductAttribute(SearchProductAttributeRequest) returns (ProductAttributesResponse);
     rpc UpdateProductAttribute(UpdateProductAttributeRequest) returns (ProductAttributesResponse);
     rpc DeleteProductAttribute(DeleteProductAttributeRequest) returns (ProductAttributesResponse);
-
-    // Discounts
-    rpc CreateDiscount(CreateDiscountRequest) returns (DiscountsResponse);
-    rpc SearchDiscount(SearchDiscountRequest) returns (DiscountsResponse);
-    rpc UpdateDiscount(UpdateDiscountRequest) returns (DiscountsResponse);
-    rpc DeleteDiscount(DeleteDiscountRequest) returns (DiscountsResponse);
 
     // ShippingMethods
     rpc CreateShippingMethod(CreateShippingMethodRequest) returns (ShippingMethodsResponse);
@@ -151,12 +112,6 @@ service GRPCServices {
     rpc UpdateNewsletterSubscriber(UpdateNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
     rpc DeleteNewsletterSubscriber(DeleteNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
 
-    // ProductRatings
-    rpc CreateProductRating(CreateProductRatingRequest) returns (ProductRatingsResponse);
-    rpc SearchProductRating(SearchProductRatingRequest) returns (ProductRatingsResponse);
-    rpc UpdateProductRating(UpdateProductRatingRequest) returns (ProductRatingsResponse);
-    rpc DeleteProductRating(DeleteProductRatingRequest) returns (ProductRatingsResponse);
-
     // Sizes
     rpc CreateSize(CreateSizeRequest) returns (SizesResponse);
     rpc SearchSize(SearchSizeRequest) returns (SizesResponse);
@@ -169,30 +124,10 @@ service GRPCServices {
     rpc UpdateColor(UpdateColorRequest) returns (ColorsResponse);
     rpc DeleteColor(DeleteColorRequest) returns (ColorsResponse);
 
-    // ProductCategoryMapping
-    rpc CreateProductCategoryMapping(CreateProductCategoryMappingRequest) returns (ProductCategoryMappingsResponse);
-    rpc SearchProductCategoryMapping(SearchProductCategoryMappingRequest) returns (ProductCategoryMappingsResponse);
-    rpc DeleteProductCategoryMapping(DeleteProductCategoryMappingRequest) returns (ProductCategoryMappingsResponse);
-
     // ProductAttributeMapping
     rpc CreateProductAttributeMapping(CreateProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
     rpc SearchProductAttributeMapping(SearchProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
     rpc DeleteProductAttributeMapping(DeleteProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
-
-    // UserRoleMapping
-    rpc CreateUserRoleMapping(CreateUserRoleMappingRequest) returns (UserRoleMappingsResponse);
-    rpc SearchUserRoleMapping(SearchUserRoleMappingRequest) returns (UserRoleMappingsResponse);
-    rpc DeleteUserRoleMapping(DeleteUserRoleMappingRequest) returns (UserRoleMappingsResponse);
-
-    // ProductSizeMapping
-    rpc CreateProductSizeMapping(CreateProductSizeMappingRequest) returns (ProductSizeMappingsResponse);
-    rpc SearchProductSizeMapping(SearchProductSizeMappingRequest) returns (ProductSizeMappingsResponse);
-    rpc DeleteProductSizeMapping(DeleteProductSizeMappingRequest) returns (ProductSizeMappingsResponse);
-
-    // ProductColorMapping
-    rpc CreateProductColorMapping(CreateProductColorMappingRequest) returns (ProductColorMappingsResponse);
-    rpc SearchProductColorMapping(SearchProductColorMappingRequest) returns (ProductColorMappingsResponse);
-    rpc DeleteProductColorMapping(DeleteProductColorMappingRequest) returns (ProductColorMappingsResponse);
 
     // ProductVariants
     rpc CreateProductVariant(CreateProductVariantRequest) returns (ProductVariantsResponse);
@@ -217,24 +152,6 @@ service GRPCServices {
     rpc SearchInventoryLog(SearchInventoryLogRequest) returns (InventoryLogsResponse);
     rpc UpdateInventoryLog(UpdateInventoryLogRequest) returns (InventoryLogsResponse);
     rpc DeleteInventoryLog(DeleteInventoryLogRequest) returns (InventoryLogsResponse);
-
-    // Promotions
-    rpc CreatePromotion(CreatePromotionRequest) returns (PromotionsResponse);
-    rpc SearchPromotion(SearchPromotionRequest) returns (PromotionsResponse);
-    rpc UpdatePromotion(UpdatePromotionRequest) returns (PromotionsResponse);
-    rpc DeletePromotion(DeletePromotionRequest) returns (PromotionsResponse);
-
-    // ShippingZones
-    rpc CreateShippingZone(CreateShippingZoneRequest) returns (ShippingZonesResponse);
-    rpc SearchShippingZone(SearchShippingZoneRequest) returns (ShippingZonesResponse);
-    rpc UpdateShippingZone(UpdateShippingZoneRequest) returns (ShippingZonesResponse);
-    rpc DeleteShippingZone(DeleteShippingZoneRequest) returns (ShippingZonesResponse);
-
-    // PaymentMethods
-    rpc CreatePaymentMethod(CreatePaymentMethodRequest) returns (PaymentMethodsResponse);
-    rpc SearchPaymentMethod(SearchPaymentMethodRequest) returns (PaymentMethodsResponse);
-    rpc UpdatePaymentMethod(UpdatePaymentMethodRequest) returns (PaymentMethodsResponse);
-    rpc DeletePaymentMethod(DeletePaymentMethodRequest) returns (PaymentMethodsResponse);
 
     // PaymentIntents
     rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (PaymentIntentsResponse);

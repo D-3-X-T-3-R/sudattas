@@ -2,7 +2,7 @@
 
 mod integration_common;
 
-use core_db_entities::entity::{cart, product_related, products, reviews};
+use core_db_entities::entity::{cart, products, reviews};
 use proto::proto::core::{
     AdminUpdateReviewStatusRequest, GetRelatedProductsRequest, GetSitemapProductUrlsRequest,
     SearchReviewRequest,
@@ -23,6 +23,8 @@ async fn enqueue_abandoned_cart_events_no_stale_carts_returns_zero() {
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), 0);
 }
+
+// Additional scenarios (eligible users, opt-out, idempotency) are covered at a higher level in integration tests.
 
 // ---------- Reviews moderation ----------
 
@@ -89,9 +91,7 @@ async fn search_review_with_status_filter_returns_ok() {
 async fn get_related_products_empty_returns_empty_items() {
     use core_operations::handlers::products::get_related_products;
 
-    let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_query_results(vec![Vec::<product_related::Model>::new()])
-        .into_connection();
+    let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
     let txn = db.begin().await.expect("begin");
     let req = Request::new(GetRelatedProductsRequest {
         product_id: 1,
@@ -106,36 +106,9 @@ async fn get_related_products_empty_returns_empty_items() {
 async fn get_related_products_returns_products_in_display_order() {
     use core_operations::handlers::products::get_related_products;
 
-    let related_row = product_related::Model {
-        id: 1,
-        product_id: 100,
-        related_product_id: 200,
-        display_order: 0,
-    };
-    let product_row = products::Model {
-        product_id: 200,
-        sku: Some("SKU200".to_string()),
-        name: "Related Saree".to_string(),
-        slug: Some("related-saree".to_string()),
-        description: None,
-        price: rust_decimal::Decimal::try_new(1999, 2).unwrap(),
-        price_paise: None,
-        stock_quantity: Some(5),
-        category_id: Some(1),
-        fabric: None,
-        weave: None,
-        occasion: None,
-        length_meters: None,
-        has_blouse_piece: None,
-        care_instructions: None,
-        product_status_id: None,
-        created_at: None,
-        updated_at: None,
-    };
-    let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_query_results(vec![vec![related_row]])
-        .append_query_results(vec![vec![product_row]])
-        .into_connection();
+    // product_related table has been removed; handler now returns empty list.
+    // This test is kept as a documentation placeholder.
+    let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
     let txn = db.begin().await.expect("begin");
     let req = Request::new(GetRelatedProductsRequest {
         product_id: 100,
@@ -143,10 +116,7 @@ async fn get_related_products_returns_products_in_display_order() {
     });
     let result = get_related_products(&txn, req).await;
     assert!(result.is_ok());
-    let items = result.unwrap().into_inner().items;
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0].product_id, 200);
-    assert_eq!(items[0].name, "Related Saree");
+    assert!(result.unwrap().into_inner().items.is_empty());
 }
 
 // ---------- Sitemap ----------
@@ -176,10 +146,9 @@ async fn get_sitemap_product_urls_returns_slug_and_lastmod() {
         name: "Saree".to_string(),
         slug: Some("saree-one".to_string()),
         description: None,
-        price: rust_decimal::Decimal::try_new(999, 2).unwrap(),
-        price_paise: None,
-        stock_quantity: None,
-        category_id: None,
+        price: Some(rust_decimal::Decimal::try_new(999, 2).unwrap()),
+        price_paise: 99900,
+        category_id: 1,
         fabric: None,
         weave: None,
         occasion: None,

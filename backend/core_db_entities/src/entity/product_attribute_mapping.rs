@@ -19,7 +19,7 @@ pub enum Relation {
         from = "Column::AttributeId",
         to = "super::product_attributes::Column::AttributeId",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     ProductAttributes,
     #[sea_orm(
@@ -27,7 +27,7 @@ pub enum Relation {
         from = "Column::ProductId",
         to = "super::products::Column::ProductId",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     Products,
 }

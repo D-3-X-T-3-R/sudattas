@@ -13,8 +13,16 @@ pub async fn search_product_attribute(
     let req = request.into_inner();
 
     let mut query = product_attributes::Entity::find();
-    if req.attribute_id != 0 {
-        query = query.filter(product_attributes::Column::AttributeId.eq(req.attribute_id));
+    if let Some(attribute_id) = req.attribute_id {
+        if attribute_id != 0 {
+            query = query.filter(product_attributes::Column::AttributeId.eq(attribute_id));
+        }
+    }
+    if let Some(ref name) = req.attribute_name {
+        query = query.filter(product_attributes::Column::AttributeName.eq(name.as_str()));
+    }
+    if let Some(ref value) = req.attribute_value {
+        query = query.filter(product_attributes::Column::AttributeValue.eq(value.as_str()));
     }
 
     match query.all(txn).await {
@@ -23,9 +31,8 @@ pub async fn search_product_attribute(
                 .into_iter()
                 .map(|m| ProductAttributeResponse {
                     attribute_id: m.attribute_id,
-                    product_id: m.product_id.unwrap_or(0),
-                    attribute_name: m.attribute_name.unwrap_or_default(),
-                    attribute_value: m.attribute_value.unwrap_or_default(),
+                    attribute_name: m.attribute_name,
+                    attribute_value: m.attribute_value,
                 })
                 .collect();
             Ok(Response::new(ProductAttributesResponse { items }))

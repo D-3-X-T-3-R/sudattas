@@ -930,3 +930,295 @@ async fn e2e_mutation_confirm_image_upload() {
     ).await;
     assert_valid_gql_response(status, &body);
 }
+
+// ---------- New queries/mutations wired in this iteration ----------
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_mutation_enqueue_abandoned_cart() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        "mutation { enqueueAbandonedCart(delayHours: \"24\") }",
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_query_get_related_products() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        "query { getRelatedProducts(input: { productId: \"1\", limit: \"5\" }) { productId name } }",
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_users_and_security_audit() {
+    let client = Client::new();
+    let (status, body) = post_gql(
+        &client,
+        r#"
+        mutation {
+          c: createUser(input: {
+            username: "e2e_user"
+            email: "e2e@example.com"
+            authProvider: "email"
+            passwordPlain: "StrongP@ssw0rd!"
+          }) { userId }
+          audit: recordSecurityAuditEvent(input: {
+            eventType: "secrets_rotation"
+          })
+        }
+        "#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_admin_order_and_events_extras() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"
+        mutation {
+          createOrderAdmin(input: {
+            userId: "1"
+            shippingAddressId: "1"
+            statusId: "1"
+            totalAmountPaise: "1000"
+          }) { orderId userId }
+          markShipped: adminMarkOrderShipped(input: { orderId: "1" })
+          markDelivered: adminMarkOrderDelivered(input: { orderId: "1" })
+        }
+        "#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_query_search_order_events() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        "query { searchOrderEvents(orderId: \"1\", limit: \"10\", offset: \"0\") { eventId orderId } }",
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_admin_review_status_and_variants_and_coupons() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"
+        mutation {
+          updateReviewStatus: adminUpdateReviewStatus(input: { reviewId: "1", status: "approved" })
+          createVariant: createProductVariant(input: { productId: "1" }) { variantId productId }
+          createCouponAdmin(input: {
+            code: "E2E10"
+            discountType: "percentage"
+            discountValue: 10
+            startsAt: "2025-01-01T00:00:00Z"
+          })
+        }
+        "#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_product_attributes_and_mappings() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"
+        mutation {
+          createProductAttribute(input: { attributeName: "Material", attributeValue: "Cotton" }) {
+            attributeId
+          }
+          createProductAttributeMapping(input: { productId: "1", attributeId: "1" }) {
+            productId
+            attributeId
+          }
+        }
+        "#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_admin_reference_data_sizes_colors() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"
+        mutation {
+          createSize(input: { sizeName: "XL" }) { sizeId sizeName }
+          createColor(input: { colorName: "Blue" }) { colorId colorName }
+        }
+        "#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_admin_user_roles_and_transactions() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"
+        mutation {
+          createUserRole(input: { roleName: "admin" }) { roleId roleName }
+          createTransaction(input: { userId: "1", amountPaise: "5000", type: "credit" }) {
+            transactionId
+          }
+        }
+        "#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_newsletter_and_logs_and_refunds() {
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"
+        mutation {
+          createNewsletterSubscriber(input: { email: "newsletter@example.com" }) {
+            subscriberId
+          }
+          createEventLog(input: {
+            eventType: "e2e"
+            eventDescription: "test"
+            userId: "1"
+          }) { logId }
+          createUserActivity(input: {
+            userId: "1"
+            activityType: "login"
+            activityDetails: "e2e"
+          }) { activityId }
+          createInventoryLog(input: {
+            variantId: "1"
+            changeQuantity: "1"
+            reason: "e2e"
+          }) { logId }
+          createRefund(input: {
+            orderId: "1"
+            gatewayRefundId: "e2e-refund"
+            amountPaise: "100"
+          }) { refundId status }
+          resolveNeedsReview(input: {
+            orderId: "1"
+            resolution: "paid"
+            actorId: "admin"
+          })
+        }
+        "#,
+        None,
+    )
+    .await;
+    assert_valid_gql_response(status, &body);
+}
+
+// ---------- Negative-path E2E tests (validation / parse failures) ----------
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_mutation_create_inventory_log_invalid_numbers_returns_errors() {
+    // variantId and changeQuantity must be numeric; here we pass invalid strings.
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"
+        mutation {
+          createInventoryLog(input: {
+            variantId: "not-a-number"
+            changeQuantity: "NaN"
+            reason: "e2e-invalid"
+          }) {
+            logId
+          }
+        }
+        "#,
+        None,
+    )
+    .await;
+
+    // We expect GraphQL to respond (2xx) but with validation errors surfaced.
+    assert!(
+        status.is_success(),
+        "expected 2xx even for validation error, got {} body={}",
+        status,
+        body
+    );
+    let errors = body
+        .get("errors")
+        .and_then(|e| e.as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !errors.is_empty(),
+        "expected GraphQL errors for invalid numeric fields, got body={}",
+        body
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_mutation_create_order_admin_invalid_total_amount_returns_errors() {
+    // totalAmountPaise must parse as i64; here we pass an invalid value.
+    let (status, body) = post_gql(
+        &Client::new(),
+        r#"
+        mutation {
+          createOrderAdmin(input: {
+            userId: "1"
+            shippingAddressId: "1"
+            statusId: "1"
+            totalAmountPaise: "invalid-total"
+          }) {
+            orderId
+          }
+        }
+        "#,
+        None,
+    )
+    .await;
+
+    assert!(
+        status.is_success(),
+        "expected 2xx even for validation error, got {} body={}",
+        status,
+        body
+    );
+    let errors = body
+        .get("errors")
+        .and_then(|e| e.as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !errors.is_empty(),
+        "expected GraphQL errors for invalid totalAmountPaise, got body={}",
+        body
+    );
+}

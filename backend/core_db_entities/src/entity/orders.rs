@@ -17,18 +17,23 @@ pub struct Model {
     pub order_date: DateTimeUtc,
     #[sea_orm(column_name = "ShippingAddressID")]
     pub shipping_address_id: i64,
-    #[sea_orm(column_name = "TotalAmount", column_type = "Decimal(Some((10, 2)))")]
-    pub total_amount: Decimal,
+    #[sea_orm(
+        column_name = "TotalAmount",
+        column_type = "Decimal(Some((10, 2)))",
+        nullable
+    )]
+    pub total_amount: Option<Decimal>,
     #[sea_orm(column_name = "StatusID")]
     pub status_id: i64,
     pub payment_status: Option<PaymentStatus>,
+    pub payment_method: Option<String>,
     pub currency: Option<String>,
     pub updated_at: Option<DateTimeUtc>,
-    pub subtotal_minor: Option<i64>,
+    pub subtotal_minor: i64,
     pub shipping_minor: Option<i64>,
     pub tax_total_minor: Option<i64>,
     pub discount_total_minor: Option<i64>,
-    pub grand_total_minor: Option<i64>,
+    pub grand_total_minor: i64,
     pub applied_coupon_id: Option<i64>,
     pub applied_coupon_code: Option<String>,
     pub applied_discount_paise: Option<i32>,
@@ -36,8 +41,20 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::coupon_redemptions::Entity")]
+    CouponRedemptions,
+    #[sea_orm(
+        belongs_to = "super::coupons::Entity",
+        from = "Column::AppliedCouponId",
+        to = "super::coupons::Column::CouponId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    Coupons,
     #[sea_orm(has_many = "super::order_details::Entity")]
     OrderDetails,
+    #[sea_orm(has_many = "super::order_events::Entity")]
+    OrderEvents,
     #[sea_orm(
         belongs_to = "super::order_status::Entity",
         from = "Column::StatusId",
@@ -46,6 +63,12 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     OrderStatus,
+    #[sea_orm(has_many = "super::payment_intents::Entity")]
+    PaymentIntents,
+    #[sea_orm(has_many = "super::refunds::Entity")]
+    Refunds,
+    #[sea_orm(has_many = "super::shipments::Entity")]
+    Shipments,
     #[sea_orm(
         belongs_to = "super::shipping_addresses::Entity",
         from = "Column::ShippingAddressId",
@@ -62,48 +85,6 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Users,
-    #[sea_orm(has_many = "super::coupon_redemptions::Entity")]
-    CouponRedemptions,
-    #[sea_orm(
-        belongs_to = "super::coupons::Entity",
-        from = "Column::AppliedCouponId",
-        to = "super::coupons::Column::CouponId",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Coupons,
-    #[sea_orm(has_many = "super::order_events::Entity")]
-    OrderEvents,
-    #[sea_orm(has_many = "super::payment_intents::Entity")]
-    PaymentIntents,
-    #[sea_orm(has_many = "super::refunds::Entity")]
-    Refunds,
-    #[sea_orm(has_many = "super::shipments::Entity")]
-    Shipments,
-}
-
-impl Related<super::order_details::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::OrderDetails.def()
-    }
-}
-
-impl Related<super::order_status::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::OrderStatus.def()
-    }
-}
-
-impl Related<super::shipping_addresses::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::ShippingAddresses.def()
-    }
-}
-
-impl Related<super::users::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Users.def()
-    }
 }
 
 impl Related<super::coupon_redemptions::Entity> for Entity {
@@ -118,9 +99,21 @@ impl Related<super::coupons::Entity> for Entity {
     }
 }
 
+impl Related<super::order_details::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OrderDetails.def()
+    }
+}
+
 impl Related<super::order_events::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::OrderEvents.def()
+    }
+}
+
+impl Related<super::order_status::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OrderStatus.def()
     }
 }
 
@@ -139,6 +132,18 @@ impl Related<super::refunds::Entity> for Entity {
 impl Related<super::shipments::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Shipments.def()
+    }
+}
+
+impl Related<super::shipping_addresses::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ShippingAddresses.def()
+    }
+}
+
+impl Related<super::users::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Users.def()
     }
 }
 

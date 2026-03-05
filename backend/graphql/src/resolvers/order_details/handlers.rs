@@ -25,7 +25,7 @@ pub(crate) async fn create_order_detail(
             let price_paise = parse_i64(&details.price_paise, "price_paise")?;
             Ok(CreateOrderDetailRequest {
                 order_id: to_i64(details.order_id),
-                product_id: to_i64(details.product_id),
+                variant_id: to_i64(details.variant_id),
                 quantity: to_i64(details.quantity),
                 price_paise,
                 unit_price_minor: None,
@@ -58,7 +58,7 @@ pub(crate) async fn search_order_detail(
         .search_order_detail(SearchOrderDetailRequest {
             order_detail_id: to_option_i64(search.order_detail_id),
             order_id: to_option_i64(search.order_id),
-            product_id: to_option_i64(search.product_id),
+            variant_id: to_option_i64(search.variant_id),
             quantity: to_option_i64(search.quantity),
             price_start_paise: search
                 .price_start_paise
@@ -86,7 +86,7 @@ pub(crate) async fn update_order_detail(
         .update_order_detail(UpdateOrderDetailRequest {
             order_detail_id: to_i64(order_detail.order_detail_id),
             order_id: to_i64(order_detail.order_id),
-            product_id: to_i64(order_detail.product_id),
+            variant_id: to_i64(order_detail.variant_id),
             quantity: to_i64(order_detail.quantity),
             price_paise: parse_i64(&order_detail.price_paise, "price_paise")?,
         })

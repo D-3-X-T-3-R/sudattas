@@ -8,47 +8,31 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(column_name = "InventoryID", primary_key)]
     pub inventory_id: i64,
-    #[sea_orm(column_name = "ProductID")]
-    pub product_id: Option<i64>,
+    #[sea_orm(column_name = "VariantID")]
+    pub variant_id: Option<i64>,
     #[sea_orm(column_name = "QuantityAvailable")]
     pub quantity_available: Option<i64>,
     pub quantity_reserved: Option<i32>,
     #[sea_orm(column_name = "ReorderLevel")]
     pub reorder_level: Option<i64>,
-    #[sea_orm(column_name = "SupplierID")]
-    pub supplier_id: Option<i64>,
     pub updated_at: Option<DateTimeUtc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::products::Entity",
-        from = "Column::ProductId",
-        to = "super::products::Column::ProductId",
+        belongs_to = "super::product_variants::Entity",
+        from = "Column::VariantId",
+        to = "super::product_variants::Column::VariantId",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Products,
-    #[sea_orm(
-        belongs_to = "super::suppliers::Entity",
-        from = "Column::SupplierId",
-        to = "super::suppliers::Column::SupplierId",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Suppliers,
+    ProductVariants,
 }
 
-impl Related<super::products::Entity> for Entity {
+impl Related<super::product_variants::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Products.def()
-    }
-}
-
-impl Related<super::suppliers::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Suppliers.def()
+        Relation::ProductVariants.def()
     }
 }
 

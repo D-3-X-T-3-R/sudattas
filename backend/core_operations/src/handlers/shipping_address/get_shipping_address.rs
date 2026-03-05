@@ -16,11 +16,13 @@ pub async fn get_shipping_address(
                 .into_iter()
                 .map(|m| ShippingAddressResponse {
                     shipping_address_id: m.shipping_address_id,
-                    country_id: m.country_id,
-                    state_id: m.state_id,
-                    city_id: m.city_id,
-                    road: m.road.unwrap_or_default(),
-                    apartment_no_or_name: m.apartment_no_or_name.unwrap_or_default(),
+                    user_id: m.user_id,
+                    country: m.country,
+                    state_region: m.state_region,
+                    city: m.city,
+                    postal_code: m.postal_code,
+                    road: m.road,
+                    apartment_no_or_name: m.apartment_no_or_name,
                 })
                 .collect();
             Ok(Response::new(ShippingAddressesResponse { items }))

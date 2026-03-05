@@ -13,73 +13,50 @@ use proto::proto::core::{
     grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkOrderDeliveredRequest,
     AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse,
     AdminUpdateReviewStatusRequest, AdminUpdateReviewStatusResponse, ApplyCouponRequest,
-    CapturePaymentRequest, CartItemsResponse, CategoriesResponse, CitiesResponse, ColorsResponse,
-    ConfirmImageUploadRequest, CountriesResponse, CountryStateMappingsResponse,
-    CouponsAdminResponse, CouponsResponse, CreateCartItemRequest, CreateCategoryRequest,
-    CreateCityRequest, CreateColorRequest, CreateCountryRequest, CreateCountryStateMappingRequest,
-    CreateCouponRequest, CreateDiscountRequest, CreateEventLogRequest, CreateInventoryItemRequest,
-    CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOrderDetailsRequest,
-    CreateOrderEventRequest, CreateOrderRequest, CreatePaymentIntentRequest,
-    CreatePaymentMethodRequest, CreateProductAttributeMappingRequest,
-    CreateProductAttributeRequest, CreateProductCategoryMappingRequest,
-    CreateProductColorMappingRequest, CreateProductRatingRequest, CreateProductRequest,
-    CreateProductSizeMappingRequest, CreateProductVariantRequest, CreatePromotionRequest,
+    CapturePaymentRequest, CartItemsResponse, CategoriesResponse, ColorsResponse,
+    ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse, CreateCartItemRequest,
+    CreateCategoryRequest, CreateColorRequest, CreateCouponRequest, CreateEventLogRequest,
+    CreateInventoryItemRequest, CreateInventoryLogRequest, CreateNewsletterSubscriberRequest,
+    CreateOrderDetailsRequest, CreateOrderEventRequest, CreateOrderRequest,
+    CreatePaymentIntentRequest, CreateProductAttributeMappingRequest,
+    CreateProductAttributeRequest, CreateProductRequest, CreateProductVariantRequest,
     CreateRefundRequest, CreateReviewRequest, CreateShipmentRequest, CreateShippingAddressRequest,
-    CreateShippingMethodRequest, CreateShippingZoneRequest, CreateSizeRequest,
-    CreateStateCityMappingRequest, CreateStateRequest, CreateSupplierRequest,
-    CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest,
-    CreateUserRoleMappingRequest, CreateUserRoleRequest, DeleteCartItemRequest,
-    DeleteCategoryRequest, DeleteCityRequest, DeleteColorRequest, DeleteCountryRequest,
-    DeleteCountryStateMappingRequest, DeleteDiscountRequest, DeleteEventLogRequest,
-    DeleteInventoryItemRequest, DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest,
-    DeleteOrderRequest, DeletePaymentMethodRequest, DeleteProductAttributeMappingRequest,
-    DeleteProductAttributeRequest, DeleteProductCategoryMappingRequest,
-    DeleteProductColorMappingRequest, DeleteProductImageRequest, DeleteProductRatingRequest,
-    DeleteProductRequest, DeleteProductSizeMappingRequest, DeleteProductVariantRequest,
-    DeletePromotionRequest, DeleteReviewRequest, DeleteShippingAddressRequest,
-    DeleteShippingMethodRequest, DeleteShippingZoneRequest, DeleteSizeRequest,
-    DeleteStateCityMappingRequest, DeleteStateRequest, DeleteSupplierRequest,
-    DeleteTransactionRequest, DeleteUserActivityRequest, DeleteUserRequest,
-    DeleteUserRoleMappingRequest, DeleteUserRoleRequest, DeleteWishlistItemRequest,
-    DiscountsResponse, EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse,
+    CreateShippingMethodRequest, CreateSizeRequest, CreateTransactionRequest,
+    CreateUserActivityRequest, CreateUserRequest, CreateUserRoleRequest, DeleteCartItemRequest,
+    DeleteCategoryRequest, DeleteColorRequest, DeleteEventLogRequest, DeleteInventoryItemRequest,
+    DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOrderRequest,
+    DeleteProductAttributeMappingRequest, DeleteProductAttributeRequest, DeleteProductImageRequest,
+    DeleteProductRequest, DeleteProductVariantRequest, DeleteReviewRequest,
+    DeleteShippingAddressRequest, DeleteShippingMethodRequest, DeleteSizeRequest,
+    DeleteTransactionRequest, DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleRequest,
+    DeleteWishlistItemRequest, EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse,
     EventLogsResponse, GetCartItemsRequest, GetOrderEventsRequest, GetPaymentIntentRequest,
     GetPresignedUploadUrlRequest, GetProductsByIdRequest, GetRelatedProductsRequest,
     GetShipmentRequest, GetShippingAddressRequest, GetSitemapProductUrlsRequest,
     GetSitemapProductUrlsResponse, GetUserPiiExportRequest, GetUserPiiExportResponse,
     IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
     NewsletterSubscribersResponse, OrderDetailsResponse, OrderEventsResponse, OrdersResponse,
-    PaymentIntentsResponse, PaymentMethodsResponse, PlaceOrderRequest, PresignedUploadUrlResponse,
-    ProductAttributeMappingsResponse, ProductAttributesResponse, ProductCategoryMappingsResponse,
-    ProductColorMappingsResponse, ProductImagesResponse, ProductRatingsResponse,
-    ProductSizeMappingsResponse, ProductVariantsResponse, ProductsResponse, PromotionsResponse,
-    ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
-    RefundsResponse, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ReviewsResponse,
-    SearchCategoryRequest, SearchCityRequest, SearchColorRequest, SearchCountryRequest,
-    SearchCountryStateMappingRequest, SearchDiscountRequest, SearchEventLogRequest,
-    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterSubscriberRequest,
-    SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
-    SearchPaymentMethodRequest, SearchProductAttributeMappingRequest,
-    SearchProductAttributeRequest, SearchProductCategoryMappingRequest,
-    SearchProductColorMappingRequest, SearchProductImageRequest, SearchProductRatingRequest,
-    SearchProductRequest, SearchProductSizeMappingRequest, SearchProductVariantRequest,
-    SearchPromotionRequest, SearchReviewRequest, SearchShippingMethodRequest,
-    SearchShippingZoneRequest, SearchSizeRequest, SearchStateCityMappingRequest,
-    SearchStateRequest, SearchSupplierRequest, SearchTransactionRequest, SearchUserActivityRequest,
-    SearchUserRequest, SearchUserRoleMappingRequest, SearchUserRoleRequest,
-    SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
-    ShippingMethodsResponse, ShippingZonesResponse, SizesResponse, StateCityMappingsResponse,
-    StatesResponse, SuppliersResponse, TransactionsResponse, UpdateCartItemRequest,
-    UpdateCategoryRequest, UpdateColorRequest, UpdateCountryStateMappingRequest,
-    UpdateCouponRequest, UpdateDiscountRequest, UpdateEventLogRequest, UpdateInventoryItemRequest,
-    UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOrderDetailRequest,
-    UpdateOrderRequest, UpdatePaymentMethodRequest, UpdateProductAttributeRequest,
-    UpdateProductImageRequest, UpdateProductRatingRequest, UpdateProductRequest,
-    UpdateProductVariantRequest, UpdatePromotionRequest, UpdateReviewRequest,
-    UpdateShipmentRequest, UpdateShippingAddressRequest, UpdateShippingMethodRequest,
-    UpdateShippingZoneRequest, UpdateSizeRequest, UpdateStateCityMappingRequest,
-    UpdateSupplierRequest, UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest,
-    UpdateUserRoleRequest, UserActivitiesResponse, UserRoleMappingsResponse, UserRolesResponse,
-    UsersResponse, ValidateCouponRequest, VerifyRazorpayPaymentRequest,
+    PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse,
+    ProductAttributeMappingsResponse, ProductAttributesResponse, ProductImagesResponse,
+    ProductVariantsResponse, ProductsResponse, ReadinessRequest, ReadinessResponse,
+    RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
+    ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ReviewsResponse, SearchCategoryRequest,
+    SearchColorRequest, SearchEventLogRequest, SearchInventoryItemRequest,
+    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOrderDetailRequest,
+    SearchOrderEventsRequest, SearchOrderRequest, SearchProductAttributeMappingRequest,
+    SearchProductAttributeRequest, SearchProductImageRequest, SearchProductRequest,
+    SearchProductVariantRequest, SearchReviewRequest, SearchShippingMethodRequest,
+    SearchSizeRequest, SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
+    SearchUserRoleRequest, SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
+    ShippingMethodsResponse, SizesResponse, TransactionsResponse, UpdateCartItemRequest,
+    UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest, UpdateEventLogRequest,
+    UpdateInventoryItemRequest, UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest,
+    UpdateOrderDetailRequest, UpdateOrderRequest, UpdateProductAttributeRequest,
+    UpdateProductImageRequest, UpdateProductRequest, UpdateProductVariantRequest,
+    UpdateReviewRequest, UpdateShipmentRequest, UpdateShippingAddressRequest,
+    UpdateShippingMethodRequest, UpdateSizeRequest, UpdateTransactionRequest,
+    UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UserActivitiesResponse,
+    UserRolesResponse, UsersResponse, ValidateCouponRequest, VerifyRazorpayPaymentRequest,
     VerifyRazorpayPaymentResponse, WebhookEventsResponse, WishlistItemsResponse,
 };
 
@@ -144,287 +121,6 @@ impl MyGRPCServices {
 
 #[tonic::async_trait]
 impl GrpcServices for MyGRPCServices {
-    // Country Services
-    async fn create_country(
-        &self,
-        request: Request<CreateCountryRequest>,
-    ) -> Result<Response<CountriesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::country::create_country(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_country(
-        &self,
-        request: Request<SearchCountryRequest>,
-    ) -> Result<Response<CountriesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::country::search_country(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_country(
-        &self,
-        request: Request<DeleteCountryRequest>,
-    ) -> Result<Response<CountriesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::country::delete_country(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // State Service
-    async fn create_state(
-        &self,
-        request: Request<CreateStateRequest>,
-    ) -> Result<Response<StatesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::state::create_state(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_state(
-        &self,
-        request: Request<SearchStateRequest>,
-    ) -> Result<Response<StatesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::state::search_state(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_state(
-        &self,
-        request: Request<DeleteStateRequest>,
-    ) -> Result<Response<StatesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::state::delete_state(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // City Service
-    async fn create_city(
-        &self,
-        request: Request<CreateCityRequest>,
-    ) -> Result<Response<CitiesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::city::create_city(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_city(
-        &self,
-        request: Request<SearchCityRequest>,
-    ) -> Result<Response<CitiesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::city::search_city(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_city(
-        &self,
-        request: Request<DeleteCityRequest>,
-    ) -> Result<Response<CitiesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::city::delete_city(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // CityState Mapping Service
-    async fn create_state_city_mapping(
-        &self,
-        request: Request<CreateStateCityMappingRequest>,
-    ) -> Result<Response<StateCityMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::state_city_mapping::create_state_city_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn update_state_city_mapping(
-        &self,
-        request: Request<UpdateStateCityMappingRequest>,
-    ) -> Result<Response<StateCityMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::state_city_mapping::update_state_city_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_state_city_mapping(
-        &self,
-        request: Request<DeleteStateCityMappingRequest>,
-    ) -> Result<Response<StateCityMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::state_city_mapping::delete_state_city_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_state_city_mapping(
-        &self,
-        request: Request<SearchStateCityMappingRequest>,
-    ) -> Result<Response<StateCityMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::state_city_mapping::search_state_city_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // CountryState Mapping
-    async fn create_country_state_mapping(
-        &self,
-        request: Request<CreateCountryStateMappingRequest>,
-    ) -> Result<Response<CountryStateMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::country_state_mapping::create_country_state_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn update_country_state_mapping(
-        &self,
-        request: Request<UpdateCountryStateMappingRequest>,
-    ) -> Result<Response<CountryStateMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::country_state_mapping::update_country_state_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_country_state_mapping(
-        &self,
-        request: Request<DeleteCountryStateMappingRequest>,
-    ) -> Result<Response<CountryStateMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::country_state_mapping::delete_country_state_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_country_state_mapping(
-        &self,
-        request: Request<SearchCountryStateMappingRequest>,
-    ) -> Result<Response<CountryStateMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::country_state_mapping::search_country_state_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
     // Shipping Address Service
     async fn create_shipping_address(
         &self,
@@ -563,64 +259,6 @@ impl GrpcServices for MyGRPCServices {
         handlers::cart::enqueue_abandoned_cart(db, request).await
     }
 
-    // ProductColorMapping Services
-    async fn create_product_color_mapping(
-        &self,
-        request: Request<CreateProductColorMappingRequest>,
-    ) -> Result<Response<ProductColorMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-
-        let res =
-            handlers::product_color_mappings::create_product_color_mapping(&txn, request).await?;
-
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_product_color_mapping(
-        &self,
-        request: Request<SearchProductColorMappingRequest>,
-    ) -> Result<Response<ProductColorMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-
-        let res =
-            handlers::product_color_mappings::search_product_color_mapping(&txn, request).await?;
-
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_product_color_mapping(
-        &self,
-        request: Request<DeleteProductColorMappingRequest>,
-    ) -> Result<Response<ProductColorMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-
-        let res =
-            handlers::product_color_mappings::delete_product_color_mapping(&txn, request).await?;
-
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
     // Product Services
     async fn create_product(
         &self,
@@ -730,58 +368,6 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::products::update_product(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // ProductSizeMapping Services
-    async fn create_product_size_mapping(
-        &self,
-        request: Request<CreateProductSizeMappingRequest>,
-    ) -> Result<Response<ProductSizeMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_size_mappings::create_product_size_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_product_size_mapping(
-        &self,
-        request: Request<SearchProductSizeMappingRequest>,
-    ) -> Result<Response<ProductSizeMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_size_mappings::search_product_size_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_product_size_mapping(
-        &self,
-        request: Request<DeleteProductSizeMappingRequest>,
-    ) -> Result<Response<ProductSizeMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_size_mappings::delete_product_size_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1263,71 +849,6 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
-    // Suppliers Services
-    async fn create_supplier(
-        &self,
-        request: Request<CreateSupplierRequest>,
-    ) -> Result<Response<SuppliersResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::suppliers::create_supplier(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_supplier(
-        &self,
-        request: Request<SearchSupplierRequest>,
-    ) -> Result<Response<SuppliersResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::suppliers::search_supplier(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn update_supplier(
-        &self,
-        request: Request<UpdateSupplierRequest>,
-    ) -> Result<Response<SuppliersResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::suppliers::update_supplier(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_supplier(
-        &self,
-        request: Request<DeleteSupplierRequest>,
-    ) -> Result<Response<SuppliersResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::suppliers::delete_supplier(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
     // Inventory Services
     async fn create_inventory_item(
         &self,
@@ -1503,71 +1024,6 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::product_attributes::delete_product_attribute(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // Discounts Services
-    async fn create_discount(
-        &self,
-        request: Request<CreateDiscountRequest>,
-    ) -> Result<Response<DiscountsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::discounts::create_discount(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_discount(
-        &self,
-        request: Request<SearchDiscountRequest>,
-    ) -> Result<Response<DiscountsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::discounts::search_discount(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn update_discount(
-        &self,
-        request: Request<UpdateDiscountRequest>,
-    ) -> Result<Response<DiscountsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::discounts::update_discount(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_discount(
-        &self,
-        request: Request<DeleteDiscountRequest>,
-    ) -> Result<Response<DiscountsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::discounts::delete_discount(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1836,71 +1292,6 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
-    // ProductRatings Services
-    async fn create_product_rating(
-        &self,
-        request: Request<CreateProductRatingRequest>,
-    ) -> Result<Response<ProductRatingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::product_ratings::create_product_rating(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_product_rating(
-        &self,
-        request: Request<SearchProductRatingRequest>,
-    ) -> Result<Response<ProductRatingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::product_ratings::search_product_rating(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn update_product_rating(
-        &self,
-        request: Request<UpdateProductRatingRequest>,
-    ) -> Result<Response<ProductRatingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::product_ratings::update_product_rating(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_product_rating(
-        &self,
-        request: Request<DeleteProductRatingRequest>,
-    ) -> Result<Response<ProductRatingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::product_ratings::delete_product_rating(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
     // Sizes Services
     async fn create_size(
         &self,
@@ -2031,61 +1422,6 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
-    // ProductCategoryMapping Services
-    async fn create_product_category_mapping(
-        &self,
-        request: Request<CreateProductCategoryMappingRequest>,
-    ) -> Result<Response<ProductCategoryMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_category_mappings::create_product_category_mapping(&txn, request)
-                .await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_product_category_mapping(
-        &self,
-        request: Request<SearchProductCategoryMappingRequest>,
-    ) -> Result<Response<ProductCategoryMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_category_mappings::search_product_category_mapping(&txn, request)
-                .await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_product_category_mapping(
-        &self,
-        request: Request<DeleteProductCategoryMappingRequest>,
-    ) -> Result<Response<ProductCategoryMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res =
-            handlers::product_category_mappings::delete_product_category_mapping(&txn, request)
-                .await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
     // ProductAttributeMapping Services
     async fn create_product_attribute_mapping(
         &self,
@@ -2137,55 +1473,6 @@ impl GrpcServices for MyGRPCServices {
         let res =
             handlers::product_attribute_mappings::delete_product_attribute_mapping(&txn, request)
                 .await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // UserRoleMapping Services
-    async fn create_user_role_mapping(
-        &self,
-        request: Request<CreateUserRoleMappingRequest>,
-    ) -> Result<Response<UserRoleMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::user_role_mappings::create_user_role_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_user_role_mapping(
-        &self,
-        request: Request<SearchUserRoleMappingRequest>,
-    ) -> Result<Response<UserRoleMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::user_role_mappings::search_user_role_mapping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_user_role_mapping(
-        &self,
-        request: Request<DeleteUserRoleMappingRequest>,
-    ) -> Result<Response<UserRoleMappingsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::user_role_mappings::delete_user_role_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2446,201 +1733,6 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::inventory_logs::delete_inventory_log(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // Promotions Services
-    async fn create_promotion(
-        &self,
-        request: Request<CreatePromotionRequest>,
-    ) -> Result<Response<PromotionsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::promotions::create_promotion(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_promotion(
-        &self,
-        request: Request<SearchPromotionRequest>,
-    ) -> Result<Response<PromotionsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::promotions::search_promotion(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn update_promotion(
-        &self,
-        request: Request<UpdatePromotionRequest>,
-    ) -> Result<Response<PromotionsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::promotions::update_promotion(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_promotion(
-        &self,
-        request: Request<DeletePromotionRequest>,
-    ) -> Result<Response<PromotionsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::promotions::delete_promotion(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // ShippingZones Services
-    async fn create_shipping_zone(
-        &self,
-        request: Request<CreateShippingZoneRequest>,
-    ) -> Result<Response<ShippingZonesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::shipping_zones::create_shipping_zone(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_shipping_zone(
-        &self,
-        request: Request<SearchShippingZoneRequest>,
-    ) -> Result<Response<ShippingZonesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::shipping_zones::search_shipping_zone(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn update_shipping_zone(
-        &self,
-        request: Request<UpdateShippingZoneRequest>,
-    ) -> Result<Response<ShippingZonesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::shipping_zones::update_shipping_zone(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_shipping_zone(
-        &self,
-        request: Request<DeleteShippingZoneRequest>,
-    ) -> Result<Response<ShippingZonesResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::shipping_zones::delete_shipping_zone(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    // PaymentMethods Services
-    async fn create_payment_method(
-        &self,
-        request: Request<CreatePaymentMethodRequest>,
-    ) -> Result<Response<PaymentMethodsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::payment_methods::create_payment_method(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn search_payment_method(
-        &self,
-        request: Request<SearchPaymentMethodRequest>,
-    ) -> Result<Response<PaymentMethodsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::payment_methods::search_payment_method(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn update_payment_method(
-        &self,
-        request: Request<UpdatePaymentMethodRequest>,
-    ) -> Result<Response<PaymentMethodsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::payment_methods::update_payment_method(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
-    }
-
-    async fn delete_payment_method(
-        &self,
-        request: Request<DeletePaymentMethodRequest>,
-    ) -> Result<Response<PaymentMethodsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::payment_methods::delete_payment_method(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

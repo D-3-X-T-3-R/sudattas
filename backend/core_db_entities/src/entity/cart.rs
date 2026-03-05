@@ -11,8 +11,8 @@ pub struct Model {
     #[sea_orm(column_name = "UserID")]
     pub user_id: Option<i64>,
     pub session_id: Option<String>,
-    #[sea_orm(column_name = "ProductID")]
-    pub product_id: i64,
+    #[sea_orm(column_name = "VariantID")]
+    pub variant_id: i64,
     #[sea_orm(column_name = "Quantity")]
     pub quantity: i64,
     pub created_at: Option<DateTimeUtc>,
@@ -23,26 +23,26 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::products::Entity",
-        from = "Column::ProductId",
-        to = "super::products::Column::ProductId",
+        belongs_to = "super::product_variants::Entity",
+        from = "Column::VariantId",
+        to = "super::product_variants::Column::VariantId",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Products,
+    ProductVariants,
     #[sea_orm(
         belongs_to = "super::users::Entity",
         from = "Column::UserId",
         to = "super::users::Column::UserId",
         on_update = "NoAction",
-        on_delete = "NoAction"
+        on_delete = "Cascade"
     )]
     Users,
 }
 
-impl Related<super::products::Entity> for Entity {
+impl Related<super::product_variants::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Products.def()
+        Relation::ProductVariants.def()
     }
 }
 

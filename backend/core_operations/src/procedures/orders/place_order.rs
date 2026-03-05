@@ -16,7 +16,7 @@ use crate::order_state_machine;
 
 use core_db_entities::entity::prelude::IdempotencyKeys;
 use core_db_entities::entity::{
-    idempotency_keys, orders, sea_orm_active_enums::Status as IdempotencyStatus,
+    idempotency_keys, orders, product_variants, sea_orm_active_enums::Status as IdempotencyStatus,
 };
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
@@ -77,7 +77,7 @@ pub async fn place_order(
                             .iter()
                             .map(|item| {
                                 json!({
-                                    "product_id": item.product_id,
+                                    "variant_id": item.variant_id,
                                     "quantity": item.quantity,
                                 })
                             })
@@ -114,10 +114,7 @@ pub async fn place_order(
                         user_id = existing_order.user_id,
                         "place_order idempotent replay – returning existing order"
                     );
-                    let total_amount_paise =
-                        existing_order.grand_total_minor.unwrap_or_else(|| {
-                            crate::money::decimal_to_paise(&existing_order.total_amount)
-                        });
+                    let total_amount_paise = existing_order.grand_total_minor;
                     return Ok(Response::new(OrdersResponse {
                         items: vec![proto::proto::core::OrderResponse {
                             order_id: existing_order.order_id,
@@ -164,23 +161,35 @@ pub async fn place_order(
         ));
     }
 
-    let (product_quantity_map, product_ids): (HashMap<i64, i64>, Vec<i64>) = cart_items
+    let (variant_quantity_map, variant_ids): (HashMap<i64, i64>, Vec<i64>) = cart_items
         .iter()
-        .map(|item| ((item.product_id, item.quantity), item.product_id))
+        .map(|item| ((item.variant_id, item.quantity), item.variant_id))
         .unzip();
 
+    let variants = product_variants::Entity::find()
+        .filter(product_variants::Column::VariantId.is_in(variant_ids.clone()))
+        .all(txn)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+    let product_ids: Vec<i64> = variants.iter().map(|v| v.product_id).collect();
     let order_products =
         get_products_by_id(txn, Request::new(GetProductsByIdRequest { product_ids }))
             .await?
             .into_inner()
             .items;
+    let variants_by_id: HashMap<i64, product_variants::Model> =
+        variants.into_iter().map(|v| (v.variant_id, v)).collect();
+    let products_by_id: HashMap<i64, proto::proto::core::ProductResponse> = order_products
+        .iter()
+        .map(|p| (p.product_id, p.clone()))
+        .collect();
 
     // Build a stable representation of the logical request payload for idempotency hashing.
     let cart_snapshot: Vec<_> = cart_items
         .iter()
         .map(|item| {
             json!({
-                "product_id": item.product_id,
+                "variant_id": item.variant_id,
                 "quantity": item.quantity,
             })
         })
@@ -239,19 +248,26 @@ pub async fn place_order(
 
     // Compute the gross amount in paise (integer minor units) to avoid float drift.
     let mut gross_paise: i64 = 0;
-    for product in &order_products {
-        if let Some(&quantity) = product_quantity_map.get(&product.product_id) {
-            let price_paise = product.price_paise;
-            let line_paise = paise_checked_mul(price_paise, quantity).map_err(|e| {
-                Status::internal(format!(
-                    "Overflow computing line total for product {}: {}",
-                    product.product_id, e
-                ))
-            })?;
-            gross_paise = paise_checked_add(gross_paise, line_paise).map_err(|e| {
-                Status::internal(format!("Overflow computing order total in paise: {}", e))
-            })?;
-        }
+    for item in &cart_items {
+        let variant = variants_by_id.get(&item.variant_id).ok_or_else(|| {
+            Status::invalid_argument(format!("Variant {} not found", item.variant_id))
+        })?;
+        let product = products_by_id.get(&variant.product_id).ok_or_else(|| {
+            Status::internal(format!(
+                "Product {} for variant {} not found",
+                variant.product_id, item.variant_id
+            ))
+        })?;
+        let unit_paise = product.price_paise + i64::from(variant.additional_price.unwrap_or(0));
+        let line_paise = paise_checked_mul(unit_paise, item.quantity).map_err(|e| {
+            Status::internal(format!(
+                "Overflow computing line total for variant {}: {}",
+                item.variant_id, e
+            ))
+        })?;
+        gross_paise = paise_checked_add(gross_paise, line_paise).map_err(|e| {
+            Status::internal(format!("Overflow computing order total in paise: {}", e))
+        })?;
     }
 
     // Apply coupon if provided, deriving the discounted total in paise and coupon snapshot.
@@ -260,11 +276,15 @@ pub async fn place_order(
     let (total_paise, coupon_snapshot) = if let Some(ref code) = req.coupon_code {
         match check_coupon(txn, code, gross_paise, false).await {
             Ok(result) if result.is_valid => {
-                let cart_for_scope: Vec<CartProduct> = order_products
+                let cart_for_scope: Vec<CartProduct> = cart_items
                     .iter()
-                    .map(|p| CartProduct {
-                        product_id: p.product_id,
-                        category_id: p.category_id,
+                    .filter_map(|item| {
+                        let v = variants_by_id.get(&item.variant_id)?;
+                        let p = products_by_id.get(&v.product_id)?;
+                        Some(CartProduct {
+                            product_id: p.product_id,
+                            category_id: Some(p.category_id),
+                        })
                     })
                     .collect();
                 let ok_per_customer = check_per_customer_limit(txn, result.coupon_id, req.user_id)
@@ -309,6 +329,26 @@ pub async fn place_order(
 
     let discount_total_minor = gross_paise - total_paise;
 
+    // Reserve inventory before creating the order so that on insufficient stock we fail without creating any order.
+    for (variant_id, quantity) in &variant_quantity_map {
+        let qty = *quantity;
+        let result = txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable - ? WHERE VariantID = ? AND QuantityAvailable >= ?"#,
+                [qty.into(), (*variant_id).into(), qty.into()],
+            ))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        if result.rows_affected() == 0 {
+            crate::observability::record_inventory_update_failure_total();
+            return Err(Status::failed_precondition(format!(
+                "Insufficient stock for variant {} (need {}); inventory update had no effect",
+                variant_id, qty
+            )));
+        }
+    }
+
     let pending_status_id = order_state_machine::get_status_id(txn, "pending")
         .await
         .map_err(|e| Status::internal(e.to_string()))?
@@ -346,16 +386,23 @@ pub async fn place_order(
 
     let mut order_details: Vec<CreateOrderDetailRequest> = Vec::new();
 
-    for product in order_products.iter() {
-        let quantity = product_quantity_map
-            .get(&product.product_id)
-            .unwrap()
-            .to_owned();
-        let unit_price_paise = product.price_paise;
+    for item in &cart_items {
+        let variant = variants_by_id.get(&item.variant_id).ok_or_else(|| {
+            Status::invalid_argument(format!("Variant {} not found", item.variant_id))
+        })?;
+        let product = products_by_id.get(&variant.product_id).ok_or_else(|| {
+            Status::internal(format!(
+                "Product {} for variant {} not found",
+                variant.product_id, item.variant_id
+            ))
+        })?;
+        let quantity = item.quantity;
+        let unit_price_paise =
+            product.price_paise + i64::from(variant.additional_price.unwrap_or(0));
         let line_total_paise = paise_checked_mul(unit_price_paise, quantity).unwrap_or(0);
         order_details.push(CreateOrderDetailRequest {
             order_id: create_order.order_id,
-            product_id: product.product_id,
+            variant_id: item.variant_id,
             quantity,
             price_paise: line_total_paise,
             unit_price_minor: Some(unit_price_paise as i32),
@@ -373,26 +420,6 @@ pub async fn place_order(
     .await?
     .into_inner()
     .items;
-
-    // Atomic inventory decrement: reserve stock for this order (same transaction).
-    for (product_id, quantity) in &product_quantity_map {
-        let qty = *quantity;
-        let result = txn
-            .execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable - ? WHERE ProductID = ? AND QuantityAvailable >= ?"#,
-                [qty.into(), (*product_id).into(), qty.into()],
-            ))
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-        if result.rows_affected() == 0 {
-            crate::observability::record_inventory_update_failure_total();
-            return Err(Status::failed_precondition(format!(
-                "Insufficient stock for product {} (need {}); inventory update had no effect",
-                product_id, qty
-            )));
-        }
-    }
 
     // Auto-create a pending payment intent: backend creates Razorpay order via API (server-authoritative).
     let amount_paise = total_paise;

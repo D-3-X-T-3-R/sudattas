@@ -1,4 +1,5 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
 use core_db_entities::entity::users;
 use proto::proto::core::{SearchUserRequest, UserResponse, UsersResponse};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
@@ -19,15 +20,22 @@ pub async fn search_user(
         Ok(models) => {
             let items = models
                 .into_iter()
-                .map(|m| UserResponse {
-                    user_id: m.user_id,
-                    username: m.username,
-                    email: m.email,
-                    full_name: m.full_name,
-                    address: m.address,
-                    phone: m.phone,
-                    create_date: m.create_date.to_rfc3339(),
-                    session_id: None,
+                .map(|m| {
+                    let ap = match m.auth_provider {
+                        AuthProvider::Google => "google",
+                        AuthProvider::Email => "email",
+                    };
+                    UserResponse {
+                        user_id: m.user_id,
+                        username: m.username,
+                        email: m.email,
+                        auth_provider: ap.to_string(),
+                        full_name: m.full_name,
+                        address: m.address,
+                        phone: m.phone,
+                        create_date: m.create_date.to_rfc3339(),
+                        session_id: None,
+                    }
                 })
                 .collect();
             Ok(Response::new(UsersResponse { items }))

@@ -16,13 +16,15 @@ pub struct Model {
     pub slug: Option<String>,
     #[sea_orm(column_name = "Description", column_type = "Text", nullable)]
     pub description: Option<String>,
-    #[sea_orm(column_name = "Price", column_type = "Decimal(Some((10, 2)))")]
-    pub price: Decimal,
-    pub price_paise: Option<i32>,
-    #[sea_orm(column_name = "StockQuantity")]
-    pub stock_quantity: Option<i64>,
+    #[sea_orm(
+        column_name = "Price",
+        column_type = "Decimal(Some((10, 2)))",
+        nullable
+    )]
+    pub price: Option<Decimal>,
+    pub price_paise: i32,
     #[sea_orm(column_name = "CategoryID")]
-    pub category_id: Option<i64>,
+    pub category_id: i64,
     pub fabric: Option<String>,
     pub weave: Option<String>,
     pub occasion: Option<String>,
@@ -38,44 +40,18 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::cart::Entity")]
-    Cart,
+    #[sea_orm(has_many = "super::product_attribute_mapping::Entity")]
+    ProductAttributeMapping,
     #[sea_orm(
-        belongs_to = "super::categories::Entity",
+        belongs_to = "super::product_categories::Entity",
         from = "Column::CategoryId",
-        to = "super::categories::Column::CategoryId",
+        to = "super::product_categories::Column::CategoryId",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    Categories,
-    #[sea_orm(has_many = "super::discounts::Entity")]
-    Discounts,
-    #[sea_orm(has_many = "super::inventory::Entity")]
-    Inventory,
-    #[sea_orm(has_many = "super::inventory_log::Entity")]
-    InventoryLog,
-    #[sea_orm(has_many = "super::order_details::Entity")]
-    OrderDetails,
-    #[sea_orm(has_many = "super::product_attribute_mapping::Entity")]
-    ProductAttributeMapping,
-    #[sea_orm(has_many = "super::product_attributes::Entity")]
-    ProductAttributes,
-    #[sea_orm(has_many = "super::product_category_mapping::Entity")]
-    ProductCategoryMapping,
-    #[sea_orm(has_many = "super::product_color_mapping::Entity")]
-    ProductColorMapping,
-    #[sea_orm(has_many = "super::product_images::Entity")]
+    ProductCategories,
+    #[sea_orm(has_one = "super::product_images::Entity")]
     ProductImages,
-    #[sea_orm(has_many = "super::product_ratings::Entity")]
-    ProductRatings,
-    #[sea_orm(has_many = "super::product_size_mapping::Entity")]
-    ProductSizeMapping,
-    #[sea_orm(has_many = "super::product_variants::Entity")]
-    ProductVariants,
-    #[sea_orm(has_many = "super::reviews::Entity")]
-    Reviews,
-    #[sea_orm(has_many = "super::wishlist::Entity")]
-    Wishlist,
     #[sea_orm(
         belongs_to = "super::product_statuses::Entity",
         from = "Column::ProductStatusId",
@@ -84,36 +60,12 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     ProductStatuses,
-}
-
-impl Related<super::cart::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Cart.def()
-    }
-}
-
-impl Related<super::discounts::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Discounts.def()
-    }
-}
-
-impl Related<super::inventory::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Inventory.def()
-    }
-}
-
-impl Related<super::inventory_log::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::InventoryLog.def()
-    }
-}
-
-impl Related<super::order_details::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::OrderDetails.def()
-    }
+    #[sea_orm(has_many = "super::product_variants::Entity")]
+    ProductVariants,
+    #[sea_orm(has_many = "super::reviews::Entity")]
+    Reviews,
+    #[sea_orm(has_many = "super::wishlist::Entity")]
+    Wishlist,
 }
 
 impl Related<super::product_attribute_mapping::Entity> for Entity {
@@ -122,15 +74,9 @@ impl Related<super::product_attribute_mapping::Entity> for Entity {
     }
 }
 
-impl Related<super::product_category_mapping::Entity> for Entity {
+impl Related<super::product_categories::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::ProductCategoryMapping.def()
-    }
-}
-
-impl Related<super::product_color_mapping::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::ProductColorMapping.def()
+        Relation::ProductCategories.def()
     }
 }
 
@@ -140,15 +86,9 @@ impl Related<super::product_images::Entity> for Entity {
     }
 }
 
-impl Related<super::product_ratings::Entity> for Entity {
+impl Related<super::product_statuses::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::ProductRatings.def()
-    }
-}
-
-impl Related<super::product_size_mapping::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::ProductSizeMapping.def()
+        Relation::ProductStatuses.def()
     }
 }
 
@@ -170,34 +110,6 @@ impl Related<super::wishlist::Entity> for Entity {
     }
 }
 
-impl Related<super::product_statuses::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::ProductStatuses.def()
-    }
-}
-
-impl Related<super::categories::Entity> for Entity {
-    fn to() -> RelationDef {
-        super::product_category_mapping::Relation::Categories.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(
-            super::product_category_mapping::Relation::Products
-                .def()
-                .rev(),
-        )
-    }
-}
-
-impl Related<super::colors::Entity> for Entity {
-    fn to() -> RelationDef {
-        super::product_color_mapping::Relation::Colors.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(super::product_color_mapping::Relation::Products.def().rev())
-    }
-}
-
 impl Related<super::product_attributes::Entity> for Entity {
     fn to() -> RelationDef {
         super::product_attribute_mapping::Relation::ProductAttributes.def()
@@ -208,15 +120,6 @@ impl Related<super::product_attributes::Entity> for Entity {
                 .def()
                 .rev(),
         )
-    }
-}
-
-impl Related<super::sizes::Entity> for Entity {
-    fn to() -> RelationDef {
-        super::product_size_mapping::Relation::Sizes.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(super::product_size_mapping::Relation::Products.def().rev())
     }
 }
 

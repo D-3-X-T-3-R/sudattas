@@ -27,11 +27,16 @@ pub async fn delete_product_image(
                             items: vec![ProductImageResponse {
                                 image_id: model.image_id,
                                 product_id: model.product_id,
-                                image_base64: model.image_base64.unwrap_or_default(),
-                                alt_text: model.alt_text,
-                                url: model.url,
-                                cdn_path: model.cdn_path,
-                                thumbnail_url: model.thumbnail_url,
+                                image_base64: String::new(),
+                                alt_text: None,
+                                url: model
+                                    .urls
+                                    .get("1")
+                                    .or_else(|| model.urls.get("0"))
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from),
+                                cdn_path: None,
+                                thumbnail_url: None,
                             }],
                         };
                         Ok(Response::new(response))

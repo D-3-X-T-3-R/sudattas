@@ -14,30 +14,13 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::product_size_mapping::Entity")]
-    ProductSizeMapping,
     #[sea_orm(has_many = "super::product_variants::Entity")]
     ProductVariants,
-}
-
-impl Related<super::product_size_mapping::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::ProductSizeMapping.def()
-    }
 }
 
 impl Related<super::product_variants::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ProductVariants.def()
-    }
-}
-
-impl Related<super::products::Entity> for Entity {
-    fn to() -> RelationDef {
-        super::product_size_mapping::Relation::Products.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(super::product_size_mapping::Relation::Sizes.def().rev())
     }
 }
 

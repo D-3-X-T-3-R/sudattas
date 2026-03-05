@@ -25,9 +25,8 @@ pub async fn delete_product_attribute(
                 Ok(_) => Ok(Response::new(ProductAttributesResponse {
                     items: vec![ProductAttributeResponse {
                         attribute_id: model.attribute_id,
-                        product_id: model.product_id.unwrap_or(0),
-                        attribute_name: model.attribute_name.unwrap_or_default(),
-                        attribute_value: model.attribute_value.unwrap_or_default(),
+                        attribute_name: model.attribute_name,
+                        attribute_value: model.attribute_value,
                     }],
                 })),
                 Err(e) => Err(map_db_error_to_status(e)),

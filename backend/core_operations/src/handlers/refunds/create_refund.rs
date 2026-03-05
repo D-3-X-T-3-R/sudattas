@@ -9,9 +9,7 @@ use core_db_entities::entity::{order_status, orders, refunds};
 use proto::proto::core::{
     CreateOrderEventRequest, CreateRefundRequest, RefundResponse, RefundsResponse,
 };
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, TransactionTrait,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn create_refund(
@@ -82,7 +80,7 @@ pub async fn create_refund(
 
     let inserted = refund.insert(txn).await.map_err(map_db_error_to_status)?;
 
-    let grand_total = order.grand_total_minor.unwrap_or(0);
+    let grand_total = order.grand_total_minor;
     let total_refunded: i64 = refunds::Entity::find()
         .filter(refunds::Column::OrderId.eq(req.order_id))
         .all(txn)
