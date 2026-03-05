@@ -22,7 +22,7 @@ pub async fn update_review(
         user_id: ActiveValue::Set(req.user_id.or(existing.user_id)),
         rating: ActiveValue::Set(req.rating.unwrap_or(existing.rating as i32) as i8),
         comment: ActiveValue::Set(req.comment.or(existing.comment)),
-        status: ActiveValue::Set(existing.status),
+        review_status: ActiveValue::Set(existing.review_status),
         is_verified_purchase: ActiveValue::Set(existing.is_verified_purchase),
         created_at: ActiveValue::Set(existing.created_at),
     };

@@ -273,19 +273,21 @@ CREATE TABLE `OrderDetails` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Reviews` (Enhanced with moderation)
+-- Column review_status (not status) so SeaORM codegen generates a distinct enum (pending/approved/rejected).
+-- After changing this file: run backend/start-db.ps1 to reload schema and regenerate entities.
 CREATE TABLE `Reviews` (
     `ReviewID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint DEFAULT NULL,
     `UserID` bigint DEFAULT NULL,
     `Rating` TINYINT NOT NULL,
     `Comment` text,
-    `status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    `review_status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
     `is_verified_purchase` BOOLEAN DEFAULT FALSE COMMENT 'Derived from order history; not user-controlled',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`ReviewID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
-    INDEX `idx_product_status` (`ProductID`, `status`),
+    INDEX `idx_product_review_status` (`ProductID`, `review_status`),
     INDEX `idx_reviews_user` (`UserID`),
     UNIQUE KEY `uq_reviews_user_product` (`UserID`, `ProductID`),
     CHECK (`Rating` BETWEEN 1 AND 5)
