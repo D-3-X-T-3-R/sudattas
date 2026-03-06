@@ -2,9 +2,7 @@
 
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::order_status;
-use proto::proto::core::{
-    OrderStatusesResponse, OrderStatusResponse, SearchOrderStatusRequest,
-};
+use proto::proto::core::{OrderStatusResponse, OrderStatusesResponse, SearchOrderStatusRequest};
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tonic::{Request, Response, Status};
 

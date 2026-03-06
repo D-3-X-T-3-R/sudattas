@@ -16,20 +16,12 @@ pub struct Model {
     pub slug: Option<String>,
     #[sea_orm(column_name = "Description", column_type = "Text", nullable)]
     pub description: Option<String>,
-    #[sea_orm(
-        column_name = "Price",
-        column_type = "Decimal(Some((10, 2)))",
-        nullable
-    )]
-    pub price: Option<Decimal>,
     pub price_paise: i32,
     #[sea_orm(column_name = "CategoryID")]
     pub category_id: i64,
     pub fabric: Option<String>,
     pub weave: Option<String>,
     pub occasion: Option<String>,
-    #[sea_orm(column_type = "Decimal(Some((3, 1)))", nullable)]
-    pub length_meters: Option<Decimal>,
     pub has_blouse_piece: Option<i8>,
     #[sea_orm(column_type = "Text", nullable)]
     pub care_instructions: Option<String>,

@@ -1,5 +1,4 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::money::paise_to_decimal;
 use core_db_entities::entity::products;
 use proto::proto::core::{ProductResponse, ProductsResponse, SearchProductRequest};
 use sea_orm::{
@@ -27,10 +26,10 @@ pub async fn search_product(
             query.filter(products::Column::CategoryId.eq(v))
         })
         .apply_if(req.starting_price_paise, |query, v| {
-            query.filter(products::Column::Price.gte(paise_to_decimal(v)))
+            query.filter(products::Column::PricePaise.gte(v as i32))
         })
         .apply_if(req.ending_price_paise, |query, v| {
-            query.filter(products::Column::Price.lte(paise_to_decimal(v)))
+            query.filter(products::Column::PricePaise.lte(v as i32))
         })
         .apply_if(req.limit, |query, v| query.limit(v as u64))
         .apply_if(req.offset, |query, v| query.offset(v as u64))

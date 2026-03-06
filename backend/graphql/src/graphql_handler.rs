@@ -68,7 +68,7 @@ pub async fn handle_graphql_request(
     }
 
     let operation_name = req.operation_name.as_deref();
-    let variables = req.variables.unwrap_or_else(juniper::Variables::new);
+    let variables = req.variables.unwrap_or_default();
 
     let start = Instant::now();
     let result =
