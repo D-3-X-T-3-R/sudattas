@@ -112,6 +112,9 @@ message SearchProductRequest {
     optional int64 product_id = 6;
     optional int64 limit = 7;
     optional int64 offset = 8;
+    optional string fabric = 9;
+    optional string weave = 10;
+    optional string occasion = 11;
 }
 
 message GetProductsByIdRequest {
@@ -144,6 +147,14 @@ message ProductResponse {
     int64 price_paise = 3;
     int64 category_id = 4;
     int64 product_id = 5;
+    optional string sku = 6;
+    optional string slug = 7;
+    optional string fabric = 8;
+    optional string weave = 9;
+    optional string occasion = 10;
+    optional bool has_blouse_piece = 11;
+    optional string care_instructions = 12;
+    optional int64 product_status_id = 13;
 }
 
 message ProductsResponse {
@@ -499,6 +510,7 @@ message GetPresignedUploadUrlRequest {
     int64 product_id = 1;
     string filename = 2;
     string content_type = 3;
+    optional int32 display_order = 4;  // When set, used as image index for key (avoids race when uploading multiple in parallel)
 }
 
 message PresignedUploadUrlResponse {

@@ -22,6 +22,11 @@ export interface ProductRow {
   name: string;
 }
 
+export interface ProductImageListItem {
+  thumbnailUrl?: string | null;
+  url?: string | null;
+}
+
 /** Category for admin dropdowns */
 export interface CategoryRow {
   categoryId: string;
@@ -32,9 +37,20 @@ export interface CategoryRow {
 export interface ProductListRow {
   productId: string;
   name: string;
+  description?: string | null;
+  amountPaise?: string;
   formatted: string;
   stockQuantity?: string | null;
   categoryId?: string | null;
+  sku?: string | null;
+  slug?: string | null;
+  fabric?: string | null;
+  weave?: string | null;
+  occasion?: string | null;
+  hasBlousePiece?: boolean | null;
+  careInstructions?: string | null;
+  productStatusId?: string | null;
+  images?: ProductImageListItem[] | null;
 }
 
 /** Fetch all categories for admin dropdowns. */
@@ -49,11 +65,17 @@ export async function fetchCategories(): Promise<CategoryRow[]> {
 export async function fetchProductsList(params: {
   name?: string;
   categoryId?: string;
+  fabric?: string;
+  weave?: string;
+  occasion?: string;
   limit?: string;
 }): Promise<ProductListRow[]> {
   const search: Record<string, string> = {};
   if (params.name) search.name = params.name;
   if (params.categoryId) search.categoryId = params.categoryId;
+  if (params.fabric) search.fabric = params.fabric;
+  if (params.weave) search.weave = params.weave;
+  if (params.occasion) search.occasion = params.occasion;
   if (params.limit) search.limit = params.limit;
 
   const data = await gqlAdmin<{ searchProduct?: ProductListRow[] }>(
@@ -61,9 +83,23 @@ export async function fetchProductsList(params: {
       searchProduct(search: $search) {
         productId
         name
+        description
+        amountPaise
         formatted
         stockQuantity
         categoryId
+        sku
+        slug
+        fabric
+        weave
+        occasion
+        hasBlousePiece
+        careInstructions
+        productStatusId
+        images {
+          thumbnailUrl
+          url
+        }
       }
     }`,
     { search: Object.keys(search).length ? search : { limit: "50" } }

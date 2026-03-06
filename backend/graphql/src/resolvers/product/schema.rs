@@ -15,6 +15,14 @@ pub struct Product {
     pub formatted: String,
     pub stock_quantity: Option<String>,
     pub category_id: Option<String>,
+    pub sku: Option<String>,
+    pub slug: Option<String>,
+    pub fabric: Option<String>,
+    pub weave: Option<String>,
+    pub occasion: Option<String>,
+    pub has_blouse_piece: Option<bool>,
+    pub care_instructions: Option<String>,
+    pub product_status_id: Option<String>,
 }
 
 #[graphql_object]
@@ -49,6 +57,38 @@ impl Product {
 
     async fn category_id(&self) -> &Option<String> {
         &self.category_id
+    }
+
+    async fn sku(&self) -> &Option<String> {
+        &self.sku
+    }
+
+    async fn slug(&self) -> &Option<String> {
+        &self.slug
+    }
+
+    async fn fabric(&self) -> &Option<String> {
+        &self.fabric
+    }
+
+    async fn weave(&self) -> &Option<String> {
+        &self.weave
+    }
+
+    async fn occasion(&self) -> &Option<String> {
+        &self.occasion
+    }
+
+    async fn has_blouse_piece(&self) -> &Option<bool> {
+        &self.has_blouse_piece
+    }
+
+    async fn care_instructions(&self) -> &Option<String> {
+        &self.care_instructions
+    }
+
+    async fn product_status_id(&self) -> &Option<String> {
+        &self.product_status_id
     }
 
     async fn category_details(&self) -> FieldResult<Vec<Category>> {
@@ -102,6 +142,9 @@ pub struct SearchProduct {
     pub ending_price_paise: Option<String>,
     pub stock_quantity: Option<String>,
     pub category_id: Option<String>,
+    pub fabric: Option<String>,
+    pub weave: Option<String>,
+    pub occasion: Option<String>,
     /// Maximum number of results to return (default: all)
     pub limit: Option<String>,
     /// Number of results to skip for pagination

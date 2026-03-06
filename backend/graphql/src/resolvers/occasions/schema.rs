@@ -42,4 +42,3 @@ pub struct OccasionMutation {
 pub struct DeleteOccasionInput {
     pub occasion_id: String,
 }
-
