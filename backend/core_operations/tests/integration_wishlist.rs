@@ -62,6 +62,14 @@ async fn wishlist_test_setup(txn: &sea_orm::DatabaseTransaction, now_tag: i64) -
             description: None,
             price_paise: 4_000,
             category_id: cat.category_id,
+            sku: None,
+            slug: None,
+            fabric: None,
+            weave: None,
+            occasion: None,
+            has_blouse_piece: None,
+            care_instructions: None,
+            product_status_id: None,
         }),
     )
     .await

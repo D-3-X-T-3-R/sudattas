@@ -41,8 +41,10 @@ impl Product {
         &self.formatted
     }
 
-    async fn stock_quantity(&self) -> &Option<String> {
-        &self.stock_quantity
+    async fn stock_quantity(&self) -> FieldResult<Option<String>> {
+        crate::resolvers::product::handlers::get_stock_for_product(&self.product_id)
+            .await
+            .map_err(|e| e.into())
     }
 
     async fn category_id(&self) -> &Option<String> {
@@ -76,8 +78,17 @@ pub struct NewProduct {
     pub description: String,
     /// Price in paise (e.g. 49900 = ₹499.00)
     pub price_paise: String,
-    pub stock_quantity: String,
+    /// Legacy product-level stock; now managed via variants. Optional to avoid forcing clients to send it.
+    pub stock_quantity: Option<String>,
     pub category_id: String,
+    pub sku: Option<String>,
+    pub slug: Option<String>,
+    pub fabric: Option<String>,
+    pub weave: Option<String>,
+    pub occasion: Option<String>,
+    pub has_blouse_piece: Option<bool>,
+    pub care_instructions: Option<String>,
+    pub product_status_id: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
@@ -111,6 +122,15 @@ pub struct ProductMutation {
     pub name: String,
     pub description: String,
     pub price_paise: String,
-    pub stock_quantity: String,
+    /// Legacy product-level stock; now managed via variants. Optional to avoid forcing clients to send it.
+    pub stock_quantity: Option<String>,
     pub category_id: String,
+    pub sku: Option<String>,
+    pub slug: Option<String>,
+    pub fabric: Option<String>,
+    pub weave: Option<String>,
+    pub occasion: Option<String>,
+    pub has_blouse_piece: Option<bool>,
+    pub care_instructions: Option<String>,
+    pub product_status_id: Option<String>,
 }

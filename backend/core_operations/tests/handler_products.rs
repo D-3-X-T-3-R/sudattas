@@ -44,6 +44,14 @@ async fn create_product_inserts_and_returns_created_model() {
         description: Some("A nice saree".to_string()),
         price_paise: 99_90,
         category_id: 5,
+        sku: None,
+        slug: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        has_blouse_piece: None,
+        care_instructions: None,
+        product_status_id: None,
     });
     let result = create_product(&txn, req).await;
     assert!(result.is_ok());
@@ -93,6 +101,14 @@ async fn update_product_updates_fields_and_returns_response() {
         description: Some("Updated desc".to_string()),
         price_paise: 12_34,
         category_id: 10,
+        sku: None,
+        slug: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        has_blouse_piece: None,
+        care_instructions: None,
+        product_status_id: None,
     });
     let result = update_product(&txn, req).await;
     assert!(result.is_ok());

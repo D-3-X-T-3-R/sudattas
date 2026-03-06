@@ -15,15 +15,39 @@ pub async fn update_product(
         description: ActiveValue::Set(req.description),
         product_id: ActiveValue::Set(req.product_id),
         category_id: ActiveValue::Set(req.category_id),
-        sku: ActiveValue::NotSet,
-        slug: ActiveValue::NotSet,
+        sku: req
+            .sku
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        slug: req
+            .slug
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
         price_paise: ActiveValue::Set(req.price_paise as i32),
-        fabric: ActiveValue::NotSet,
-        weave: ActiveValue::NotSet,
-        occasion: ActiveValue::NotSet,
-        has_blouse_piece: ActiveValue::NotSet,
-        care_instructions: ActiveValue::NotSet,
-        product_status_id: ActiveValue::NotSet,
+        fabric: req
+            .fabric
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        weave: req
+            .weave
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        occasion: req
+            .occasion
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        has_blouse_piece: req
+            .has_blouse_piece
+            .map(|b| ActiveValue::Set(Some(if b { 1 } else { 0 })))
+            .unwrap_or(ActiveValue::NotSet),
+        care_instructions: req
+            .care_instructions
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        product_status_id: req
+            .product_status_id
+            .map(|id| ActiveValue::Set(Some(id)))
+            .unwrap_or(ActiveValue::NotSet),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };

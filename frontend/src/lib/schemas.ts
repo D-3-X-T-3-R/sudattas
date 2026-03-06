@@ -54,9 +54,32 @@ export const adminProductFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string(),
   priceRupees: z.string(),
-  stockQuantity: z.string(),
   categoryId: z.string().min(1, "Please select a category"),
+  sku: z.string().optional(),
+  slug: z.string().optional(),
+  fabric: z.string().optional(),
+  weave: z.string().optional(),
+  occasion: z.string().optional(),
+  hasBlousePiece: z.boolean().optional(),
+  careInstructions: z.string().optional(),
+  productStatusId: z.string().optional(),
 });
 export const adminNewCategorySchema = z.object({ name: z.string().min(1) });
 export type AdminProductForm = z.infer<typeof adminProductFormSchema>;
 export type AdminNewCategory = z.infer<typeof adminNewCategorySchema>;
+
+/** One variant row for add-product form (size, color, extra price, initial stock) */
+export interface AdminProductVariantRow {
+  sizeId: string;
+  colorId?: string;
+  additionalPricePaise: string;
+  quantityAvailable: string;
+  reorderLevel?: string;
+}
+
+/** Attribute to link to product (existing attributeId or new name+value) */
+export interface AdminProductAttributeRow {
+  attributeId?: string;
+  attributeName: string;
+  attributeValue: string;
+}

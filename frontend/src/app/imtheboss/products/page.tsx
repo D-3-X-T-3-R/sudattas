@@ -8,9 +8,26 @@ import {
   fetchCategories,
   fetchProductsList,
   deleteProduct,
+  fetchSizes,
+  fetchColors,
+  fetchFabrics,
+  fetchWeaves,
+  fetchOccasions,
+  searchProductAttributes,
+  createProductVariant,
+  createProductAttribute,
+  createProductAttributeMapping,
+  createInventoryItem,
   type ProductListRow,
   type CategoryRow,
+  type SizeRow,
+  type ColorRow,
+  type ProductAttributeRow,
+  type FabricRow,
+  type WeaveRow,
+  type OccasionRow,
 } from "@/lib/admin-queries";
+import type { AdminProductVariantRow, AdminProductAttributeRow } from "@/lib/schemas";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +42,14 @@ type ProductFormState = {
   priceRupees: string;
   stockQuantity: string;
   categoryId: string;
+  sku: string;
+  slug: string;
+  fabric: string;
+  weave: string;
+  occasion: string;
+  hasBlousePiece: boolean;
+  careInstructions: string;
+  productStatusId: string;
 };
 
 const DRAFT_KEY = "sudattas_admin_product_draft";
@@ -69,6 +94,32 @@ export default function AdminProductsPage() {
     enabled: true,
   });
 
+  const { data: sizes = [] } = useQuery<SizeRow[], Error>({
+    queryKey: ["admin", "sizes"],
+    queryFn: fetchSizes,
+  });
+  const { data: colors = [] } = useQuery<ColorRow[], Error>({
+    queryKey: ["admin", "colors"],
+    queryFn: fetchColors,
+  });
+  const { data: weaves = [] } = useQuery<WeaveRow[], Error>({
+    queryKey: ["admin", "weaves"],
+    queryFn: fetchWeaves,
+  });
+  const { data: occasions = [] } = useQuery<OccasionRow[], Error>({
+    queryKey: ["admin", "occasions"],
+    queryFn: fetchOccasions,
+  });
+  const { data: existingAttributes = [] } = useQuery<ProductAttributeRow[], Error>({
+    queryKey: ["admin", "productAttributes"],
+    queryFn: () => searchProductAttributes({}),
+  });
+
+  const { data: fabrics = [] } = useQuery<FabricRow[], Error>({
+    queryKey: ["admin", "fabrics"],
+    queryFn: fetchFabrics,
+  });
+
   const deleteProductMutation = useMutation({
     mutationFn: deleteProduct,
     onSuccess: () => {
@@ -78,13 +129,24 @@ export default function AdminProductsPage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ productId: string; name: string } | null>(null);
 
+  const [activeTab, setActiveTab] = useState<"view" | "add">("view");
+
   const [form, setForm] = useState<ProductFormState>({
     name: "",
     description: "",
     priceRupees: "",
-    stockQuantity: "0",
     categoryId: categories[0]?.categoryId ?? "",
+    sku: "",
+    slug: "",
+    fabric: "",
+    weave: "",
+    occasion: "",
+    hasBlousePiece: true,
+    careInstructions: "",
+    productStatusId: "",
   });
+  const [variants, setVariants] = useState<AdminProductVariantRow[]>([]);
+  const [attributes, setAttributes] = useState<AdminProductAttributeRow[]>([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showNewCategory, setShowNewCategory] = useState(false);
@@ -103,7 +165,7 @@ export default function AdminProductsPage() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Load draft from sessionStorage on first mount
+  // Load draft from sessionStorage on first mount (product fields only; variants/attributes not persisted)
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -113,6 +175,7 @@ export default function AdminProductsPage() {
       setForm((prev) => ({
         ...prev,
         ...parsed,
+        hasBlousePiece: parsed.hasBlousePiece ?? prev.hasBlousePiece,
       }));
     } catch {
       // ignore malformed drafts
@@ -154,24 +217,39 @@ export default function AdminProductsPage() {
       pricePaise: number;
       stockQuantity: string;
       categoryId: string;
+      sku?: string;
+      slug?: string;
+      fabric?: string;
+      weave?: string;
+      occasion?: string;
+      hasBlousePiece?: boolean;
+      careInstructions?: string;
+      productStatusId?: string;
     }) => {
+      const product: Record<string, unknown> = {
+        name: payload.name,
+        description: payload.description,
+        pricePaise: String(payload.pricePaise),
+        stockQuantity: payload.stockQuantity,
+        categoryId: payload.categoryId,
+      };
+      if (payload.sku?.trim()) product.sku = payload.sku.trim();
+      if (payload.slug?.trim()) product.slug = payload.slug.trim();
+      if (payload.fabric?.trim()) product.fabric = payload.fabric.trim();
+      if (payload.weave?.trim()) product.weave = payload.weave.trim();
+      if (payload.occasion?.trim()) product.occasion = payload.occasion.trim();
+      if (payload.hasBlousePiece !== undefined) product.hasBlousePiece = payload.hasBlousePiece;
+      if (payload.careInstructions?.trim()) product.careInstructions = payload.careInstructions.trim();
+      if (payload.productStatusId?.trim()) product.productStatusId = payload.productStatusId.trim();
       const data = await gqlAdmin<{ createProduct?: Array<{ productId: string; name: string; formatted?: string }> }>(
         `mutation CreateProduct($product: NewProduct!) {
           createProduct(product: $product) { productId name formatted }
         }`,
-        {
-          product: {
-            name: payload.name,
-            description: payload.description,
-            pricePaise: String(payload.pricePaise),
-            stockQuantity: payload.stockQuantity,
-            categoryId: payload.categoryId,
-          },
-        }
+        { product }
       );
       return data?.createProduct?.[0];
     },
-    onSuccess: (created) => {
+    onSuccess: async (created) => {
       setMessage(
         created
           ? `Created: ${created.name}${
@@ -190,13 +268,63 @@ export default function AdminProductsPage() {
             });
           });
         }
+        // Create variants and inventory
+        for (const v of variants) {
+          try {
+            const sizeId = v.sizeId?.trim() || undefined;
+            const colorId = v.colorId?.trim() || undefined;
+            const additionalPricePaise = v.additionalPricePaise?.trim() || undefined;
+            const variant = await createProductVariant({
+              productId: created.productId,
+              sizeId: sizeId || undefined,
+              colorId: colorId || undefined,
+              additionalPricePaise,
+            });
+            if (variant?.variantId) {
+              await createInventoryItem({
+                variantId: variant.variantId,
+                quantityAvailable: (v.quantityAvailable?.trim() || "0").replace(/^$/, "0"),
+                reorderLevel: v.reorderLevel?.trim() || undefined,
+              });
+            }
+          } catch (err) {
+            console.error("Failed to create variant/inventory:", err);
+          }
+        }
+        // Create or link attributes
+        for (const attr of attributes) {
+          if (!attr.attributeName?.trim() || !attr.attributeValue?.trim()) continue;
+          try {
+            let attributeId = attr.attributeId;
+            if (!attributeId) {
+              const createdAttr = await createProductAttribute(attr.attributeName.trim(), attr.attributeValue.trim());
+              attributeId = createdAttr?.attributeId ?? undefined;
+            }
+            if (attributeId) {
+              await createProductAttributeMapping(created.productId, attributeId);
+            }
+          } catch (err) {
+            console.error("Failed to create/link attribute:", err);
+          }
+        }
+        setVariants([]);
+        setAttributes([]);
       }
       setForm((prev) => ({
+        ...prev,
         name: "",
         description: "",
         priceRupees: "",
         stockQuantity: "0",
         categoryId: prev.categoryId,
+        sku: "",
+        slug: "",
+        fabric: "",
+        weave: "",
+        occasion: "",
+        hasBlousePiece: true,
+        careInstructions: "",
+        productStatusId: "",
       }));
       setError("");
       if (typeof window !== "undefined") {
@@ -211,9 +339,10 @@ export default function AdminProductsPage() {
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >
   ) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
     setForm((prev) => {
-      const next = { ...prev, [name]: value };
+      const next = { ...prev, [name]: type === "checkbox" ? checked : value };
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next));
       }
@@ -252,19 +381,41 @@ export default function AdminProductsPage() {
       setError(msg);
       return;
     }
-    const { name, description, priceRupees, stockQuantity, categoryId } =
+    const { name, description, priceRupees, categoryId, sku, slug, fabric, weave, occasion, hasBlousePiece, careInstructions, productStatusId } =
       parsed.data;
     const pricePaise = Math.round(parseFloat(priceRupees || "0") * 100);
     if (isNaN(pricePaise) || pricePaise < 0) {
       setError("Enter a valid price (e.g. 499.00).");
       return;
     }
+    if (variants.length === 0) {
+      setError("Add at least one variant (size) with stock.");
+      return;
+    }
+    const invalidVariant = variants.find(
+      (v) =>
+        !v.sizeId ||
+        v.quantityAvailable.trim() === "" ||
+        Number.isNaN(Number(v.quantityAvailable)) ||
+        Number(v.quantityAvailable) < 0
+    );
+    if (invalidVariant) {
+      setError("Each variant must have a size and non-negative stock quantity.");
+      return;
+    }
     createProductMutation.mutate({
       name,
       description: description || "",
       pricePaise,
-      stockQuantity: stockQuantity || "0",
       categoryId,
+      sku: sku || undefined,
+      slug: slug || undefined,
+      fabric: fabric || undefined,
+      weave: weave || undefined,
+      occasion: occasion || undefined,
+      hasBlousePiece,
+      careInstructions: careInstructions || undefined,
+      productStatusId: productStatusId || undefined,
     });
   };
 
@@ -410,8 +561,6 @@ export default function AdminProductsPage() {
       setImageMessage("");
     },
   });
-
-  const [activeTab, setActiveTab] = useState<"view" | "add">("view");
 
   return (
     <Section compact className="max-w-6xl">
@@ -690,19 +839,6 @@ export default function AdminProductsPage() {
                     className="rounded-lg"
                   />
                 </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
-                    Stock quantity
-                  </label>
-                  <Input
-                    type="number"
-                    name="stockQuantity"
-                    value={form.stockQuantity}
-                    onChange={handleChange}
-                    min={0}
-                    className="rounded-lg"
-                  />
-                </div>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
@@ -777,6 +913,336 @@ export default function AdminProductsPage() {
                     create one.
                   </p>
                 )}
+              </div>
+              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">SKU</label>
+                  <Input
+                    type="text"
+                    name="sku"
+                    value={form.sku}
+                    onChange={handleChange}
+                    placeholder="Optional unique code"
+                    className="rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Slug</label>
+                  <Input
+                    type="text"
+                    name="slug"
+                    value={form.slug}
+                    onChange={handleChange}
+                    placeholder="Optional URL slug"
+                    className="rounded-lg"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Fabric</label>
+                  <select
+                    name="fabric"
+                    value={form.fabric}
+                    onChange={handleChange}
+                    className={cn(
+                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    )}
+                  >
+                    <option value="">Select fabric</option>
+                    {fabrics.map((f) => (
+                      <option key={f.fabricId} value={f.fabricName}>
+                        {f.fabricName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Weave</label>
+                  <select
+                    name="weave"
+                    value={form.weave}
+                    onChange={handleChange}
+                    className={cn(
+                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    )}
+                  >
+                    <option value="">Select weave</option>
+                    {weaves.map((w) => (
+                      <option key={w.weaveId} value={w.weaveName}>
+                        {w.weaveName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Occasion</label>
+                  <select
+                    name="occasion"
+                    value={form.occasion}
+                    onChange={handleChange}
+                    className={cn(
+                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    )}
+                  >
+                    <option value="">Select occasion</option>
+                    {occasions.map((o) => (
+                      <option key={o.occasionId} value={o.occasionName}>
+                        {o.occasionName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="hasBlousePiece"
+                  name="hasBlousePiece"
+                  checked={form.hasBlousePiece}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-[var(--color-line)]"
+                />
+                <label htmlFor="hasBlousePiece" className="text-sm font-medium text-[var(--color-ink)]">
+                  Has blouse piece
+                </label>
+              </div>
+              <div className="mt-4">
+                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Care instructions</label>
+                <textarea
+                  name="careInstructions"
+                  value={form.careInstructions}
+                  onChange={handleChange}
+                  placeholder="Optional care instructions"
+                  rows={2}
+                  className={cn(
+                    "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                  )}
+                />
+              </div>
+              <div className="mt-4">
+                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Product status</label>
+                <select
+                  name="productStatusId"
+                  value={form.productStatusId}
+                  onChange={handleChange}
+                  className={cn(
+                    "w-full max-w-xs rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                  )}
+                >
+                  <option value="">— Not set —</option>
+                  <option value="1">Draft</option>
+                  <option value="2">Active</option>
+                  <option value="3">Archived</option>
+                </select>
+              </div>
+              <div className="mt-8 border-t border-[var(--color-line)] pt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
+                  Variants (optional)
+                </h3>
+                <p className="mt-2 text-xs text-[var(--color-muted)]">
+                  Add size/color combinations. Each variant can have an extra price (paise) and initial stock. If no variants are added, the product can still be created; you can add variants later.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {variants.map((v, idx) => (
+                    <div
+                      key={idx}
+                      className="flex flex-wrap items-end gap-2 rounded-lg border border-[var(--color-line)] bg-white/40 p-3"
+                    >
+                      <select
+                        className={cn(
+                          "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                          "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+                        )}
+                        value={v.sizeId}
+                        onChange={(e) =>
+                          setVariants((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], sizeId: e.target.value };
+                            return next;
+                          })
+                        }
+                      >
+                        <option value="">Select size</option>
+                        {sizes.map((s) => (
+                          <option key={s.sizeId} value={s.sizeId}>{s.sizeName}</option>
+                        ))}
+                      </select>
+                      <select
+                        className={cn(
+                          "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                          "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+                        )}
+                        value={v.colorId}
+                        onChange={(e) =>
+                          setVariants((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], colorId: e.target.value };
+                            return next;
+                          })
+                        }
+                      >
+                        <option value="">Select color</option>
+                        {colors.map((c) => (
+                          <option key={c.colorId} value={c.colorId}>{c.colorName}</option>
+                        ))}
+                      </select>
+                      <Input
+                        type="text"
+                        placeholder="Extra price (paise)"
+                        value={v.additionalPricePaise}
+                        onChange={(e) =>
+                          setVariants((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], additionalPricePaise: e.target.value };
+                            return next;
+                          })
+                        }
+                        className="h-9 w-28 rounded-md"
+                      />
+                      <Input
+                        type="text"
+                        placeholder="Qty"
+                        value={v.quantityAvailable}
+                        onChange={(e) =>
+                          setVariants((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], quantityAvailable: e.target.value };
+                            return next;
+                          })
+                        }
+                        className="h-9 w-20 rounded-md"
+                      />
+                      <Input
+                        type="text"
+                        placeholder="Reorder"
+                        value={v.reorderLevel}
+                        onChange={(e) =>
+                          setVariants((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], reorderLevel: e.target.value };
+                            return next;
+                          })
+                        }
+                        className="h-9 w-20 rounded-md"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 text-red-600"
+                        onClick={() => setVariants((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg border-[var(--color-line)]"
+                    onClick={() =>
+                      setVariants((prev) => [
+                        ...prev,
+                        {
+                          sizeId: "",
+                          colorId: "",
+                          additionalPricePaise: "",
+                          quantityAvailable: "0",
+                          reorderLevel: "",
+                        },
+                      ])
+                    }
+                  >
+                    + Add variant
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-6 border-t border-[var(--color-line)] pt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
+                  Attributes (optional)
+                </h3>
+                <p className="mt-2 text-xs text-[var(--color-muted)]">
+                  Link attributes (e.g. Material = Cotton). Select an existing attribute or enter name + value to create and link.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {attributes.map((attr, idx) => (
+                    <div
+                      key={idx}
+                      className="flex flex-wrap items-end gap-2 rounded-lg border border-[var(--color-line)] bg-white/40 p-3"
+                    >
+                      <select
+                        className={cn(
+                          "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                          "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+                        )}
+                        value={attr.attributeId ?? ""}
+                        onChange={(e) => {
+                          const opt = existingAttributes.find((a) => a.attributeId === e.target.value);
+                          setAttributes((prev) => {
+                            const next = [...prev];
+                            next[idx] = opt
+                              ? { attributeId: opt.attributeId, attributeName: opt.attributeName, attributeValue: opt.attributeValue }
+                              : { attributeName: "", attributeValue: "" };
+                            return next;
+                          });
+                        }}
+                      >
+                        <option value="">New or select…</option>
+                        {existingAttributes.map((a) => (
+                          <option key={a.attributeId} value={a.attributeId}>
+                            {a.attributeName} = {a.attributeValue}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        type="text"
+                        placeholder="Name"
+                        value={attr.attributeName}
+                        onChange={(e) =>
+                          setAttributes((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], attributeName: e.target.value };
+                            return next;
+                          })
+                        }
+                        className="h-9 w-32 rounded-md"
+                      />
+                      <Input
+                        type="text"
+                        placeholder="Value"
+                        value={attr.attributeValue}
+                        onChange={(e) =>
+                          setAttributes((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], attributeValue: e.target.value };
+                            return next;
+                          })
+                        }
+                        className="h-9 w-32 rounded-md"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 text-red-600"
+                        onClick={() => setAttributes((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg border-[var(--color-line)]"
+                    onClick={() => setAttributes((prev) => [...prev, { attributeName: "", attributeValue: "" }])}
+                  >
+                    + Add attribute
+                  </Button>
+                </div>
               </div>
               <div className="mt-8 border-t border-[var(--color-line)] pt-4">
                 <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">

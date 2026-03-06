@@ -13,20 +13,25 @@ use tonic::Request;
 async fn confirm_image_upload_inserts_row_and_maps_urls() {
     use core_operations::handlers::product_images::confirm_image_upload;
 
-    // Simulate DB returning a row with urls map containing key "1".
-    let urls = json!({ "1": "https://cdn.example.com/products/1/img.png" });
-    let model = product_images::Model {
+    // Simulate no existing row first, then the inserted row returned by SeaORM.
+    let urls = json!({ "1": "https://cdn.example.com/products/5/uuid/file.png" });
+    let inserted_model = product_images::Model {
         image_id: 10,
         product_id: 5,
         urls,
         created_at: None,
     };
+
     let db = MockDatabase::new(DatabaseBackend::MySql)
+        // First query: lookup by product_id returns no rows.
+        .append_query_results(vec![Vec::<product_images::Model>::new()])
+        // Exec for insert.
         .append_exec_results(vec![MockExecResult {
             last_insert_id: 10,
             rows_affected: 1,
         }])
-        .append_query_results(vec![vec![model]])
+        // Query used by insert() to load the inserted row.
+        .append_query_results(vec![vec![inserted_model]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
@@ -39,11 +44,20 @@ async fn confirm_image_upload_inserts_row_and_maps_urls() {
         alt_text: Some("alt".into()),
     });
     let result = confirm_image_upload(&txn, req).await;
-    assert!(result.is_ok());
+    if let Err(status) = &result {
+        panic!(
+            "confirm_image_upload error: code={:?} message={}",
+            status.code(),
+            status.message()
+        );
+    }
     let ProductImagesResponse { items } = result.unwrap().into_inner();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].product_id, 5);
-    assert!(items[0].url.is_some());
+    assert_eq!(
+        items[0].url.as_deref(),
+        Some("https://cdn.example.com/products/5/uuid/file.png")
+    );
 }
 
 #[tokio::test]
