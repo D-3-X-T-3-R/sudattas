@@ -149,13 +149,11 @@ CREATE TABLE `Products` (
     `Name` varchar(255) NOT NULL,
     `slug` VARCHAR(255) UNIQUE,
     `Description` text,
-    `Price` decimal(10,2) NULL COMMENT 'Legacy field, do not use; use price_paise instead',
     `price_paise` INT NOT NULL COMMENT 'Price in paise (₹499.00 = 49900)',
     `CategoryID` bigint NOT NULL,
     `fabric` VARCHAR(100),
     `weave` VARCHAR(100),
     `occasion` VARCHAR(100),
-    `length_meters` DECIMAL(3,1) DEFAULT 5.5,
     `has_blouse_piece` BOOLEAN DEFAULT TRUE,
     `care_instructions` TEXT,
     -- Product management

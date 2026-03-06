@@ -1,5 +1,4 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::money::paise_to_decimal;
 use core_db_entities::entity::products;
 use proto::proto::core::{ProductResponse, ProductsResponse, UpdateProductRequest};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
@@ -14,7 +13,6 @@ pub async fn update_product(
     let products = products::ActiveModel {
         name: ActiveValue::Set(req.name),
         description: ActiveValue::Set(req.description),
-        price: ActiveValue::Set(Some(paise_to_decimal(req.price_paise))),
         product_id: ActiveValue::Set(req.product_id),
         category_id: ActiveValue::Set(req.category_id),
         sku: ActiveValue::NotSet,
@@ -23,7 +21,6 @@ pub async fn update_product(
         fabric: ActiveValue::NotSet,
         weave: ActiveValue::NotSet,
         occasion: ActiveValue::NotSet,
-        length_meters: ActiveValue::NotSet,
         has_blouse_piece: ActiveValue::NotSet,
         care_instructions: ActiveValue::NotSet,
         product_status_id: ActiveValue::NotSet,
