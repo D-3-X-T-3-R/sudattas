@@ -65,4 +65,3 @@ pub(crate) async fn delete_weave(input: DeleteWeaveInput) -> Result<Vec<Weave>, 
         .await?;
     Ok(weaves_response_to_vec(resp.into_inner()))
 }
-

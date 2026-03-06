@@ -35,6 +35,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Section } from "@/components/ui/section";
 import { Kicker, SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
+import { Pencil, Trash2 } from "lucide-react";
 
 type ProductFormState = {
   name: string;
@@ -60,6 +61,25 @@ function getCategoryName(categoryId: string | null | undefined, categories: Cate
   return c ? c.name : categoryId;
 }
 
+function getProductThumbnail(p: ProductListRow): string | null {
+  const first = p.images?.[0];
+  return first?.thumbnailUrl ?? first?.url ?? null;
+}
+
+function paiseToRupeesInput(paise?: string): string {
+  const n = Number(paise ?? "0");
+  if (!Number.isFinite(n)) return "";
+  return (n / 100).toFixed(2);
+}
+
+function getProductStatusLabel(statusId?: string | null): string {
+  if (!statusId) return "—";
+  if (statusId === "1") return "Draft";
+  if (statusId === "2") return "Active";
+  if (statusId === "3") return "Archived";
+  return statusId;
+}
+
 export default function AdminProductsPage() {
   const queryClient = useQueryClient();
   const {
@@ -75,10 +95,16 @@ export default function AdminProductsPage() {
 
   const [searchName, setSearchName] = useState("");
   const [searchCategoryId, setSearchCategoryId] = useState("");
+  const [searchFabric, setSearchFabric] = useState("");
+  const [searchWeave, setSearchWeave] = useState("");
+  const [searchOccasion, setSearchOccasion] = useState("");
   const [searchLimit, setSearchLimit] = useState("20");
   const [appliedSearch, setAppliedSearch] = useState<{
     name?: string;
     categoryId?: string;
+    fabric?: string;
+    weave?: string;
+    occasion?: string;
     limit?: string;
   }>({ limit: "20" });
 
@@ -128,8 +154,12 @@ export default function AdminProductsPage() {
   });
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ productId: string; name: string } | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductListRow | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   const [activeTab, setActiveTab] = useState<"view" | "add">("view");
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   const [form, setForm] = useState<ProductFormState>({
     name: "",
@@ -334,6 +364,68 @@ export default function AdminProductsPage() {
     onError: (err: Error) => setError(err.message || "Failed to create product."),
   });
 
+  const updateProductMutation = useMutation({
+    mutationFn: async (payload: {
+      productId: string;
+      name: string;
+      description: string;
+      pricePaise: number;
+      categoryId: string;
+      sku?: string;
+      slug?: string;
+      fabric?: string;
+      weave?: string;
+      occasion?: string;
+      hasBlousePiece?: boolean;
+      careInstructions?: string;
+      productStatusId?: string;
+    }) => {
+      const product: Record<string, unknown> = {
+        productId: payload.productId,
+        name: payload.name,
+        description: payload.description,
+        pricePaise: String(payload.pricePaise),
+        categoryId: payload.categoryId,
+      };
+      if (payload.sku?.trim()) product.sku = payload.sku.trim();
+      if (payload.slug?.trim()) product.slug = payload.slug.trim();
+      if (payload.fabric?.trim()) product.fabric = payload.fabric.trim();
+      if (payload.weave?.trim()) product.weave = payload.weave.trim();
+      if (payload.occasion?.trim()) product.occasion = payload.occasion.trim();
+      if (payload.hasBlousePiece !== undefined) product.hasBlousePiece = payload.hasBlousePiece;
+      if (payload.careInstructions?.trim()) product.careInstructions = payload.careInstructions.trim();
+      if (payload.productStatusId?.trim()) product.productStatusId = payload.productStatusId.trim();
+
+      const data = await gqlAdmin<{ updateProduct?: Array<{ productId: string; name: string; formatted?: string }> }>(
+        `mutation UpdateProduct($product: ProductMutation!) {
+          updateProduct(product: $product) { productId name formatted }
+        }`,
+        { product }
+      );
+      return data?.updateProduct?.[0];
+    },
+    onSuccess: async (updated) => {
+      if (updated?.productId && imageFiles.length > 0) {
+        imageFiles.forEach((file, index) => {
+          uploadImageMutation.mutate({
+            file,
+            productId: updated.productId,
+            order: index,
+          });
+        });
+      }
+      setMessage(
+        updated
+          ? `Updated: ${updated.name}${updated.formatted ? ` (${updated.formatted})` : ""}`
+          : "Product updated."
+      );
+      setEditingProductId(null);
+      setImageFiles([]);
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+    onError: (err: Error) => setError(err.message || "Failed to update product."),
+  });
+
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -370,7 +462,7 @@ export default function AdminProductsPage() {
     setImageError("");
     setImageMessage("");
 
-    if (imageFiles.length === 0) {
+    if (!editingProductId && imageFiles.length === 0) {
       setImageError("At least one product image is required.");
       return;
     }
@@ -388,7 +480,7 @@ export default function AdminProductsPage() {
       setError("Enter a valid price (e.g. 499.00).");
       return;
     }
-    if (variants.length === 0) {
+    if (!editingProductId && variants.length === 0) {
       setError("Add at least one variant (size) with stock.");
       return;
     }
@@ -399,24 +491,42 @@ export default function AdminProductsPage() {
         Number.isNaN(Number(v.quantityAvailable)) ||
         Number(v.quantityAvailable) < 0
     );
-    if (invalidVariant) {
+    if (invalidVariant && variants.length > 0) {
       setError("Each variant must have a size and non-negative stock quantity.");
       return;
     }
-    createProductMutation.mutate({
-      name,
-      description: description || "",
-      pricePaise,
-      categoryId,
-      sku: sku || undefined,
-      slug: slug || undefined,
-      fabric: fabric || undefined,
-      weave: weave || undefined,
-      occasion: occasion || undefined,
-      hasBlousePiece,
-      careInstructions: careInstructions || undefined,
-      productStatusId: productStatusId || undefined,
-    });
+    if (editingProductId) {
+      updateProductMutation.mutate({
+        productId: editingProductId,
+        name,
+        description: description || "",
+        pricePaise,
+        categoryId,
+        sku: sku || undefined,
+        slug: slug || undefined,
+        fabric: fabric || undefined,
+        weave: weave || undefined,
+        occasion: occasion || undefined,
+        hasBlousePiece,
+        careInstructions: careInstructions || undefined,
+        productStatusId: productStatusId || undefined,
+      });
+    } else {
+      createProductMutation.mutate({
+        name,
+        description: description || "",
+        pricePaise,
+        categoryId,
+        sku: sku || undefined,
+        slug: slug || undefined,
+        fabric: fabric || undefined,
+        weave: weave || undefined,
+        occasion: occasion || undefined,
+        hasBlousePiece,
+        careInstructions: careInstructions || undefined,
+        productStatusId: productStatusId || undefined,
+      });
+    }
   };
 
   // Auto-clear success message after a short delay
@@ -431,6 +541,10 @@ export default function AdminProductsPage() {
     const t = setTimeout(() => setImageMessage(""), 4000);
     return () => clearTimeout(t);
   }, [imageMessage]);
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [selectedProduct?.productId]);
 
   // Build and clean up object URLs for image previews
   useEffect(() => {
@@ -452,11 +566,21 @@ export default function AdminProductsPage() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const next: { name?: string; categoryId?: string; limit?: string } = {};
+    const next: {
+      name?: string;
+      categoryId?: string;
+      fabric?: string;
+      weave?: string;
+      occasion?: string;
+      limit?: string;
+    } = {};
     const trimmedName = searchName.trim();
     const trimmedLimit = searchLimit.trim();
     if (trimmedName) next.name = trimmedName;
     if (searchCategoryId) next.categoryId = searchCategoryId;
+    if (searchFabric) next.fabric = searchFabric;
+    if (searchWeave) next.weave = searchWeave;
+    if (searchOccasion) next.occasion = searchOccasion;
     if (trimmedLimit) next.limit = trimmedLimit;
     setAppliedSearch(next);
   };
@@ -464,6 +588,9 @@ export default function AdminProductsPage() {
   const handleSearchClear = () => {
     setSearchName("");
     setSearchCategoryId("");
+    setSearchFabric("");
+    setSearchWeave("");
+    setSearchOccasion("");
     setSearchLimit("20");
     setAppliedSearch({ limit: "20" });
   };
@@ -473,6 +600,34 @@ export default function AdminProductsPage() {
     deleteProductMutation.mutate(deleteConfirm.productId, {
       onSettled: () => setDeleteConfirm(null),
     });
+  };
+
+  const beginEditProduct = (p: ProductListRow) => {
+    setActiveTab("add");
+    setEditingProductId(p.productId);
+    setForm((prev) => ({
+      ...prev,
+      name: p.name ?? "",
+      description: p.description ?? "",
+      priceRupees: paiseToRupeesInput(p.amountPaise),
+      categoryId: p.categoryId ?? prev.categoryId ?? "",
+      // Keep optional fields editable by user; existing values are not returned in product list query.
+      sku: "",
+      slug: "",
+      fabric: "",
+      weave: "",
+      occasion: "",
+      hasBlousePiece: true,
+      careInstructions: "",
+      productStatusId: "",
+    }));
+    setVariants([]);
+    setAttributes([]);
+    setImageFiles([]);
+    setImageError("");
+    setImageMessage("");
+    setError("");
+    setMessage(`Editing product: ${p.name}`);
   };
 
   const uploadImageMutation = useMutation({
@@ -504,6 +659,7 @@ export default function AdminProductsPage() {
             productId,
             filename: file.name,
             contentType: file.type || "application/octet-stream",
+            displayOrder: order,
           },
         }
       );
@@ -653,6 +809,69 @@ export default function AdminProductsPage() {
                     className="h-9 w-20 rounded-md"
                   />
                 </div>
+                <div>
+                  <label htmlFor="products-fabric" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Fabric
+                  </label>
+                  <select
+                    id="products-fabric"
+                    className={cn(
+                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+                    )}
+                    value={searchFabric}
+                    onChange={(e) => setSearchFabric(e.target.value)}
+                  >
+                    <option value="">All fabrics</option>
+                    {fabrics.map((f) => (
+                      <option key={f.fabricId} value={f.fabricName}>
+                        {f.fabricName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="products-weave" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Weave
+                  </label>
+                  <select
+                    id="products-weave"
+                    className={cn(
+                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+                    )}
+                    value={searchWeave}
+                    onChange={(e) => setSearchWeave(e.target.value)}
+                  >
+                    <option value="">All weaves</option>
+                    {weaves.map((w) => (
+                      <option key={w.weaveId} value={w.weaveName}>
+                        {w.weaveName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="products-occasion" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Occasion
+                  </label>
+                  <select
+                    id="products-occasion"
+                    className={cn(
+                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+                    )}
+                    value={searchOccasion}
+                    onChange={(e) => setSearchOccasion(e.target.value)}
+                  >
+                    <option value="">All occasions</option>
+                    {occasions.map((o) => (
+                      <option key={o.occasionId} value={o.occasionName}>
+                        {o.occasionName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="flex gap-2">
                   <Button type="submit" size="sm">
                     Apply
@@ -689,46 +908,76 @@ export default function AdminProductsPage() {
                 </p>
               )}
               {!productsLoading && !productsError && products.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
-                        <th className="pb-2 pr-4 font-medium">Product ID</th>
-                        <th className="pb-2 pr-4 font-medium">Name</th>
-                        <th className="pb-2 pr-4 font-medium">Category</th>
-                        <th className="pb-2 pr-4 font-medium">Price</th>
-                        <th className="pb-2 pr-4 font-medium">Stock</th>
-                        <th className="pb-2 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {products.map((p) => (
-                        <tr
-                          key={p.productId}
-                          className="border-b border-[var(--color-line)] last:border-0 hover:bg-[var(--color-surface)]"
-                        >
-                          <td className="py-3 pr-4 font-mono text-[var(--color-ink)]">{p.productId}</td>
-                          <td className="py-3 pr-4 text-[var(--color-ink)]">{p.name}</td>
-                          <td className="py-3 pr-4 text-[var(--color-ink)]">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                  {products.map((p) => {
+                    const thumb = getProductThumbnail(p);
+                    return (
+                      <div
+                        key={p.productId}
+                        className="overflow-hidden rounded-xl border border-[var(--color-line)] bg-white"
+                        onClick={() => setSelectedProduct(p)}
+                      >
+                        <div className="aspect-square w-full bg-[var(--color-surface)]">
+                          {thumb ? (
+                            <img
+                              src={thumb}
+                              alt={p.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-xs text-[var(--color-muted)]">
+                              No image
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-1.5 p-2">
+                          <div className="line-clamp-1 text-xs font-semibold text-[var(--color-ink)]">
+                            {p.name}
+                          </div>
+                          <div className="text-[11px] text-[var(--color-muted)]">
                             {getCategoryName(p.categoryId, categories)}
-                          </td>
-                          <td className="py-3 pr-4 text-[var(--color-ink)]">{p.formatted}</td>
-                          <td className="py-3 pr-4 text-[var(--color-muted)]">{p.stockQuantity ?? "—"}</td>
-                          <td className="py-3">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 border-red-200 hover:bg-red-50"
-                              onClick={() => setDeleteConfirm({ productId: p.productId, name: p.name })}
-                            >
-                              Delete
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </div>
+                          <div className="text-xs text-[var(--color-ink)]">{p.formatted}</div>
+                          <div className="text-[11px] text-[var(--color-muted)]">
+                            Stock: {p.stockQuantity ?? "—"}
+                          </div>
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="font-mono text-[11px] text-[var(--color-muted)]">
+                              #{p.productId}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-8 w-8 p-0"
+                                aria-label={`Edit ${p.name}`}
+                                title="Edit"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  beginEditProduct(p);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-8 w-8 p-0 text-red-600 border-red-200 hover:bg-red-50"
+                                aria-label={`Delete ${p.name}`}
+                                title="Delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirm({ productId: p.productId, name: p.name });
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -755,12 +1004,165 @@ export default function AdminProductsPage() {
               </DialogContent>
             </Dialog>
           )}
+
+          {selectedProduct && (
+            (() => {
+              const imageUrls = (selectedProduct.images ?? [])
+                .map((img) => img.thumbnailUrl || img.url || "")
+                .filter((u) => !!u);
+              const hasImages = imageUrls.length > 0;
+              const activeImage = hasImages
+                ? imageUrls[Math.min(selectedImageIndex, imageUrls.length - 1)]
+                : null;
+              return (
+            <Dialog
+              open={!!selectedProduct}
+              onOpenChange={(open) => !open && setSelectedProduct(null)}
+            >
+              <DialogContent className="sm:max-w-2xl">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div
+                    className="relative overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)]"
+                    onTouchStart={(e) => setTouchStartX(e.changedTouches[0]?.clientX ?? null)}
+                    onTouchEnd={(e) => {
+                      if (!hasImages || imageUrls.length <= 1 || touchStartX == null) return;
+                      const endX = e.changedTouches[0]?.clientX ?? touchStartX;
+                      const delta = endX - touchStartX;
+                      if (delta > 40) {
+                        setSelectedImageIndex((prev) =>
+                          prev === 0 ? imageUrls.length - 1 : prev - 1
+                        );
+                      } else if (delta < -40) {
+                        setSelectedImageIndex((prev) =>
+                          prev === imageUrls.length - 1 ? 0 : prev + 1
+                        );
+                      }
+                      setTouchStartX(null);
+                    }}
+                  >
+                    {activeImage ? (
+                      <img
+                        src={activeImage}
+                        alt={selectedProduct.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex aspect-square items-center justify-center text-sm text-[var(--color-muted)]">
+                        No image
+                      </div>
+                    )}
+                    {imageUrls.length > 1 && (
+                      <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
+                        <div className="rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white">
+                          {selectedImageIndex + 1} / {imageUrls.length}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <h3 className="text-base font-semibold text-[var(--color-ink)]">
+                      {selectedProduct.name}
+                    </h3>
+                    <p className="text-[var(--color-muted)]">
+                      {selectedProduct.description || "No description"}
+                    </p>
+                    <div className="rounded-md border border-[var(--color-line)] p-3">
+                      <p>
+                        <span className="font-medium">Product ID:</span>{" "}
+                        <span className="font-mono">{selectedProduct.productId}</span>
+                      </p>
+                      <p>
+                        <span className="font-medium">Category:</span>{" "}
+                        {getCategoryName(selectedProduct.categoryId, categories)}
+                      </p>
+                      <p>
+                        <span className="font-medium">Price:</span>{" "}
+                        {selectedProduct.formatted}
+                      </p>
+                      <p>
+                        <span className="font-medium">Stock:</span>{" "}
+                        {selectedProduct.stockQuantity ?? "—"}
+                      </p>
+                      <p>
+                        <span className="font-medium">SKU:</span>{" "}
+                        {selectedProduct.sku ?? "—"}
+                      </p>
+                      <p>
+                        <span className="font-medium">Slug:</span>{" "}
+                        {selectedProduct.slug ?? "—"}
+                      </p>
+                      <p>
+                        <span className="font-medium">Fabric:</span>{" "}
+                        {selectedProduct.fabric ?? "—"}
+                      </p>
+                      <p>
+                        <span className="font-medium">Weave:</span>{" "}
+                        {selectedProduct.weave ?? "—"}
+                      </p>
+                      <p>
+                        <span className="font-medium">Occasion:</span>{" "}
+                        {selectedProduct.occasion ?? "—"}
+                      </p>
+                      <p>
+                        <span className="font-medium">Has blouse piece:</span>{" "}
+                        {selectedProduct.hasBlousePiece == null
+                          ? "—"
+                          : selectedProduct.hasBlousePiece
+                            ? "Yes"
+                            : "No"}
+                      </p>
+                      <p>
+                        <span className="font-medium">Care instructions:</span>{" "}
+                        {selectedProduct.careInstructions ?? "—"}
+                      </p>
+                      <p>
+                        <span className="font-medium">Product status:</span>{" "}
+                        {getProductStatusLabel(selectedProduct.productStatusId)}
+                      </p>
+                    </div>
+                    {imageUrls.length > 1 && (
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setSelectedImageIndex((prev) =>
+                              prev === 0 ? imageUrls.length - 1 : prev - 1
+                            )
+                          }
+                        >
+                          Prev
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setSelectedImageIndex((prev) =>
+                              prev === imageUrls.length - 1 ? 0 : prev + 1
+                            )
+                          }
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+              );
+            })()
+          )}
         </>
       )}
 
       {activeTab === "add" && (
         <Card className="mt-6 border-[var(--color-line)]">
-          <CardTitle className="text-[var(--color-muted)]">Add new product</CardTitle>
+          <CardTitle className="text-[var(--color-muted)]">
+            {editingProductId ? "Edit product" : "Add new product"}
+          </CardTitle>
           <CardContent className="mt-6">
             {categoriesError && (
               <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -1307,13 +1709,51 @@ export default function AdminProductsPage() {
                   )}
                 </div>
               </div>
-              <Button
-                type="submit"
-                disabled={createProductMutation.isPending}
-                className="mt-4 rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
-              >
-                {createProductMutation.isPending ? "Creating…" : "Add product"}
-              </Button>
+              <div className="mt-4 flex items-center gap-2">
+                <Button
+                  type="submit"
+                  disabled={createProductMutation.isPending || updateProductMutation.isPending}
+                  className="rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
+                >
+                  {editingProductId
+                    ? updateProductMutation.isPending
+                      ? "Updating…"
+                      : "Update product"
+                    : createProductMutation.isPending
+                      ? "Creating…"
+                      : "Add product"}
+                </Button>
+                {editingProductId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingProductId(null);
+                      setForm((prev) => ({
+                        ...prev,
+                        name: "",
+                        description: "",
+                        priceRupees: "",
+                        sku: "",
+                        slug: "",
+                        fabric: "",
+                        weave: "",
+                        occasion: "",
+                        hasBlousePiece: true,
+                        careInstructions: "",
+                        productStatusId: "",
+                      }));
+                      setVariants([]);
+                      setAttributes([]);
+                      setImageFiles([]);
+                      setImageError("");
+                      setImageMessage("");
+                    }}
+                  >
+                    Cancel edit
+                  </Button>
+                )}
+              </div>
             </form>
           </CardContent>
         </Card>

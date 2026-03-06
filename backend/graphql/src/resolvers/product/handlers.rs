@@ -72,6 +72,9 @@ pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>
             product_id: to_option_i64(search.product_id),
             limit,
             offset: to_option_i64(search.offset),
+            fabric: search.fabric,
+            weave: search.weave,
+            occasion: search.occasion,
         })
         .await?;
 
@@ -209,7 +212,7 @@ pub(crate) async fn get_stock_for_product(product_id: &str) -> Result<Option<Str
             })
             .await?;
         for item in inventory_resp.into_inner().items {
-            total += item.quantity_available as i64;
+            total += item.quantity_available;
         }
     }
 

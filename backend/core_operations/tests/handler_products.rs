@@ -212,6 +212,9 @@ async fn search_product_filters_by_multiple_fields_and_pagination() {
         ending_price_paise: Some(20_000),
         limit: Some(10),
         offset: Some(0),
+        fabric: None,
+        weave: None,
+        occasion: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -260,6 +263,9 @@ async fn search_product_filters_by_product_id_only() {
         ending_price_paise: None,
         limit: None,
         offset: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -306,6 +312,9 @@ async fn search_product_filters_by_name_only() {
         ending_price_paise: None,
         limit: None,
         offset: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -351,6 +360,9 @@ async fn search_product_filters_by_category_only() {
         ending_price_paise: None,
         limit: None,
         offset: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -396,6 +408,9 @@ async fn search_product_filters_by_price_range_only() {
         ending_price_paise: Some(10_000),
         limit: None,
         offset: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
     });
 
     let result = search_product(&txn, req).await;

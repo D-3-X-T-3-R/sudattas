@@ -21,26 +21,38 @@ pub async fn search_product_image(
         .await
     {
         Ok(models) => {
-            let items = models
-                .into_iter()
-                .map(|model| {
-                    let url = model
-                        .urls
-                        .get("1")
-                        .or_else(|| model.urls.get("0"))
-                        .and_then(|v| v.as_str())
-                        .map(String::from);
-                    ProductImageResponse {
+            let mut items: Vec<ProductImageResponse> = Vec::new();
+            for model in models {
+                let mut ordered: Vec<(i32, String)> = model
+                    .urls
+                    .as_object()
+                    .map(|m| {
+                        m.iter()
+                            .filter_map(|(k, v)| {
+                                let idx = k.parse::<i32>().ok()?;
+                                let url = v.as_str()?.to_string();
+                                Some((idx, url))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                ordered.sort_by_key(|(idx, _)| *idx);
+
+                for (idx, url) in ordered {
+                    items.push(ProductImageResponse {
                         image_id: model.image_id,
                         product_id: model.product_id,
                         image_base64: String::new(),
                         alt_text: None,
-                        url,
+                        url: Some(url),
                         cdn_path: None,
                         thumbnail_url: None,
-                    }
-                })
-                .collect();
+                    });
+                    // keep compiler happy about idx until dedicated field exists
+                    let _ = idx;
+                }
+            }
 
             let response = ProductImagesResponse { items };
             Ok(Response::new(response))

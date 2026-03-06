@@ -199,6 +199,12 @@ pub struct SearchProductRequest {
     pub limit: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "8")]
     pub offset: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "9")]
+    pub fabric: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "10")]
+    pub weave: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "11")]
+    pub occasion: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -259,6 +265,22 @@ pub struct ProductResponse {
     pub category_id: i64,
     #[prost(int64, tag = "5")]
     pub product_id: i64,
+    #[prost(string, optional, tag = "6")]
+    pub sku: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "7")]
+    pub slug: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "8")]
+    pub fabric: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "9")]
+    pub weave: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "10")]
+    pub occasion: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bool, optional, tag = "11")]
+    pub has_blouse_piece: ::core::option::Option<bool>,
+    #[prost(string, optional, tag = "12")]
+    pub care_instructions: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, optional, tag = "13")]
+    pub product_status_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -921,6 +943,9 @@ pub struct GetPresignedUploadUrlRequest {
     pub filename: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub content_type: ::prost::alloc::string::String,
+    /// When set, used as image index for key (avoids race when uploading multiple in parallel)
+    #[prost(int32, optional, tag = "4")]
+    pub display_order: ::core::option::Option<i32>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

@@ -41,6 +41,12 @@ use crate::resolvers::{
             NewsletterSubscriberMutation, SearchNewsletterSubscriberInput,
         },
     },
+    occasions::{
+        self,
+        schema::{
+            DeleteOccasionInput, NewOccasion, Occasion, OccasionMutation, SearchOccasionInput,
+        },
+    },
     order_details::{
         self,
         schema::{NewOrderDetails, OrderDetails, OrderDetailsMutation},
@@ -115,16 +121,6 @@ use crate::resolvers::{
         self,
         schema::{DeleteSizeInput, NewSize, SearchSizeInput, Size, SizeMutation},
     },
-    weaves::{
-        self,
-        schema::{DeleteWeaveInput, NewWeave, SearchWeaveInput, Weave, WeaveMutation},
-    },
-    occasions::{
-        self,
-        schema::{
-            DeleteOccasionInput, NewOccasion, Occasion, OccasionMutation, SearchOccasionInput,
-        },
-    },
     transactions::{
         self,
         schema::{
@@ -148,6 +144,10 @@ use crate::resolvers::{
     users::{
         self,
         schema::{DeleteUserInput, NewUser, RecordSecurityAuditEventInput, UpdateUserInput, User},
+    },
+    weaves::{
+        self,
+        schema::{DeleteWeaveInput, NewWeave, SearchWeaveInput, Weave, WeaveMutation},
     },
     wishlist::{
         self,

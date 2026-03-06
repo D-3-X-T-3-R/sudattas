@@ -88,6 +88,7 @@ pub(crate) async fn get_presigned_upload_url(
             product_id: parse_i64(&input.product_id, "product id")?,
             filename: input.filename,
             content_type: input.content_type,
+            display_order: input.display_order,
         })
         .await?;
     let r = response.into_inner();

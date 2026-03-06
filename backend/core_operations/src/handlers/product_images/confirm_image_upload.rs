@@ -45,7 +45,10 @@ pub async fn confirm_image_upload(
             urls: ActiveValue::Set(urls_json),
             created_at: ActiveValue::NotSet,
         };
-        active.update(txn).await.map_err(|e| tonic::Status::internal(e.to_string()))?
+        active
+            .update(txn)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?
     } else {
         let mut urls_map = serde_json::Map::new();
         urls_map.insert(order_key, serde_json::Value::String(cdn_url.clone()));
@@ -56,7 +59,10 @@ pub async fn confirm_image_upload(
             urls: ActiveValue::Set(urls_json),
             created_at: ActiveValue::NotSet,
         };
-        image.insert(txn).await.map_err(|e| tonic::Status::internal(e.to_string()))?
+        image
+            .insert(txn)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?
     };
 
     Ok(Response::new(ProductImagesResponse {

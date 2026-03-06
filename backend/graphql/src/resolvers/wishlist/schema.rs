@@ -38,6 +38,9 @@ impl WishlistItem {
             ending_price_paise: None,
             stock_quantity: None,
             category_id: None,
+            fabric: None,
+            weave: None,
+            occasion: None,
             limit: None,
             offset: None,
         })

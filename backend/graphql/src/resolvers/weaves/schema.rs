@@ -42,4 +42,3 @@ pub struct WeaveMutation {
 pub struct DeleteWeaveInput {
     pub weave_id: String,
 }
-

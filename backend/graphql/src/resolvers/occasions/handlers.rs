@@ -70,4 +70,3 @@ pub(crate) async fn delete_occasion(input: DeleteOccasionInput) -> Result<Vec<Oc
         .await?;
     Ok(occasions_response_to_vec(resp.into_inner()))
 }
-

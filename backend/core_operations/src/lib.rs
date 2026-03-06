@@ -2228,7 +2228,11 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<GetPresignedUploadUrlRequest>,
     ) -> Result<Response<PresignedUploadUrlResponse>, Status> {
-        handlers::product_images::get_presigned_upload_url(request).await
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("Database not initialized"))?;
+        handlers::product_images::get_presigned_upload_url(db, request).await
     }
 
     async fn confirm_image_upload(
