@@ -5,7 +5,6 @@ use proto::proto::core::{
     CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest, ProductsResponse,
     SearchProductRequest, UpdateProductRequest,
 };
-use rust_decimal::Decimal;
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
 use tonic::Request;
 
@@ -19,13 +18,11 @@ async fn create_product_inserts_and_returns_created_model() {
         name: "Saree".to_string(),
         slug: Some("saree-1".to_string()),
         description: Some("A nice saree".to_string()),
-        price: Some(Decimal::new(9990, 2)),
         price_paise: 99_90,
         category_id: 5,
         fabric: None,
         weave: None,
         occasion: None,
-        length_meters: None,
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
@@ -47,6 +44,14 @@ async fn create_product_inserts_and_returns_created_model() {
         description: Some("A nice saree".to_string()),
         price_paise: 99_90,
         category_id: 5,
+        sku: None,
+        slug: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        has_blouse_piece: None,
+        care_instructions: None,
+        product_status_id: None,
     });
     let result = create_product(&txn, req).await;
     assert!(result.is_ok());
@@ -69,13 +74,11 @@ async fn update_product_updates_fields_and_returns_response() {
         name: "Updated".to_string(),
         slug: Some("updated-2".to_string()),
         description: Some("Updated desc".to_string()),
-        price: Some(Decimal::new(12_34, 2)),
         price_paise: 12_34,
         category_id: 10,
         fabric: None,
         weave: None,
         occasion: None,
-        length_meters: None,
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
@@ -98,6 +101,14 @@ async fn update_product_updates_fields_and_returns_response() {
         description: Some("Updated desc".to_string()),
         price_paise: 12_34,
         category_id: 10,
+        sku: None,
+        slug: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        has_blouse_piece: None,
+        care_instructions: None,
+        product_status_id: None,
     });
     let result = update_product(&txn, req).await;
     assert!(result.is_ok());
@@ -119,13 +130,11 @@ async fn delete_product_deletes_existing_and_returns_response() {
         name: "DeleteMe".to_string(),
         slug: Some("delete-me".to_string()),
         description: Some("To be deleted".to_string()),
-        price: Some(Decimal::new(5000, 2)),
         price_paise: 5_000,
         category_id: 7,
         fabric: None,
         weave: None,
         occasion: None,
-        length_meters: None,
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
@@ -177,13 +186,11 @@ async fn search_product_filters_by_multiple_fields_and_pagination() {
         name: "Festive Saree".to_string(),
         slug: Some("festive-saree".to_string()),
         description: Some("Red festive saree".to_string()),
-        price: Some(Decimal::new(15000, 2)),
         price_paise: 15_000,
         category_id: 9,
         fabric: None,
         weave: None,
         occasion: Some("festive".to_string()),
-        length_meters: None,
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
@@ -205,6 +212,10 @@ async fn search_product_filters_by_multiple_fields_and_pagination() {
         ending_price_paise: Some(20_000),
         limit: Some(10),
         offset: Some(0),
+        fabric: None,
+        weave: None,
+        occasion: None,
+        product_status_id: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -227,13 +238,11 @@ async fn search_product_filters_by_product_id_only() {
         name: "Single".to_string(),
         slug: Some("single".to_string()),
         description: Some("Only product".to_string()),
-        price: Some(Decimal::new(2000, 2)),
         price_paise: 2_000,
         category_id: 2,
         fabric: None,
         weave: None,
         occasion: None,
-        length_meters: None,
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
@@ -255,6 +264,10 @@ async fn search_product_filters_by_product_id_only() {
         ending_price_paise: None,
         limit: None,
         offset: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        product_status_id: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -275,13 +288,11 @@ async fn search_product_filters_by_name_only() {
         name: "Cotton Dress".to_string(),
         slug: Some("cotton-dress".to_string()),
         description: Some("Light cotton dress".to_string()),
-        price: Some(Decimal::new(3000, 2)),
         price_paise: 3_000,
         category_id: 3,
         fabric: None,
         weave: None,
         occasion: None,
-        length_meters: None,
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
@@ -303,6 +314,10 @@ async fn search_product_filters_by_name_only() {
         ending_price_paise: None,
         limit: None,
         offset: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        product_status_id: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -322,13 +337,11 @@ async fn search_product_filters_by_category_only() {
         name: "CategoryOnly".to_string(),
         slug: Some("category-only".to_string()),
         description: Some("Belongs to category 4".to_string()),
-        price: Some(Decimal::new(4000, 2)),
         price_paise: 4_000,
         category_id: 4,
         fabric: None,
         weave: None,
         occasion: None,
-        length_meters: None,
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
@@ -350,6 +363,10 @@ async fn search_product_filters_by_category_only() {
         ending_price_paise: None,
         limit: None,
         offset: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        product_status_id: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -369,13 +386,11 @@ async fn search_product_filters_by_price_range_only() {
         name: "PriceRange".to_string(),
         slug: Some("price-range".to_string()),
         description: Some("Within range".to_string()),
-        price: Some(Decimal::new(7500, 2)),
         price_paise: 7_500,
         category_id: 6,
         fabric: None,
         weave: None,
         occasion: None,
-        length_meters: None,
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
@@ -397,6 +412,10 @@ async fn search_product_filters_by_price_range_only() {
         ending_price_paise: Some(10_000),
         limit: None,
         offset: None,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        product_status_id: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -416,13 +435,11 @@ async fn get_products_by_id_returns_matching_products() {
         name: "P1".to_string(),
         slug: Some("p1".to_string()),
         description: Some("First".to_string()),
-        price: Some(Decimal::new(1000, 2)),
         price_paise: 1_000,
         category_id: 1,
         fabric: None,
         weave: None,
         occasion: None,
-        length_meters: None,
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,

@@ -16,48 +16,52 @@ use proto::proto::core::{
     CapturePaymentRequest, CartItemsResponse, CategoriesResponse, ColorsResponse,
     ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse, CreateCartItemRequest,
     CreateCategoryRequest, CreateColorRequest, CreateCouponRequest, CreateEventLogRequest,
-    CreateInventoryItemRequest, CreateInventoryLogRequest, CreateNewsletterSubscriberRequest,
-    CreateOrderDetailsRequest, CreateOrderEventRequest, CreateOrderRequest,
-    CreatePaymentIntentRequest, CreateProductAttributeMappingRequest,
-    CreateProductAttributeRequest, CreateProductRequest, CreateProductVariantRequest,
-    CreateRefundRequest, CreateReviewRequest, CreateShipmentRequest, CreateShippingAddressRequest,
-    CreateShippingMethodRequest, CreateSizeRequest, CreateTransactionRequest,
-    CreateUserActivityRequest, CreateUserRequest, CreateUserRoleRequest, DeleteCartItemRequest,
-    DeleteCategoryRequest, DeleteColorRequest, DeleteEventLogRequest, DeleteInventoryItemRequest,
-    DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOrderRequest,
-    DeleteProductAttributeMappingRequest, DeleteProductAttributeRequest, DeleteProductImageRequest,
-    DeleteProductRequest, DeleteProductVariantRequest, DeleteReviewRequest,
-    DeleteShippingAddressRequest, DeleteShippingMethodRequest, DeleteSizeRequest,
-    DeleteTransactionRequest, DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleRequest,
-    DeleteWishlistItemRequest, EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse,
-    EventLogsResponse, GetCartItemsRequest, GetOrderEventsRequest, GetPaymentIntentRequest,
+    CreateFabricRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
+    CreateNewsletterSubscriberRequest, CreateOccasionRequest, CreateOrderDetailsRequest,
+    CreateOrderEventRequest, CreateOrderRequest, CreatePaymentIntentRequest,
+    CreateProductAttributeMappingRequest, CreateProductAttributeRequest, CreateProductRequest,
+    CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest, CreateShipmentRequest,
+    CreateShippingAddressRequest, CreateShippingMethodRequest, CreateSizeRequest,
+    CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest, CreateUserRoleRequest,
+    CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest, DeleteColorRequest,
+    DeleteEventLogRequest, DeleteFabricRequest, DeleteInventoryItemRequest,
+    DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOccasionRequest,
+    DeleteOrderRequest, DeleteProductAttributeMappingRequest, DeleteProductAttributeRequest,
+    DeleteProductImageRequest, DeleteProductRequest, DeleteProductVariantRequest,
+    DeleteReviewRequest, DeleteShippingAddressRequest, DeleteShippingMethodRequest,
+    DeleteSizeRequest, DeleteTransactionRequest, DeleteUserActivityRequest, DeleteUserRequest,
+    DeleteUserRoleRequest, DeleteWeaveRequest, DeleteWishlistItemRequest,
+    EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse, EventLogsResponse, FabricsResponse,
+    GetCartItemsRequest, GetOrderEventsRequest, GetPaymentIntentRequest,
     GetPresignedUploadUrlRequest, GetProductsByIdRequest, GetRelatedProductsRequest,
     GetShipmentRequest, GetShippingAddressRequest, GetSitemapProductUrlsRequest,
     GetSitemapProductUrlsResponse, GetUserPiiExportRequest, GetUserPiiExportResponse,
     IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
-    NewsletterSubscribersResponse, OrderDetailsResponse, OrderEventsResponse, OrdersResponse,
-    PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse,
-    ProductAttributeMappingsResponse, ProductAttributesResponse, ProductImagesResponse,
-    ProductVariantsResponse, ProductsResponse, ReadinessRequest, ReadinessResponse,
-    RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
+    NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse, OrderEventsResponse,
+    OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse, PlaceOrderRequest,
+    PresignedUploadUrlResponse, ProductAttributeMappingsResponse, ProductAttributesResponse,
+    ProductImagesResponse, ProductVariantsResponse, ProductsResponse, ReadinessRequest,
+    ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
     ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ReviewsResponse, SearchCategoryRequest,
-    SearchColorRequest, SearchEventLogRequest, SearchInventoryItemRequest,
-    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOrderDetailRequest,
-    SearchOrderEventsRequest, SearchOrderRequest, SearchProductAttributeMappingRequest,
-    SearchProductAttributeRequest, SearchProductImageRequest, SearchProductRequest,
-    SearchProductVariantRequest, SearchReviewRequest, SearchShippingMethodRequest,
-    SearchSizeRequest, SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
-    SearchUserRoleRequest, SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
+    SearchColorRequest, SearchEventLogRequest, SearchFabricRequest, SearchInventoryItemRequest,
+    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOccasionRequest,
+    SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
+    SearchOrderStatusRequest, SearchProductAttributeMappingRequest, SearchProductAttributeRequest,
+    SearchProductImageRequest, SearchProductRequest, SearchProductVariantRequest,
+    SearchReviewRequest, SearchShippingMethodRequest, SearchSizeRequest, SearchTransactionRequest,
+    SearchUserActivityRequest, SearchUserRequest, SearchUserRoleRequest, SearchWeaveRequest,
+    SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
     ShippingMethodsResponse, SizesResponse, TransactionsResponse, UpdateCartItemRequest,
     UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest, UpdateEventLogRequest,
-    UpdateInventoryItemRequest, UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest,
-    UpdateOrderDetailRequest, UpdateOrderRequest, UpdateProductAttributeRequest,
-    UpdateProductImageRequest, UpdateProductRequest, UpdateProductVariantRequest,
-    UpdateReviewRequest, UpdateShipmentRequest, UpdateShippingAddressRequest,
-    UpdateShippingMethodRequest, UpdateSizeRequest, UpdateTransactionRequest,
-    UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UserActivitiesResponse,
-    UserRolesResponse, UsersResponse, ValidateCouponRequest, VerifyRazorpayPaymentRequest,
-    VerifyRazorpayPaymentResponse, WebhookEventsResponse, WishlistItemsResponse,
+    UpdateFabricRequest, UpdateInventoryItemRequest, UpdateInventoryLogRequest,
+    UpdateNewsletterSubscriberRequest, UpdateOccasionRequest, UpdateOrderDetailRequest,
+    UpdateOrderRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
+    UpdateProductRequest, UpdateProductVariantRequest, UpdateReviewRequest, UpdateShipmentRequest,
+    UpdateShippingAddressRequest, UpdateShippingMethodRequest, UpdateSizeRequest,
+    UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest,
+    UpdateWeaveRequest, UserActivitiesResponse, UserRolesResponse, UsersResponse,
+    ValidateCouponRequest, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
+    WeavesResponse, WebhookEventsResponse, WishlistItemsResponse,
 };
 
 use sea_orm::TransactionTrait;
@@ -650,6 +654,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::admin_mark_order_delivered(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_order_status(
+        &self,
+        request: Request<SearchOrderStatusRequest>,
+    ) -> Result<Response<OrderStatusesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::search_order_status(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1357,6 +1377,201 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
+    // Fabrics Services
+    async fn create_fabric(
+        &self,
+        request: Request<CreateFabricRequest>,
+    ) -> Result<Response<FabricsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::fabrics::create_fabric(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    // Weaves Services
+    async fn create_weave(
+        &self,
+        request: Request<CreateWeaveRequest>,
+    ) -> Result<Response<WeavesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::weaves::create_weave(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_weave(
+        &self,
+        request: Request<SearchWeaveRequest>,
+    ) -> Result<Response<WeavesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::weaves::search_weave(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn update_weave(
+        &self,
+        request: Request<UpdateWeaveRequest>,
+    ) -> Result<Response<WeavesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::weaves::update_weave(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn delete_weave(
+        &self,
+        request: Request<DeleteWeaveRequest>,
+    ) -> Result<Response<WeavesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::weaves::delete_weave(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    // Occasions Services
+    async fn create_occasion(
+        &self,
+        request: Request<CreateOccasionRequest>,
+    ) -> Result<Response<OccasionsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::occasions::create_occasion(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_occasion(
+        &self,
+        request: Request<SearchOccasionRequest>,
+    ) -> Result<Response<OccasionsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::occasions::search_occasion(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn update_occasion(
+        &self,
+        request: Request<UpdateOccasionRequest>,
+    ) -> Result<Response<OccasionsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::occasions::update_occasion(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn delete_occasion(
+        &self,
+        request: Request<DeleteOccasionRequest>,
+    ) -> Result<Response<OccasionsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::occasions::delete_occasion(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_fabric(
+        &self,
+        request: Request<SearchFabricRequest>,
+    ) -> Result<Response<FabricsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::fabrics::search_fabric(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn update_fabric(
+        &self,
+        request: Request<UpdateFabricRequest>,
+    ) -> Result<Response<FabricsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::fabrics::update_fabric(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn delete_fabric(
+        &self,
+        request: Request<DeleteFabricRequest>,
+    ) -> Result<Response<FabricsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::fabrics::delete_fabric(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
     // Colors Services
     async fn create_color(
         &self,
@@ -2013,7 +2228,11 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<GetPresignedUploadUrlRequest>,
     ) -> Result<Response<PresignedUploadUrlResponse>, Status> {
-        handlers::product_images::get_presigned_upload_url(request).await
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("Database not initialized"))?;
+        handlers::product_images::get_presigned_upload_url(db, request).await
     }
 
     async fn confirm_image_upload(

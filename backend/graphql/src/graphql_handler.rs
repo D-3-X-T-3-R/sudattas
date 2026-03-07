@@ -19,6 +19,8 @@ use warp::Reply;
 struct GraphQLRequestBody {
     query: Option<String>,
     operation_name: Option<String>,
+    #[serde(default)]
+    variables: Option<juniper::Variables>,
 }
 
 /// Max query depth from env or default.
@@ -66,7 +68,7 @@ pub async fn handle_graphql_request(
     }
 
     let operation_name = req.operation_name.as_deref();
-    let variables = juniper::Variables::new();
+    let variables = req.variables.unwrap_or_default();
 
     let start = Instant::now();
     let result =

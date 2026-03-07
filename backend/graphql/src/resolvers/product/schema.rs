@@ -15,6 +15,14 @@ pub struct Product {
     pub formatted: String,
     pub stock_quantity: Option<String>,
     pub category_id: Option<String>,
+    pub sku: Option<String>,
+    pub slug: Option<String>,
+    pub fabric: Option<String>,
+    pub weave: Option<String>,
+    pub occasion: Option<String>,
+    pub has_blouse_piece: Option<bool>,
+    pub care_instructions: Option<String>,
+    pub product_status_id: Option<String>,
 }
 
 #[graphql_object]
@@ -41,12 +49,46 @@ impl Product {
         &self.formatted
     }
 
-    async fn stock_quantity(&self) -> &Option<String> {
-        &self.stock_quantity
+    async fn stock_quantity(&self) -> FieldResult<Option<String>> {
+        crate::resolvers::product::handlers::get_stock_for_product(&self.product_id)
+            .await
+            .map_err(|e| e.into())
     }
 
     async fn category_id(&self) -> &Option<String> {
         &self.category_id
+    }
+
+    async fn sku(&self) -> &Option<String> {
+        &self.sku
+    }
+
+    async fn slug(&self) -> &Option<String> {
+        &self.slug
+    }
+
+    async fn fabric(&self) -> &Option<String> {
+        &self.fabric
+    }
+
+    async fn weave(&self) -> &Option<String> {
+        &self.weave
+    }
+
+    async fn occasion(&self) -> &Option<String> {
+        &self.occasion
+    }
+
+    async fn has_blouse_piece(&self) -> &Option<bool> {
+        &self.has_blouse_piece
+    }
+
+    async fn care_instructions(&self) -> &Option<String> {
+        &self.care_instructions
+    }
+
+    async fn product_status_id(&self) -> &Option<String> {
+        &self.product_status_id
     }
 
     async fn category_details(&self) -> FieldResult<Vec<Category>> {
@@ -76,8 +118,17 @@ pub struct NewProduct {
     pub description: String,
     /// Price in paise (e.g. 49900 = ₹499.00)
     pub price_paise: String,
-    pub stock_quantity: String,
+    /// Legacy product-level stock; now managed via variants. Optional to avoid forcing clients to send it.
+    pub stock_quantity: Option<String>,
     pub category_id: String,
+    pub sku: Option<String>,
+    pub slug: Option<String>,
+    pub fabric: Option<String>,
+    pub weave: Option<String>,
+    pub occasion: Option<String>,
+    pub has_blouse_piece: Option<bool>,
+    pub care_instructions: Option<String>,
+    pub product_status_id: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
@@ -91,6 +142,11 @@ pub struct SearchProduct {
     pub ending_price_paise: Option<String>,
     pub stock_quantity: Option<String>,
     pub category_id: Option<String>,
+    pub fabric: Option<String>,
+    pub weave: Option<String>,
+    pub occasion: Option<String>,
+    /// Filter by product status id (e.g. 1=Draft, 2=Active, 3=Archived)
+    pub product_status_id: Option<String>,
     /// Maximum number of results to return (default: all)
     pub limit: Option<String>,
     /// Number of results to skip for pagination
@@ -111,6 +167,15 @@ pub struct ProductMutation {
     pub name: String,
     pub description: String,
     pub price_paise: String,
-    pub stock_quantity: String,
+    /// Legacy product-level stock; now managed via variants. Optional to avoid forcing clients to send it.
+    pub stock_quantity: Option<String>,
     pub category_id: String,
+    pub sku: Option<String>,
+    pub slug: Option<String>,
+    pub fabric: Option<String>,
+    pub weave: Option<String>,
+    pub occasion: Option<String>,
+    pub has_blouse_piece: Option<bool>,
+    pub care_instructions: Option<String>,
+    pub product_status_id: Option<String>,
 }

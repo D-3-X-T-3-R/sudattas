@@ -5,9 +5,11 @@ import Image from "next/image";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { HeroHeading, Kicker } from "@/components/ui/typography";
 import { HERO_SLIDES } from "@/lib/seed-data";
 import { goTo } from "@/hooks/use-scroll-to";
 
+const SLIDE_DURATION = 0.5;
 
 export function HeroSection() {
   const [slide, setSlide] = useState(0);
@@ -33,11 +35,11 @@ export function HeroSection() {
         <AnimatePresence mode="wait">
           <motion.div
             key={slide}
-            initial={{ opacity: 0, scale: 1.02 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.02 }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
             transition={{
-              duration: reduceMotion ? 0 : 0.7,
+              duration: reduceMotion ? 0 : SLIDE_DURATION,
               ease: "easeOut",
             }}
             className="absolute inset-0"
@@ -55,15 +57,19 @@ export function HeroSection() {
             <div className="absolute inset-x-0 bottom-0">
               <div className="mx-auto max-w-7xl px-4 pb-16 pt-24 sm:pb-20">
                 <div className="max-w-2xl">
-                  <div
-                    className="text-[11px] font-semibold tracking-[0.28em] uppercase text-[var(--color-accent-gold)]"
+                  <Kicker
+                    tone="inverse"
+                    className="text-[var(--color-accent-gold)]"
                     style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
                   >
                     {current.eyebrow}
-                  </div>
-                  <h1 className="mt-4 font-display text-4xl font-medium tracking-tight text-white drop-shadow-sm sm:text-6xl md:text-7xl md:leading-[1.1]">
+                  </Kicker>
+                  <HeroHeading
+                    inverse
+                    className="mt-4 text-white drop-shadow-sm md:leading-[1.05]"
+                  >
                     {current.title}
-                  </h1>
+                  </HeroHeading>
                   <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                     <Button
                       onClick={() => goTo("shop", !!reduceMotion)}
@@ -135,8 +141,8 @@ export function HeroSection() {
         >
           <span className="text-[10px] font-medium tracking-widest">Discover</span>
           <motion.div
-            animate={reduceMotion ? undefined : { y: [0, 6, 0] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            animate={reduceMotion ? undefined : { y: [0, 4, 0] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
           >
             <ChevronDown className="h-5 w-5" />
           </motion.div>

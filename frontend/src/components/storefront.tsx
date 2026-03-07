@@ -14,6 +14,7 @@ import { Header } from "@/components/header";
 import { HeroSection } from "@/components/hero-section";
 import { EditorialStrip } from "@/components/editorial-strip";
 import { CollectionsSection } from "@/components/collections-section";
+import { EditorialBlock } from "@/components/editorial-block";
 import { SectionNav } from "@/components/section-nav";
 import { ShopSection } from "@/components/shop-section";
 import { StorySection } from "@/components/story-section";
@@ -23,13 +24,6 @@ import { CartDrawer } from "@/components/cart-drawer";
 import { WishlistDrawer } from "@/components/wishlist-drawer";
 import { QuickViewModal } from "@/components/quick-view-modal";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
-import { AuthSync } from "@/components/auth-sync";
-
-const AUTH0_ENABLED = !!(
-  typeof process !== "undefined" &&
-  process.env?.NEXT_PUBLIC_AUTH0_DOMAIN &&
-  process.env?.NEXT_PUBLIC_AUTH0_CLIENT_ID
-);
 
 export function Storefront() {
   const reduceMotion = useReducedMotion();
@@ -133,7 +127,6 @@ export function Storefront() {
       id="top"
       className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]"
     >
-      {AUTH0_ENABLED && <AuthSync />}
       <AnnouncementBar />
       <Header
         query={query}
@@ -144,7 +137,6 @@ export function Storefront() {
         setCartOpen={setCartOpen}
         setWishOpen={setWishOpen}
         goTo={goToWithMotion}
-        authEnabled={AUTH0_ENABLED}
       />
 
       <HeroSection />
@@ -170,6 +162,8 @@ export function Storefront() {
         onAddToCart={addToCart}
         onQuickView={setQuickView}
       />
+
+      <EditorialBlock />
 
       <StorySection />
 
@@ -203,7 +197,6 @@ export function Storefront() {
         paymentMessage={paymentMessage}
         onTestRazorpay={runTest}
         onCheckout={() => alert("Checkout flow not wired yet")}
-        authEnabled={AUTH0_ENABLED}
       />
 
       <QuickViewModal

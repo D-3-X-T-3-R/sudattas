@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   Package,
@@ -11,8 +12,10 @@ import {
   Settings,
   Menu,
   X,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 
 const ADMIN_BASE = "/imtheboss";
@@ -53,20 +56,22 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-30 bg-[rgba(247,245,240,0.85)] md:hidden"
+          className="fixed inset-0 z-30 bg-[var(--color-ivory)]/90 backdrop-blur-[2px] md:hidden"
           aria-label="Close menu"
         />
       )}
 
       <aside
         className={cn(
-          "fixed md:static inset-y-0 left-0 z-40 w-64 flex flex-col",
+          "fixed inset-y-0 left-0 z-40 w-64 flex flex-col",
           "border-r border-[var(--color-line)] bg-white transition-transform duration-200 ease-out",
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className="flex h-14 items-center justify-between border-b border-[var(--color-line)] px-4">
-          <span className="text-sm font-semibold tracking-wide">ADMIN</span>
+        <div className="flex h-16 items-center justify-between border-b border-[var(--color-line)] px-5">
+          <span className="text-sm font-semibold uppercase tracking-wider text-[var(--color-muted)]">
+            Admin
+          </span>
           <Button
             variant="outline"
             size="icon"
@@ -77,7 +82,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <X className="h-5 w-5" />
           </Button>
         </div>
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-0.5 p-4">
           {NAV.map(({ href, icon: Icon, label }) => {
             const isActive =
               href === ADMIN_BASE
@@ -91,8 +96,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors border-l-2",
                   isActive
-                    ? "border-[var(--color-accent-brown)] bg-[var(--color-line)]/40 text-[var(--color-ink)]"
-                    : "border-transparent text-[var(--color-muted)] hover:border-[var(--color-line)]/80 hover:bg-[#F5F5F4] hover:text-[var(--color-ink)]"
+                    ? "border-[var(--color-accent-gold)] bg-[var(--color-line)]/30 text-[var(--color-ink)]"
+                    : "border-transparent text-[var(--color-muted)] hover:border-[var(--color-line)] hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)]"
                 )}
                 aria-current={isActive ? "page" : undefined}
               >
@@ -102,18 +107,26 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t border-[var(--color-line)] p-3">
+        <div className="border-t border-[var(--color-line)] space-y-0.5 p-4">
           <Link
             href={STORE_URL}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[#F5F5F4] hover:text-[var(--color-ink)]"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)]"
           >
             ← Back to store
           </Link>
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)] text-left"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            Sign out
+          </button>
         </div>
       </aside>
 
-      <main className="flex flex-1 flex-col min-w-0">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-[var(--color-line)] bg-[var(--color-ivory)]/95 px-4 backdrop-blur">
+      <main className="flex flex-1 flex-col min-w-0 md:ml-64">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-ivory)]/95 px-4 md:px-6 backdrop-blur">
           <Button
             variant="outline"
             size="icon"
@@ -123,9 +136,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <h1 className="text-lg font-semibold">{title}</h1>
+          <SectionHeading className="text-xl md:text-2xl">{title}</SectionHeading>
         </header>
-        <div className="flex-1 p-4 md:p-6">{children}</div>
+        <div className="flex-1 p-4 md:p-6 lg:p-8">{children}</div>
       </main>
     </div>
   );

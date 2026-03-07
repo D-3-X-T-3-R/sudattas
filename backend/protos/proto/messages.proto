@@ -93,6 +93,14 @@ message CreateProductRequest {
     optional string description = 2;
     int64 price_paise = 3;  // Price in minor units (e.g. 49900 = ₹499.00)
     int64 category_id = 4;   // Required; schema ProductCategories
+    optional string sku = 5;
+    optional string slug = 6;
+    optional string fabric = 7;
+    optional string weave = 8;
+    optional string occasion = 9;
+    optional bool has_blouse_piece = 10;
+    optional string care_instructions = 11;
+    optional int64 product_status_id = 12;
 }
 
 message SearchProductRequest {
@@ -104,6 +112,10 @@ message SearchProductRequest {
     optional int64 product_id = 6;
     optional int64 limit = 7;
     optional int64 offset = 8;
+    optional string fabric = 9;
+    optional string weave = 10;
+    optional string occasion = 11;
+    optional int64 product_status_id = 12;
 }
 
 message GetProductsByIdRequest {
@@ -116,6 +128,14 @@ message UpdateProductRequest {
     int64 price_paise = 3;
     int64 category_id = 4;
     int64 product_id = 5;
+    optional string sku = 6;
+    optional string slug = 7;
+    optional string fabric = 8;
+    optional string weave = 9;
+    optional string occasion = 10;
+    optional bool has_blouse_piece = 11;
+    optional string care_instructions = 12;
+    optional int64 product_status_id = 13;
 }
 
 message DeleteProductRequest {
@@ -128,6 +148,14 @@ message ProductResponse {
     int64 price_paise = 3;
     int64 category_id = 4;
     int64 product_id = 5;
+    optional string sku = 6;
+    optional string slug = 7;
+    optional string fabric = 8;
+    optional string weave = 9;
+    optional string occasion = 10;
+    optional bool has_blouse_piece = 11;
+    optional string care_instructions = 12;
+    optional int64 product_status_id = 13;
 }
 
 message ProductsResponse {
@@ -312,6 +340,16 @@ message OrdersResponse {
     repeated OrderResponse items = 1;
 }
 
+// OrderStatus (list for admin dropdowns; table OrderStatus)
+message SearchOrderStatusRequest {}
+message OrderStatusResponse {
+    int64 status_id = 1;
+    string status_name = 2;
+}
+message OrderStatusesResponse {
+    repeated OrderStatusResponse items = 1;
+}
+
 // OrderDetails (schema: VariantID not ProductID)
 
 message CreateOrderDetailRequest {
@@ -473,6 +511,7 @@ message GetPresignedUploadUrlRequest {
     int64 product_id = 1;
     string filename = 2;
     string content_type = 3;
+    optional int32 display_order = 4;  // When set, used as image index for key (avoids race when uploading multiple in parallel)
 }
 
 message PresignedUploadUrlResponse {
@@ -738,6 +777,90 @@ message SizeResponse {
 
 message SizesResponse {
     repeated SizeResponse items = 1;
+}
+
+// Fabrics
+
+message CreateFabricRequest {
+    string fabric_name = 1;
+}
+
+message SearchFabricRequest {
+    int64 fabric_id = 1;
+}
+
+message UpdateFabricRequest {
+    int64 fabric_id = 1;
+    string fabric_name = 2;
+}
+
+message DeleteFabricRequest {
+    int64 fabric_id = 1;
+}
+
+message FabricResponse {
+    int64 fabric_id = 1;
+    string fabric_name = 2;
+}
+
+message FabricsResponse {
+    repeated FabricResponse items = 1;
+}
+
+// Weaves
+
+message CreateWeaveRequest {
+    string weave_name = 1;
+}
+
+message SearchWeaveRequest {
+    int64 weave_id = 1;
+}
+
+message UpdateWeaveRequest {
+    int64 weave_id = 1;
+    string weave_name = 2;
+}
+
+message DeleteWeaveRequest {
+    int64 weave_id = 1;
+}
+
+message WeaveResponse {
+    int64 weave_id = 1;
+    string weave_name = 2;
+}
+
+message WeavesResponse {
+    repeated WeaveResponse items = 1;
+}
+
+// Occasions
+
+message CreateOccasionRequest {
+    string occasion_name = 1;
+}
+
+message SearchOccasionRequest {
+    int64 occasion_id = 1;
+}
+
+message UpdateOccasionRequest {
+    int64 occasion_id = 1;
+    string occasion_name = 2;
+}
+
+message DeleteOccasionRequest {
+    int64 occasion_id = 1;
+}
+
+message OccasionResponse {
+    int64 occasion_id = 1;
+    string occasion_name = 2;
+}
+
+message OccasionsResponse {
+    repeated OccasionResponse items = 1;
 }
 
 // Colors

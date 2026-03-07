@@ -20,7 +20,7 @@ use crate::resolvers::{
     order_events::{self, schema::OrderEvent},
     orders::{
         self,
-        schema::{Order, SearchOrder},
+        schema::{Order, OrderStatus, SearchOrder},
     },
     payment_intents::{
         self,
@@ -143,6 +143,12 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_order(search: SearchOrder) -> FieldResult<Vec<Order>> {
         orders::handlers::search_order(search)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    async fn search_order_status() -> FieldResult<Vec<OrderStatus>> {
+        orders::handlers::search_order_status()
             .await
             .map_err(|e| e.into_field_error())
     }

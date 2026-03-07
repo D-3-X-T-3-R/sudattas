@@ -22,6 +22,10 @@ use crate::resolvers::{
             DeleteEventLogInput, EventLog, EventLogMutation, NewEventLog, SearchEventLogInput,
         },
     },
+    fabrics::{
+        self,
+        schema::{DeleteFabricInput, Fabric, FabricMutation, NewFabric, SearchFabricInput},
+    },
     inventory::{
         self,
         schema::{InventoryItem, InventoryItemMutation, NewInventoryItem},
@@ -35,6 +39,12 @@ use crate::resolvers::{
         schema::{
             DeleteNewsletterSubscriberInput, NewNewsletterSubscriber, NewsletterSubscriber,
             NewsletterSubscriberMutation, SearchNewsletterSubscriberInput,
+        },
+    },
+    occasions::{
+        self,
+        schema::{
+            DeleteOccasionInput, NewOccasion, Occasion, OccasionMutation, SearchOccasionInput,
         },
     },
     order_details::{
@@ -134,6 +144,10 @@ use crate::resolvers::{
     users::{
         self,
         schema::{DeleteUserInput, NewUser, RecordSecurityAuditEventInput, UpdateUserInput, User},
+    },
+    weaves::{
+        self,
+        schema::{DeleteWeaveInput, NewWeave, SearchWeaveInput, Weave, WeaveMutation},
     },
     wishlist::{
         self,
@@ -581,6 +595,93 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn delete_size(input: DeleteSizeInput) -> FieldResult<Vec<Size>> {
         sizes::handlers::delete_size(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Fabrics
+    #[instrument(err, ret)]
+    async fn create_fabric(input: NewFabric) -> FieldResult<Vec<Fabric>> {
+        fabrics::handlers::create_fabric(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_fabric(input: SearchFabricInput) -> FieldResult<Vec<Fabric>> {
+        fabrics::handlers::search_fabric(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_fabric(input: FabricMutation) -> FieldResult<Vec<Fabric>> {
+        fabrics::handlers::update_fabric(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_fabric(input: DeleteFabricInput) -> FieldResult<Vec<Fabric>> {
+        fabrics::handlers::delete_fabric(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Weaves
+    #[instrument(err, ret)]
+    async fn create_weave(input: NewWeave) -> FieldResult<Vec<Weave>> {
+        weaves::handlers::create_weave(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_weave(input: SearchWeaveInput) -> FieldResult<Vec<Weave>> {
+        weaves::handlers::search_weave(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_weave(input: WeaveMutation) -> FieldResult<Vec<Weave>> {
+        weaves::handlers::update_weave(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_weave(input: DeleteWeaveInput) -> FieldResult<Vec<Weave>> {
+        weaves::handlers::delete_weave(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Occasions
+    #[instrument(err, ret)]
+    async fn create_occasion(input: NewOccasion) -> FieldResult<Vec<Occasion>> {
+        occasions::handlers::create_occasion(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_occasion(input: SearchOccasionInput) -> FieldResult<Vec<Occasion>> {
+        occasions::handlers::search_occasion(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn update_occasion(input: OccasionMutation) -> FieldResult<Vec<Occasion>> {
+        occasions::handlers::update_occasion(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn delete_occasion(input: DeleteOccasionInput) -> FieldResult<Vec<Occasion>> {
+        occasions::handlers::delete_occasion(input)
             .await
             .map_err(|e| e.into_field_error())
     }

@@ -53,6 +53,10 @@ impl ProductImage {
             ending_price_paise: None,
             stock_quantity: None,
             category_id: None,
+            fabric: None,
+            weave: None,
+            occasion: None,
+            product_status_id: None,
             limit: None,
             offset: None,
         })
@@ -103,6 +107,8 @@ pub struct GetPresignedUploadUrl {
     pub product_id: String,
     pub filename: String,
     pub content_type: String,
+    /// Image index (0-based). When provided, used for R2 key to avoid race when uploading multiple images in parallel.
+    pub display_order: Option<i32>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

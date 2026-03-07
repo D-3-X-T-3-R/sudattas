@@ -37,6 +37,7 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      aria-describedby={undefined}
       className={cn(
         "fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden bg-[var(--color-ivory)] shadow-2xl focus:outline-none",
         className
@@ -44,10 +45,12 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
-        {title && (
+        {title ? (
           <DialogPrimitive.Title className="text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]">
             {title}
           </DialogPrimitive.Title>
+        ) : (
+          <DialogPrimitive.Title className="sr-only">Dialog</DialogPrimitive.Title>
         )}
         {showClose && (
           <DialogPrimitive.Close asChild>

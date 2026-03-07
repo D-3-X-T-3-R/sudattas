@@ -48,6 +48,14 @@ async fn integration_create_product_search_by_name_and_category_returns_product(
             description: Some("Integration test product".to_string()),
             price_paise: 7_500,
             category_id: cat.category_id,
+            sku: None,
+            slug: None,
+            fabric: None,
+            weave: None,
+            occasion: None,
+            has_blouse_piece: None,
+            care_instructions: None,
+            product_status_id: None,
         }),
     )
     .await
@@ -68,6 +76,10 @@ async fn integration_create_product_search_by_name_and_category_returns_product(
             product_id: None,
             limit: Some(10),
             offset: Some(0),
+            fabric: None,
+            weave: None,
+            occasion: None,
+            product_status_id: None,
         }),
     )
     .await
@@ -112,6 +124,14 @@ async fn integration_create_product_and_variant_get_by_id_returns_product_and_va
             description: None,
             price_paise: 12_000,
             category_id: cat.category_id,
+            sku: None,
+            slug: None,
+            fabric: None,
+            weave: None,
+            occasion: None,
+            has_blouse_piece: None,
+            care_instructions: None,
+            product_status_id: None,
         }),
     )
     .await
@@ -181,6 +201,14 @@ async fn integration_update_product_price_get_by_id_reflects_new_price() {
             description: None,
             price_paise: 9_000,
             category_id: cat.category_id,
+            sku: None,
+            slug: None,
+            fabric: None,
+            weave: None,
+            occasion: None,
+            has_blouse_piece: None,
+            care_instructions: None,
+            product_status_id: None,
         }),
     )
     .await
@@ -196,6 +224,14 @@ async fn integration_update_product_price_get_by_id_reflects_new_price() {
             description: None,
             price_paise: new_price,
             category_id: cat.category_id,
+            sku: None,
+            slug: None,
+            fabric: None,
+            weave: None,
+            occasion: None,
+            has_blouse_piece: None,
+            care_instructions: None,
+            product_status_id: None,
         }),
     )
     .await
@@ -244,6 +280,14 @@ async fn integration_delete_product_get_by_id_returns_empty() {
             description: None,
             price_paise: 3_000,
             category_id: cat.category_id,
+            sku: None,
+            slug: None,
+            fabric: None,
+            weave: None,
+            occasion: None,
+            has_blouse_piece: None,
+            care_instructions: None,
+            product_status_id: None,
         }),
     )
     .await

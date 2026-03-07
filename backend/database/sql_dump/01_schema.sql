@@ -80,6 +80,96 @@ CREATE TABLE `ProductCategories` (
     UNIQUE KEY `uq_category_name` (`Name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+INSERT IGNORE INTO `ProductCategories` (`Name`) VALUES
+  ('Sarees'),
+  ('Kurtis & Tunics'),
+  ('Dresses'),
+  ('Lehengas'),
+  ('Blouses'),
+  ('Ethnic Sets'),
+  ('Casual Wear'),
+  ('Formal Wear'),
+  ('Loungewear'),
+  ('Jewellery'),
+  ('Bags & Clutches'),
+  ('Footwear'),
+  ('Accessories'),
+  ('Home & Living'),
+  ('Gifting');
+
+-- Lookup table for Fabrics (for product metadata)
+CREATE TABLE `Fabrics` (
+    `FabricID` bigint NOT NULL AUTO_INCREMENT,
+    `Name` varchar(100) NOT NULL,
+    PRIMARY KEY (`FabricID`),
+    UNIQUE KEY `uq_fabric_name` (`Name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `Fabrics` (`Name`) VALUES
+  ('Cotton'),
+  ('Silk'),
+  ('Linen'),
+  ('Chiffon'),
+  ('Georgette'),
+  ('Crepe'),
+  ('Organza'),
+  ('Net'),
+  ('Rayon'),
+  ('Viscose'),
+  ('Satin'),
+  ('Velvet'),
+  ('Brocade'),
+  ('Khadi'),
+  ('Muslin'),
+  ('Tussar Silk'),
+  ('Banarasi Silk'),
+  ('Art Silk'),
+  ('Polyester'),
+  ('Cotton Silk');
+
+-- Lookup table for Weaves (for product metadata)
+CREATE TABLE `Weaves` (
+    `WeaveID` bigint NOT NULL AUTO_INCREMENT,
+    `Name` varchar(100) NOT NULL,
+    PRIMARY KEY (`WeaveID`),
+    UNIQUE KEY `uq_weave_name` (`Name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `Weaves` (`Name`) VALUES
+  ('Plain'),
+  ('Twill'),
+  ('Satin'),
+  ('Jacquard'),
+  ('Dobby'),
+  ('Kanjivaram'),
+  ('Banarasi'),
+  ('Ikat'),
+  ('Chanderi'),
+  ('Kota'),
+  ('Jamdani'),
+  ('Handloom'),
+  ('Powerloom');
+
+-- Lookup table for Occasions (for product metadata)
+CREATE TABLE `Occasions` (
+    `OccasionID` bigint NOT NULL AUTO_INCREMENT,
+    `Name` varchar(100) NOT NULL,
+    PRIMARY KEY (`OccasionID`),
+    UNIQUE KEY `uq_occasion_name` (`Name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `Occasions` (`Name`) VALUES
+  ('Casual'),
+  ('Work'),
+  ('Festive'),
+  ('Wedding'),
+  ('Party'),
+  ('Puja'),
+  ('Bridal'),
+  ('Daily Wear'),
+  ('Evening'),
+  ('Formal');
+
 -- Table structure for table `Users`
 -- auth_provider distinguishes the login method for each account.
 -- Exactly one provider path is valid per row, enforced by the check constraint:
@@ -133,7 +223,6 @@ INSERT IGNORE INTO `ProductStatuses` (`code`) VALUES
   ('active'),
   ('archived');
 
--- Table structure for table `ProductAttributes`
 CREATE TABLE `ProductAttributes` (
     `AttributeID` BIGINT NOT NULL AUTO_INCREMENT,
     `AttributeName` VARCHAR(255) NOT NULL,
@@ -149,13 +238,11 @@ CREATE TABLE `Products` (
     `Name` varchar(255) NOT NULL,
     `slug` VARCHAR(255) UNIQUE,
     `Description` text,
-    `Price` decimal(10,2) NULL COMMENT 'Legacy field, do not use; use price_paise instead',
     `price_paise` INT NOT NULL COMMENT 'Price in paise (₹499.00 = 49900)',
     `CategoryID` bigint NOT NULL,
-    `fabric` VARCHAR(100),
+    `fabric` VARCHAR(100) COMMENT 'Common values: Cotton, Silk, Linen, Chiffon, Georgette, Crepe, Organza, Net, Rayon, Viscose, Satin, Velvet, Brocade, Khadi, Muslin, Tussar Silk, Banarasi Silk, Art Silk, Polyester, Cotton Silk',
     `weave` VARCHAR(100),
     `occasion` VARCHAR(100),
-    `length_meters` DECIMAL(3,1) DEFAULT 5.5,
     `has_blouse_piece` BOOLEAN DEFAULT TRUE,
     `care_instructions` TEXT,
     -- Product management
@@ -242,12 +329,45 @@ CREATE TABLE `Sizes` (
     PRIMARY KEY (`SizeID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+INSERT IGNORE INTO `Sizes` (`SizeName`) VALUES
+  ('Free Size'),
+  ('XS'),
+  ('S'),
+  ('M'),
+  ('L'),
+  ('XL'),
+  ('XXL'),
+  ('3XL');
+
 -- Table structure for table `Colors`
 CREATE TABLE `Colors` (
     `ColorID` bigint NOT NULL AUTO_INCREMENT,
     `ColorName` varchar(50) NOT NULL,
     PRIMARY KEY (`ColorID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `Colors` (`ColorName`) VALUES
+  ('Red'),
+  ('Maroon'),
+  ('Pink'),
+  ('Orange'),
+  ('Yellow'),
+  ('Green'),
+  ('Olive'),
+  ('Blue'),
+  ('Navy'),
+  ('Teal'),
+  ('Purple'),
+  ('Violet'),
+  ('Magenta'),
+  ('Brown'),
+  ('Beige'),
+  ('Cream'),
+  ('Grey'),
+  ('Black'),
+  ('White'),
+  ('Gold'),
+  ('Silver');
 
 -- Table structure for table `ProductVariants`
 CREATE TABLE `ProductVariants` (

@@ -52,6 +52,7 @@ service GRPCServices {
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
     rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);
     rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);
+    rpc SearchOrderStatus(SearchOrderStatusRequest) returns (OrderStatusesResponse);
 
     // OrderDetails
     rpc CreateOrderDetails(CreateOrderDetailsRequest) returns (OrderDetailsResponse);
@@ -117,6 +118,24 @@ service GRPCServices {
     rpc SearchSize(SearchSizeRequest) returns (SizesResponse);
     rpc UpdateSize(UpdateSizeRequest) returns (SizesResponse);
     rpc DeleteSize(DeleteSizeRequest) returns (SizesResponse);
+
+    // Fabrics
+    rpc CreateFabric(CreateFabricRequest) returns (FabricsResponse);
+    rpc SearchFabric(SearchFabricRequest) returns (FabricsResponse);
+    rpc UpdateFabric(UpdateFabricRequest) returns (FabricsResponse);
+    rpc DeleteFabric(DeleteFabricRequest) returns (FabricsResponse);
+
+    // Weaves
+    rpc CreateWeave(CreateWeaveRequest) returns (WeavesResponse);
+    rpc SearchWeave(SearchWeaveRequest) returns (WeavesResponse);
+    rpc UpdateWeave(UpdateWeaveRequest) returns (WeavesResponse);
+    rpc DeleteWeave(DeleteWeaveRequest) returns (WeavesResponse);
+
+    // Occasions
+    rpc CreateOccasion(CreateOccasionRequest) returns (OccasionsResponse);
+    rpc SearchOccasion(SearchOccasionRequest) returns (OccasionsResponse);
+    rpc UpdateOccasion(UpdateOccasionRequest) returns (OccasionsResponse);
+    rpc DeleteOccasion(DeleteOccasionRequest) returns (OccasionsResponse);
 
     // Colors
     rpc CreateColor(CreateColorRequest) returns (ColorsResponse);
