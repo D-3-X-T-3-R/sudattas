@@ -205,6 +205,8 @@ pub struct SearchProductRequest {
     pub weave: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "11")]
     pub occasion: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, optional, tag = "12")]
+    pub product_status_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

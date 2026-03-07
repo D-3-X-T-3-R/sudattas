@@ -7,7 +7,6 @@ import { adminProductFormSchema } from "@/lib/schemas";
 import {
   fetchCategories,
   fetchProductsList,
-  deleteProduct,
   fetchSizes,
   fetchColors,
   fetchFabrics,
@@ -98,6 +97,9 @@ export default function AdminProductsPage() {
   const [searchFabric, setSearchFabric] = useState("");
   const [searchWeave, setSearchWeave] = useState("");
   const [searchOccasion, setSearchOccasion] = useState("");
+  const [searchProductStatusId, setSearchProductStatusId] = useState("");
+  const [searchPriceMinRupees, setSearchPriceMinRupees] = useState("");
+  const [searchPriceMaxRupees, setSearchPriceMaxRupees] = useState("");
   const [searchLimit, setSearchLimit] = useState("20");
   const [appliedSearch, setAppliedSearch] = useState<{
     name?: string;
@@ -106,6 +108,9 @@ export default function AdminProductsPage() {
     weave?: string;
     occasion?: string;
     limit?: string;
+    productStatusId?: string;
+    startingPricePaise?: string;
+    endingPricePaise?: string;
   }>({ limit: "20" });
 
   const {
@@ -146,14 +151,7 @@ export default function AdminProductsPage() {
     queryFn: fetchFabrics,
   });
 
-  const deleteProductMutation = useMutation({
-    mutationFn: deleteProduct,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-    },
-  });
-
-  const [deleteConfirm, setDeleteConfirm] = useState<{ productId: string; name: string } | null>(null);
+  const [archiveConfirm, setArchiveConfirm] = useState<ProductListRow | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ProductListRow | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -581,6 +579,11 @@ export default function AdminProductsPage() {
     if (searchFabric) next.fabric = searchFabric;
     if (searchWeave) next.weave = searchWeave;
     if (searchOccasion) next.occasion = searchOccasion;
+    if (searchProductStatusId) next.productStatusId = searchProductStatusId;
+    const minRupees = parseFloat(searchPriceMinRupees);
+    const maxRupees = parseFloat(searchPriceMaxRupees);
+    if (Number.isFinite(minRupees) && minRupees >= 0) next.startingPricePaise = String(Math.round(minRupees * 100));
+    if (Number.isFinite(maxRupees) && maxRupees >= 0) next.endingPricePaise = String(Math.round(maxRupees * 100));
     if (trimmedLimit) next.limit = trimmedLimit;
     setAppliedSearch(next);
   };
@@ -591,15 +594,37 @@ export default function AdminProductsPage() {
     setSearchFabric("");
     setSearchWeave("");
     setSearchOccasion("");
+    setSearchProductStatusId("");
+    setSearchPriceMinRupees("");
+    setSearchPriceMaxRupees("");
     setSearchLimit("20");
     setAppliedSearch({ limit: "20" });
   };
 
-  const handleDeleteConfirm = () => {
-    if (!deleteConfirm) return;
-    deleteProductMutation.mutate(deleteConfirm.productId, {
-      onSettled: () => setDeleteConfirm(null),
-    });
+  const handleArchiveConfirm = () => {
+    if (!archiveConfirm) return;
+    const pricePaise = parseInt(archiveConfirm.amountPaise ?? "0", 10) || 0;
+    updateProductMutation.mutate(
+      {
+        productId: archiveConfirm.productId,
+        name: archiveConfirm.name,
+        description: archiveConfirm.description ?? "",
+        pricePaise,
+        categoryId: archiveConfirm.categoryId ?? "",
+        sku: archiveConfirm.sku ?? undefined,
+        slug: archiveConfirm.slug ?? undefined,
+        fabric: archiveConfirm.fabric ?? undefined,
+        weave: archiveConfirm.weave ?? undefined,
+        occasion: archiveConfirm.occasion ?? undefined,
+        hasBlousePiece: archiveConfirm.hasBlousePiece ?? undefined,
+        careInstructions: archiveConfirm.careInstructions ?? undefined,
+        productStatusId: "3",
+      },
+      {
+        onSettled: () => setArchiveConfirm(null),
+        onSuccess: () => setMessage(`${archiveConfirm.name} archived.`),
+      }
+    );
   };
 
   const beginEditProduct = (p: ProductListRow) => {
@@ -796,6 +821,77 @@ export default function AdminProductsPage() {
                   </select>
                 </div>
                 <div>
+                  <label htmlFor="products-status" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Status
+                  </label>
+                  <select
+                    id="products-status"
+                    className={cn(
+                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+                    )}
+                    value={searchProductStatusId}
+                    onChange={(e) => setSearchProductStatusId(e.target.value)}
+                  >
+                    <option value="">All statuses</option>
+                    <option value="1">Draft</option>
+                    <option value="2">Active</option>
+                    <option value="3">Archived</option>
+                  </select>
+                </div>
+                <div className="min-w-[14rem]">
+                  <label htmlFor="products-price-min" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Price range (₹)
+                  </label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="products-price-min"
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Min"
+                        value={searchPriceMinRupees}
+                        onChange={(e) => setSearchPriceMinRupees(e.target.value)}
+                        className="h-9 w-24 rounded-md"
+                      />
+                      <span className="text-xs text-[var(--color-muted)]">–</span>
+                      <Input
+                        id="products-price-max"
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="Max"
+                        value={searchPriceMaxRupees}
+                        onChange={(e) => setSearchPriceMaxRupees(e.target.value)}
+                        className="h-9 w-24 rounded-md"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={0}
+                        max={50000}
+                        step={100}
+                        value={Math.min(Number(searchPriceMinRupees) || 0, 50000)}
+                        onChange={(e) => setSearchPriceMinRupees(e.target.value)}
+                        className="h-2 w-24 flex-1 cursor-pointer appearance-none rounded-lg bg-[var(--color-line)] accent-[var(--color-accent-brown)]"
+                        aria-label="Min price (₹)"
+                      />
+                      <input
+                        type="range"
+                        min={0}
+                        max={50000}
+                        step={100}
+                        value={searchPriceMaxRupees === "" ? 50000 : Math.min(Number(searchPriceMaxRupees), 50000)}
+                        onChange={(e) => setSearchPriceMaxRupees(e.target.value)}
+                        className="h-2 w-24 flex-1 cursor-pointer appearance-none rounded-lg bg-[var(--color-line)] accent-[var(--color-accent-brown)]"
+                        aria-label="Max price (₹)"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
                   <label htmlFor="products-limit" className="mb-1 block text-xs text-[var(--color-muted)]">
                     Limit
                   </label>
@@ -963,11 +1059,11 @@ export default function AdminProductsPage() {
                                 type="button"
                                 variant="outline"
                                 className="h-8 w-8 p-0 text-red-600 border-red-200 hover:bg-red-50"
-                                aria-label={`Delete ${p.name}`}
-                                title="Delete"
+                                aria-label={`Archive ${p.name}`}
+                                title="Archive"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setDeleteConfirm({ productId: p.productId, name: p.name });
+                                  setArchiveConfirm(p);
                                 }}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -983,22 +1079,22 @@ export default function AdminProductsPage() {
             </CardContent>
           </Card>
 
-          {deleteConfirm && (
-            <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+          {archiveConfirm && (
+            <Dialog open={!!archiveConfirm} onOpenChange={(open) => !open && setArchiveConfirm(null)}>
               <DialogContent className="sm:max-w-md">
                 <p className="text-sm text-[var(--color-ink)]">
-                  Delete product <strong>{deleteConfirm.name}</strong> (ID: {deleteConfirm.productId})? This cannot be undone.
+                  Archive product <strong>{archiveConfirm.name}</strong> (ID: {archiveConfirm.productId})? Its status will be set to Archived; it will not be deleted.
                 </p>
                 <div className="mt-4 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+                  <Button variant="outline" onClick={() => setArchiveConfirm(null)}>
                     Cancel
                   </Button>
                   <Button
                     variant="destructive"
-                    onClick={handleDeleteConfirm}
-                    disabled={deleteProductMutation.isPending}
+                    onClick={handleArchiveConfirm}
+                    disabled={updateProductMutation.isPending}
                   >
-                    {deleteProductMutation.isPending ? "Deleting…" : "Delete"}
+                    {updateProductMutation.isPending ? "Archiving…" : "Archive"}
                   </Button>
                 </div>
               </DialogContent>

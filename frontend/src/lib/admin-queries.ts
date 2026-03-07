@@ -61,7 +61,7 @@ export async function fetchCategories(): Promise<CategoryRow[]> {
   return data?.searchCategory ?? [];
 }
 
-/** Fetch products for admin list with optional name, category, and limit. */
+/** Fetch products for admin list with optional filters. */
 export async function fetchProductsList(params: {
   name?: string;
   categoryId?: string;
@@ -69,6 +69,9 @@ export async function fetchProductsList(params: {
   weave?: string;
   occasion?: string;
   limit?: string;
+  productStatusId?: string;
+  startingPricePaise?: string;
+  endingPricePaise?: string;
 }): Promise<ProductListRow[]> {
   const search: Record<string, string> = {};
   if (params.name) search.name = params.name;
@@ -77,6 +80,9 @@ export async function fetchProductsList(params: {
   if (params.weave) search.weave = params.weave;
   if (params.occasion) search.occasion = params.occasion;
   if (params.limit) search.limit = params.limit;
+  if (params.productStatusId) search.productStatusId = params.productStatusId;
+  if (params.startingPricePaise) search.startingPricePaise = params.startingPricePaise;
+  if (params.endingPricePaise) search.endingPricePaise = params.endingPricePaise;
 
   const data = await gqlAdmin<{ searchProduct?: ProductListRow[] }>(
     `query SearchProductsList($search: SearchProduct!) {
@@ -360,11 +366,12 @@ export async function fetchOrderStatuses(): Promise<OrderStatusRow[]> {
   return data?.searchOrderStatus ?? [];
 }
 
-/** Fetch orders for admin list with optional date range, status, and pagination. */
+/** Fetch orders for admin list with optional date range, status, userId, and pagination. */
 export async function fetchOrdersList(params: {
   orderDateStart?: string;
   orderDateEnd?: string;
   statusId?: string;
+  userId?: string;
   limit?: string;
   offset?: string;
 }): Promise<OrderListRow[]> {
@@ -372,6 +379,7 @@ export async function fetchOrdersList(params: {
     userId: "",
     limit: params.limit ?? "100",
   };
+  if (params.userId) search.userId = params.userId;
   if (params.orderDateStart) search.orderDateStart = params.orderDateStart;
   if (params.orderDateEnd) search.orderDateEnd = params.orderDateEnd;
   if (params.statusId) search.statusId = params.statusId;
@@ -406,6 +414,38 @@ async function fetchProductCount(): Promise<number> {
   );
   const list = data?.searchProduct ?? [];
   return list.length;
+}
+
+/** Customer row for admin list (from searchUser). */
+export interface CustomerListRow {
+  userId: string;
+  username: string;
+  email: string;
+  authProvider: string;
+  fullName: string | null;
+  address: string | null;
+  phone: string | null;
+  createDate: string;
+}
+
+/** Fetch all customers (users). Uses searchUser(userId: "0") to list all. */
+export async function fetchCustomersList(): Promise<CustomerListRow[]> {
+  const data = await gqlAdmin<{ searchUser?: CustomerListRow[] }>(
+    `query SearchUsersList($input: SearchUserInput!) {
+      searchUser(input: $input) {
+        userId
+        username
+        email
+        authProvider
+        fullName
+        address
+        phone
+        createDate
+      }
+    }`,
+    { input: { userId: "0" } }
+  );
+  return data?.searchUser ?? [];
 }
 
 /** Fetch customer count via searchUser(userId: "0") which returns all users; we count the list. */

@@ -115,6 +115,7 @@ message SearchProductRequest {
     optional string fabric = 9;
     optional string weave = 10;
     optional string occasion = 11;
+    optional int64 product_status_id = 12;
 }
 
 message GetProductsByIdRequest {

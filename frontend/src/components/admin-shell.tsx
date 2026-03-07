@@ -63,7 +63,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <aside
         className={cn(
-          "fixed md:static inset-y-0 left-0 z-40 w-64 flex flex-col",
+          "fixed inset-y-0 left-0 z-40 w-64 flex flex-col",
           "border-r border-[var(--color-line)] bg-white transition-transform duration-200 ease-out",
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
@@ -123,7 +123,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex flex-1 flex-col min-w-0">
+      <main className="flex flex-1 flex-col min-w-0 md:ml-64">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-ivory)]/95 px-4 md:px-6 backdrop-blur">
           <Button
             variant="outline"
