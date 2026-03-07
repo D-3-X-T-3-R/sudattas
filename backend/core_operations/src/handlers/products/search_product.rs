@@ -40,6 +40,9 @@ pub async fn search_product(
         .apply_if(req.occasion, |query, v| {
             query.filter(products::Column::Occasion.eq(v))
         })
+        .apply_if(req.product_status_id, |query, v| {
+            query.filter(products::Column::ProductStatusId.eq(v))
+        })
         .apply_if(req.limit, |query, v| query.limit(v as u64))
         .apply_if(req.offset, |query, v| query.offset(v as u64))
         .all(txn)

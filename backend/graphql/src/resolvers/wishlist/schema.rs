@@ -41,6 +41,7 @@ impl WishlistItem {
             fabric: None,
             weave: None,
             occasion: None,
+            product_status_id: None,
             limit: None,
             offset: None,
         })

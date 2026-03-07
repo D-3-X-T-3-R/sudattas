@@ -45,10 +45,12 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
-        {title && (
+        {title ? (
           <DialogPrimitive.Title className="text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]">
             {title}
           </DialogPrimitive.Title>
+        ) : (
+          <DialogPrimitive.Title className="sr-only">Dialog</DialogPrimitive.Title>
         )}
         {showClose && (
           <DialogPrimitive.Close asChild>

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,15 +74,21 @@ function getStatusLabel(statusId: string, statuses: { statusId: string; statusNa
 }
 
 export default function AdminOrdersPage() {
+  const searchParams = useSearchParams();
+  const userIdFromUrl = searchParams.get("userId") ?? undefined;
+
   const [datePreset, setDatePreset] = useState<DatePreset>("30");
   const [statusId, setStatusId] = useState("");
 
-  const dateRange = getDateRange(datePreset);
-  const filters = {
-    ...dateRange,
-    statusId: statusId.trim() || undefined,
-    limit: "100",
-  };
+  const filters = useMemo(() => {
+    const dateRange = getDateRange(datePreset);
+    return {
+      ...dateRange,
+      statusId: statusId.trim() || undefined,
+      userId: userIdFromUrl,
+      limit: "100",
+    };
+  }, [datePreset, statusId, userIdFromUrl]);
 
   const { data: statuses = [] } = useQuery({
     queryKey: ["admin", "order-statuses"],
@@ -121,6 +129,18 @@ export default function AdminOrdersPage() {
               </Button>
             ))}
           </div>
+          {userIdFromUrl && (
+            <div className="flex items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-sm">
+              <span className="text-[var(--color-muted)]">Customer:</span>
+              <span className="font-mono text-[var(--color-ink)]">{userIdFromUrl}</span>
+              <Link
+                href="/imtheboss/orders"
+                className="text-[var(--color-accent-brown)] hover:underline"
+              >
+                Clear
+              </Link>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <label htmlFor="orders-status" className="text-sm text-[var(--color-muted)]">
               Status

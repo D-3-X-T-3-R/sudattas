@@ -145,6 +145,8 @@ pub struct SearchProduct {
     pub fabric: Option<String>,
     pub weave: Option<String>,
     pub occasion: Option<String>,
+    /// Filter by product status id (e.g. 1=Draft, 2=Active, 3=Archived)
+    pub product_status_id: Option<String>,
     /// Maximum number of results to return (default: all)
     pub limit: Option<String>,
     /// Number of results to skip for pagination
