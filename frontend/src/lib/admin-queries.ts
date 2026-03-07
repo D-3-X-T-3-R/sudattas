@@ -312,6 +312,63 @@ function endOfMonthSeconds(): number {
   return Math.floor(d.getTime() / 1000);
 }
 
+/** Last N days: start of first day (00:00) to end of today (23:59), as unix seconds strings. */
+export function lastNDaysRange(n: number): { orderDateStart: string; orderDateEnd: string } {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setDate(start.getDate() - n);
+  start.setHours(0, 0, 0, 0);
+  return {
+    orderDateStart: String(Math.floor(start.getTime() / 1000)),
+    orderDateEnd: String(Math.floor(end.getTime() / 1000)),
+  };
+}
+
+/** Last N months: start of month N months ago to end of current month, as unix seconds strings. */
+export function lastNMonthsRange(n: number): { orderDateStart: string; orderDateEnd: string } {
+  const end = new Date();
+  end.setMonth(end.getMonth() + 1, 0);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setMonth(start.getMonth() - n, 1);
+  start.setHours(0, 0, 0, 0);
+  return {
+    orderDateStart: String(Math.floor(start.getTime() / 1000)),
+    orderDateEnd: String(Math.floor(end.getTime() / 1000)),
+  };
+}
+
+/** Last N weeks: start of week N weeks ago (Monday) to end of today, as unix seconds strings. */
+export function lastNWeeksRange(n: number): { orderDateStart: string; orderDateEnd: string } {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setDate(start.getDate() - n * 7);
+  const day = start.getDay();
+  const toMonday = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + toMonday);
+  start.setHours(0, 0, 0, 0);
+  return {
+    orderDateStart: String(Math.floor(start.getTime() / 1000)),
+    orderDateEnd: String(Math.floor(end.getTime() / 1000)),
+  };
+}
+
+/** Last N years: start of year N years ago to end of current year, as unix seconds strings. */
+export function lastNYearsRange(n: number): { orderDateStart: string; orderDateEnd: string } {
+  const end = new Date();
+  end.setMonth(11, 31);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - n, 0, 1);
+  start.setHours(0, 0, 0, 0);
+  return {
+    orderDateStart: String(Math.floor(start.getTime() / 1000)),
+    orderDateEnd: String(Math.floor(end.getTime() / 1000)),
+  };
+}
+
 export interface DashboardStats {
   ordersToday: number;
   revenueMtdPaise: number;
@@ -321,7 +378,7 @@ export interface DashboardStats {
 }
 
 /** Fetch orders with optional date range (unix seconds as string for GraphQL → backend i64). Omit userId for admin (all orders). */
-async function fetchOrders(params: {
+export async function fetchOrdersByDateRange(params: {
   orderDateStart?: string;
   orderDateEnd?: string;
   limit?: string;
@@ -448,6 +505,44 @@ export async function fetchCustomersList(): Promise<CustomerListRow[]> {
   return data?.searchUser ?? [];
 }
 
+/** Order counts by status for dashboard (total, pending, delivered, cancelled, in transit). */
+export interface OrderCountsByStatus {
+  total: number;
+  pending: number;
+  delivered: number;
+  cancelled: number;
+  inTransit: number;
+}
+
+/** Fetch order counts: total and by status (pending, delivered, cancelled, in transit = shipped). */
+export async function fetchOrderCountsByStatus(): Promise<OrderCountsByStatus> {
+  const [orders, statuses] = await Promise.all([
+    fetchOrdersList({ limit: "5000" }),
+    fetchOrderStatuses(),
+  ]);
+  const idToName = new Map<string, string>(
+    statuses.map((s) => [s.statusId, s.statusName.toLowerCase()])
+  );
+  let pending = 0;
+  let delivered = 0;
+  let cancelled = 0;
+  let inTransit = 0;
+  for (const o of orders) {
+    const name = idToName.get(o.statusId) ?? "";
+    if (name === "pending") pending++;
+    else if (name === "delivered") delivered++;
+    else if (name === "cancelled") cancelled++;
+    else if (name === "shipped") inTransit++;
+  }
+  return {
+    total: orders.length,
+    pending,
+    delivered,
+    cancelled,
+    inTransit,
+  };
+}
+
 /** Fetch customer count via searchUser(userId: "0") which returns all users; we count the list. */
 async function fetchCustomerCount(): Promise<number> {
   const data = await gqlAdmin<{ searchUser?: { userId: string }[] }>(
@@ -473,8 +568,8 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   const monthEnd = String(endOfMonthSeconds());
 
   const [ordersToday, ordersMtd, productsCount, customersCount] = await Promise.all([
-    fetchOrders({ orderDateStart: todayStart, orderDateEnd: todayEnd, limit: "500" }),
-    fetchOrders({ orderDateStart: monthStart, orderDateEnd: monthEnd, limit: "2000" }),
+    fetchOrdersByDateRange({ orderDateStart: todayStart, orderDateEnd: todayEnd, limit: "500" }),
+    fetchOrdersByDateRange({ orderDateStart: monthStart, orderDateEnd: monthEnd, limit: "2000" }),
     fetchProductCount(),
     fetchCustomerCount(),
   ]);
@@ -498,5 +593,37 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     revenueMtdFormatted,
     productsCount,
     customersCount,
+  };
+}
+
+/** Revenue (MTD), Revenue (Total), and customers count for dashboard extra cards. */
+export interface DashboardExtras {
+  revenueMtdFormatted: string;
+  revenueTotalFormatted: string;
+  customersCount: number;
+}
+
+/** Fetch revenue MTD, revenue total (all orders), and customer count for dashboard. */
+export async function fetchDashboardExtras(): Promise<DashboardExtras> {
+  const [stats, allOrders] = await Promise.all([
+    fetchDashboardStats(),
+    fetchOrdersList({ limit: "10000" }),
+  ]);
+  const totalPaise = allOrders.reduce(
+    (sum, o) => sum + (parseInt(o.totalAmountPaise, 10) || 0),
+    0
+  );
+  const revenueTotalFormatted =
+    totalPaise >= 0
+      ? new Intl.NumberFormat("en-IN", {
+          style: "currency",
+          currency: "INR",
+          maximumFractionDigits: 0,
+        }).format(totalPaise / 100)
+      : "—";
+  return {
+    revenueMtdFormatted: stats.revenueMtdFormatted,
+    revenueTotalFormatted,
+    customersCount: stats.customersCount ?? 0,
   };
 }

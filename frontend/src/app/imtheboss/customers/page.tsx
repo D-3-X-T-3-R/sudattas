@@ -6,8 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Section } from "@/components/ui/section";
-import { Kicker, SectionHeading } from "@/components/ui/typography";
+import { SectionHeading } from "@/components/ui/typography";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   fetchCustomersList,
@@ -16,7 +15,7 @@ import {
   type OrderListRow,
 } from "@/lib/admin-queries";
 import { cn } from "@/lib/utils";
-import { ArrowUpDown, ArrowDown, ArrowUp, Download, ExternalLink, User } from "lucide-react";
+import { ArrowUpDown, ArrowDown, ArrowUp, Download, ExternalLink, User, Filter, Users } from "lucide-react";
 
 function formatCreateDate(createDate: string): string {
   try {
@@ -180,14 +179,29 @@ export default function AdminCustomersPage() {
     );
 
   return (
-    <Section compact className="max-w-5xl">
-      <Kicker className="text-[var(--color-muted)]">Customers</Kicker>
-      <SectionHeading size="default" className="mt-2">
-        Customer list
-      </SectionHeading>
+    <div className="mx-auto max-w-6xl w-full">
+      <div className="mb-8">
+        <p className="text-sm text-[var(--color-muted)]">Customers</p>
+        <SectionHeading size="default" className="mt-1">
+          Customer list
+        </SectionHeading>
+        <p className="mt-1 text-sm leading-relaxed text-[var(--color-muted)]">
+          Search, filter, and export. Click a row to see details and orders.
+        </p>
+      </div>
 
-      <Card className="mt-8 border-[var(--color-line)]">
-        <CardTitle className="text-[var(--color-muted)]">Filters</CardTitle>
+      <div className="mb-6 flex flex-wrap gap-3">
+        <span className="inline-flex items-center gap-2 rounded-full bg-teal-500/12 px-4 py-2 text-sm font-medium text-teal-700">
+          <Users className="h-4 w-4" />
+          {filteredAndSorted.length} customer{filteredAndSorted.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      <Card className="rounded-xl border-[var(--color-line)] border-l-4 border-l-teal-500 bg-white shadow-[var(--admin-card-shadow)]">
+        <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+          <Filter className="h-4 w-4 text-teal-500" />
+          Filters
+        </CardTitle>
         <CardContent className="mt-3 flex flex-wrap items-end gap-3">
           <div>
             <label htmlFor="customers-search" className="mb-1 block text-xs text-[var(--color-muted)]">
@@ -236,8 +250,11 @@ export default function AdminCustomersPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-6 border-[var(--color-line)]">
-        <CardTitle className="text-[var(--color-muted)]">Customers</CardTitle>
+      <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-amber-500 bg-white shadow-[var(--admin-card-shadow)]">
+        <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+          <Users className="h-4 w-4 text-amber-500" />
+          Customers
+        </CardTitle>
         <CardContent className="mt-3">
           {isLoading && (
             <p className="py-8 text-center text-sm text-[var(--color-muted)]">
@@ -455,6 +472,6 @@ export default function AdminCustomersPage() {
           </DialogContent>
         </Dialog>
       )}
-    </Section>
+    </div>
   );
 }

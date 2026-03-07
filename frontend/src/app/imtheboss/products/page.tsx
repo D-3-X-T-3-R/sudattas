@@ -31,10 +31,9 @@ import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Section } from "@/components/ui/section";
-import { Kicker, SectionHeading } from "@/components/ui/typography";
+import { SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Filter, Package, Plus } from "lucide-react";
 
 type ProductFormState = {
   name: string;
@@ -163,6 +162,7 @@ export default function AdminProductsPage() {
     name: "",
     description: "",
     priceRupees: "",
+    stockQuantity: "0",
     categoryId: categories[0]?.categoryId ?? "",
     sku: "",
     slug: "",
@@ -514,6 +514,7 @@ export default function AdminProductsPage() {
         name,
         description: description || "",
         pricePaise,
+        stockQuantity: form.stockQuantity ?? "0",
         categoryId,
         sku: sku || undefined,
         slug: slug || undefined,
@@ -571,6 +572,9 @@ export default function AdminProductsPage() {
       weave?: string;
       occasion?: string;
       limit?: string;
+      productStatusId?: string;
+      startingPricePaise?: string;
+      endingPricePaise?: string;
     } = {};
     const trimmedName = searchName.trim();
     const trimmedLimit = searchLimit.trim();
@@ -744,13 +748,27 @@ export default function AdminProductsPage() {
   });
 
   return (
-    <Section compact className="max-w-6xl">
-      <Kicker className="text-[var(--color-muted)]">Products</Kicker>
-      <SectionHeading size="default" className="mt-2">
-        Product catalog
-      </SectionHeading>
+    <div className="mx-auto max-w-6xl w-full">
+      <div className="mb-8">
+        <p className="text-sm text-[var(--color-muted)]">Products</p>
+        <SectionHeading size="default" className="mt-1">
+          Product catalog
+        </SectionHeading>
+        <p className="mt-1 text-sm leading-relaxed text-[var(--color-muted)]">
+          View, search, and add products. Filter by category, status, and price.
+        </p>
+      </div>
 
-      <div className="mt-6 inline-flex rounded-full border border-[var(--color-line)] bg-white/70 p-1 text-xs">
+      <div className="mb-6 flex flex-wrap gap-3">
+        {activeTab === "view" && (
+          <span className="inline-flex items-center gap-2 rounded-full bg-violet-500/12 px-4 py-2 text-sm font-medium text-violet-700">
+            <Package className="h-4 w-4" />
+            {products.length} product{products.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-6 inline-flex rounded-full border border-[var(--color-line)] bg-white shadow-sm p-1 text-xs">
         <button
           type="button"
           onClick={() => setActiveTab("view")}
@@ -779,8 +797,11 @@ export default function AdminProductsPage() {
 
       {activeTab === "view" && (
         <>
-          <Card className="mt-6 border-[var(--color-line)]">
-            <CardTitle className="text-[var(--color-muted)]">Filters</CardTitle>
+          <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-blue-500 bg-white shadow-[var(--admin-card-shadow)]">
+            <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+              <Filter className="h-4 w-4 text-blue-500" />
+              Filters
+            </CardTitle>
             <CardContent className="mt-3">
               <form
                 onSubmit={handleSearchSubmit}
@@ -983,8 +1004,11 @@ export default function AdminProductsPage() {
             </CardContent>
           </Card>
 
-          <Card className="mt-6 border-[var(--color-line)]">
-            <CardTitle className="text-[var(--color-muted)]">Products</CardTitle>
+          <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-violet-500 bg-white shadow-[var(--admin-card-shadow)]">
+            <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+              <Package className="h-4 w-4 text-violet-500" />
+              Products
+            </CardTitle>
             <CardContent className="mt-3">
               {productsError && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -1090,7 +1114,8 @@ export default function AdminProductsPage() {
                     Cancel
                   </Button>
                   <Button
-                    variant="destructive"
+                    variant="outline"
+                    className="border-red-200 text-red-600 hover:bg-red-50"
                     onClick={handleArchiveConfirm}
                     disabled={updateProductMutation.isPending}
                   >
@@ -1255,8 +1280,13 @@ export default function AdminProductsPage() {
       )}
 
       {activeTab === "add" && (
-        <Card className="mt-6 border-[var(--color-line)]">
-          <CardTitle className="text-[var(--color-muted)]">
+        <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-emerald-500 bg-white shadow-[var(--admin-card-shadow)]">
+          <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+            {editingProductId ? (
+              <Pencil className="h-4 w-4 text-emerald-500" />
+            ) : (
+              <Plus className="h-4 w-4 text-emerald-500" />
+            )}
             {editingProductId ? "Edit product" : "Add new product"}
           </CardTitle>
           <CardContent className="mt-6">
@@ -1938,6 +1968,6 @@ export default function AdminProductsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </Section>
+    </div>
   );
 }

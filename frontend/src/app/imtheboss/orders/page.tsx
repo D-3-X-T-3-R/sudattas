@@ -6,14 +6,14 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Section } from "@/components/ui/section";
-import { Kicker, SectionHeading } from "@/components/ui/typography";
+import { SectionHeading } from "@/components/ui/typography";
 import {
   fetchOrdersList,
   fetchOrderStatuses,
   type OrderListRow,
 } from "@/lib/admin-queries";
 import { cn } from "@/lib/utils";
+import { Filter, ListOrdered } from "lucide-react";
 
 type DatePreset = "7" | "30" | "month" | "all";
 
@@ -107,14 +107,29 @@ export default function AdminOrdersPage() {
   });
 
   return (
-    <Section compact className="max-w-5xl">
-      <Kicker className="text-[var(--color-muted)]">Orders</Kicker>
-      <SectionHeading size="default" className="mt-2">
-        Order management
-      </SectionHeading>
+    <div className="mx-auto max-w-6xl w-full">
+      <div className="mb-8">
+        <p className="text-sm text-[var(--color-muted)]">Orders</p>
+        <SectionHeading size="default" className="mt-1">
+          Order management
+        </SectionHeading>
+        <p className="mt-1 text-sm leading-relaxed text-[var(--color-muted)]">
+          Filter by date and status, or view orders for a specific customer.
+        </p>
+      </div>
 
-      <Card className="mt-8 border-[var(--color-line)]">
-        <CardTitle className="text-[var(--color-muted)]">Filters</CardTitle>
+      <div className="mb-6 flex flex-wrap gap-3">
+        <span className="inline-flex items-center gap-2 rounded-full bg-blue-500/12 px-4 py-2 text-sm font-medium text-blue-700">
+          <ListOrdered className="h-4 w-4" />
+          {orders.length} order{orders.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      <Card className="rounded-xl border-[var(--color-line)] border-l-4 border-l-blue-500 bg-white shadow-[var(--admin-card-shadow)]">
+        <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+          <Filter className="h-4 w-4 text-blue-500" />
+          Filters
+        </CardTitle>
         <CardContent className="mt-3 flex flex-wrap items-center gap-3">
           <div className="flex flex-wrap gap-2">
             {PRESETS.map(({ key, label }) => (
@@ -168,8 +183,11 @@ export default function AdminOrdersPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-6 border-[var(--color-line)]">
-        <CardTitle className="text-[var(--color-muted)]">Orders</CardTitle>
+      <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-violet-500 bg-white shadow-[var(--admin-card-shadow)]">
+        <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+          <ListOrdered className="h-4 w-4 text-violet-500" />
+          Orders
+        </CardTitle>
         <CardContent className="mt-3">
           {isLoading && (
             <p className="py-8 text-center text-sm text-[var(--color-muted)]">Loading orders…</p>
@@ -216,6 +234,6 @@ export default function AdminOrdersPage() {
           )}
         </CardContent>
       </Card>
-    </Section>
+    </div>
   );
 }
