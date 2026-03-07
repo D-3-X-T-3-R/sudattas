@@ -15,7 +15,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Kicker, SectionHeading } from "@/components/ui/typography";
+import { SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 
 const ADMIN_BASE = "/imtheboss";
@@ -69,7 +69,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         )}
       >
         <div className="flex h-16 items-center justify-between border-b border-[var(--color-line)] px-5">
-          <Kicker className="text-[var(--color-muted)]">Admin</Kicker>
+          <span className="text-sm font-semibold uppercase tracking-wider text-[var(--color-muted)]">
+            Admin
+          </span>
           <Button
             variant="outline"
             size="icon"
@@ -115,7 +117,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)]"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)] text-left"
           >
             <LogOut className="h-4 w-4 shrink-0" />
             Sign out
