@@ -1,12 +1,14 @@
 use proto::proto::core::{
     CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest, GetRelatedProductsRequest,
     SearchInventoryItemRequest, SearchProductRequest, SearchProductVariantRequest,
-    UpdateProductRequest,
+    SearchSizeRequest, UpdateProductRequest,
 };
 
 use tracing::instrument;
 
-use super::schema::{GetRelatedProducts, NewProduct, Product, ProductMutation, SearchProduct};
+use super::schema::{
+    GetRelatedProducts, NewProduct, Product, ProductMutation, ProductVariantStock, SearchProduct,
+};
 use crate::resolvers::{
     convert,
     error::GqlError,
@@ -222,4 +224,67 @@ pub(crate) async fn get_stock_for_product(product_id: &str) -> Result<Option<Str
     } else {
         Ok(Some(total.to_string()))
     }
+}
+
+/// Per-size stock for storefront. Variants with no size_id are skipped (free size → empty list).
+#[instrument]
+pub(crate) async fn get_variant_stock_for_product(
+    product_id: &str,
+) -> Result<Vec<ProductVariantStock>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let product_id_i64 = parse_i64(product_id, "product id")?;
+
+    let variants_resp = client
+        .search_product_variant(SearchProductVariantRequest { variant_id: 0 })
+        .await?;
+    let variants: Vec<_> = variants_resp
+        .into_inner()
+        .items
+        .into_iter()
+        .filter(|v| v.product_id == product_id_i64)
+        .filter(|v| v.size_id.is_some())
+        .collect();
+
+    if variants.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Build size_id -> size_name map (fetch all sizes once)
+    let sizes_resp = client.search_size(SearchSizeRequest { size_id: 0 }).await?;
+    let size_names: std::collections::HashMap<i64, String> = sizes_resp
+        .into_inner()
+        .items
+        .into_iter()
+        .map(|s| (s.size_id, s.size_name))
+        .collect();
+
+    let mut out = Vec::with_capacity(variants.len());
+    for v in variants {
+        let size_id = v.size_id.expect("filtered to Some");
+        let size_name = size_names
+            .get(&size_id)
+            .cloned()
+            .unwrap_or_else(|| size_id.to_string());
+
+        let inv_resp = client
+            .search_inventory_item(SearchInventoryItemRequest {
+                inventory_id: None,
+                variant_id: Some(v.variant_id),
+            })
+            .await?;
+        let quantity: i32 = inv_resp
+            .into_inner()
+            .items
+            .into_iter()
+            .map(|i| i.quantity_available)
+            .sum::<i64>()
+            .clamp(0, i64::from(i32::MAX)) as i32;
+
+        out.push(ProductVariantStock {
+            size_id: size_id.to_string(),
+            size_name,
+            quantity,
+        });
+    }
+    Ok(out)
 }

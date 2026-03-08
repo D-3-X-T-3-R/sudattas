@@ -8,10 +8,11 @@ import type {
   CategoryRow,
   OccasionRow,
   ProductListRow,
+  ProductListRowWithVariantStock,
   ProductImageListItem,
 } from "./graphql-types";
 
-export type { CategoryRow, OccasionRow, ProductListRow, ProductImageListItem };
+export type { CategoryRow, OccasionRow, ProductListRow, ProductListRowWithVariantStock, ProductImageListItem };
 
 export interface OrderRow {
   orderId: string;
@@ -37,6 +38,15 @@ const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
     productId name description amountPaise formatted stockQuantity categoryId
     sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
     images { thumbnailUrl url }
+  }
+}`;
+
+const PRODUCT_BY_ID_QUERY = `query ProductById($search: SearchProduct!) {
+  searchProduct(search: $search) {
+    productId name description amountPaise formatted stockQuantity categoryId
+    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
+    images { thumbnailUrl url }
+    variantStock { sizeId sizeName quantity }
   }
 }`;
 
@@ -72,6 +82,18 @@ export async function fetchProductsList(params: {
   const variables = { search: Object.keys(search).length ? search : { limit: "50" } };
   const data = await gqlAdmin<{ searchProduct?: ProductListRow[] }>(PRODUCTS_QUERY, variables);
   return data?.searchProduct ?? [];
+}
+
+/** Fetch a single product by id with variant stock (for storefront detail when no session). */
+export async function fetchProductById(
+  productId: string
+): Promise<ProductListRowWithVariantStock | null> {
+  const data = await gqlAdmin<{ searchProduct?: ProductListRowWithVariantStock[] }>(
+    PRODUCT_BY_ID_QUERY,
+    { search: { productId, limit: "1" } }
+  );
+  const list = data?.searchProduct ?? [];
+  return list[0] ?? null;
 }
 
 /** Delete a product by ID. Returns remaining products (backend returns deleted product in list). */

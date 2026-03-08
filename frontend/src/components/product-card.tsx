@@ -42,7 +42,7 @@ export function ProductCard({
     <div className={cn("group", featured && "flex h-full flex-col")}>
       <div
         className={cn(
-          "relative overflow-hidden rounded-sm bg-white shadow-[0_1px_3px_rgba(26,24,20,0.06)] transition-shadow duration-300 group-hover:shadow-[0_6px_20px_rgba(26,24,20,0.08)]",
+          "relative overflow-hidden rounded-sm bg-[var(--background)]",
           featured && "flex flex-1 flex-col"
         )}
       >
@@ -65,46 +65,22 @@ export function ProductCard({
           />
         </button>
 
-        {/* Hover-only: wishlist (desktop) */}
+        {/* Hover-only: wishlist */}
         <Button
           variant="outline"
           size="icon"
-          onClick={() => onToggleWish(product)}
-          className="absolute right-3 top-3 h-10 w-10 rounded-full border-[var(--color-line)] bg-white/90 backdrop-blur opacity-0 transition-opacity duration-300 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleWish(product);
+          }}
+          className="absolute right-3 top-3 z-10 h-10 w-10 rounded-full border-[var(--color-line)] bg-white/90 backdrop-blur opacity-0 transition-opacity duration-300 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100"
           aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
         >
           <Heart
             className={cn("h-5 w-5", wished && "fill-[var(--color-ink)]")}
           />
         </Button>
-
-        {/* Hover-only: quick view + add (desktop); always visible on touch for accessibility, but we keep them in quick view flow on mobile */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition duration-300 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100" />
-        <div className="absolute inset-x-3 bottom-3 flex gap-2 opacity-0 transition duration-300 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onQuickView(product);
-            }}
-            className="pointer-events-auto flex-1 rounded-full border-white/60 bg-white/95 backdrop-blur hover:bg-white"
-          >
-            Quick view
-          </Button>
-          <Button
-            size="sm"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onAddToCart(product);
-            }}
-            className="pointer-events-auto rounded-full bg-[var(--color-ink)] hover:bg-[var(--color-ink)]/90"
-          >
-            Add
-          </Button>
-        </div>
       </div>
 
       <div className={cn("mt-4", featured && "mt-6 flex-none")}>

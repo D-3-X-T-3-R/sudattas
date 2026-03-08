@@ -31,8 +31,9 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     title?: string;
     showClose?: boolean;
+    contentClassName?: string;
   }
->(({ className, children, title, showClose = true, ...props }, ref) => (
+>(({ className, children, title, showClose = true, contentClassName, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -60,7 +61,7 @@ const DialogContent = React.forwardRef<
           </DialogPrimitive.Close>
         )}
       </div>
-      <div className="p-5">{children}</div>
+      <div className={cn("p-5", contentClassName)}>{children}</div>
     </DialogPrimitive.Content>
   </DialogPortal>
 ));

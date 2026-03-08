@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import type { Product } from "@/lib/schemas";
-import { fetchProductsList, fetchCategories } from "@/lib/admin-queries";
-import type { ProductListRow } from "@/lib/graphql-types";
+import { fetchProductById, fetchCategories, fetchSizes } from "@/lib/admin-queries";
+import type { ProductListRowWithVariantStock } from "@/lib/graphql-types";
 import {
-  fetchProductsListWithSession,
+  fetchProductByIdWithVariantStock,
   fetchCategoriesWithSession,
+  fetchSizesWithSession,
 } from "@/lib/storefront-queries";
 
-/** Map backend product list row + category names to storefront Product shape. */
 function mapToStorefrontProduct(
-  row: ProductListRow,
+  row: ProductListRowWithVariantStock,
   categoryNameById: Record<string, string>
 ): Product {
   const pricePaise = row.amountPaise ? parseInt(row.amountPaise, 10) : 0;
@@ -39,27 +39,38 @@ function mapToStorefrontProduct(
     hoverImage: hoverUrl || undefined,
     images: allUrls.length > 0 ? allUrls : undefined,
     imageAlt: row.name,
+    variantStock: row.variantStock ?? undefined,
   };
 }
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
   const sessionId = request.headers.get("x-session-id")?.trim() || null;
 
   try {
-    let productsList: ProductListRow[];
+    let row: ProductListRowWithVariantStock | null;
     let categories: { categoryId: string; name: string }[];
+    let sizes: { sizeId: string; sizeName: string }[];
 
     if (sessionId) {
-      // Session only; no admin fallback when session fails
-      [productsList, categories] = await Promise.all([
-        fetchProductsListWithSession(sessionId, { limit: "200" }),
+      [row, categories, sizes] = await Promise.all([
+        fetchProductByIdWithVariantStock(sessionId, id),
         fetchCategoriesWithSession(sessionId),
+        fetchSizesWithSession(sessionId),
       ]);
     } else {
-      [productsList, categories] = await Promise.all([
-        fetchProductsList({ limit: "200" }),
+      [row, categories, sizes] = await Promise.all([
+        fetchProductById(id),
         fetchCategories(),
+        fetchSizes(),
       ]);
+    }
+
+    if (!row) {
+      return NextResponse.json({ product: null, sizes: [], error: "Not found" }, { status: 404 });
     }
 
     const categoryNameById: Record<string, string> = {};
@@ -67,27 +78,14 @@ export async function GET(request: Request) {
       categoryNameById[c.categoryId] = c.name;
     }
 
-    const products: Product[] = productsList.map((row) =>
-      mapToStorefrontProduct(row, categoryNameById)
-    );
-
-    return NextResponse.json({ products, error: null });
+    const product = mapToStorefrontProduct(row, categoryNameById);
+    return NextResponse.json({ product, sizes, error: null });
   } catch (e) {
     const message =
-      e instanceof Error ? e.message : "Failed to load products";
-    const isAuthMissing =
-      typeof message === "string" &&
-      (message.includes("Unauthorized") || message.includes("NEXT_PUBLIC_ADMIN_API_KEY"));
-    if (isAuthMissing) {
-      console.warn(
-        "API products: no valid session and no admin key. Set NEXT_PUBLIC_ADMIN_API_KEY in .env.local to match backend ADMIN_API_KEY (or fix session)."
-      );
-    } else {
-      console.error("API products:", e);
-    }
+      e instanceof Error ? e.message : "Failed to load product";
     return NextResponse.json(
-      { products: [], error: message },
-      { status: 200 }
+      { product: null, sizes: [], error: message },
+      { status: 500 }
     );
   }
 }
