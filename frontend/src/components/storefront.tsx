@@ -2,14 +2,59 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useReducedMotion } from "framer-motion";
-import { ensureGuestSession } from "@/lib/session";
+import { ensureGuestSession, getGuestSessionId, clearGuestSession } from "@/lib/session";
 import { PRODUCTS_SEED } from "@/lib/seed-data";
 import type { Product, CartLine } from "@/lib/schemas";
+
+type ProductsResponse = { products: Product[]; error: string | null };
+
+async function fetchStorefrontProducts(sessionId: string | null): Promise<{
+  products: Product[];
+  error: string | null;
+}> {
+  try {
+    const headers: Record<string, string> = {};
+    if (sessionId) headers["X-Session-Id"] = sessionId;
+    const res = await fetch("/api/products", { headers });
+    const data = (await res.json()) as ProductsResponse | Product[];
+    if (Array.isArray(data)) {
+      return { products: data, error: null };
+    }
+    return {
+      products: data.products ?? [],
+      error: data.error ?? (res.ok ? null : "Request failed"),
+    };
+  } catch {
+    return { products: [], error: "Network error" };
+  }
+}
+
+type StorefrontFiltersResponse = {
+  categories: { categoryId: string; name: string }[];
+  occasions: { occasionId: string; occasionName: string }[];
+  error: string | null;
+};
+
+async function fetchStorefrontFilters(sessionId: string | null): Promise<StorefrontFiltersResponse> {
+  if (!sessionId) return { categories: [], occasions: [], error: null };
+  try {
+    const res = await fetch("/api/storefront-filters", {
+      headers: { "X-Session-Id": sessionId },
+    });
+    const data = (await res.json()) as StorefrontFiltersResponse;
+    return {
+      categories: data.categories ?? [],
+      occasions: data.occasions ?? [],
+      error: data.error ?? null,
+    };
+  } catch {
+    return { categories: [], occasions: [], error: "Network error" };
+  }
+}
 import { useActiveSection } from "@/hooks/use-active-section";
 import { useLockBodyScroll } from "@/hooks/use-lock-body-scroll";
 import { useRazorpayTest } from "@/hooks/use-razorpay-test";
 import { goTo } from "@/hooks/use-scroll-to";
-import { AnnouncementBar } from "@/components/announcement-bar";
 import { Header } from "@/components/header";
 import { HeroSection } from "@/components/hero-section";
 import { EditorialStrip } from "@/components/editorial-strip";
@@ -37,6 +82,11 @@ export function Storefront() {
   const [sort, setSort] = useState("Featured");
   const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [cart, setCart] = useState<Record<string, { product: Product; qty: number }>>({});
+  const [products, setProducts] = useState<Product[]>(PRODUCTS_SEED);
+  const [productsError, setProductsError] = useState<string | null>(null);
+  const [productsBannerDismissed, setProductsBannerDismissed] = useState(false);
+  const [categories, setCategories] = useState<{ categoryId: string; name: string }[]>([]);
+  const [occasions, setOccasions] = useState<{ occasionId: string; occasionName: string }[]>([]);
 
   const { paymentMessage, paymentLoading, runTest } = useRazorpayTest();
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
@@ -46,14 +96,59 @@ export function Storefront() {
     ensureGuestSession();
   }, []);
 
-  const occasions = useMemo(() => {
-    const set = new Set(PRODUCTS_SEED.map((p) => p.occasion));
-    return ["All", ...Array.from(set)];
+  useEffect(() => {
+    // Use guest session so backend allows searchProduct without admin key
+    async function loadProducts() {
+      await ensureGuestSession();
+      let sessionId = getGuestSessionId();
+      let { products: list, error } = await fetchStorefrontProducts(sessionId);
+      // If backend says session invalid/expired (e.g. Redis was restarted), clear and retry with a new session
+      const sessionInvalid =
+        error &&
+        (error.includes("Session invalid") ||
+          error.includes("Session not found") ||
+          error.includes("expired"));
+      if (sessionInvalid && sessionId) {
+        clearGuestSession();
+        await ensureGuestSession();
+        sessionId = getGuestSessionId();
+        const retry = await fetchStorefrontProducts(sessionId);
+        list = retry.products;
+        error = retry.error;
+      }
+      if (list.length > 0) {
+        setProducts(list);
+        setProductsError(null);
+      } else {
+        setProductsError(error ?? "No products from backend");
+      }
+      const sid = getGuestSessionId();
+      const { categories: cats, occasions: occs } = await fetchStorefrontFilters(sid);
+      setCategories(cats);
+      setOccasions(occs);
+    }
+    loadProducts();
   }, []);
+
+  const occasionOptions = useMemo(() => {
+    if (occasions.length > 0) {
+      return ["All", ...occasions.map((o) => o.occasionName)];
+    }
+    const fromProducts = new Set(products.map((p) => p.occasion).filter(Boolean));
+    return ["All", ...Array.from(fromProducts)];
+  }, [occasions, products]);
+
+  const collectionOptions = useMemo(() => {
+    if (categories.length > 0) {
+      return ["All", ...categories.map((c) => c.name)];
+    }
+    const fromProducts = new Set(products.map((p) => p.collection).filter(Boolean));
+    return ["All", ...Array.from(fromProducts)];
+  }, [categories, products]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let xs = PRODUCTS_SEED.filter((p) => {
+    let xs = products.filter((p) => {
       const matchesQuery =
         !q ||
         [p.name, p.collection, p.fabric, p.occasion]
@@ -69,7 +164,7 @@ export function Storefront() {
     if (sort === "Price: High") xs = [...xs].sort((a, b) => b.price - a.price);
     if (sort === "Rating") xs = [...xs].sort((a, b) => b.rating - a.rating);
     return xs;
-  }, [query, collection, occasion, sort]);
+  }, [products, query, collection, occasion, sort]);
 
   const cartLines: CartLine[] = useMemo(() => Object.values(cart), [cart]);
   const cartCount = useMemo(
@@ -85,8 +180,8 @@ export function Storefront() {
     [wishlist]
   );
   const wishedProducts = useMemo(
-    () => PRODUCTS_SEED.filter((p) => wishlist[p.id]),
-    [wishlist]
+    () => products.filter((p) => wishlist[p.id]),
+    [products, wishlist]
   );
 
   const toggleWish = (p: Product) => {
@@ -127,7 +222,6 @@ export function Storefront() {
       id="top"
       className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]"
     >
-      <AnnouncementBar />
       <Header
         query={query}
         setQuery={setQuery}
@@ -141,6 +235,24 @@ export function Storefront() {
 
       <HeroSection />
 
+      {productsError && !productsBannerDismissed && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="mx-auto flex max-w-7xl items-start justify-between gap-3">
+            <p className="min-w-0">
+              <strong>Sample products only.</strong> Catalog could not be loaded ({productsError}). To show your DB products: in <code className="rounded bg-amber-100 px-1">.env.local</code> set <code className="rounded bg-amber-100 px-1">NEXT_PUBLIC_GRAPHQL_URL</code> (e.g. http://localhost:8080/v2) and <code className="rounded bg-amber-100 px-1">NEXT_PUBLIC_ADMIN_API_KEY</code> to match the backend <code className="rounded bg-amber-100 px-1">ADMIN_API_KEY</code>, then restart the dev server.
+            </p>
+            <button
+              type="button"
+              onClick={() => setProductsBannerDismissed(true)}
+              className="shrink-0 rounded p-1 hover:bg-amber-200/50"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       <EditorialStrip />
 
       <CollectionsSection
@@ -150,13 +262,15 @@ export function Storefront() {
 
       <ShopSection
         filtered={filtered}
+        totalCount={products.length}
         collection={collection}
         occasion={occasion}
         sort={sort}
         setCollection={setCollection}
         setOccasion={setOccasion}
         setSort={setSort}
-        occasions={occasions}
+        occasions={occasionOptions}
+        collections={collectionOptions}
         wishlist={wishlist}
         onToggleWish={toggleWish}
         onAddToCart={addToCart}

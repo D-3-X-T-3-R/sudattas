@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Search, Menu, Heart, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,10 +86,17 @@ export function Header({
         <button
           type="button"
           onClick={() => goTo("top", false)}
-          className="justify-self-center font-display text-xl font-medium tracking-[0.12em] text-[var(--color-ink)] md:text-2xl"
-          aria-label="Go to top"
+          className="justify-self-center flex items-center"
+          aria-label="Sudatta's - Go to top"
         >
-          Sudatta&apos;s
+          <Image
+            src="/Sudattas_logo_final_transparent.png"
+            alt="Sudatta's"
+            width={160}
+            height={48}
+            className="h-8 w-auto md:h-10"
+            priority
+          />
         </button>
 
         <div className="flex items-center justify-end gap-1">

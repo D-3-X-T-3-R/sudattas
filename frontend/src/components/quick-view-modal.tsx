@@ -58,7 +58,7 @@ export function QuickViewModal({
             </div>
             <div className="mt-4 flex items-center justify-between">
               <div className="text-lg font-semibold">
-                {INR.format(product.price)}
+                {product.priceFormatted ?? INR.format(product.price)}
               </div>
               <Rating value={product.rating} />
             </div>

@@ -9,6 +9,7 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 
 export interface ShopSectionProps {
   filtered: Product[];
+  totalCount: number;
   collection: string;
   occasion: string;
   sort: string;
@@ -16,6 +17,7 @@ export interface ShopSectionProps {
   setOccasion: (o: string) => void;
   setSort: (s: string) => void;
   occasions: string[];
+  collections: string[];
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
   onAddToCart: (p: Product) => void;
@@ -24,6 +26,7 @@ export interface ShopSectionProps {
 
 export function ShopSection({
   filtered,
+  totalCount,
   collection,
   occasion,
   sort,
@@ -31,11 +34,15 @@ export function ShopSection({
   setOccasion,
   setSort,
   occasions,
+  collections,
   wishlist,
   onToggleWish,
   onAddToCart,
   onQuickView,
 }: ShopSectionProps) {
+  const collectionList = collections.length > 0 ? collections : COLLECTIONS.map((c) => c.key);
+  const isFiltered = collection !== "All" || occasion !== "All";
+  const showAllHint = isFiltered && filtered.length < totalCount && totalCount > 0;
   return (
     <Section id="shop">
       <ScrollReveal>
@@ -50,6 +57,11 @@ export function ShopSection({
                 {filtered.length} item{filtered.length === 1 ? "" : "s"} •
                 Collection: {collection} • Occasion: {occasion}
               </p>
+              {showAllHint && (
+                <p className="mt-1 text-sm text-[var(--color-muted)]">
+                  Select <button type="button" onClick={() => { setCollection("All"); setOccasion("All"); }} className="underline underline-offset-2 hover:text-[var(--color-ink)]">All</button> to see all {totalCount} products.
+                </p>
+              )}
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -61,9 +73,9 @@ export function ShopSection({
                   className="rounded-full border border-[var(--color-line)] bg-white/70 px-4 py-2 text-sm outline-none focus:bg-white"
                 >
                   <option value="All">All</option>
-                  {COLLECTIONS.map((c) => (
-                    <option key={c.key} value={c.key}>
-                      {c.key}
+                  {collectionList.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
                     </option>
                   ))}
                 </select>
@@ -107,7 +119,7 @@ export function ShopSection({
       </ScrollReveal>
 
       {filtered.length > 0 && (
-        <div className="mt-14 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-14 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {filtered.map((p, i) => (
             <ScrollReveal key={p.id} delay={i * 0.05}>
               <ProductCard

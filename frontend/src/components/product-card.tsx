@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { INR } from "@/lib/constants";
 import type { Product } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
+
+const PLACEHOLDER_IMAGE =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='500' viewBox='0 0 400 500'%3E%3Crect fill='%23f0ede8' width='400' height='500'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle'%3ENo image%3C/text%3E%3C/svg%3E";
+
+/** True if URL is from a host not in Next.js remotePatterns (e.g. your R2/CDN). Use unoptimized so the image still loads. */
+function isExternalProductImage(src: string | undefined): boolean {
+  if (!src || src.startsWith("/") || src.startsWith("data:")) return false;
+  try {
+    const host = new URL(src).hostname;
+    return host !== "images.unsplash.com";
+  } catch {
+    return false;
+  }
+}
 
 export interface ProductCardProps {
   product: Product;
@@ -26,22 +38,8 @@ export function ProductCard({
   onQuickView,
   featured = false,
 }: ProductCardProps) {
-  const [hover, setHover] = useState(false);
-  const reduceMotion = useReducedMotion();
-  const img =
-    hover && product.hoverImage ? product.hoverImage : product.image;
-
-  const cardHoverY = reduceMotion ? undefined : 3;
-  const duration = 0.4;
-
   return (
-    <motion.div
-      whileHover={cardHoverY !== undefined ? { y: -cardHoverY } : undefined}
-      transition={{ duration, ease: "easeOut" }}
-      className={cn("group", featured && "flex h-full flex-col")}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
+    <div className={cn("group", featured && "flex h-full flex-col")}>
       <div
         className={cn(
           "relative overflow-hidden rounded-sm bg-white shadow-[0_1px_3px_rgba(26,24,20,0.06)] transition-shadow duration-300 group-hover:shadow-[0_6px_20px_rgba(26,24,20,0.08)]",
@@ -58,11 +56,12 @@ export function ProductCard({
           aria-label={`Quick view ${product.name}`}
         >
           <Image
-            src={img}
+            src={product.image || PLACEHOLDER_IMAGE}
             alt={product.imageAlt || product.name}
             fill
-            className="object-cover transition duration-500 ease-out group-hover:scale-[1.02]"
+            className="object-cover"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            unoptimized={isExternalProductImage(product.image)}
           />
         </button>
 
@@ -123,9 +122,9 @@ export function ProductCard({
           {product.name}
         </div>
         <div className="mt-2 font-semibold text-[var(--color-ink)]">
-          {INR.format(product.price)}
+          {product.priceFormatted ?? INR.format(product.price)}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

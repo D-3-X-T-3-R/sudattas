@@ -26,12 +26,23 @@ export const HERO_SLIDES = [
   },
 ];
 
+/** Hero composition: M1 (left), Center (dominant), M2 (right1), M3 (right2). Add your 4 photos to public/hero/ – see public/hero/README.md. */
+export const HERO_IMAGES = [
+  { src: "/hero/left.png", alt: "Red saree" },       // M1: red saree (glasses)
+  { src: "/hero/center.png", alt: "Cream saree" },   // HERO: cream saree
+  { src: "/hero/right1.png", alt: "Floral saree" },  // M2: floral saree
+  { src: "/hero/right2.png", alt: "Black floral saree" }, // M3: black floral
+];
+
 export const COLLECTION_IMAGES = [
   heroOne,
   heroTwo,
   categoryHero,
   heroOne,
 ];
+
+/** Seed products use no external image URLs; product card shows placeholder until DB products load. */
+const SEED_IMAGE = "";
 
 export const PRODUCTS_SEED: Product[] = [
   {
@@ -45,8 +56,8 @@ export const PRODUCTS_SEED: Product[] = [
     occasion: "Festive",
     description:
       "Clean ivory body with a statement border. Designed to look expensive without being loud.",
-    image: categoryHero,
-    hoverImage: categoryHero,
+    image: SEED_IMAGE,
+    hoverImage: SEED_IMAGE,
     imageAlt: "Saree product image",
   },
   {
@@ -60,8 +71,8 @@ export const PRODUCTS_SEED: Product[] = [
     occasion: "Cocktail",
     description:
       "A modern floral story—editorial colors, fluid drape, and crisp finishing.",
-    image: categoryHero,
-    hoverImage: heroTwo,
+    image: SEED_IMAGE,
+    hoverImage: SEED_IMAGE,
     imageAlt: "Saree product image",
   },
   {
@@ -75,8 +86,8 @@ export const PRODUCTS_SEED: Product[] = [
     occasion: "Office",
     description:
       "Minimal motifs with a sharp edge. Built for repeat-wear and clean styling.",
-    image: heroOne,
-    hoverImage: categoryHero,
+    image: SEED_IMAGE,
+    hoverImage: SEED_IMAGE,
     imageAlt: "Saree product image",
   },
   {
@@ -90,8 +101,8 @@ export const PRODUCTS_SEED: Product[] = [
     occasion: "Wedding",
     description:
       "Dense craft, refined finish. Premium without the chaos.",
-    image: heroTwo,
-    hoverImage: heroOne,
+    image: SEED_IMAGE,
+    hoverImage: SEED_IMAGE,
     imageAlt: "Saree product image",
   },
 ];
