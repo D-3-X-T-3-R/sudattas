@@ -70,6 +70,16 @@ function paiseToRupeesInput(paise?: string): string {
   return (n / 100).toFixed(2);
 }
 
+/** Convert rupees string (e.g. "799.99") to paise without float rounding. */
+function rupeesToPaise(rupeesStr: string): number {
+  const s = (rupeesStr || "0").trim();
+  const parts = s.split(".");
+  const major = parseInt(parts[0] || "0", 10) || 0;
+  const minorStr = (parts[1] || "00").slice(0, 2).padEnd(2, "0");
+  const minor = parseInt(minorStr, 10) || 0;
+  return major * 100 + minor;
+}
+
 function getProductStatusLabel(statusId?: string | null): string {
   if (!statusId) return "—";
   if (statusId === "1") return "Draft";
@@ -473,8 +483,8 @@ export default function AdminProductsPage() {
     }
     const { name, description, priceRupees, categoryId, sku, slug, fabric, weave, occasion, hasBlousePiece, careInstructions, productStatusId } =
       parsed.data;
-    const pricePaise = Math.round(parseFloat(priceRupees || "0") * 100);
-    if (isNaN(pricePaise) || pricePaise < 0) {
+    const pricePaise = rupeesToPaise(priceRupees || "0");
+    if (pricePaise < 0) {
       setError("Enter a valid price (e.g. 499.00).");
       return;
     }

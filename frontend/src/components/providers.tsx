@@ -2,9 +2,14 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ensureGuestSession } from "@/lib/session";
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    ensureGuestSession();
+  }, []);
+
   const [queryClient] = useState(
     () =>
       new QueryClient({

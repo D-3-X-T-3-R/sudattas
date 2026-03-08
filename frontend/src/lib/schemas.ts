@@ -5,6 +5,8 @@ export const productSchema = z.object({
   name: z.string(),
   collection: z.string(),
   price: z.number(),
+  /** Backend display string (e.g. "₹799.99"); use for display when set to avoid rounding. */
+  priceFormatted: z.string().optional(),
   rating: z.number(),
   reviews: z.number().optional(),
   fabric: z.string(),

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Kicker } from "@/components/ui/typography";
 
 interface FooterProps {
@@ -13,7 +14,13 @@ export function Footer({ goTo }: FooterProps) {
         <div>
           <div className="flex items-center gap-2">
             <span className="h-px w-6 bg-[var(--color-accent-gold)]" />
-            <Kicker className="text-[var(--color-ink)]">Sudatta&apos;s</Kicker>
+            <Image
+              src="/Sudattas_logo_final_transparent.png"
+              alt="Sudatta's"
+              width={140}
+              height={42}
+              className="h-7 w-auto"
+            />
           </div>
           <div className="mt-1 text-[10px] tracking-[0.22em] text-[var(--color-muted)]">
             DESIGNER BOUTIQUE

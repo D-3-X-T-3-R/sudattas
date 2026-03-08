@@ -1,8 +1,17 @@
 /**
- * Admin dashboard GraphQL queries. Use with gqlAdmin (sends Bearer token).
+ * Admin dashboard GraphQL queries. Use gqlAdmin (Bearer / admin key) only.
+ * For storefront (guest session) use @/lib/storefront-queries.
  */
 
-import { gqlAdmin } from "./graphqlAdmin";
+import { gqlAdmin } from "./graphql-client";
+import type {
+  CategoryRow,
+  OccasionRow,
+  ProductListRow,
+  ProductImageListItem,
+} from "./graphql-types";
+
+export type { CategoryRow, OccasionRow, ProductListRow, ProductImageListItem };
 
 export interface OrderRow {
   orderId: string;
@@ -22,42 +31,18 @@ export interface ProductRow {
   name: string;
 }
 
-export interface ProductImageListItem {
-  thumbnailUrl?: string | null;
-  url?: string | null;
-}
-
-/** Category for admin dropdowns */
-export interface CategoryRow {
-  categoryId: string;
-  name: string;
-}
-
-/** Product row for admin list (includes categoryId for filter and display) */
-export interface ProductListRow {
-  productId: string;
-  name: string;
-  description?: string | null;
-  amountPaise?: string;
-  formatted: string;
-  stockQuantity?: string | null;
-  categoryId?: string | null;
-  sku?: string | null;
-  slug?: string | null;
-  fabric?: string | null;
-  weave?: string | null;
-  occasion?: string | null;
-  hasBlousePiece?: boolean | null;
-  careInstructions?: string | null;
-  productStatusId?: string | null;
-  images?: ProductImageListItem[] | null;
-}
+const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { categoryId name } }`;
+const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
+  searchProduct(search: $search) {
+    productId name description amountPaise formatted stockQuantity categoryId
+    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
+    images { thumbnailUrl url }
+  }
+}`;
 
 /** Fetch all categories for admin dropdowns. */
 export async function fetchCategories(): Promise<CategoryRow[]> {
-  const data = await gqlAdmin<{ searchCategory?: CategoryRow[] }>(
-    `query Categories { searchCategory(search: {}) { categoryId name } }`
-  );
+  const data = await gqlAdmin<{ searchCategory?: CategoryRow[] }>(CATEGORIES_QUERY);
   return data?.searchCategory ?? [];
 }
 
@@ -84,32 +69,8 @@ export async function fetchProductsList(params: {
   if (params.startingPricePaise) search.startingPricePaise = params.startingPricePaise;
   if (params.endingPricePaise) search.endingPricePaise = params.endingPricePaise;
 
-  const data = await gqlAdmin<{ searchProduct?: ProductListRow[] }>(
-    `query SearchProductsList($search: SearchProduct!) {
-      searchProduct(search: $search) {
-        productId
-        name
-        description
-        amountPaise
-        formatted
-        stockQuantity
-        categoryId
-        sku
-        slug
-        fabric
-        weave
-        occasion
-        hasBlousePiece
-        careInstructions
-        productStatusId
-        images {
-          thumbnailUrl
-          url
-        }
-      }
-    }`,
-    { search: Object.keys(search).length ? search : { limit: "50" } }
-  );
+  const variables = { search: Object.keys(search).length ? search : { limit: "50" } };
+  const data = await gqlAdmin<{ searchProduct?: ProductListRow[] }>(PRODUCTS_QUERY, variables);
   return data?.searchProduct ?? [];
 }
 
@@ -175,16 +136,10 @@ export async function fetchWeaves(): Promise<WeaveRow[]> {
   return data?.searchWeave ?? [];
 }
 
-/** Occasion options for products (id "0" returns all) */
-export interface OccasionRow {
-  occasionId: string;
-  occasionName: string;
-}
+const OCCASIONS_MUTATION = `mutation Occasions { searchOccasion(input: { occasionId: "0" }) { occasionId occasionName } }`;
 
 export async function fetchOccasions(): Promise<OccasionRow[]> {
-  const data = await gqlAdmin<{ searchOccasion?: OccasionRow[] }>(
-    `mutation Occasions { searchOccasion(input: { occasionId: "0" }) { occasionId occasionName } }`
-  );
+  const data = await gqlAdmin<{ searchOccasion?: OccasionRow[] }>(OCCASIONS_MUTATION);
   return data?.searchOccasion ?? [];
 }
 
