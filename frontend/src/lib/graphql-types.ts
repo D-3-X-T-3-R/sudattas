@@ -17,6 +17,12 @@ export interface OccasionRow {
   occasionName: string;
 }
 
+export interface ProductVariantStockRow {
+  sizeId: string;
+  sizeName: string;
+  quantity: number;
+}
+
 /** Product list row (searchProduct); used by admin list and storefront products API mapping. */
 export interface ProductListRow {
   productId: string;
@@ -35,4 +41,9 @@ export interface ProductListRow {
   careInstructions?: string | null;
   productStatusId?: string | null;
   images?: ProductImageListItem[] | null;
+}
+
+/** Product list row plus variant stock (for single-product fetch). */
+export interface ProductListRowWithVariantStock extends ProductListRow {
+  variantStock?: ProductVariantStockRow[] | null;
 }

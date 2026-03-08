@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { ensureGuestSession, getGuestSessionId, clearGuestSession } from "@/lib/session";
 import { PRODUCTS_SEED } from "@/lib/seed-data";
 import type { Product, CartLine } from "@/lib/schemas";
+import { useStorefront } from "@/context/storefront-context";
 
 type ProductsResponse = { products: Product[]; error: string | null };
 
@@ -67,21 +69,32 @@ import { Footer } from "@/components/footer";
 import { MenuDrawer } from "@/components/menu-drawer";
 import { CartDrawer } from "@/components/cart-drawer";
 import { WishlistDrawer } from "@/components/wishlist-drawer";
-import { QuickViewModal } from "@/components/quick-view-modal";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
 
 export function Storefront() {
+  const router = useRouter();
   const reduceMotion = useReducedMotion();
+  const {
+    wishlist,
+    toggleWish,
+    cart,
+    addToCart,
+    decCart,
+    incCart,
+    cartOpen,
+    setCartOpen,
+    wishOpen,
+    setWishOpen,
+    cartLines,
+    cartCount,
+    cartSubtotal,
+    wishCount,
+  } = useStorefront();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [wishOpen, setWishOpen] = useState(false);
-  const [quickView, setQuickView] = useState<Product | null>(null);
   const [query, setQuery] = useState("");
   const [collection, setCollection] = useState("All");
   const [occasion, setOccasion] = useState("All");
   const [sort, setSort] = useState("Featured");
-  const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
-  const [cart, setCart] = useState<Record<string, { product: Product; qty: number }>>({});
   const [products, setProducts] = useState<Product[]>(PRODUCTS_SEED);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [productsBannerDismissed, setProductsBannerDismissed] = useState(false);
@@ -90,7 +103,7 @@ export function Storefront() {
 
   const { paymentMessage, paymentLoading, runTest } = useRazorpayTest();
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
-  useLockBodyScroll(menuOpen || cartOpen || wishOpen || !!quickView);
+  useLockBodyScroll(menuOpen || cartOpen || wishOpen);
 
   useEffect(() => {
     ensureGuestSession();
@@ -166,54 +179,12 @@ export function Storefront() {
     return xs;
   }, [products, query, collection, occasion, sort]);
 
-  const cartLines: CartLine[] = useMemo(() => Object.values(cart), [cart]);
-  const cartCount = useMemo(
-    () => cartLines.reduce((s, l) => s + l.qty, 0),
-    [cartLines]
-  );
-  const cartSubtotal = useMemo(
-    () => cartLines.reduce((s, l) => s + l.qty * l.product.price, 0),
-    [cartLines]
-  );
-  const wishCount = useMemo(
-    () => Object.values(wishlist).filter(Boolean).length,
-    [wishlist]
-  );
   const wishedProducts = useMemo(
     () => products.filter((p) => wishlist[p.id]),
     [products, wishlist]
   );
 
-  const toggleWish = (p: Product) => {
-    setWishlist((prev) => ({ ...prev, [p.id]: !prev[p.id] }));
-  };
-  const addToCart = (p: Product) => {
-    setCart((prev) => {
-      const existing = prev[p.id];
-      const nextQty = existing ? existing.qty + 1 : 1;
-      return { ...prev, [p.id]: { product: p, qty: nextQty } };
-    });
-    setCartOpen(true);
-  };
-  const decCart = (id: string) => {
-    setCart((prev) => {
-      const line = prev[id];
-      if (!line) return prev;
-      if (line.qty <= 1) {
-        const { [id]: _, ...rest } = prev;
-        return rest;
-      }
-      return { ...prev, [id]: { ...line, qty: line.qty - 1 } };
-    });
-  };
-  const incCart = (id: string) => {
-    setCart((prev) => {
-      const line = prev[id];
-      if (!line) return prev;
-      return { ...prev, [id]: { ...line, qty: line.qty + 1 } };
-    });
-  };
-
+  const goToProduct = (p: Product) => router.push(`/product/${p.id}`);
   const goToWithMotion = (id: string, instant?: boolean) =>
     goTo(id, instant ?? !!reduceMotion);
 
@@ -274,7 +245,7 @@ export function Storefront() {
         wishlist={wishlist}
         onToggleWish={toggleWish}
         onAddToCart={addToCart}
-        onQuickView={setQuickView}
+        onQuickView={goToProduct}
       />
 
       <EditorialBlock />
@@ -295,7 +266,7 @@ export function Storefront() {
         onClose={() => setWishOpen(false)}
         wishCount={wishCount}
         wishedProducts={wishedProducts}
-        onQuickView={setQuickView}
+        onQuickView={goToProduct}
         onAddToCart={addToCart}
         onToggleWish={toggleWish}
       />
@@ -311,15 +282,6 @@ export function Storefront() {
         paymentMessage={paymentMessage}
         onTestRazorpay={runTest}
         onCheckout={() => alert("Checkout flow not wired yet")}
-      />
-
-      <QuickViewModal
-        product={quickView}
-        open={!!quickView}
-        onClose={() => setQuickView(null)}
-        wished={!!(quickView && wishlist[quickView.id])}
-        onToggleWish={toggleWish}
-        onAddToCart={addToCart}
       />
 
       <MobileBottomBar

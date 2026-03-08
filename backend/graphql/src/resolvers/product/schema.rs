@@ -5,6 +5,14 @@ use crate::resolvers::{
     product_images::schema::{ProductImage, SearchProductImage},
 };
 
+/// Per-size stock for storefront size selector. Empty or only variants with no size = "free size".
+#[derive(Default, Debug, Clone)]
+pub struct ProductVariantStock {
+    pub size_id: String,
+    pub size_name: String,
+    pub quantity: i32,
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct Product {
     pub product_id: String,
@@ -108,6 +116,27 @@ impl Product {
         })
         .await
         .map_err(|e| e.into())
+    }
+
+    /// Sizes with quantity for this product. Empty = free size (hide size selector).
+    async fn variant_stock(&self) -> FieldResult<Vec<ProductVariantStock>> {
+        crate::resolvers::product::handlers::get_variant_stock_for_product(&self.product_id)
+            .await
+            .map_err(|e| e.into())
+    }
+}
+
+#[graphql_object]
+#[graphql(description = "Size and quantity for storefront")]
+impl ProductVariantStock {
+    fn size_id(&self) -> &str {
+        &self.size_id
+    }
+    fn size_name(&self) -> &str {
+        &self.size_name
+    }
+    fn quantity(&self) -> i32 {
+        self.quantity
     }
 }
 

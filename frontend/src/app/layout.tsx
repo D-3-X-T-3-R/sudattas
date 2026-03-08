@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Cormorant_Garamond, Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { StorefrontProvider } from "@/context/storefront-context";
 
 const display = Cormorant_Garamond({
   variable: "--font-display",
@@ -35,7 +36,9 @@ export default function RootLayout({
       <body
         className={`${display.variable} ${playfair.variable} ${sans.variable} font-sans antialiased bg-[var(--background)] text-[var(--foreground)]`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+        <StorefrontProvider>{children}</StorefrontProvider>
+      </Providers>
       </body>
     </html>
   );

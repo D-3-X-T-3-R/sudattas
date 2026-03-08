@@ -14,7 +14,19 @@ export const productSchema = z.object({
   description: z.string(),
   image: z.string(),
   hoverImage: z.string().optional(),
+  /** All image URLs for gallery; when set, use instead of just image + hoverImage. */
+  images: z.array(z.string()).optional(),
   imageAlt: z.string().optional(),
+  /** Per-size stock from DB. Empty or absent = free size (no size selector). */
+  variantStock: z
+    .array(
+      z.object({
+        sizeId: z.string(),
+        sizeName: z.string(),
+        quantity: z.number(),
+      })
+    )
+    .optional(),
 });
 
 export const collectionSchema = z.object({

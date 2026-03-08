@@ -41,8 +41,6 @@ export function ShopSection({
   onQuickView,
 }: ShopSectionProps) {
   const collectionList = collections.length > 0 ? collections : COLLECTIONS.map((c) => c.key);
-  const isFiltered = collection !== "All" || occasion !== "All";
-  const showAllHint = isFiltered && filtered.length < totalCount && totalCount > 0;
   return (
     <Section id="shop">
       <ScrollReveal>
@@ -53,15 +51,6 @@ export function ShopSection({
               <SectionHeading size="lg" className="mt-3">
                 New arrivals
               </SectionHeading>
-              <p className="mt-2 text-sm text-[var(--color-muted)]">
-                {filtered.length} item{filtered.length === 1 ? "" : "s"} •
-                Collection: {collection} • Occasion: {occasion}
-              </p>
-              {showAllHint && (
-                <p className="mt-1 text-sm text-[var(--color-muted)]">
-                  Select <button type="button" onClick={() => { setCollection("All"); setOccasion("All"); }} className="underline underline-offset-2 hover:text-[var(--color-ink)]">All</button> to see all {totalCount} products.
-                </p>
-              )}
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
