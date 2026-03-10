@@ -75,7 +75,7 @@ export function Header({
                 key={id}
                 type="button"
                 onClick={() => goTo(id, false)}
-                className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent-brown)]"
+                className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent-gold)]"
               >
                 {label}
               </button>
@@ -86,15 +86,15 @@ export function Header({
         <button
           type="button"
           onClick={() => goTo("top", false)}
-          className="justify-self-center flex items-center"
+          className="flex items-center justify-self-center"
           aria-label="Sudatta's - Go to top"
         >
           <Image
-            src="/Sudattas_logo_final_transparent.png"
+            src="/logo_title.png"
             alt="Sudatta's"
             width={160}
             height={48}
-            className="h-8 w-auto md:h-10"
+            className="h-11 w-auto md:h-14"
             priority
           />
         </button>
@@ -131,11 +131,11 @@ export function Header({
             size="icon"
             onClick={() => setWishOpen(true)}
             aria-label="Wishlist"
-            className="relative"
+            className={cn("relative", wishCount > 0 && "text-[var(--color-accent-gold)]")}
           >
             <Heart className="h-5 w-5" />
             {wishCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-ink)] text-[10px] font-semibold text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
                 {wishCount}
               </span>
             )}
@@ -145,11 +145,11 @@ export function Header({
             size="icon"
             onClick={() => setCartOpen(true)}
             aria-label="Bag"
-            className="relative"
+            className={cn("relative", cartCount > 0 && "text-[var(--color-accent-gold)]")}
           >
             <ShoppingBag className="h-5 w-5" />
             {cartCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-ink)] text-[10px] font-semibold text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
                 {cartCount}
               </span>
             )}

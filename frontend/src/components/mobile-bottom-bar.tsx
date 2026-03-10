@@ -3,6 +3,7 @@
 import { Heart, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { goTo } from "@/hooks/use-scroll-to";
+import { cn } from "@/lib/utils";
 
 export interface MobileBottomBarProps {
   activeSection: string;
@@ -40,11 +41,14 @@ export function MobileBottomBar({
               size="icon"
               onClick={onWishOpen}
               aria-label="Wishlist"
-              className="relative border-[var(--color-line)] bg-white"
+              className={cn(
+                "relative border-[var(--color-line)] bg-white",
+                wishCount > 0 && "text-[var(--color-accent-gold)] border-[var(--color-accent-gold)]"
+              )}
             >
               <Heart className="h-5 w-5" />
               {wishCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-ink)] text-[10px] font-semibold text-white">
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
                   {wishCount}
                 </span>
               )}
@@ -54,11 +58,14 @@ export function MobileBottomBar({
               size="icon"
               onClick={onCartOpen}
               aria-label="Bag"
-              className="relative border-[var(--color-line)] bg-white"
+              className={cn(
+                "relative border-[var(--color-line)] bg-white",
+                cartCount > 0 && "text-[var(--color-accent-gold)] border-[var(--color-accent-gold)]"
+              )}
             >
               <ShoppingBag className="h-5 w-5" />
               {cartCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-ink)] text-[10px] font-semibold text-white">
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
                   {cartCount}
                 </span>
               )}

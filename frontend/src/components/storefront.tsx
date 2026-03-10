@@ -70,10 +70,13 @@ import { MenuDrawer } from "@/components/menu-drawer";
 import { CartDrawer } from "@/components/cart-drawer";
 import { WishlistDrawer } from "@/components/wishlist-drawer";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
+import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/loading";
 
 export function Storefront() {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
+  const { showToast } = useToast();
   const {
     wishlist,
     toggleWish,
@@ -100,6 +103,7 @@ export function Storefront() {
   const [productsBannerDismissed, setProductsBannerDismissed] = useState(false);
   const [categories, setCategories] = useState<{ categoryId: string; name: string }[]>([]);
   const [occasions, setOccasions] = useState<{ occasionId: string; occasionName: string }[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
 
   const { paymentMessage, paymentLoading, runTest } = useRazorpayTest();
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
@@ -112,6 +116,7 @@ export function Storefront() {
   useEffect(() => {
     // Use guest session so backend allows searchProduct without admin key
     async function loadProducts() {
+      setLoadingProducts(true);
       await ensureGuestSession();
       let sessionId = getGuestSessionId();
       let { products: list, error } = await fetchStorefrontProducts(sessionId);
@@ -134,11 +139,19 @@ export function Storefront() {
         setProductsError(null);
       } else {
         setProductsError(error ?? "No products from backend");
+        if (error) {
+          showToast({
+            title: "Catalog",
+            description:
+              "Having trouble connecting. Your bag is saved on this device.",
+          });
+        }
       }
       const sid = getGuestSessionId();
       const { categories: cats, occasions: occs } = await fetchStorefrontFilters(sid);
       setCategories(cats);
       setOccasions(occs);
+      setLoadingProducts(false);
     }
     loadProducts();
   }, []);
@@ -231,22 +244,28 @@ export function Storefront() {
         reduceMotion={!!reduceMotion}
       />
 
-      <ShopSection
-        filtered={filtered}
-        totalCount={products.length}
-        collection={collection}
-        occasion={occasion}
-        sort={sort}
-        setCollection={setCollection}
-        setOccasion={setOccasion}
-        setSort={setSort}
-        occasions={occasionOptions}
-        collections={collectionOptions}
-        wishlist={wishlist}
-        onToggleWish={toggleWish}
-        onAddToCart={addToCart}
-        onQuickView={goToProduct}
-      />
+      {loadingProducts ? (
+        <div className="flex justify-center py-16">
+          <Spinner />
+        </div>
+      ) : (
+        <ShopSection
+          filtered={filtered}
+          totalCount={products.length}
+          collection={collection}
+          occasion={occasion}
+          sort={sort}
+          setCollection={setCollection}
+          setOccasion={setOccasion}
+          setSort={setSort}
+          occasions={occasionOptions}
+          collections={collectionOptions}
+          wishlist={wishlist}
+          onToggleWish={toggleWish}
+          onAddToCart={addToCart}
+          onQuickView={goToProduct}
+        />
+      )}
 
       <EditorialBlock />
 

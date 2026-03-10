@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { AdminAuthSync } from "@/components/admin-auth-sync";
+import { AppErrorBoundary } from "@/components/app-error-boundary";
 
 const LOGIN_PATH = "/imtheboss/login";
 
@@ -40,7 +41,9 @@ export default function ImTheBossLayout({
   return (
     <>
       <AdminAuthSync />
-      <AdminShell>{children}</AdminShell>
+      <AppErrorBoundary>
+        <AdminShell>{children}</AdminShell>
+      </AppErrorBoundary>
     </>
   );
 }

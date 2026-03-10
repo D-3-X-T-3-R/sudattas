@@ -10,8 +10,8 @@ export interface CartDrawerProps {
   onClose: () => void;
   cartLines: CartLine[];
   cartSubtotal: number;
-  onDecCart: (productId: string) => void;
-  onIncCart: (productId: string) => void;
+  onDecCart: (lineId: string) => void;
+  onIncCart: (lineId: string) => void;
   paymentLoading: boolean;
   paymentMessage: string | null;
   onTestRazorpay: () => void;
@@ -44,14 +44,22 @@ export function CartDrawer({
       side="right"
     >
       {cartLines.length === 0 ? (
-        <div className="rounded-2xl bg-white p-6 text-sm text-[var(--color-muted)]">
-          Your bag is empty.
+        <div className="rounded-2xl bg-white p-6 text-sm text-[var(--color-muted)] space-y-4">
+          <p>Your bag is empty.</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full rounded-full border-[var(--color-line)]"
+            onClick={onClose}
+          >
+            Continue shopping
+          </Button>
         </div>
       ) : (
         <div className="space-y-5">
-          {cartLines.map(({ product, qty }) => (
+          {cartLines.map(({ id, product, qty, sizeName }) => (
             <div
-              key={product.id}
+              key={id}
               className="border-b border-[var(--color-line)] pb-5"
             >
               <div className="text-[11px] tracking-[0.18em] text-[var(--color-muted)]">
@@ -62,32 +70,33 @@ export function CartDrawer({
               </div>
               <div className="mt-1 text-xs text-[var(--color-muted)]">
                 {product.fabric} • {product.occasion}
+                {sizeName ? ` • Size ${sizeName}` : null}
               </div>
               <div className="mt-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => onDecCart(product.id)}
+                    onClick={() => onDecCart(id)}
                     aria-label="Decrease"
                     className="border-[var(--color-line)] bg-white hover:bg-white/80"
                   >
                     −
                   </Button>
-                  <div className="min-w-10 text-center text-sm font-semibold">
+                  <div className="min-w-10 text-center font-sans text-sm font-semibold">
                     {qty}
                   </div>
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => onIncCart(product.id)}
+                    onClick={() => onIncCart(id)}
                     aria-label="Increase"
                     className="border-[var(--color-line)] bg-white hover:bg-white/80"
                   >
                     +
                   </Button>
                 </div>
-                <div className="text-sm font-semibold">
+                <div className="font-sans text-sm font-semibold">
                   {INR.format(qty * product.price)}
                 </div>
               </div>
@@ -97,7 +106,7 @@ export function CartDrawer({
           <div className="rounded-2xl bg-white p-5">
             <div className="flex items-center justify-between text-sm">
               <span className="text-[var(--color-muted)]">Subtotal</span>
-              <span className="font-semibold">{INR.format(cartSubtotal)}</span>
+              <span className="font-sans font-semibold">{INR.format(cartSubtotal)}</span>
             </div>
             <div className="mt-2 text-xs text-[var(--color-muted)]">
               Shipping and taxes calculated at checkout.
@@ -106,7 +115,7 @@ export function CartDrawer({
               authCheckoutButton
             ) : (
               <Button
-                className="mt-4 w-full rounded-full bg-[var(--color-ink)] hover:bg-[var(--color-ink)]/90"
+                className="mt-4 w-full rounded-full bg-[var(--color-accent-gold)] hover:bg-[var(--color-accent-gold)]/90 text-[var(--color-ink)]"
                 onClick={onCheckout}
               >
                 Checkout

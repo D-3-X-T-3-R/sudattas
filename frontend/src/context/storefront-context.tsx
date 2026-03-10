@@ -5,20 +5,25 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { Product, CartLine } from "@/lib/schemas";
+import { useToast } from "@/components/ui/toast";
 
-type CartState = Record<string, { product: Product; qty: number }>;
+type CartState = Record<
+  string,
+  { id: string; product: Product; qty: number; sizeName?: string | null }
+>;
 
 type StorefrontContextValue = {
   wishlist: Record<string, boolean>;
   toggleWish: (p: Product) => void;
   cart: CartState;
-  addToCart: (p: Product, qty?: number) => void;
-  decCart: (productId: string) => void;
-  incCart: (productId: string) => void;
+  addToCart: (p: Product, qty?: number, sizeName?: string | null) => void;
+  decCart: (lineId: string) => void;
+  incCart: (lineId: string) => void;
   cartOpen: boolean;
   setCartOpen: (open: boolean) => void;
   wishOpen: boolean;
@@ -36,19 +41,55 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartState>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [wishOpen, setWishOpen] = useState(false);
+  const { showToast } = useToast();
+  const lastToastRef = useRef<{ key: string; at: number } | null>(null);
 
-  const toggleWish = useCallback((p: Product) => {
-    setWishlist((prev) => ({ ...prev, [p.id]: !prev[p.id] }));
-  }, []);
+  const toggleWish = useCallback(
+    (p: Product) => {
+      setWishlist((prev) => {
+        const next = !prev[p.id];
+        const now = Date.now();
+        const toastKey = `wish-${p.id}-${next ? "on" : "off"}`;
+        const last = lastToastRef.current;
+        if (!last || last.key !== toastKey || now - last.at > 200) {
+          showToast({
+            group: "wishlist",
+            title: "Wishlist",
+            description: next ? "Added to wishlist." : "Removed from wishlist.",
+          });
+          lastToastRef.current = { key: toastKey, at: now };
+        }
+        return { ...prev, [p.id]: next };
+      });
+    },
+    [showToast]
+  );
 
-  const addToCart = useCallback((p: Product, qty = 1) => {
-    setCart((prev) => {
-      const existing = prev[p.id];
-      const nextQty = existing ? existing.qty + qty : qty;
-      return { ...prev, [p.id]: { product: p, qty: nextQty } };
-    });
-    setCartOpen(true);
-  }, []);
+  const addToCart = useCallback(
+    (p: Product, qty = 1, sizeName?: string | null) => {
+      const key = `${p.id}__${sizeName ?? "nosize"}`;
+      setCart((prev) => {
+        const existing = prev[key];
+        const nextQty = existing ? existing.qty + qty : qty;
+        return {
+          ...prev,
+          [key]: { id: key, product: p, qty: nextQty, sizeName: sizeName ?? null },
+        };
+      });
+      const now = Date.now();
+      const toastKey = `cart-${key}`;
+      const last = lastToastRef.current;
+      if (!last || last.key !== toastKey || now - last.at > 200) {
+        showToast({
+          group: "cart",
+          title: "Bag",
+          description: "Added to bag.",
+        });
+        lastToastRef.current = { key: toastKey, at: now };
+      }
+    },
+    [showToast]
+  );
 
   const decCart = useCallback((id: string) => {
     setCart((prev) => {
@@ -70,7 +111,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const cartLines = useMemo(() => Object.values(cart), [cart]);
+  const cartLines = useMemo<CartLine[]>(() => Object.values(cart), [cart]);
   const cartCount = useMemo(
     () => cartLines.reduce((s, l) => s + l.qty, 0),
     [cartLines]

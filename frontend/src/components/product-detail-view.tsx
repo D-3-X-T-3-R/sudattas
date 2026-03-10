@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
-import { ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { INR } from "@/lib/constants";
 import type { Product } from "@/lib/schemas";
@@ -50,36 +49,13 @@ function isExternalImage(src: string | undefined): boolean {
   }
 }
 
-function Accordion({
-  title,
-  children,
-  defaultOpen = false,
-}: {
-  title: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-}) {
-  return (
-    <details
-      className="group border-b border-[var(--color-line)]"
-      open={defaultOpen}
-    >
-      <summary className="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-semibold text-[var(--color-ink)]">
-        {title}
-        <ChevronUp className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
-      </summary>
-      <div className="pb-4 text-sm text-[var(--color-muted)]">{children}</div>
-    </details>
-  );
-}
-
 export interface ProductDetailViewProps {
   product: Product;
   /** All sizes from DB (display order). When provided, used for the size list; missing or 0-qty shown struck through. */
   sizes?: { sizeId: string; sizeName: string }[];
   wished: boolean;
   onToggleWish: (p: Product) => void;
-  onAddToCart: (p: Product, qty?: number) => void;
+  onAddToCart: (p: Product, qty?: number, sizeName?: string | null) => void;
 }
 
 export function ProductDetailView({
@@ -100,7 +76,6 @@ export function ProductDetailView({
     sizeNames.find((name) => getStockForSize(variantStock, name) > 0) ?? sizeNames[0] ?? null;
   const [selectedSize, setSelectedSize] = useState<string | null>(defaultSize);
   const [quantity, setQuantity] = useState(1);
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   const maxQuantity =
     selectedSize != null
@@ -129,8 +104,6 @@ export function ProductDetailView({
   }, [product]);
 
   const mainImage = images[selectedImageIndex] || product.image;
-  const descShort = product.description.slice(0, 160);
-  const hasMoreDesc = product.description.length > 160;
 
   return (
     <div className="grid min-w-0 gap-8 md:grid-cols-2 md:items-start">
@@ -174,30 +147,17 @@ export function ProductDetailView({
 
       {/* Right: details + actions + accordions */}
       <div className="min-w-0 flex flex-col overflow-visible p-4 md:p-6 md:pl-6 md:pr-8">
-        <div className="text-[11px] font-semibold tracking-[0.24em] text-[var(--color-muted)]">
-          {product.collection.toUpperCase()}
-        </div>
-        <div className="mt-2 text-2xl font-semibold text-[var(--color-ink)]">
-          {product.priceFormatted ?? INR.format(product.price)} INR
-        </div>
-        <h1 className="mt-3 font-display text-xl font-semibold tracking-tight text-[var(--color-ink)] md:text-2xl">
+        <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--color-ink)] md:text-2xl">
           {product.name}
         </h1>
 
         <p className="mt-4 text-sm leading-relaxed text-[var(--color-muted)]">
-          {descriptionExpanded || !hasMoreDesc
-            ? product.description
-            : `${descShort}${hasMoreDesc ? "…" : ""}`}
-          {hasMoreDesc && (
-            <button
-              type="button"
-              onClick={() => setDescriptionExpanded(true)}
-              className="ml-1 font-semibold text-[var(--color-ink)] underline"
-            >
-              Read more
-            </button>
-          )}
+          {product.description}
         </p>
+
+        <div className="mt-4 font-sans text-2xl font-semibold text-[var(--color-accent-gold)]">
+          {product.priceFormatted ?? INR.format(product.price)} INR
+        </div>
 
         {hasSizeSelector(product) && (
           <div className="mt-6">
@@ -253,7 +213,7 @@ export function ProductDetailView({
             >
               −
             </button>
-            <span className="min-w-[2rem] text-center text-sm font-medium">
+            <span className="min-w-[2rem] text-center font-sans text-sm font-medium">
               {quantity}
             </span>
             <button
@@ -268,11 +228,11 @@ export function ProductDetailView({
         </div>
 
         <Button
-          onClick={() => onAddToCart(product, quantity)}
+          onClick={() => onAddToCart(product, quantity, selectedSize)}
           disabled={maxQuantity < 1}
-          className="mt-6 w-full rounded-full bg-[var(--color-ink)] py-6 text-base font-semibold hover:bg-[var(--color-ink)]/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-6 w-full rounded-full bg-[var(--color-accent-gold)] py-6 text-base font-semibold text-[var(--color-ink)] hover:bg-[var(--color-accent-gold)]/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          ADD TO CART
+          ADD TO BAG
         </Button>
 
         <Button
@@ -283,9 +243,10 @@ export function ProductDetailView({
           {wished ? "Wishlisted" : "Add to wishlist"}
         </Button>
 
-        <div className="mt-8">
-          <Accordion title="Details" defaultOpen>
-            <div className="grid gap-2 text-sm">
+        <div className="mt-8 space-y-0 border-t border-[var(--color-line)]">
+          <section className="border-b border-[var(--color-line)] py-4">
+            <h3 className="text-sm font-semibold text-[var(--color-ink)]">Details</h3>
+            <div className="mt-2 grid gap-2 text-sm text-[var(--color-muted)]">
               <div className="flex justify-between">
                 <span>Material</span>
                 <span className="text-[var(--color-ink)]">{product.fabric}</span>
@@ -295,28 +256,20 @@ export function ProductDetailView({
                 <span className="text-[var(--color-ink)]">{product.occasion}</span>
               </div>
             </div>
-          </Accordion>
-          <Accordion title="Payment">
-            <p>
-              Order is made to order. Dispatch in 7–10 working days; transit
-              4–5 days. Cash on Delivery available.
-            </p>
-          </Accordion>
-          <Accordion title="Exchange">
-            <ul className="list-disc space-y-1 pl-5">
-              <li>3 days easy return & exchange</li>
-              <li>Free pickup for returns & exchanges</li>
-              <li>Returns/exchanges allowed only for unused products with tags</li>
-            </ul>
-          </Accordion>
-          <Accordion title="Care">
-            <ul className="list-disc space-y-1 pl-5">
-              <li>Hand wash in cold water</li>
-              <li>Dry clean recommended for Sarees</li>
-              <li>Wash inside out</li>
-              <li>Iron on low heat</li>
-            </ul>
-          </Accordion>
+          </section>
+          {product.collection.toLowerCase().includes("saree") && (
+            <section className="border-b border-[var(--color-line)] py-4">
+              <h3 className="text-sm font-semibold text-[var(--color-ink)]">Care</h3>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--color-muted)]">
+                <li><strong>Dry Clean Only:</strong> This saree should be professionally dry cleaned to preserve the fabric, color, and embroidery.</li>
+                <li><strong>Do Not Machine Wash:</strong> Washing in water may damage the fabric and delicate work.</li>
+                <li><strong>Avoid Direct Sunlight:</strong> When drying or airing the saree, keep it away from harsh sunlight to prevent color fading.</li>
+                <li><strong>Iron with Care:</strong> Use a low to medium heat setting. It is recommended to iron on the reverse side or place a protective cloth over the saree while ironing.</li>
+                <li><strong>Proper Storage:</strong> Store the saree in a cool, dry place. Preferably wrap it in a soft cotton or muslin cloth to allow the fabric to breathe and prevent moisture buildup.</li>
+                <li><strong>Refold Periodically:</strong> Refold the saree occasionally to avoid permanent creases along the same fold lines.</li>
+              </ul>
+            </section>
+          )}
         </div>
       </div>
     </div>

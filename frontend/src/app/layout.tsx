@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Inter, Playfair_Display } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { StorefrontProvider } from "@/context/storefront-context";
+import { AppErrorBoundary } from "@/components/app-error-boundary";
 
-const display = Cormorant_Garamond({
+/** Headings: Playfair Display */
+const playfair = Playfair_Display({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
-const playfair = Playfair_Display({
-  variable: "--font-hero",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
+/** Body / UI: Inter */
 const sans = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
@@ -34,11 +31,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${display.variable} ${playfair.variable} ${sans.variable} font-sans antialiased bg-[var(--background)] text-[var(--foreground)]`}
+        className={`${playfair.variable} ${sans.variable} font-sans antialiased bg-[var(--background)] text-[var(--foreground)]`}
       >
         <Providers>
-        <StorefrontProvider>{children}</StorefrontProvider>
-      </Providers>
+          <AppErrorBoundary>
+            <StorefrontProvider>{children}</StorefrontProvider>
+          </AppErrorBoundary>
+        </Providers>
       </body>
     </html>
   );

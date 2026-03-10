@@ -1,5 +1,5 @@
 /**
- * Guest session for cart (no login).
+ * Guest session for bag (no login).
  * Persists in localStorage; call ensureGuestSession() early (e.g. App mount).
  */
 

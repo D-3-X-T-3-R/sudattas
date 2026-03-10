@@ -35,8 +35,10 @@ export const collectionSchema = z.object({
 });
 
 export const cartLineSchema = z.object({
+  id: z.string(),
   product: productSchema,
   qty: z.number().int().min(1),
+  sizeName: z.string().optional().nullable(),
 });
 
 export const paymentIntentSchema = z.object({

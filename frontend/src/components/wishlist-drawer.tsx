@@ -49,7 +49,7 @@ export function WishlistDrawer({
                 {p.name}
               </div>
               <div className="mt-2 flex items-center justify-between">
-                <div className="text-sm font-semibold">{p.priceFormatted ?? INR.format(p.price)}</div>
+                <div className="font-sans text-sm font-semibold">{p.priceFormatted ?? INR.format(p.price)}</div>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
