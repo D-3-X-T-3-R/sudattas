@@ -30,7 +30,7 @@ export interface QuickViewModalProps {
   onClose: () => void;
   wished: boolean;
   onToggleWish: (p: Product) => void;
-  onAddToCart: (p: Product, qty?: number) => void;
+  onAddToCart: (p: Product, qty?: number, sizeName?: string | null) => void;
 }
 
 function Accordion({
@@ -158,7 +158,7 @@ export function QuickViewModal({
                 )}
               </p>
 
-              <div className="mt-4 text-lg font-semibold text-[var(--color-ink)]">
+              <div className="mt-4 font-sans text-lg font-semibold text-[var(--color-accent-gold)]">
                 MRP {product.priceFormatted ?? INR.format(product.price)} INR
               </div>
 
@@ -205,7 +205,7 @@ export function QuickViewModal({
                   >
                     −
                   </button>
-                  <span className="min-w-[2rem] text-center text-sm font-medium">
+                  <span className="min-w-[2rem] text-center font-sans text-sm font-medium">
                     {quantity}
                   </span>
                   <button
@@ -219,10 +219,10 @@ export function QuickViewModal({
               </div>
 
               <Button
-                onClick={() => onAddToCart(product, quantity)}
-                className="mt-6 w-full rounded-full bg-[var(--color-ink)] py-6 text-base font-semibold hover:bg-[var(--color-ink)]/90"
+                onClick={() => onAddToCart(product, quantity, selectedSize)}
+                className="mt-6 w-full rounded-full bg-[var(--color-accent-gold)] py-6 text-base font-semibold text-[var(--color-ink)] hover:bg-[var(--color-accent-gold)]/90"
               >
-                ADD TO CART
+                ADD TO BAG
               </Button>
 
               <div className="mt-4 flex items-center gap-2 text-sm text-[var(--color-muted)]">

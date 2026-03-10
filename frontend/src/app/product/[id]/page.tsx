@@ -37,6 +37,7 @@ export default function ProductPage() {
   const [sizes, setSizes] = useState<{ sizeId: string; sizeName: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [wishedProducts, setWishedProducts] = useState<Product[]>([]);
 
   useEffect(() => {
     if (!id) {
@@ -71,8 +72,28 @@ export default function ProductPage() {
     };
   }, [id]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const sessionId = getGuestSessionId();
+    const headers: Record<string, string> = {};
+    if (sessionId) headers["X-Session-Id"] = sessionId;
+    fetch("/api/products", { headers })
+      .then((res) => res.json())
+      .then((data: { products?: Product[] } | Product[]) => {
+        if (cancelled) return;
+        const list = Array.isArray(data) ? data : data.products ?? [];
+        if (list.length === 0) return;
+        setWishedProducts(list.filter((p) => wishlist[p.id]));
+      })
+      .catch(() => {
+        if (!cancelled) setWishedProducts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wishlist]);
+
   const goToHome = () => router.push("/");
-  const wishedProducts: Product[] = product && wishlist[product.id] ? [product] : [];
 
   return (
     <div className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]">

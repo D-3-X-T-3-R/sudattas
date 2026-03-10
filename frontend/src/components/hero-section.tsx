@@ -30,12 +30,12 @@ export function HeroSection() {
           {/* Hero copy */}
           <motion.div
             className="flex shrink-0 flex-col items-center text-center md:items-start md:text-left"
-            initial={reduceMotion ? false : { opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={false}
+            animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
           >
             <h1
-              className="font-[var(--font-hero)] text-3xl font-medium leading-tight text-white sm:text-4xl md:text-5xl"
+              className="font-display text-3xl font-medium leading-tight text-white sm:text-4xl md:text-5xl"
               style={{ textShadow: "0 2px 8px rgba(0,0,0,0.3)" }}
             >
               Handcrafted Sarees
@@ -44,7 +44,7 @@ export function HeroSection() {
             </h1>
             <Button
               onClick={() => goTo("shop", !!reduceMotion)}
-              className="mt-8 w-fit rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-[var(--color-ink)] hover:bg-[var(--color-warm-white)]"
+              className="mt-8 w-fit rounded-full border-2 border-[var(--color-accent-gold)] bg-transparent px-8 py-3.5 text-sm font-semibold text-white hover:bg-[var(--color-accent-gold)]"
             >
               Explore Collection
             </Button>

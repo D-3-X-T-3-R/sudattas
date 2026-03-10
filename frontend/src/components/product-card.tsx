@@ -50,7 +50,7 @@ export function ProductCard({
           type="button"
           onClick={() => onQuickView(product)}
           className={cn(
-            "relative w-full cursor-pointer text-left",
+            "relative w-full cursor-pointer text-left rounded-sm transition-[box-shadow,border-color] duration-200 group-hover:shadow-[0_0_0_1px_var(--color-accent-gold)]",
             featured ? "min-h-[280px] flex-1 basis-0 aspect-[4/5]" : "aspect-[4/5]"
           )}
           aria-label={`Quick view ${product.name}`}
@@ -78,26 +78,21 @@ export function ProductCard({
           aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
         >
           <Heart
-            className={cn("h-5 w-5", wished && "fill-[var(--color-ink)]")}
+            className={cn("h-5 w-5", wished && "fill-[var(--color-accent-gold)] text-[var(--color-accent-gold)]")}
           />
         </Button>
       </div>
 
       <div className={cn("mt-4", featured && "mt-6 flex-none")}>
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-[0.18em] text-[var(--color-muted)]">
-            {product.collection}
-          </span>
-        </div>
         <div
           className={cn(
-            "mt-1.5 line-clamp-2 font-display font-medium tracking-tight text-[var(--color-ink)]",
-            featured ? "text-lg md:text-xl" : "text-base"
+            "line-clamp-2 font-display font-medium tracking-tight text-[var(--color-ink)]",
+            featured ? "text-xl md:text-2xl" : "text-lg"
           )}
         >
           {product.name}
         </div>
-        <div className="mt-2 font-semibold text-[var(--color-ink)]">
+        <div className="mt-2 font-sans font-semibold text-[var(--color-accent-gold)]">
           {product.priceFormatted ?? INR.format(product.price)}
         </div>
       </div>

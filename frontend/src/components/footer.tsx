@@ -37,7 +37,7 @@ export function Footer({ goTo }: FooterProps) {
               <button
                 type="button"
                 onClick={() => goTo("collections", false)}
-                className="transition-colors hover:text-[var(--color-accent-brown)]"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
               >
                 Collections
               </button>
@@ -46,7 +46,7 @@ export function Footer({ goTo }: FooterProps) {
               <button
                 type="button"
                 onClick={() => goTo("shop", false)}
-                className="transition-colors hover:text-[var(--color-accent-brown)]"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
               >
                 New arrivals
               </button>

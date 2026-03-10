@@ -33,6 +33,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/loading";
 import { Pencil, Trash2, Filter, Package, Plus } from "lucide-react";
 
 type ProductFormState = {
@@ -90,6 +92,7 @@ function getProductStatusLabel(statusId?: string | null): string {
 
 export default function AdminProductsPage() {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const {
     data: categories = [],
     isLoading: categoriesLoading,
@@ -288,13 +291,15 @@ export default function AdminProductsPage() {
       return data?.createProduct?.[0];
     },
     onSuccess: async (created) => {
-      setMessage(
-        created
-          ? `Created: ${created.name}${
-              created.formatted ? ` (${created.formatted})` : ""
-            }`
-          : "Product created."
-      );
+      const text =
+        created && created.name
+          ? `Created: ${created.name}${created.formatted ? ` (${created.formatted})` : ""}`
+          : "Product created.";
+      setMessage(text);
+      showToast({
+        title: "Product",
+        description: "Product created.",
+      });
       if (created?.productId) {
         setLastCreatedProduct({ id: created.productId, name: created.name });
         if (imageFiles.length > 0) {
@@ -369,7 +374,13 @@ export default function AdminProductsPage() {
         window.sessionStorage.removeItem(DRAFT_KEY);
       }
     },
-    onError: (err: Error) => setError(err.message || "Failed to create product."),
+    onError: (err: Error) => {
+      setError(err.message || "Failed to create product.");
+      showToast({
+        title: "Product",
+        description: "Failed to create product.",
+      });
+    },
   });
 
   const updateProductMutation = useMutation({
@@ -1030,7 +1041,9 @@ export default function AdminProductsPage() {
                 </div>
               )}
               {productsLoading && !productsError && (
-                <p className="py-8 text-center text-sm text-[var(--color-muted)]">Loading products…</p>
+                <div className="flex justify-center py-8">
+                  <Spinner />
+                </div>
               )}
               {!productsLoading && !productsError && products.length === 0 && (
                 <p className="py-8 text-center text-sm text-[var(--color-muted)]">
