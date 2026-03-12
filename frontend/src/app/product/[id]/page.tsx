@@ -6,7 +6,6 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/header";
-import { CartDrawer } from "@/components/cart-drawer";
 import { WishlistDrawer } from "@/components/wishlist-drawer";
 import { ProductDetailView } from "@/components/product-detail-view";
 import { useStorefront } from "@/context/storefront-context";
@@ -21,14 +20,8 @@ export default function ProductPage() {
     wishlist,
     toggleWish,
     addToCart,
-    decCart,
-    incCart,
-    cartOpen,
-    setCartOpen,
     wishOpen,
     setWishOpen,
-    cartLines,
-    cartSubtotal,
     cartCount,
     wishCount,
   } = useStorefront();
@@ -103,7 +96,7 @@ export default function ProductPage() {
         cartCount={cartCount}
         wishCount={wishCount}
         setMenuOpen={() => {}}
-        setCartOpen={setCartOpen}
+        setCartOpen={() => {}}
         setWishOpen={setWishOpen}
         goTo={goToHome}
       />
@@ -145,18 +138,6 @@ export default function ProductPage() {
         )}
       </div>
 
-      <CartDrawer
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
-        cartLines={cartLines}
-        cartSubtotal={cartSubtotal}
-        onDecCart={decCart}
-        onIncCart={incCart}
-        paymentLoading={false}
-        paymentMessage={null}
-        onTestRazorpay={() => {}}
-        onCheckout={() => alert("Checkout flow not wired yet")}
-      />
       <WishlistDrawer
         open={wishOpen}
         onClose={() => setWishOpen(false)}

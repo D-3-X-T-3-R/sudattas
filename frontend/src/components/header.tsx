@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Search, Menu, Heart, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,16 +144,18 @@ export function Header({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCartOpen(true)}
             aria-label="Bag"
             className={cn("relative", cartCount > 0 && "text-[var(--color-accent-gold)]")}
+            asChild
           >
-            <ShoppingBag className="h-5 w-5" />
-            {cartCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
-                {cartCount}
-              </span>
-            )}
+            <Link href="/bag">
+              <ShoppingBag className="h-5 w-5" />
+              {cartCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
           </Button>
         </div>
       </div>

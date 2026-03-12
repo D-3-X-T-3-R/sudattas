@@ -21,6 +21,7 @@ export const productSchema = z.object({
   variantStock: z
     .array(
       z.object({
+        variantId: z.string().optional(),
         sizeId: z.string(),
         sizeName: z.string(),
         quantity: z.number(),

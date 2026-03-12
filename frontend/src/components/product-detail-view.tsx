@@ -270,6 +270,20 @@ export function ProductDetailView({
               </ul>
             </section>
           )}
+          {product.collection.toLowerCase().includes("kurti") && (
+            <section className="border-b border-[var(--color-line)] py-4">
+              <h3 className="text-sm font-semibold text-[var(--color-ink)]">Care</h3>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--color-muted)]">
+                <li><strong>Gentle Wash Recommended:</strong> Hand wash separately in cold water using a mild detergent.</li>
+                <li><strong>Do Not Bleach:</strong> Avoid bleach or harsh chemicals as they may damage the fabric and fade colors.</li>
+                <li><strong>Machine Wash (If Required):</strong> Use a gentle cycle with cold water and place the kurti inside a laundry bag.</li>
+                <li><strong>Dry in Shade:</strong> Always dry the garment in shade to prevent color fading caused by direct sunlight.</li>
+                <li><strong>Iron with Care:</strong> Use a low to medium heat setting. Iron on the reverse side to protect prints, embroidery, or embellishments.</li>
+                <li><strong>Avoid Wringing:</strong> Do not twist or wring the fabric aggressively, as this may distort the shape of the garment.</li>
+                <li><strong>Proper Storage:</strong> Store in a cool, dry place and keep away from moisture to maintain fabric quality.</li>
+              </ul>
+            </section>
+          )}
         </div>
       </div>
     </div>

@@ -28,7 +28,7 @@ const PRODUCT_BY_ID_QUERY = `query ProductById($search: SearchProduct!) {
     productId name description amountPaise formatted stockQuantity categoryId
     sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
     images { thumbnailUrl url }
-    variantStock { sizeId sizeName quantity }
+    variantStock { variantId sizeId sizeName quantity }
   }
 }`;
 
