@@ -67,7 +67,6 @@ import { ShopSection } from "@/components/shop-section";
 import { StorySection } from "@/components/story-section";
 import { Footer } from "@/components/footer";
 import { MenuDrawer } from "@/components/menu-drawer";
-import { CartDrawer } from "@/components/cart-drawer";
 import { WishlistDrawer } from "@/components/wishlist-drawer";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
 import { useToast } from "@/components/ui/toast";
@@ -84,8 +83,6 @@ export function Storefront() {
     addToCart,
     decCart,
     incCart,
-    cartOpen,
-    setCartOpen,
     wishOpen,
     setWishOpen,
     cartLines,
@@ -107,7 +104,7 @@ export function Storefront() {
 
   const { paymentMessage, paymentLoading, runTest } = useRazorpayTest();
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
-  useLockBodyScroll(menuOpen || cartOpen || wishOpen);
+  useLockBodyScroll(menuOpen || wishOpen);
 
   useEffect(() => {
     ensureGuestSession();
@@ -212,7 +209,7 @@ export function Storefront() {
         cartCount={cartCount}
         wishCount={wishCount}
         setMenuOpen={setMenuOpen}
-        setCartOpen={setCartOpen}
+        setCartOpen={() => {}}
         setWishOpen={setWishOpen}
         goTo={goToWithMotion}
       />
@@ -290,25 +287,12 @@ export function Storefront() {
         onToggleWish={toggleWish}
       />
 
-      <CartDrawer
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
-        cartLines={cartLines}
-        cartSubtotal={cartSubtotal}
-        onDecCart={decCart}
-        onIncCart={incCart}
-        paymentLoading={paymentLoading}
-        paymentMessage={paymentMessage}
-        onTestRazorpay={runTest}
-        onCheckout={() => alert("Checkout flow not wired yet")}
-      />
-
       <MobileBottomBar
         activeSection={activeSection}
         wishCount={wishCount}
         cartCount={cartCount}
         onWishOpen={() => setWishOpen(true)}
-        onCartOpen={() => setCartOpen(true)}
+        onCartOpen={() => router.push("/bag")}
         reduceMotion={!!reduceMotion}
       />
 

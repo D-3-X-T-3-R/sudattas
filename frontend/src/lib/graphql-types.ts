@@ -18,6 +18,7 @@ export interface OccasionRow {
 }
 
 export interface ProductVariantStockRow {
+  variantId?: string;
   sizeId: string;
   sizeName: string;
   quantity: number;

@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -11,11 +12,48 @@ import {
 } from "react";
 import type { Product, CartLine } from "@/lib/schemas";
 import { useToast } from "@/components/ui/toast";
+import { getGuestSessionId } from "@/lib/session";
+import {
+  fetchCartLines,
+  addCartItem,
+  updateCartItem,
+  deleteCartItem,
+  type CartLineMapped,
+} from "@/lib/cart-api";
 
 type CartState = Record<
   string,
   { id: string; product: Product; qty: number; sizeName?: string | null }
 >;
+
+function cartLinesToState(lines: CartLineMapped[]): CartState {
+  const state: CartState = {};
+  for (const line of lines) {
+    state[line.id] = {
+      id: line.id,
+      product: line.product,
+      qty: line.qty,
+      sizeName: line.sizeName ?? null,
+    };
+  }
+  return state;
+}
+
+/** Resolve variant_id for addToCart from product + size. */
+function getVariantId(p: Product, sizeName?: string | null): string | null {
+  const stock = p.variantStock ?? [];
+  if (stock.length === 0) return null;
+  if (sizeName && sizeName !== "Free Size") {
+    const row = stock.find((v) => v.sizeName === sizeName);
+    return row?.variantId ?? null;
+  }
+  return stock[0]?.variantId ?? null;
+}
+
+/** True if line id is a backend cart_id (numeric string). */
+function isBackendCartId(id: string): boolean {
+  return /^\d+$/.test(id);
+}
 
 type StorefrontContextValue = {
   wishlist: Record<string, boolean>;
@@ -32,6 +70,7 @@ type StorefrontContextValue = {
   cartCount: number;
   cartSubtotal: number;
   wishCount: number;
+  cartLoading: boolean;
 };
 
 const StorefrontContext = createContext<StorefrontContextValue | null>(null);
@@ -41,8 +80,24 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartState>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [wishOpen, setWishOpen] = useState(false);
+  const [cartLoading, setCartLoading] = useState(true);
   const { showToast } = useToast();
   const lastToastRef = useRef<{ key: string; at: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCartLoading(true);
+    fetchCartLines()
+      .then((lines) => {
+        if (!cancelled) setCart(cartLinesToState(lines));
+      })
+      .finally(() => {
+        if (!cancelled) setCartLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggleWish = useCallback(
     (p: Product) => {
@@ -66,7 +121,30 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   );
 
   const addToCart = useCallback(
-    (p: Product, qty = 1, sizeName?: string | null) => {
+    async (p: Product, qty = 1, sizeName?: string | null) => {
+      const variantId = getVariantId(p, sizeName);
+      const sessionId = getGuestSessionId();
+
+      if (variantId && sessionId) {
+        const lines = await addCartItem(variantId, qty, sessionId);
+        if (lines) {
+          setCart(cartLinesToState(lines));
+          const now = Date.now();
+          const toastKey = `cart-add-${p.id}`;
+          const last = lastToastRef.current;
+          if (!last || last.key !== toastKey || now - last.at > 200) {
+            showToast({
+              group: "cart",
+              title: "Bag",
+              description: "Added to bag.",
+            });
+            lastToastRef.current = { key: toastKey, at: now };
+          }
+          return;
+        }
+      }
+
+      // Fallback: local-only when no variantId or API failed
       const key = `${p.id}__${sizeName ?? "nosize"}`;
       setCart((prev) => {
         const existing = prev[key];
@@ -91,25 +169,75 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     [showToast]
   );
 
-  const decCart = useCallback((id: string) => {
+  const decCart = useCallback(async (id: string) => {
+    const line = cart[id];
+    if (!line) return;
+    const sessionId = getGuestSessionId();
+
+    if (isBackendCartId(id) && sessionId) {
+      const newQty = line.qty - 1;
+      if (newQty < 1) {
+        const lines = await deleteCartItem(id, sessionId);
+        if (lines) setCart(cartLinesToState(lines));
+        else
+          setCart((prev) => {
+            const { [id]: _, ...rest } = prev;
+            return rest;
+          });
+      } else {
+        const variantId = getVariantId(line.product, line.sizeName);
+        if (variantId) {
+          const lines = await updateCartItem(id, variantId, newQty, sessionId);
+          if (lines) setCart(cartLinesToState(lines));
+          else
+            setCart((prev) => ({
+              ...prev,
+              [id]: { ...line, qty: newQty },
+            }));
+        } else {
+          setCart((prev) => {
+            const { [id]: _, ...rest } = prev;
+            return rest;
+          });
+        }
+      }
+      return;
+    }
+
     setCart((prev) => {
-      const line = prev[id];
-      if (!line) return prev;
-      if (line.qty <= 1) {
+      const current = prev[id];
+      if (!current) return prev;
+      if (current.qty <= 1) {
         const { [id]: _, ...rest } = prev;
         return rest;
       }
-      return { ...prev, [id]: { ...line, qty: line.qty - 1 } };
+      return { ...prev, [id]: { ...current, qty: current.qty - 1 } };
     });
-  }, []);
+  }, [cart]);
 
-  const incCart = useCallback((id: string) => {
+  const incCart = useCallback(async (id: string) => {
+    const line = cart[id];
+    if (!line) return;
+    const sessionId = getGuestSessionId();
+
+    if (isBackendCartId(id) && sessionId) {
+      const variantId = getVariantId(line.product, line.sizeName);
+      if (variantId) {
+        const newQty = line.qty + 1;
+        const lines = await updateCartItem(id, variantId, newQty, sessionId);
+        if (lines) setCart(cartLinesToState(lines));
+        else
+          setCart((prev) => ({ ...prev, [id]: { ...line, qty: newQty } }));
+      }
+      return;
+    }
+
     setCart((prev) => {
-      const line = prev[id];
-      if (!line) return prev;
-      return { ...prev, [id]: { ...line, qty: line.qty + 1 } };
+      const current = prev[id];
+      if (!current) return prev;
+      return { ...prev, [id]: { ...current, qty: current.qty + 1 } };
     });
-  }, []);
+  }, [cart]);
 
   const cartLines = useMemo<CartLine[]>(() => Object.values(cart), [cart]);
   const cartCount = useMemo(
@@ -141,6 +269,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       cartCount,
       cartSubtotal,
       wishCount,
+      cartLoading,
     }),
     [
       wishlist,
@@ -155,6 +284,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       cartCount,
       cartSubtotal,
       wishCount,
+      cartLoading,
     ]
   );
 

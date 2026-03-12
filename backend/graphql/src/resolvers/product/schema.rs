@@ -8,6 +8,7 @@ use crate::resolvers::{
 /// Per-size stock for storefront size selector. Empty or only variants with no size = "free size".
 #[derive(Default, Debug, Clone)]
 pub struct ProductVariantStock {
+    pub variant_id: String,
     pub size_id: String,
     pub size_name: String,
     pub quantity: i32,
@@ -129,6 +130,9 @@ impl Product {
 #[graphql_object]
 #[graphql(description = "Size and quantity for storefront")]
 impl ProductVariantStock {
+    fn variant_id(&self) -> &str {
+        &self.variant_id
+    }
     fn size_id(&self) -> &str {
         &self.size_id
     }

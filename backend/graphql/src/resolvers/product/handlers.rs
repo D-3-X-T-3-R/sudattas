@@ -226,7 +226,7 @@ pub(crate) async fn get_stock_for_product(product_id: &str) -> Result<Option<Str
     }
 }
 
-/// Per-size stock for storefront. Variants with no size_id are skipped (free size → empty list).
+/// Per-size stock for storefront. Variants with size_id appear per size; variants with no size_id become one "Free Size" entry.
 #[instrument]
 pub(crate) async fn get_variant_stock_for_product(
     product_id: &str,
@@ -237,17 +237,14 @@ pub(crate) async fn get_variant_stock_for_product(
     let variants_resp = client
         .search_product_variant(SearchProductVariantRequest { variant_id: 0 })
         .await?;
-    let variants: Vec<_> = variants_resp
+    let all_variants: Vec<_> = variants_resp
         .into_inner()
         .items
         .into_iter()
         .filter(|v| v.product_id == product_id_i64)
-        .filter(|v| v.size_id.is_some())
         .collect();
-
-    if variants.is_empty() {
-        return Ok(Vec::new());
-    }
+    let variants_with_size: Vec<_> = all_variants.iter().filter(|v| v.size_id.is_some()).cloned().collect();
+    let free_size_variants: Vec<_> = all_variants.into_iter().filter(|v| v.size_id.is_none()).collect();
 
     // Build size_id -> size_name map (fetch all sizes once)
     let sizes_resp = client.search_size(SearchSizeRequest { size_id: 0 }).await?;
@@ -258,8 +255,9 @@ pub(crate) async fn get_variant_stock_for_product(
         .map(|s| (s.size_id, s.size_name))
         .collect();
 
-    let mut out = Vec::with_capacity(variants.len());
-    for v in variants {
+    let mut out = Vec::new();
+
+    for v in variants_with_size {
         let size_id = v.size_id.expect("filtered to Some");
         let size_name = size_names
             .get(&size_id)
@@ -281,10 +279,35 @@ pub(crate) async fn get_variant_stock_for_product(
             .clamp(0, i64::from(i32::MAX)) as i32;
 
         out.push(ProductVariantStock {
+            variant_id: v.variant_id.to_string(),
             size_id: size_id.to_string(),
             size_name,
             quantity,
         });
     }
+
+    // Free size: single entry using first variant with no size_id
+    if let Some(first) = free_size_variants.first() {
+        let inv_resp = client
+            .search_inventory_item(SearchInventoryItemRequest {
+                inventory_id: None,
+                variant_id: Some(first.variant_id),
+            })
+            .await?;
+        let quantity: i32 = inv_resp
+            .into_inner()
+            .items
+            .into_iter()
+            .map(|i| i.quantity_available)
+            .sum::<i64>()
+            .clamp(0, i64::from(i32::MAX)) as i32;
+        out.push(ProductVariantStock {
+            variant_id: first.variant_id.to_string(),
+            size_id: "0".to_string(),
+            size_name: "Free Size".to_string(),
+            quantity,
+        });
+    }
+
     Ok(out)
 }
