@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { Search, Menu, Heart, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,8 +54,8 @@ export function Header({
       className={cn(
         "sticky top-0 z-30 transition-colors duration-300",
         scrolled
-          ? "border-b border-[var(--color-line)] bg-[var(--color-warm-white)]/95 backdrop-blur-md"
-          : "border-b border-transparent bg-transparent"
+          ? "border-b border-[var(--color-line)] bg-[var(--color-deep-green-elevated)]/95 backdrop-blur-md"
+          : "border-b border-transparent bg-[var(--color-deep-green)]/80"
       )}
     >
       <div className="mx-auto grid max-w-7xl grid-cols-3 items-center gap-4 px-4 py-4">
@@ -84,21 +83,8 @@ export function Header({
           </nav>
         </div>
 
-        <button
-          type="button"
-          onClick={() => goTo("top", false)}
-          className="flex items-center justify-self-center"
-          aria-label="Sudatta's - Go to top"
-        >
-          <Image
-            src="/logo_title.png"
-            alt="Sudatta's"
-            width={160}
-            height={48}
-            className="h-11 w-auto md:h-14"
-            priority
-          />
-        </button>
+        {/* Center column left empty (logo removed) to keep nav and actions aligned */}
+        <div />
 
         <div className="flex items-center justify-end gap-1">
           {authEnabled && authButtons && (
@@ -157,20 +143,6 @@ export function Header({
               )}
             </Link>
           </Button>
-        </div>
-      </div>
-
-      <div className="border-t border-[var(--color-line)] md:hidden">
-        <div className="mx-auto max-w-7xl px-4 py-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search sarees, fabric, occasion"
-              className="w-full py-3 pl-10"
-            />
-          </div>
         </div>
       </div>
     </header>

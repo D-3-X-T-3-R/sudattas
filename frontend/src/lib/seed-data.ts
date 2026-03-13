@@ -26,12 +26,9 @@ export const HERO_SLIDES = [
   },
 ];
 
-/** Hero composition: M1 (left), Center (dominant), M2 (right1), M3 (right2). Add your 4 photos to public/hero/ – see public/hero/README.md. */
+/** Single composite hero image generated for Sudatta's. */
 export const HERO_IMAGES = [
-  { src: "/hero/left.png", alt: "Red saree" },       // M1: red saree (glasses)
-  { src: "/hero/center.png", alt: "Cream saree" },   // HERO: cream saree
-  { src: "/hero/right1.png", alt: "Floral saree" },  // M2: floral saree
-  { src: "/hero/right2.png", alt: "Black floral saree" }, // M3: black floral
+  { src: "/hero/hero-sudattas-full.png", alt: "Sudatta's handcrafted sarees hero" },
 ];
 
 export const COLLECTION_IMAGES = [

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  /* Minimal luxury palette — warm neutrals + muted gold/bronze */
+  /* Original light theme palette */
   --color-ivory: #f7f5f0;
   --color-ink: #1a1814;
   --color-muted: #6b6560;

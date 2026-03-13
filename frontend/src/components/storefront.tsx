@@ -199,10 +199,7 @@ export function Storefront() {
     goTo(id, instant ?? !!reduceMotion);
 
   return (
-    <div
-      id="top"
-      className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]"
-    >
+    <div id="top" className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <Header
         query={query}
         setQuery={setQuery}
