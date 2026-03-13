@@ -243,8 +243,15 @@ pub(crate) async fn get_variant_stock_for_product(
         .into_iter()
         .filter(|v| v.product_id == product_id_i64)
         .collect();
-    let variants_with_size: Vec<_> = all_variants.iter().filter(|v| v.size_id.is_some()).cloned().collect();
-    let free_size_variants: Vec<_> = all_variants.into_iter().filter(|v| v.size_id.is_none()).collect();
+    let variants_with_size: Vec<_> = all_variants
+        .iter()
+        .filter(|v| v.size_id.is_some())
+        .cloned()
+        .collect();
+    let free_size_variants: Vec<_> = all_variants
+        .into_iter()
+        .filter(|v| v.size_id.is_none())
+        .collect();
 
     // Build size_id -> size_name map (fetch all sizes once)
     let sizes_resp = client.search_size(SearchSizeRequest { size_id: 0 }).await?;
