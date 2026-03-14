@@ -32,8 +32,6 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::product_attribute_mapping::Entity")]
-    ProductAttributeMapping,
     #[sea_orm(
         belongs_to = "super::product_categories::Entity",
         from = "Column::CategoryId",
@@ -60,12 +58,6 @@ pub enum Relation {
     Reviews,
     #[sea_orm(has_many = "super::wishlist::Entity")]
     Wishlist,
-}
-
-impl Related<super::product_attribute_mapping::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::ProductAttributeMapping.def()
-    }
 }
 
 impl Related<super::product_categories::Entity> for Entity {
@@ -107,19 +99,6 @@ impl Related<super::reviews::Entity> for Entity {
 impl Related<super::wishlist::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Wishlist.def()
-    }
-}
-
-impl Related<super::product_attributes::Entity> for Entity {
-    fn to() -> RelationDef {
-        super::product_attribute_mapping::Relation::ProductAttributes.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(
-            super::product_attribute_mapping::Relation::Products
-                .def()
-                .rev(),
-        )
     }
 }
 
