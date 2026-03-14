@@ -22,6 +22,8 @@ pub use super::product_attribute_mapping::Entity as ProductAttributeMapping;
 pub use super::product_attributes::Entity as ProductAttributes;
 pub use super::product_categories::Entity as ProductCategories;
 pub use super::product_images::Entity as ProductImages;
+pub use super::product_mood_mapping::Entity as ProductMoodMapping;
+pub use super::product_moods::Entity as ProductMoods;
 pub use super::product_statuses::Entity as ProductStatuses;
 pub use super::product_variants::Entity as ProductVariants;
 pub use super::products::Entity as Products;

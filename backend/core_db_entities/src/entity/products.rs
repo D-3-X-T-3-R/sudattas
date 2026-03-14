@@ -44,6 +44,8 @@ pub enum Relation {
     ProductCategories,
     #[sea_orm(has_one = "super::product_images::Entity")]
     ProductImages,
+    #[sea_orm(has_many = "super::product_mood_mapping::Entity")]
+    ProductMoodMapping,
     #[sea_orm(
         belongs_to = "super::product_statuses::Entity",
         from = "Column::ProductStatusId",
@@ -75,6 +77,12 @@ impl Related<super::product_categories::Entity> for Entity {
 impl Related<super::product_images::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ProductImages.def()
+    }
+}
+
+impl Related<super::product_mood_mapping::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ProductMoodMapping.def()
     }
 }
 
@@ -112,6 +120,15 @@ impl Related<super::product_attributes::Entity> for Entity {
                 .def()
                 .rev(),
         )
+    }
+}
+
+impl Related<super::product_moods::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::product_mood_mapping::Relation::ProductMoods.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::product_mood_mapping::Relation::Products.def().rev())
     }
 }
 

@@ -73,23 +73,23 @@ use crate::resolvers::{
         self,
         schema::{NewProduct, Product, ProductMutation},
     },
-    product_attribute_mappings::{
-        self,
-        schema::{
-            DeleteProductAttributeMappingInput, NewProductAttributeMapping,
-            ProductAttributeMapping, SearchProductAttributeMappingInput,
-        },
-    },
-    product_attributes::{
-        self,
-        schema::{
-            DeleteProductAttributeInput, NewProductAttribute, ProductAttribute,
-            ProductAttributeMutation, SearchProductAttributeInput,
-        },
-    },
     product_images::{
         self,
         schema::{ConfirmImageUpload, ProductImage, ProductImageMutation},
+    },
+    product_mood_mappings::{
+        self,
+        schema::{
+            DeleteProductMoodMappingInput, NewProductMoodMapping, ProductMoodMapping,
+            SearchProductMoodMappingInput,
+        },
+    },
+    product_moods::{
+        self,
+        schema::{
+            DeleteProductMoodInput, NewProductMood, ProductMood, ProductMoodMutation,
+            SearchProductMoodInput,
+        },
     },
     product_variants::{
         self,
@@ -801,30 +801,30 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    // Product attribute mappings
+    // Product mood mappings
     #[instrument(err, ret)]
-    async fn create_product_attribute_mapping(
-        input: NewProductAttributeMapping,
-    ) -> FieldResult<Vec<ProductAttributeMapping>> {
-        product_attribute_mappings::handlers::create_product_attribute_mapping(input)
+    async fn create_product_mood_mapping(
+        input: NewProductMoodMapping,
+    ) -> FieldResult<Vec<ProductMoodMapping>> {
+        product_mood_mappings::handlers::create_product_mood_mapping(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn search_product_attribute_mapping(
-        input: SearchProductAttributeMappingInput,
-    ) -> FieldResult<Vec<ProductAttributeMapping>> {
-        product_attribute_mappings::handlers::search_product_attribute_mapping(input)
+    async fn search_product_mood_mapping(
+        input: SearchProductMoodMappingInput,
+    ) -> FieldResult<Vec<ProductMoodMapping>> {
+        product_mood_mappings::handlers::search_product_mood_mapping(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn delete_product_attribute_mapping(
-        input: DeleteProductAttributeMappingInput,
-    ) -> FieldResult<Vec<ProductAttributeMapping>> {
-        product_attribute_mappings::handlers::delete_product_attribute_mapping(input)
+    async fn delete_product_mood_mapping(
+        input: DeleteProductMoodMappingInput,
+    ) -> FieldResult<Vec<ProductMoodMapping>> {
+        product_mood_mappings::handlers::delete_product_mood_mapping(input)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -927,39 +927,31 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    // Product attributes
+    // Product moods
     #[instrument(err, ret)]
-    async fn create_product_attribute(
-        input: NewProductAttribute,
-    ) -> FieldResult<Vec<ProductAttribute>> {
-        product_attributes::handlers::create_product_attribute(input)
+    async fn create_product_mood(input: NewProductMood) -> FieldResult<Vec<ProductMood>> {
+        product_moods::handlers::create_product_mood(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn search_product_attribute(
-        input: SearchProductAttributeInput,
-    ) -> FieldResult<Vec<ProductAttribute>> {
-        product_attributes::handlers::search_product_attribute(input)
+    async fn search_product_mood(input: SearchProductMoodInput) -> FieldResult<Vec<ProductMood>> {
+        product_moods::handlers::search_product_mood(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn update_product_attribute(
-        input: ProductAttributeMutation,
-    ) -> FieldResult<Vec<ProductAttribute>> {
-        product_attributes::handlers::update_product_attribute(input)
+    async fn update_product_mood(input: ProductMoodMutation) -> FieldResult<Vec<ProductMood>> {
+        product_moods::handlers::update_product_mood(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn delete_product_attribute(
-        input: DeleteProductAttributeInput,
-    ) -> FieldResult<Vec<ProductAttribute>> {
-        product_attributes::handlers::delete_product_attribute(input)
+    async fn delete_product_mood(input: DeleteProductMoodInput) -> FieldResult<Vec<ProductMood>> {
+        product_moods::handlers::delete_product_mood(input)
             .await
             .map_err(|e| e.into_field_error())
     }

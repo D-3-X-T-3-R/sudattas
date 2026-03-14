@@ -24,6 +24,8 @@ pub mod product_attribute_mapping;
 pub mod product_attributes;
 pub mod product_categories;
 pub mod product_images;
+pub mod product_mood_mapping;
+pub mod product_moods;
 pub mod product_statuses;
 pub mod product_variants;
 pub mod products;

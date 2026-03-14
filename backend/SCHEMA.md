@@ -274,7 +274,7 @@ Stores CDN references (R2). Base64 path removed.
 | thumbnail_url | VARCHAR | Optional thumbnail URL |
 | AltText | VARCHAR | |
 
-### Reviews / ProductRatings / ProductAttributes / ProductVariants
+### Reviews / ProductRatings / ProductMoods / ProductVariants
 Standard product enrichment tables.
 
 ### Inventory

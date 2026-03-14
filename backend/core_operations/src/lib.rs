@@ -19,15 +19,15 @@ use proto::proto::core::{
     CreateFabricRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
     CreateNewsletterSubscriberRequest, CreateOccasionRequest, CreateOrderDetailsRequest,
     CreateOrderEventRequest, CreateOrderRequest, CreatePaymentIntentRequest,
-    CreateProductAttributeMappingRequest, CreateProductAttributeRequest, CreateProductRequest,
+    CreateProductMoodMappingRequest, CreateProductMoodRequest, CreateProductRequest,
     CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest, CreateShipmentRequest,
     CreateShippingAddressRequest, CreateShippingMethodRequest, CreateSizeRequest,
     CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest, CreateUserRoleRequest,
     CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest, DeleteColorRequest,
     DeleteEventLogRequest, DeleteFabricRequest, DeleteInventoryItemRequest,
     DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOccasionRequest,
-    DeleteOrderRequest, DeleteProductAttributeMappingRequest, DeleteProductAttributeRequest,
-    DeleteProductImageRequest, DeleteProductRequest, DeleteProductVariantRequest,
+    DeleteOrderRequest, DeleteProductImageRequest, DeleteProductMoodMappingRequest,
+    DeleteProductMoodRequest, DeleteProductRequest, DeleteProductVariantRequest,
     DeleteReviewRequest, DeleteShippingAddressRequest, DeleteShippingMethodRequest,
     DeleteSizeRequest, DeleteTransactionRequest, DeleteUserActivityRequest, DeleteUserRequest,
     DeleteUserRoleRequest, DeleteWeaveRequest, DeleteWishlistItemRequest,
@@ -39,15 +39,15 @@ use proto::proto::core::{
     IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
     NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse, OrderEventsResponse,
     OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse, PlaceOrderRequest,
-    PresignedUploadUrlResponse, ProductAttributeMappingsResponse, ProductAttributesResponse,
-    ProductImagesResponse, ProductVariantsResponse, ProductsResponse, ReadinessRequest,
+    PresignedUploadUrlResponse, ProductImagesResponse, ProductMoodMappingsResponse,
+    ProductMoodsResponse, ProductVariantsResponse, ProductsResponse, ReadinessRequest,
     ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
     ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ReviewsResponse, SearchCategoryRequest,
     SearchColorRequest, SearchEventLogRequest, SearchFabricRequest, SearchInventoryItemRequest,
     SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOccasionRequest,
     SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
-    SearchOrderStatusRequest, SearchProductAttributeMappingRequest, SearchProductAttributeRequest,
-    SearchProductImageRequest, SearchProductRequest, SearchProductVariantRequest,
+    SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
+    SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
     SearchReviewRequest, SearchShippingMethodRequest, SearchSizeRequest, SearchTransactionRequest,
     SearchUserActivityRequest, SearchUserRequest, SearchUserRoleRequest, SearchWeaveRequest,
     SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
@@ -55,8 +55,8 @@ use proto::proto::core::{
     UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest, UpdateEventLogRequest,
     UpdateFabricRequest, UpdateInventoryItemRequest, UpdateInventoryLogRequest,
     UpdateNewsletterSubscriberRequest, UpdateOccasionRequest, UpdateOrderDetailRequest,
-    UpdateOrderRequest, UpdateProductAttributeRequest, UpdateProductImageRequest,
-    UpdateProductRequest, UpdateProductVariantRequest, UpdateReviewRequest, UpdateShipmentRequest,
+    UpdateOrderRequest, UpdateProductImageRequest, UpdateProductMoodRequest, UpdateProductRequest,
+    UpdateProductVariantRequest, UpdateReviewRequest, UpdateShipmentRequest,
     UpdateShippingAddressRequest, UpdateShippingMethodRequest, UpdateSizeRequest,
     UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest,
     UpdateWeaveRequest, UserActivitiesResponse, UserRolesResponse, UsersResponse,
@@ -983,11 +983,11 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
-    // ProductAttributes Services
-    async fn create_product_attribute(
+    // ProductMoods Services
+    async fn create_product_mood(
         &self,
-        request: Request<CreateProductAttributeRequest>,
-    ) -> Result<Response<ProductAttributesResponse>, Status> {
+        request: Request<CreateProductMoodRequest>,
+    ) -> Result<Response<ProductMoodsResponse>, Status> {
         let txn = self
             .db
             .as_ref()
@@ -995,15 +995,15 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attributes::create_product_attribute(&txn, request).await?;
+        let res = handlers::product_moods::create_product_mood(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
 
-    async fn search_product_attribute(
+    async fn search_product_mood(
         &self,
-        request: Request<SearchProductAttributeRequest>,
-    ) -> Result<Response<ProductAttributesResponse>, Status> {
+        request: Request<SearchProductMoodRequest>,
+    ) -> Result<Response<ProductMoodsResponse>, Status> {
         let txn = self
             .db
             .as_ref()
@@ -1011,15 +1011,15 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attributes::search_product_attribute(&txn, request).await?;
+        let res = handlers::product_moods::search_product_mood(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
 
-    async fn update_product_attribute(
+    async fn update_product_mood(
         &self,
-        request: Request<UpdateProductAttributeRequest>,
-    ) -> Result<Response<ProductAttributesResponse>, Status> {
+        request: Request<UpdateProductMoodRequest>,
+    ) -> Result<Response<ProductMoodsResponse>, Status> {
         let txn = self
             .db
             .as_ref()
@@ -1027,15 +1027,15 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attributes::update_product_attribute(&txn, request).await?;
+        let res = handlers::product_moods::update_product_mood(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
 
-    async fn delete_product_attribute(
+    async fn delete_product_mood(
         &self,
-        request: Request<DeleteProductAttributeRequest>,
-    ) -> Result<Response<ProductAttributesResponse>, Status> {
+        request: Request<DeleteProductMoodRequest>,
+    ) -> Result<Response<ProductMoodsResponse>, Status> {
         let txn = self
             .db
             .as_ref()
@@ -1043,7 +1043,7 @@ impl GrpcServices for MyGRPCServices {
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
-        let res = handlers::product_attributes::delete_product_attribute(&txn, request).await?;
+        let res = handlers::product_moods::delete_product_mood(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1637,11 +1637,11 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
-    // ProductAttributeMapping Services
-    async fn create_product_attribute_mapping(
+    // ProductMoodMapping Services
+    async fn create_product_mood_mapping(
         &self,
-        request: Request<CreateProductAttributeMappingRequest>,
-    ) -> Result<Response<ProductAttributeMappingsResponse>, Status> {
+        request: Request<CreateProductMoodMappingRequest>,
+    ) -> Result<Response<ProductMoodMappingsResponse>, Status> {
         let txn = self
             .db
             .as_ref()
@@ -1650,16 +1650,15 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res =
-            handlers::product_attribute_mappings::create_product_attribute_mapping(&txn, request)
-                .await?;
+            handlers::product_mood_mappings::create_product_mood_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
 
-    async fn search_product_attribute_mapping(
+    async fn search_product_mood_mapping(
         &self,
-        request: Request<SearchProductAttributeMappingRequest>,
-    ) -> Result<Response<ProductAttributeMappingsResponse>, Status> {
+        request: Request<SearchProductMoodMappingRequest>,
+    ) -> Result<Response<ProductMoodMappingsResponse>, Status> {
         let txn = self
             .db
             .as_ref()
@@ -1668,16 +1667,15 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res =
-            handlers::product_attribute_mappings::search_product_attribute_mapping(&txn, request)
-                .await?;
+            handlers::product_mood_mappings::search_product_mood_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
 
-    async fn delete_product_attribute_mapping(
+    async fn delete_product_mood_mapping(
         &self,
-        request: Request<DeleteProductAttributeMappingRequest>,
-    ) -> Result<Response<ProductAttributeMappingsResponse>, Status> {
+        request: Request<DeleteProductMoodMappingRequest>,
+    ) -> Result<Response<ProductMoodMappingsResponse>, Status> {
         let txn = self
             .db
             .as_ref()
@@ -1686,8 +1684,7 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res =
-            handlers::product_attribute_mappings::delete_product_attribute_mapping(&txn, request)
-                .await?;
+            handlers::product_mood_mappings::delete_product_mood_mapping(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
