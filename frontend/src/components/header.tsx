@@ -67,7 +67,7 @@ export function Header({
             aria-label="Open menu"
             className="md:hidden"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-6 w-6 shrink-0" strokeWidth={2.5} />
           </Button>
           <nav className="hidden md:flex md:items-center md:gap-6">
             {NAV_LINKS.map(({ id, label }) => (
@@ -75,7 +75,7 @@ export function Header({
                 key={id}
                 type="button"
                 onClick={() => goTo(id, false)}
-                className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent-gold)]"
+                className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent-gold)]"
               >
                 {label}
               </button>
@@ -100,7 +100,7 @@ export function Header({
                 autoFocus
                 onBlur={() => setSearchOpen(false)}
               />
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+              <Search className="absolute left-3 top-1/2 h-6 w-6 -translate-y-1/2 text-[var(--color-muted)]" strokeWidth={2.5} />
             </div>
           ) : (
             <Button
@@ -110,7 +110,7 @@ export function Header({
               aria-label="Search"
               className="md:flex"
             >
-              <Search className="h-5 w-5" />
+              <Search className="h-6 w-6 shrink-0" strokeWidth={2.5} />
             </Button>
           )}
           <Button
@@ -120,9 +120,9 @@ export function Header({
             aria-label="Wishlist"
             className={cn("relative", wishCount > 0 && "text-[var(--color-accent-gold)]")}
           >
-            <Heart className="h-5 w-5" />
+            <Heart className="h-6 w-6 shrink-0" strokeWidth={2.5} />
             {wishCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-xs font-semibold text-white">
                 {wishCount}
               </span>
             )}
@@ -135,9 +135,9 @@ export function Header({
             asChild
           >
             <Link href="/bag">
-              <ShoppingBag className="h-5 w-5" />
+              <ShoppingBag className="h-6 w-6 shrink-0" strokeWidth={2.5} />
               {cartCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-xs font-semibold text-white">
                   {cartCount}
                 </span>
               )}
