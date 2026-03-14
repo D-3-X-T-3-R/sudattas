@@ -59,7 +59,6 @@ import { useRazorpayTest } from "@/hooks/use-razorpay-test";
 import { goTo } from "@/hooks/use-scroll-to";
 import { Header } from "@/components/header";
 import { HeroSection } from "@/components/hero-section";
-import { EditorialStrip } from "@/components/editorial-strip";
 import { CollectionsSection } from "@/components/collections-section";
 import { EditorialBlock } from "@/components/editorial-block";
 import { SectionNav } from "@/components/section-nav";
@@ -230,8 +229,6 @@ export function Storefront() {
           </div>
         </div>
       )}
-
-      <EditorialStrip />
 
       <CollectionsSection
         setCollection={setCollection}
