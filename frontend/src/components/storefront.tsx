@@ -215,7 +215,7 @@ export function Storefront() {
 
       {productsError && !productsBannerDismissed && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <div className="mx-auto flex max-w-7xl items-start justify-between gap-3">
+          <div className="mx-auto flex max-w-[2000px] items-start justify-between gap-3">
             <p className="min-w-0">
               <strong>Sample products only.</strong> Catalog could not be loaded ({productsError}). To show your DB products: in <code className="rounded bg-amber-100 px-1">.env.local</code> set <code className="rounded bg-amber-100 px-1">NEXT_PUBLIC_GRAPHQL_URL</code> (e.g. http://localhost:8080/v2) and <code className="rounded bg-amber-100 px-1">NEXT_PUBLIC_ADMIN_API_KEY</code> to match the backend <code className="rounded bg-amber-100 px-1">ADMIN_API_KEY</code>, then restart the dev server.
             </p>

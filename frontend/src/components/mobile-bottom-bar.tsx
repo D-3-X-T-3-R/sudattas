@@ -24,7 +24,7 @@ export function MobileBottomBar({
 }: MobileBottomBarProps) {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-[var(--color-line)] bg-[rgba(247,245,240,0.88)] backdrop-blur md:hidden">
-      <div className="mx-auto max-w-7xl px-4 py-2">
+      <div className="mx-auto max-w-[2000px] px-4 py-2">
         <div className="flex items-center justify-between">
           <button
             type="button"

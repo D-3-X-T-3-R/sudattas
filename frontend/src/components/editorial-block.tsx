@@ -22,7 +22,7 @@ export function EditorialBlock() {
   return (
     <Section fullWidth className="overflow-hidden bg-[var(--color-ivory)]">
       <ScrollReveal delay={0}>
-        <div className="mx-auto max-w-7xl px-4">
+        <div className="mx-auto max-w-[2000px] px-4">
           <div className="grid gap-16 lg:grid-cols-12 lg:gap-24">
             <div className="relative aspect-[4/5] min-h-[400px] overflow-hidden lg:col-span-7">
               <motion.div
