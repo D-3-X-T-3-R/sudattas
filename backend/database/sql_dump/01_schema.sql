@@ -1,53 +1,10 @@
 SET character_set_client = utf8mb4;
 
-CREATE DATABASE IF NOT EXISTS `SUDATTAS`;
+DROP DATABASE IF EXISTS `SUDATTAS`;
+CREATE DATABASE `SUDATTAS`;
 USE `SUDATTAS`;
 
--- Dropping existing tables if they exist;
--- Dropping tables with dependencies first
-
 SET FOREIGN_KEY_CHECKS = 0;
-
-DROP TABLE IF EXISTS `OutboxEvents`;
-DROP TABLE IF EXISTS `OrderEvents`;
-DROP TABLE IF EXISTS `WebhookEvents`;
-DROP TABLE IF EXISTS `Shipments`;
-DROP TABLE IF EXISTS `PaymentIntents`;
-DROP TABLE IF EXISTS `IdempotencyKeys`;
-DROP TABLE IF EXISTS `Sessions`;
-DROP TABLE IF EXISTS `Coupons`;
-DROP TABLE IF EXISTS `OrderDetails`;
-DROP TABLE IF EXISTS `Cart`;
-DROP TABLE IF EXISTS `Wishlist`;
-DROP TABLE IF EXISTS `ProductImages`;
-DROP TABLE IF EXISTS `Reviews`;
-DROP TABLE IF EXISTS `Transactions`;
-DROP TABLE IF EXISTS `NewsletterSubscribers`;
-DROP TABLE IF EXISTS `InventoryLog`;
-DROP TABLE IF EXISTS `UserActivity`;
-DROP TABLE IF EXISTS `EventLogs`;
-DROP TABLE IF EXISTS `Inventory`;
-DROP TABLE IF EXISTS `Orders`;
-DROP TABLE IF EXISTS `ProductVariants`;
-DROP TABLE IF EXISTS `Products`;
-DROP TABLE IF EXISTS `ProductCategories`;
-DROP TABLE IF EXISTS `ProductMoodMapping`;
-DROP TABLE IF EXISTS `ProductMoods`;
-DROP TABLE IF EXISTS `ShippingMethods`;
-DROP TABLE IF EXISTS `UserRoles`;
-DROP TABLE IF EXISTS `Sizes`;
-DROP TABLE IF EXISTS `Colors`;
-DROP TABLE IF EXISTS `ShippingAddresses`;
-DROP TABLE IF EXISTS `OrderStatus`;
-DROP TABLE IF EXISTS `SecurityAuditLog`;
-DROP TABLE IF EXISTS `Users`;
-DROP TABLE IF EXISTS `UserStatuses`;
-DROP TABLE IF EXISTS `ProductStatuses`;
-DROP TABLE IF EXISTS `CouponRedemptions`;
-DROP TABLE IF EXISTS `CouponScope`;
-DROP TABLE IF EXISTS `Refunds`;
-
-SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================================
 -- CORE TABLES (Production-Ready)
