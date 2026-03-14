@@ -592,37 +592,33 @@ message WishlistItemsResponse {
     repeated WishlistItemResponse items = 1;
 }
 
-// ProductAttributes (schema: lookup only; UNIQUE(AttributeName, AttributeValue); link products via ProductAttributeMapping)
+// ProductMoods (schema: lookup only; id + MoodName; link products via ProductMoodMapping)
 
-message CreateProductAttributeRequest {
-    string attribute_name = 1;
-    string attribute_value = 2;
+message CreateProductMoodRequest {
+    string mood_name = 1;
 }
 
-message SearchProductAttributeRequest {
-    optional int64 attribute_id = 1;
-    optional string attribute_name = 2;
-    optional string attribute_value = 3;
+message SearchProductMoodRequest {
+    optional int64 mood_id = 1;
+    optional string mood_name = 2;
 }
 
-message UpdateProductAttributeRequest {
-    int64 attribute_id = 1;
-    optional string attribute_name = 2;
-    optional string attribute_value = 3;
+message UpdateProductMoodRequest {
+    int64 mood_id = 1;
+    optional string mood_name = 2;
 }
 
-message DeleteProductAttributeRequest {
-    int64 attribute_id = 1;
+message DeleteProductMoodRequest {
+    int64 mood_id = 1;
 }
 
-message ProductAttributeResponse {
-    int64 attribute_id = 1;
-    string attribute_name = 2;
-    string attribute_value = 3;
+message ProductMoodResponse {
+    int64 mood_id = 1;
+    string mood_name = 2;
 }
 
-message ProductAttributesResponse {
-    repeated ProductAttributeResponse items = 1;
+message ProductMoodsResponse {
+    repeated ProductMoodResponse items = 1;
 }
 
 // ShippingMethods
@@ -891,30 +887,30 @@ message ColorsResponse {
     repeated ColorResponse items = 1;
 }
 
-// ProductAttributeMapping (schema: many-to-many Products <-> ProductAttributes)
+// ProductMoodMapping (schema: many-to-many Products <-> ProductMoods)
 
-message CreateProductAttributeMappingRequest {
+message CreateProductMoodMappingRequest {
     int64 product_id = 1;
-    int64 attribute_id = 2;
+    int64 mood_id = 2;
 }
 
-message SearchProductAttributeMappingRequest {
+message SearchProductMoodMappingRequest {
     int64 product_id = 1;
-    int64 attribute_id = 2;
+    int64 mood_id = 2;
 }
 
-message DeleteProductAttributeMappingRequest {
+message DeleteProductMoodMappingRequest {
     int64 product_id = 1;
-    int64 attribute_id = 2;
+    int64 mood_id = 2;
 }
 
-message ProductAttributeMappingResponse {
+message ProductMoodMappingResponse {
     int64 product_id = 1;
-    int64 attribute_id = 2;
+    int64 mood_id = 2;
 }
 
-message ProductAttributeMappingsResponse {
-    repeated ProductAttributeMappingResponse items = 1;
+message ProductMoodMappingsResponse {
+    repeated ProductMoodMappingResponse items = 1;
 }
 
 // ProductVariants

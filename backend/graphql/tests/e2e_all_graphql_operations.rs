@@ -1042,17 +1042,17 @@ async fn e2e_admin_review_status_and_variants_and_coupons() {
 
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_product_attributes_and_mappings() {
+async fn e2e_product_moods_and_mappings() {
     let (status, body) = post_gql(
         &Client::new(),
         r#"
         mutation {
-          createProductAttribute(input: { attributeName: "Material", attributeValue: "Cotton" }) {
-            attributeId
+          createProductMood(input: { moodName: "Elegant" }) {
+            moodId
           }
-          createProductAttributeMapping(input: { productId: "1", attributeId: "1" }) {
+          createProductMoodMapping(input: { productId: "1", moodId: "1" }) {
             productId
-            attributeId
+            moodId
           }
         }
         "#,

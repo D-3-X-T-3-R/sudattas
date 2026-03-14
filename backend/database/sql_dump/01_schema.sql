@@ -31,8 +31,8 @@ DROP TABLE IF EXISTS `Orders`;
 DROP TABLE IF EXISTS `ProductVariants`;
 DROP TABLE IF EXISTS `Products`;
 DROP TABLE IF EXISTS `ProductCategories`;
-DROP TABLE IF EXISTS `ProductAttributes`;
-DROP TABLE IF EXISTS `ProductAttributeMapping`;
+DROP TABLE IF EXISTS `ProductMoodMapping`;
+DROP TABLE IF EXISTS `ProductMoods`;
 DROP TABLE IF EXISTS `ShippingMethods`;
 DROP TABLE IF EXISTS `UserRoles`;
 DROP TABLE IF EXISTS `Sizes`;
@@ -223,13 +223,30 @@ INSERT IGNORE INTO `ProductStatuses` (`code`) VALUES
   ('active'),
   ('archived');
 
-CREATE TABLE `ProductAttributes` (
-    `AttributeID` BIGINT NOT NULL AUTO_INCREMENT,
-    `AttributeName` VARCHAR(255) NOT NULL,
-    `AttributeValue` VARCHAR(255) NOT NULL,
-    PRIMARY KEY (`AttributeID`),
-    UNIQUE KEY `uq_attr` (`AttributeName`, `AttributeValue`)
+CREATE TABLE `ProductMoods` (
+    `MoodID` BIGINT NOT NULL AUTO_INCREMENT,
+    `MoodName` VARCHAR(255) NOT NULL,
+    PRIMARY KEY (`MoodID`),
+    UNIQUE KEY `uq_mood_name` (`MoodName`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `ProductMoods` (`MoodName`) VALUES
+  ('TANT-ER-SAAJ'),
+  ('Doodh e Alta'),
+  ('Amar Kolkata'),
+  ('Kanchi Canvas'),
+  ('Khadi Roots'),
+  ('Cotton Carnival'),
+  ('The Weaver''s Whisper'),
+  ('Summer Softs'),
+  ('Daily Diva'),
+  ('Mom chitra'),
+  ('Aura of Tussar'),
+  ('Gamcha Fusion Series'),
+  ('Silken Whispers'),
+  ('Kantha Tussar Treasures'),
+  ('The Jamdani Tussar Series'),
+  ('Tussar Embroidered Tales');
 
 -- Table structure for table `Products` (Enhanced for saree e-commerce)
 CREATE TABLE `Products` (
@@ -259,14 +276,14 @@ CREATE TABLE `Products` (
       FOREIGN KEY (`product_status_id`) REFERENCES `ProductStatuses`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Many-to-many mapping between products and attributes
-CREATE TABLE `ProductAttributeMapping` (
+-- Many-to-many mapping between products and moods
+CREATE TABLE `ProductMoodMapping` (
     `ProductID` BIGINT NOT NULL,
-    `AttributeID` BIGINT NOT NULL,
-    PRIMARY KEY (`ProductID`, `AttributeID`),
+    `MoodID` BIGINT NOT NULL,
+    PRIMARY KEY (`ProductID`, `MoodID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`) ON DELETE CASCADE,
-    FOREIGN KEY (`AttributeID`) REFERENCES `ProductAttributes`(`AttributeID`) ON DELETE CASCADE,
-    INDEX `idx_attr_product` (`AttributeID`, `ProductID`)
+    FOREIGN KEY (`MoodID`) REFERENCES `ProductMoods`(`MoodID`) ON DELETE CASCADE,
+    INDEX `idx_mood_product` (`MoodID`, `ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `OrderStatus`

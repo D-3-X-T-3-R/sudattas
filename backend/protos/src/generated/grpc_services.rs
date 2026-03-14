@@ -1088,58 +1088,50 @@ pub struct WishlistItemsResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CreateProductAttributeRequest {
+pub struct CreateProductMoodRequest {
     #[prost(string, tag = "1")]
-    pub attribute_name: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub attribute_value: ::prost::alloc::string::String,
+    pub mood_name: ::prost::alloc::string::String,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SearchProductAttributeRequest {
+pub struct SearchProductMoodRequest {
     #[prost(int64, optional, tag = "1")]
-    pub attribute_id: ::core::option::Option<i64>,
+    pub mood_id: ::core::option::Option<i64>,
     #[prost(string, optional, tag = "2")]
-    pub attribute_name: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "3")]
-    pub attribute_value: ::core::option::Option<::prost::alloc::string::String>,
+    pub mood_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateProductAttributeRequest {
+pub struct UpdateProductMoodRequest {
     #[prost(int64, tag = "1")]
-    pub attribute_id: i64,
+    pub mood_id: i64,
     #[prost(string, optional, tag = "2")]
-    pub attribute_name: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "3")]
-    pub attribute_value: ::core::option::Option<::prost::alloc::string::String>,
+    pub mood_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct DeleteProductAttributeRequest {
+pub struct DeleteProductMoodRequest {
     #[prost(int64, tag = "1")]
-    pub attribute_id: i64,
+    pub mood_id: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ProductAttributeResponse {
+pub struct ProductMoodResponse {
     #[prost(int64, tag = "1")]
-    pub attribute_id: i64,
+    pub mood_id: i64,
     #[prost(string, tag = "2")]
-    pub attribute_name: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub attribute_value: ::prost::alloc::string::String,
+    pub mood_name: ::prost::alloc::string::String,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ProductAttributesResponse {
+pub struct ProductMoodsResponse {
     #[prost(message, repeated, tag = "1")]
-    pub items: ::prost::alloc::vec::Vec<ProductAttributeResponse>,
+    pub items: ::prost::alloc::vec::Vec<ProductMoodResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -1586,45 +1578,45 @@ pub struct ColorsResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CreateProductAttributeMappingRequest {
+pub struct CreateProductMoodMappingRequest {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
     #[prost(int64, tag = "2")]
-    pub attribute_id: i64,
+    pub mood_id: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SearchProductAttributeMappingRequest {
+pub struct SearchProductMoodMappingRequest {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
     #[prost(int64, tag = "2")]
-    pub attribute_id: i64,
+    pub mood_id: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct DeleteProductAttributeMappingRequest {
+pub struct DeleteProductMoodMappingRequest {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
     #[prost(int64, tag = "2")]
-    pub attribute_id: i64,
+    pub mood_id: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ProductAttributeMappingResponse {
+pub struct ProductMoodMappingResponse {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
     #[prost(int64, tag = "2")]
-    pub attribute_id: i64,
+    pub mood_id: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ProductAttributeMappingsResponse {
+pub struct ProductMoodMappingsResponse {
     #[prost(message, repeated, tag = "1")]
-    pub items: ::prost::alloc::vec::Vec<ProductAttributeMappingResponse>,
+    pub items: ::prost::alloc::vec::Vec<ProductMoodMappingResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -3802,12 +3794,12 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
-        /// ProductAttributes
-        pub async fn create_product_attribute(
+        /// ProductMoods
+        pub async fn create_product_mood(
             &mut self,
-            request: impl tonic::IntoRequest<super::CreateProductAttributeRequest>,
+            request: impl tonic::IntoRequest<super::CreateProductMoodRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributesResponse>,
+            tonic::Response<super::ProductMoodsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -3821,23 +3813,20 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/CreateProductAttribute",
+                "/grpc_services.GRPCServices/CreateProductMood",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new(
-                        "grpc_services.GRPCServices",
-                        "CreateProductAttribute",
-                    ),
+                    GrpcMethod::new("grpc_services.GRPCServices", "CreateProductMood"),
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn search_product_attribute(
+        pub async fn search_product_mood(
             &mut self,
-            request: impl tonic::IntoRequest<super::SearchProductAttributeRequest>,
+            request: impl tonic::IntoRequest<super::SearchProductMoodRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributesResponse>,
+            tonic::Response<super::ProductMoodsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -3851,23 +3840,20 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/SearchProductAttribute",
+                "/grpc_services.GRPCServices/SearchProductMood",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new(
-                        "grpc_services.GRPCServices",
-                        "SearchProductAttribute",
-                    ),
+                    GrpcMethod::new("grpc_services.GRPCServices", "SearchProductMood"),
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn update_product_attribute(
+        pub async fn update_product_mood(
             &mut self,
-            request: impl tonic::IntoRequest<super::UpdateProductAttributeRequest>,
+            request: impl tonic::IntoRequest<super::UpdateProductMoodRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributesResponse>,
+            tonic::Response<super::ProductMoodsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -3881,23 +3867,20 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/UpdateProductAttribute",
+                "/grpc_services.GRPCServices/UpdateProductMood",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new(
-                        "grpc_services.GRPCServices",
-                        "UpdateProductAttribute",
-                    ),
+                    GrpcMethod::new("grpc_services.GRPCServices", "UpdateProductMood"),
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn delete_product_attribute(
+        pub async fn delete_product_mood(
             &mut self,
-            request: impl tonic::IntoRequest<super::DeleteProductAttributeRequest>,
+            request: impl tonic::IntoRequest<super::DeleteProductMoodRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributesResponse>,
+            tonic::Response<super::ProductMoodsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -3911,15 +3894,12 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/DeleteProductAttribute",
+                "/grpc_services.GRPCServices/DeleteProductMood",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new(
-                        "grpc_services.GRPCServices",
-                        "DeleteProductAttribute",
-                    ),
+                    GrpcMethod::new("grpc_services.GRPCServices", "DeleteProductMood"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -4832,12 +4812,12 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "DeleteColor"));
             self.inner.unary(req, path, codec).await
         }
-        /// ProductAttributeMapping
-        pub async fn create_product_attribute_mapping(
+        /// ProductMoodMapping
+        pub async fn create_product_mood_mapping(
             &mut self,
-            request: impl tonic::IntoRequest<super::CreateProductAttributeMappingRequest>,
+            request: impl tonic::IntoRequest<super::CreateProductMoodMappingRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributeMappingsResponse>,
+            tonic::Response<super::ProductMoodMappingsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -4851,23 +4831,23 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/CreateProductAttributeMapping",
+                "/grpc_services.GRPCServices/CreateProductMoodMapping",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
                         "grpc_services.GRPCServices",
-                        "CreateProductAttributeMapping",
+                        "CreateProductMoodMapping",
                     ),
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn search_product_attribute_mapping(
+        pub async fn search_product_mood_mapping(
             &mut self,
-            request: impl tonic::IntoRequest<super::SearchProductAttributeMappingRequest>,
+            request: impl tonic::IntoRequest<super::SearchProductMoodMappingRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributeMappingsResponse>,
+            tonic::Response<super::ProductMoodMappingsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -4881,23 +4861,23 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/SearchProductAttributeMapping",
+                "/grpc_services.GRPCServices/SearchProductMoodMapping",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
                         "grpc_services.GRPCServices",
-                        "SearchProductAttributeMapping",
+                        "SearchProductMoodMapping",
                     ),
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn delete_product_attribute_mapping(
+        pub async fn delete_product_mood_mapping(
             &mut self,
-            request: impl tonic::IntoRequest<super::DeleteProductAttributeMappingRequest>,
+            request: impl tonic::IntoRequest<super::DeleteProductMoodMappingRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributeMappingsResponse>,
+            tonic::Response<super::ProductMoodMappingsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -4911,14 +4891,14 @@ pub mod grpc_services_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/grpc_services.GRPCServices/DeleteProductAttributeMapping",
+                "/grpc_services.GRPCServices/DeleteProductMoodMapping",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
                         "grpc_services.GRPCServices",
-                        "DeleteProductAttributeMapping",
+                        "DeleteProductMoodMapping",
                     ),
                 );
             self.inner.unary(req, path, codec).await
@@ -6228,33 +6208,33 @@ pub mod grpc_services_server {
             tonic::Response<super::WishlistItemsResponse>,
             tonic::Status,
         >;
-        /// ProductAttributes
-        async fn create_product_attribute(
+        /// ProductMoods
+        async fn create_product_mood(
             &self,
-            request: tonic::Request<super::CreateProductAttributeRequest>,
+            request: tonic::Request<super::CreateProductMoodRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributesResponse>,
+            tonic::Response<super::ProductMoodsResponse>,
             tonic::Status,
         >;
-        async fn search_product_attribute(
+        async fn search_product_mood(
             &self,
-            request: tonic::Request<super::SearchProductAttributeRequest>,
+            request: tonic::Request<super::SearchProductMoodRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributesResponse>,
+            tonic::Response<super::ProductMoodsResponse>,
             tonic::Status,
         >;
-        async fn update_product_attribute(
+        async fn update_product_mood(
             &self,
-            request: tonic::Request<super::UpdateProductAttributeRequest>,
+            request: tonic::Request<super::UpdateProductMoodRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributesResponse>,
+            tonic::Response<super::ProductMoodsResponse>,
             tonic::Status,
         >;
-        async fn delete_product_attribute(
+        async fn delete_product_mood(
             &self,
-            request: tonic::Request<super::DeleteProductAttributeRequest>,
+            request: tonic::Request<super::DeleteProductMoodRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributesResponse>,
+            tonic::Response<super::ProductMoodsResponse>,
             tonic::Status,
         >;
         /// ShippingMethods
@@ -6470,26 +6450,26 @@ pub mod grpc_services_server {
             &self,
             request: tonic::Request<super::DeleteColorRequest>,
         ) -> std::result::Result<tonic::Response<super::ColorsResponse>, tonic::Status>;
-        /// ProductAttributeMapping
-        async fn create_product_attribute_mapping(
+        /// ProductMoodMapping
+        async fn create_product_mood_mapping(
             &self,
-            request: tonic::Request<super::CreateProductAttributeMappingRequest>,
+            request: tonic::Request<super::CreateProductMoodMappingRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributeMappingsResponse>,
+            tonic::Response<super::ProductMoodMappingsResponse>,
             tonic::Status,
         >;
-        async fn search_product_attribute_mapping(
+        async fn search_product_mood_mapping(
             &self,
-            request: tonic::Request<super::SearchProductAttributeMappingRequest>,
+            request: tonic::Request<super::SearchProductMoodMappingRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributeMappingsResponse>,
+            tonic::Response<super::ProductMoodMappingsResponse>,
             tonic::Status,
         >;
-        async fn delete_product_attribute_mapping(
+        async fn delete_product_mood_mapping(
             &self,
-            request: tonic::Request<super::DeleteProductAttributeMappingRequest>,
+            request: tonic::Request<super::DeleteProductMoodMappingRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ProductAttributeMappingsResponse>,
+            tonic::Response<super::ProductMoodMappingsResponse>,
             tonic::Status,
         >;
         /// ProductVariants
@@ -9275,28 +9255,25 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/CreateProductAttribute" => {
+                "/grpc_services.GRPCServices/CreateProductMood" => {
                     #[allow(non_camel_case_types)]
-                    struct CreateProductAttributeSvc<T: GrpcServices>(pub Arc<T>);
+                    struct CreateProductMoodSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<super::CreateProductAttributeRequest>
-                    for CreateProductAttributeSvc<T> {
-                        type Response = super::ProductAttributesResponse;
+                    > tonic::server::UnaryService<super::CreateProductMoodRequest>
+                    for CreateProductMoodSvc<T> {
+                        type Response = super::ProductMoodsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::CreateProductAttributeRequest>,
+                            request: tonic::Request<super::CreateProductMoodRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::create_product_attribute(
-                                        &inner,
-                                        request,
-                                    )
+                                <T as GrpcServices>::create_product_mood(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -9309,7 +9286,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = CreateProductAttributeSvc(inner);
+                        let method = CreateProductMoodSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -9325,28 +9302,25 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/SearchProductAttribute" => {
+                "/grpc_services.GRPCServices/SearchProductMood" => {
                     #[allow(non_camel_case_types)]
-                    struct SearchProductAttributeSvc<T: GrpcServices>(pub Arc<T>);
+                    struct SearchProductMoodSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<super::SearchProductAttributeRequest>
-                    for SearchProductAttributeSvc<T> {
-                        type Response = super::ProductAttributesResponse;
+                    > tonic::server::UnaryService<super::SearchProductMoodRequest>
+                    for SearchProductMoodSvc<T> {
+                        type Response = super::ProductMoodsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::SearchProductAttributeRequest>,
+                            request: tonic::Request<super::SearchProductMoodRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::search_product_attribute(
-                                        &inner,
-                                        request,
-                                    )
+                                <T as GrpcServices>::search_product_mood(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -9359,7 +9333,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = SearchProductAttributeSvc(inner);
+                        let method = SearchProductMoodSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -9375,28 +9349,25 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/UpdateProductAttribute" => {
+                "/grpc_services.GRPCServices/UpdateProductMood" => {
                     #[allow(non_camel_case_types)]
-                    struct UpdateProductAttributeSvc<T: GrpcServices>(pub Arc<T>);
+                    struct UpdateProductMoodSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<super::UpdateProductAttributeRequest>
-                    for UpdateProductAttributeSvc<T> {
-                        type Response = super::ProductAttributesResponse;
+                    > tonic::server::UnaryService<super::UpdateProductMoodRequest>
+                    for UpdateProductMoodSvc<T> {
+                        type Response = super::ProductMoodsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::UpdateProductAttributeRequest>,
+                            request: tonic::Request<super::UpdateProductMoodRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::update_product_attribute(
-                                        &inner,
-                                        request,
-                                    )
+                                <T as GrpcServices>::update_product_mood(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -9409,7 +9380,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = UpdateProductAttributeSvc(inner);
+                        let method = UpdateProductMoodSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -9425,28 +9396,25 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/DeleteProductAttribute" => {
+                "/grpc_services.GRPCServices/DeleteProductMood" => {
                     #[allow(non_camel_case_types)]
-                    struct DeleteProductAttributeSvc<T: GrpcServices>(pub Arc<T>);
+                    struct DeleteProductMoodSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<super::DeleteProductAttributeRequest>
-                    for DeleteProductAttributeSvc<T> {
-                        type Response = super::ProductAttributesResponse;
+                    > tonic::server::UnaryService<super::DeleteProductMoodRequest>
+                    for DeleteProductMoodSvc<T> {
+                        type Response = super::ProductMoodsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::DeleteProductAttributeRequest>,
+                            request: tonic::Request<super::DeleteProductMoodRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::delete_product_attribute(
-                                        &inner,
-                                        request,
-                                    )
+                                <T as GrpcServices>::delete_product_mood(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -9459,7 +9427,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = DeleteProductAttributeSvc(inner);
+                        let method = DeleteProductMoodSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -11167,15 +11135,14 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/CreateProductAttributeMapping" => {
+                "/grpc_services.GRPCServices/CreateProductMoodMapping" => {
                     #[allow(non_camel_case_types)]
-                    struct CreateProductAttributeMappingSvc<T: GrpcServices>(pub Arc<T>);
+                    struct CreateProductMoodMappingSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<
-                        super::CreateProductAttributeMappingRequest,
-                    > for CreateProductAttributeMappingSvc<T> {
-                        type Response = super::ProductAttributeMappingsResponse;
+                    > tonic::server::UnaryService<super::CreateProductMoodMappingRequest>
+                    for CreateProductMoodMappingSvc<T> {
+                        type Response = super::ProductMoodMappingsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -11183,12 +11150,12 @@ pub mod grpc_services_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::CreateProductAttributeMappingRequest,
+                                super::CreateProductMoodMappingRequest,
                             >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::create_product_attribute_mapping(
+                                <T as GrpcServices>::create_product_mood_mapping(
                                         &inner,
                                         request,
                                     )
@@ -11204,7 +11171,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = CreateProductAttributeMappingSvc(inner);
+                        let method = CreateProductMoodMappingSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -11220,15 +11187,14 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/SearchProductAttributeMapping" => {
+                "/grpc_services.GRPCServices/SearchProductMoodMapping" => {
                     #[allow(non_camel_case_types)]
-                    struct SearchProductAttributeMappingSvc<T: GrpcServices>(pub Arc<T>);
+                    struct SearchProductMoodMappingSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<
-                        super::SearchProductAttributeMappingRequest,
-                    > for SearchProductAttributeMappingSvc<T> {
-                        type Response = super::ProductAttributeMappingsResponse;
+                    > tonic::server::UnaryService<super::SearchProductMoodMappingRequest>
+                    for SearchProductMoodMappingSvc<T> {
+                        type Response = super::ProductMoodMappingsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -11236,12 +11202,12 @@ pub mod grpc_services_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::SearchProductAttributeMappingRequest,
+                                super::SearchProductMoodMappingRequest,
                             >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::search_product_attribute_mapping(
+                                <T as GrpcServices>::search_product_mood_mapping(
                                         &inner,
                                         request,
                                     )
@@ -11257,7 +11223,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = SearchProductAttributeMappingSvc(inner);
+                        let method = SearchProductMoodMappingSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -11273,15 +11239,14 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
-                "/grpc_services.GRPCServices/DeleteProductAttributeMapping" => {
+                "/grpc_services.GRPCServices/DeleteProductMoodMapping" => {
                     #[allow(non_camel_case_types)]
-                    struct DeleteProductAttributeMappingSvc<T: GrpcServices>(pub Arc<T>);
+                    struct DeleteProductMoodMappingSvc<T: GrpcServices>(pub Arc<T>);
                     impl<
                         T: GrpcServices,
-                    > tonic::server::UnaryService<
-                        super::DeleteProductAttributeMappingRequest,
-                    > for DeleteProductAttributeMappingSvc<T> {
-                        type Response = super::ProductAttributeMappingsResponse;
+                    > tonic::server::UnaryService<super::DeleteProductMoodMappingRequest>
+                    for DeleteProductMoodMappingSvc<T> {
+                        type Response = super::ProductMoodMappingsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -11289,12 +11254,12 @@ pub mod grpc_services_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::DeleteProductAttributeMappingRequest,
+                                super::DeleteProductMoodMappingRequest,
                             >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GrpcServices>::delete_product_attribute_mapping(
+                                <T as GrpcServices>::delete_product_mood_mapping(
                                         &inner,
                                         request,
                                     )
@@ -11310,7 +11275,7 @@ pub mod grpc_services_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = DeleteProductAttributeMappingSvc(inner);
+                        let method = DeleteProductMoodMappingSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -83,11 +83,11 @@ service GRPCServices {
     rpc SearchWishlistItem(SearchWishlistItemRequest) returns (WishlistItemsResponse);
     rpc DeleteWishlistItem(DeleteWishlistItemRequest) returns (WishlistItemsResponse);
 
-    // ProductAttributes
-    rpc CreateProductAttribute(CreateProductAttributeRequest) returns (ProductAttributesResponse);
-    rpc SearchProductAttribute(SearchProductAttributeRequest) returns (ProductAttributesResponse);
-    rpc UpdateProductAttribute(UpdateProductAttributeRequest) returns (ProductAttributesResponse);
-    rpc DeleteProductAttribute(DeleteProductAttributeRequest) returns (ProductAttributesResponse);
+    // ProductMoods
+    rpc CreateProductMood(CreateProductMoodRequest) returns (ProductMoodsResponse);
+    rpc SearchProductMood(SearchProductMoodRequest) returns (ProductMoodsResponse);
+    rpc UpdateProductMood(UpdateProductMoodRequest) returns (ProductMoodsResponse);
+    rpc DeleteProductMood(DeleteProductMoodRequest) returns (ProductMoodsResponse);
 
     // ShippingMethods
     rpc CreateShippingMethod(CreateShippingMethodRequest) returns (ShippingMethodsResponse);
@@ -143,10 +143,10 @@ service GRPCServices {
     rpc UpdateColor(UpdateColorRequest) returns (ColorsResponse);
     rpc DeleteColor(DeleteColorRequest) returns (ColorsResponse);
 
-    // ProductAttributeMapping
-    rpc CreateProductAttributeMapping(CreateProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
-    rpc SearchProductAttributeMapping(SearchProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
-    rpc DeleteProductAttributeMapping(DeleteProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
+    // ProductMoodMapping
+    rpc CreateProductMoodMapping(CreateProductMoodMappingRequest) returns (ProductMoodMappingsResponse);
+    rpc SearchProductMoodMapping(SearchProductMoodMappingRequest) returns (ProductMoodMappingsResponse);
+    rpc DeleteProductMoodMapping(DeleteProductMoodMappingRequest) returns (ProductMoodMappingsResponse);
 
     // ProductVariants
     rpc CreateProductVariant(CreateProductVariantRequest) returns (ProductVariantsResponse);
