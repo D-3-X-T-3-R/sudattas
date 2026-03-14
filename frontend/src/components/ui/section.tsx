@@ -28,7 +28,7 @@ export function Section({
       id={id}
       className={cn(
         compact ? "py-8 md:py-10" : "py-14 sm:py-16 md:py-24 lg:py-28",
-        !fullWidth && "mx-auto max-w-7xl px-4",
+        !fullWidth && "mx-auto max-w-[2000px] px-4",
         className
       )}
     >

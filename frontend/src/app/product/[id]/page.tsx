@@ -101,7 +101,7 @@ export default function ProductPage() {
         goTo={goToHome}
       />
 
-      <div className="mx-auto min-w-0 max-w-7xl px-4 py-4">
+      <div className="mx-auto min-w-0 max-w-[2000px] px-4 py-4">
         <Button
           variant="ghost"
           size="sm"

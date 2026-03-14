@@ -4,16 +4,14 @@ import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { HERO_IMAGES } from "@/lib/seed-data";
 import { goTo } from "@/hooks/use-scroll-to";
 
 export function HeroSection() {
   const reduceMotion = useReducedMotion();
-  const hero = HERO_IMAGES[0];
 
   return (
     <section className="relative bg-[var(--background)]">
-      <div className="mx-auto w-full max-w-7xl px-4 py-0">
+      <div className="mx-auto w-full max-w-[2000px] px-4 py-0">
         {/* Mobile: models-only hero image */}
         <div className="block md:hidden">
           <Image
@@ -26,11 +24,11 @@ export function HeroSection() {
           />
         </div>
 
-        {/* Desktop / tablet: composite hero image with logo + models */}
+        {/* Desktop / tablet: composite hero image */}
         <div className="hidden md:block">
           <Image
-            src={hero.src}
-            alt={hero.alt}
+            src="/hero/hero-sudattas-full-2.png"
+            alt="Sudatta's handcrafted sarees hero – desktop"
             width={3200}
             height={2133}
             className="w-full h-auto"

@@ -10,7 +10,7 @@ interface FooterProps {
 export function Footer({ goTo }: FooterProps) {
   return (
     <footer className="border-t border-[var(--color-line)] py-14 sm:py-16 md:py-24">
-      <div className="mx-auto grid max-w-7xl gap-12 px-4 md:grid-cols-4">
+      <div className="mx-auto grid max-w-[2000px] gap-12 px-4 md:grid-cols-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="h-px w-6 bg-[var(--color-accent-gold)]" />

@@ -58,7 +58,7 @@ export function Header({
           : "border-b border-transparent bg-[var(--color-deep-green)]/80"
       )}
     >
-      <div className="mx-auto grid max-w-7xl grid-cols-3 items-center gap-4 px-4 py-4">
+      <div className="mx-auto grid max-w-[2000px] grid-cols-3 items-center gap-4 px-4 py-4">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
