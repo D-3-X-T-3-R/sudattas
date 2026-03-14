@@ -18,8 +18,6 @@ pub use super::order_status::Entity as OrderStatus;
 pub use super::orders::Entity as Orders;
 pub use super::outbox_events::Entity as OutboxEvents;
 pub use super::payment_intents::Entity as PaymentIntents;
-pub use super::product_attribute_mapping::Entity as ProductAttributeMapping;
-pub use super::product_attributes::Entity as ProductAttributes;
 pub use super::product_categories::Entity as ProductCategories;
 pub use super::product_images::Entity as ProductImages;
 pub use super::product_mood_mapping::Entity as ProductMoodMapping;
