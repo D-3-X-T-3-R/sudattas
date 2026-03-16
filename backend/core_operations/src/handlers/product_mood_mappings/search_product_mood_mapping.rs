@@ -12,12 +12,15 @@ pub async fn search_product_mood_mapping(
 ) -> Result<Response<ProductMoodMappingsResponse>, Status> {
     let req = request.into_inner();
 
-    match product_mood_mapping::Entity::find()
-        .filter(product_mood_mapping::Column::ProductId.eq(req.product_id))
-        .filter(product_mood_mapping::Column::MoodId.eq(req.mood_id))
-        .all(txn)
-        .await
-    {
+    let mut query = product_mood_mapping::Entity::find()
+        .filter(product_mood_mapping::Column::ProductId.eq(req.product_id));
+    if let Some(mood_id) = req.mood_id {
+        if mood_id != 0 {
+            query = query.filter(product_mood_mapping::Column::MoodId.eq(mood_id));
+        }
+    }
+
+    match query.all(txn).await {
         Ok(models) => {
             let items = models
                 .into_iter()

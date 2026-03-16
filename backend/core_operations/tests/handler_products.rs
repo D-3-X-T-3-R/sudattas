@@ -216,6 +216,7 @@ async fn search_product_filters_by_multiple_fields_and_pagination() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        mood_id: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -268,6 +269,7 @@ async fn search_product_filters_by_product_id_only() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        mood_id: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -318,6 +320,7 @@ async fn search_product_filters_by_name_only() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        mood_id: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -367,6 +370,7 @@ async fn search_product_filters_by_category_only() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        mood_id: None,
     });
 
     let result = search_product(&txn, req).await;
@@ -416,6 +420,7 @@ async fn search_product_filters_by_price_range_only() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        mood_id: None,
     });
 
     let result = search_product(&txn, req).await;

@@ -51,17 +51,18 @@ use proto::proto::core::{
     SearchReviewRequest, SearchShippingMethodRequest, SearchSizeRequest, SearchTransactionRequest,
     SearchUserActivityRequest, SearchUserRequest, SearchUserRoleRequest, SearchWeaveRequest,
     SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
-    ShippingMethodsResponse, SizesResponse, TransactionsResponse, UpdateCartItemRequest,
-    UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest, UpdateEventLogRequest,
-    UpdateFabricRequest, UpdateInventoryItemRequest, UpdateInventoryLogRequest,
-    UpdateNewsletterSubscriberRequest, UpdateOccasionRequest, UpdateOrderDetailRequest,
-    UpdateOrderRequest, UpdateProductImageRequest, UpdateProductMoodRequest, UpdateProductRequest,
-    UpdateProductVariantRequest, UpdateReviewRequest, UpdateShipmentRequest,
-    UpdateShippingAddressRequest, UpdateShippingMethodRequest, UpdateSizeRequest,
-    UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest,
-    UpdateWeaveRequest, UserActivitiesResponse, UserRolesResponse, UsersResponse,
-    ValidateCouponRequest, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
-    WeavesResponse, WebhookEventsResponse, WishlistItemsResponse,
+    ShippingMethodsResponse, SizesResponse, SyncProductImagesRequest, TransactionsResponse,
+    UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest,
+    UpdateEventLogRequest, UpdateFabricRequest, UpdateInventoryItemRequest,
+    UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOccasionRequest,
+    UpdateOrderDetailRequest, UpdateOrderRequest, UpdateProductImageRequest,
+    UpdateProductMoodRequest, UpdateProductRequest, UpdateProductVariantRequest,
+    UpdateReviewRequest, UpdateShipmentRequest, UpdateShippingAddressRequest,
+    UpdateShippingMethodRequest, UpdateSizeRequest, UpdateTransactionRequest,
+    UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UpdateWeaveRequest,
+    UserActivitiesResponse, UserRolesResponse, UsersResponse, ValidateCouponRequest,
+    VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse, WeavesResponse,
+    WebhookEventsResponse, WishlistItemsResponse,
 };
 
 use sea_orm::TransactionTrait;
@@ -2244,6 +2245,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::product_images::confirm_image_upload(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn sync_product_images(
+        &self,
+        request: Request<SyncProductImagesRequest>,
+    ) -> Result<Response<ProductImagesResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_images::sync_product_images(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

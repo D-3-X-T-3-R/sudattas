@@ -70,7 +70,7 @@ async fn search_product_mood_mapping_filters_by_product_and_mood() {
 
     let req = Request::new(SearchProductMoodMappingRequest {
         product_id: 20,
-        mood_id: 8,
+        mood_id: Some(8),
     });
     let result = search_product_mood_mapping(&txn, req).await;
     assert!(result.is_ok());

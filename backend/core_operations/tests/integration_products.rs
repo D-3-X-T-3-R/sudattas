@@ -80,6 +80,7 @@ async fn integration_create_product_search_by_name_and_category_returns_product(
             weave: None,
             occasion: None,
             product_status_id: None,
+            mood_id: None,
         }),
     )
     .await

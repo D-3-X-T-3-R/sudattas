@@ -26,10 +26,12 @@ pub struct NewProductMoodMapping {
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
-#[graphql(description = "Search product-mood mapping")]
+#[graphql(
+    description = "Search product-mood mapping (omit mood_id to list all moods for a product)"
+)]
 pub struct SearchProductMoodMappingInput {
     pub product_id: String,
-    pub mood_id: String,
+    pub mood_id: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

@@ -6,13 +6,15 @@ use core_db_entities::entity::{product_categories, product_images, products};
 use proto::proto::core::{GetPresignedUploadUrlRequest, PresignedUploadUrlResponse};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
+use uuid::Uuid;
 
 use super::r2_client::build_r2_client;
 use crate::handlers::db_errors::map_db_error_to_status;
 
 /// Generate a presigned upload URL for a product image.
 /// The R2 object key follows:
-/// `product/<category_name>/<product_id>_<sku>_<index>.<extension>`
+/// `product/<category_name>/<product_id>_<sku>_<index>_<unique>.<extension>`
+/// The `<unique>` suffix (8 hex chars) avoids collisions when two uploads get the same index (e.g. concurrent requests).
 pub async fn get_presigned_upload_url(
     db: &DatabaseConnection,
     request: Request<GetPresignedUploadUrlRequest>,
@@ -56,31 +58,16 @@ pub async fn get_presigned_upload_url(
         .collect();
 
     // Use display_order when provided (avoids race when uploading multiple images in parallel).
-    // Otherwise compute next index from existing ProductImages.
+    // Otherwise compute next index from max(display_order) + 1 for this product.
     let next_index: i32 = if let Some(order) = req.display_order {
         order + 1 // 0-based order → 1-based index for filename
     } else {
-        let existing = product_images::Entity::find()
+        let rows = product_images::Entity::find()
             .filter(product_images::Column::ProductId.eq(product.product_id))
-            .one(db)
+            .all(db)
             .await
             .map_err(map_db_error_to_status)?;
-
-        if let Some(model) = existing {
-            model
-                .urls
-                .as_object()
-                .map(|map| {
-                    map.keys()
-                        .filter_map(|k| k.parse::<i32>().ok())
-                        .max()
-                        .unwrap_or(0)
-                        + 1
-                })
-                .unwrap_or(1)
-        } else {
-            1
-        }
+        rows.into_iter().map(|m| m.display_order).max().unwrap_or(0) + 1
     };
 
     // Preserve the original file extension, if present.
@@ -89,15 +76,23 @@ pub async fn get_presigned_upload_url(
         .and_then(|os| os.to_str())
         .unwrap_or("");
 
+    // Unique suffix so two uploads never get the same key (avoids overwrite when index collides).
+    let unique: String = Uuid::new_v4()
+        .simple()
+        .to_string()
+        .chars()
+        .take(8)
+        .collect();
+
     let key = if ext.is_empty() {
         format!(
-            "product/{}/{}_{}_{}",
-            safe_category, product.product_id, safe_sku, next_index
+            "product/{}/{}_{}_{}_{}",
+            safe_category, product.product_id, safe_sku, next_index, unique
         )
     } else {
         format!(
-            "product/{}/{}_{}_{}.{}",
-            safe_category, product.product_id, safe_sku, next_index, ext
+            "product/{}/{}_{}_{}_{}.{}",
+            safe_category, product.product_id, safe_sku, next_index, unique, ext
         )
     };
 

@@ -78,6 +78,7 @@ pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>
             weave: search.weave,
             occasion: search.occasion,
             product_status_id: to_option_i64(search.product_status_id),
+            mood_id: to_option_i64(search.mood_id),
         })
         .await?;
 

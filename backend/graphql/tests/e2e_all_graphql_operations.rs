@@ -272,7 +272,7 @@ async fn e2e_query_search_inventory_item() {
 async fn e2e_query_search_product_image() {
     let (status, body) = post_gql(
         &Client::new(),
-        "query { searchProductImage(search: {}) { imageId productId objectKey } }",
+        "query { searchProductImage(search: {}) { imageId productId url } }",
         None,
     )
     .await;

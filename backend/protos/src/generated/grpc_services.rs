@@ -207,6 +207,9 @@ pub struct SearchProductRequest {
     pub occasion: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "12")]
     pub product_status_id: ::core::option::Option<i64>,
+    /// filter products that have this mood linked
+    #[prost(int64, optional, tag = "13")]
+    pub mood_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -969,12 +972,41 @@ pub struct PresignedUploadUrlResponse {
 pub struct ConfirmImageUploadRequest {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
+    /// R2 object key (required when url is not set; used for new uploads)
     #[prost(string, tag = "2")]
     pub key: ::prost::alloc::string::String,
     #[prost(string, optional, tag = "3")]
     pub alt_text: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int32, optional, tag = "4")]
     pub display_order: ::core::option::Option<i32>,
+    /// when set, use this URL for this display_order (for re-adding existing images after delete)
+    #[prost(string, optional, tag = "5")]
+    pub url: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Sync product images: update display_order for kept, bulk insert new, delete removed (1 row per image).
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncProductImageItem {
+    /// existing row to keep; set its display_order to index
+    #[prost(int64, optional, tag = "1")]
+    pub image_id: ::core::option::Option<i64>,
+    /// new upload; insert row with url built from key
+    #[prost(string, optional, tag = "2")]
+    pub key: ::core::option::Option<::prost::alloc::string::String>,
+    /// when key empty, use this url for new row
+    #[prost(string, optional, tag = "3")]
+    pub url: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncProductImagesRequest {
+    #[prost(int64, tag = "1")]
+    pub product_id: i64,
+    /// ordered list; index = display_order
+    #[prost(message, repeated, tag = "2")]
+    pub items: ::prost::alloc::vec::Vec<SyncProductImageItem>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -1590,8 +1622,9 @@ pub struct CreateProductMoodMappingRequest {
 pub struct SearchProductMoodMappingRequest {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
-    #[prost(int64, tag = "2")]
-    pub mood_id: i64,
+    /// when absent or 0: return all mappings for product_id
+    #[prost(int64, optional, tag = "2")]
+    pub mood_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -3600,6 +3633,33 @@ pub mod grpc_services_client {
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new("grpc_services.GRPCServices", "DeleteProductImage"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn sync_product_images(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SyncProductImagesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ProductImagesResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SyncProductImages",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "SyncProductImages"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -6153,6 +6213,13 @@ pub mod grpc_services_server {
         async fn delete_product_image(
             &self,
             request: tonic::Request<super::DeleteProductImageRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ProductImagesResponse>,
+            tonic::Status,
+        >;
+        async fn sync_product_images(
+            &self,
+            request: tonic::Request<super::SyncProductImagesRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ProductImagesResponse>,
             tonic::Status,
@@ -8911,6 +8978,53 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = DeleteProductImageSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SyncProductImages" => {
+                    #[allow(non_camel_case_types)]
+                    struct SyncProductImagesSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::SyncProductImagesRequest>
+                    for SyncProductImagesSvc<T> {
+                        type Response = super::ProductImagesResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SyncProductImagesRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::sync_product_images(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SyncProductImagesSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

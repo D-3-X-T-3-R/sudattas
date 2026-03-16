@@ -75,7 +75,7 @@ use crate::resolvers::{
     },
     product_images::{
         self,
-        schema::{ConfirmImageUpload, ProductImage, ProductImageMutation},
+        schema::{ConfirmImageUpload, ProductImage, ProductImageMutation, SyncProductImagesInput},
     },
     product_mood_mappings::{
         self,
@@ -86,10 +86,7 @@ use crate::resolvers::{
     },
     product_moods::{
         self,
-        schema::{
-            DeleteProductMoodInput, NewProductMood, ProductMood, ProductMoodMutation,
-            SearchProductMoodInput,
-        },
+        schema::{DeleteProductMoodInput, NewProductMood, ProductMood, ProductMoodMutation},
     },
     product_variants::{
         self,
@@ -936,13 +933,6 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn search_product_mood(input: SearchProductMoodInput) -> FieldResult<Vec<ProductMood>> {
-        product_moods::handlers::search_product_mood(input)
-            .await
-            .map_err(|e| e.into_field_error())
-    }
-
-    #[instrument(err, ret)]
     async fn update_product_mood(input: ProductMoodMutation) -> FieldResult<Vec<ProductMood>> {
         product_moods::handlers::update_product_mood(input)
             .await
@@ -1020,6 +1010,14 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn confirm_image_upload(input: ConfirmImageUpload) -> FieldResult<Vec<ProductImage>> {
         product_images::handlers::confirm_image_upload(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Product Images — sync order (update kept, bulk insert new, delete removed)
+    #[instrument(err, ret)]
+    async fn sync_product_images(input: SyncProductImagesInput) -> FieldResult<Vec<ProductImage>> {
+        product_images::handlers::sync_product_images(input)
             .await
             .map_err(|e| e.into_field_error())
     }

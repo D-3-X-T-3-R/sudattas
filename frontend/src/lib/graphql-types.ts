@@ -3,6 +3,7 @@
  */
 
 export interface ProductImageListItem {
+  imageId?: string | null;
   thumbnailUrl?: string | null;
   url?: string | null;
 }

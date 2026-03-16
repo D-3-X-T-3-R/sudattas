@@ -427,16 +427,16 @@ CREATE TABLE `Wishlist` (
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `ProductImages` (Enhanced for CDN)
+-- Table structure for table `ProductImages` (one row per image; ordered by display_order)
 CREATE TABLE `ProductImages` (
     `ImageID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint NOT NULL,
-    `urls` JSON NOT NULL COMMENT 'JSON object of CDN image URLs for this product, e.g. {\"1\": \"hero_url\", \"2\": \"detail_url\"}',
+    `display_order` int NOT NULL DEFAULT 0,
+    `url` varchar(2048) NOT NULL COMMENT 'CDN URL for this image',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`ImageID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    UNIQUE KEY `uq_product_images_product` (`ProductID`),
-    INDEX `idx_product_order` (`ProductID`)
+    INDEX `idx_product_order` (`ProductID`, `display_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Inventory` (Enhanced with reserved stock)
