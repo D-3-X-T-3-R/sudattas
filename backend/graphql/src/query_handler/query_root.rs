@@ -34,6 +34,10 @@ use crate::resolvers::{
         self,
         schema::{GetPresignedUploadUrl, PresignedUploadUrl, ProductImage, SearchProductImage},
     },
+    product_moods::{
+        self,
+        schema::{ProductMood, SearchProductMoodInput},
+    },
     reviews::{
         self,
         schema::{Review, SearchReview},
@@ -111,6 +115,14 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_product(search: SearchProduct) -> FieldResult<Vec<Product>> {
         product::handlers::search_product(search)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Product moods (admin: list moods for dropdown)
+    #[instrument(err, ret)]
+    async fn search_product_mood(input: SearchProductMoodInput) -> FieldResult<Vec<ProductMood>> {
+        product_moods::handlers::search_product_mood(input)
             .await
             .map_err(|e| e.into_field_error())
     }

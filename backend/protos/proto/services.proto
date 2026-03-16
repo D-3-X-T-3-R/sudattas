@@ -71,6 +71,7 @@ service GRPCServices {
     rpc SearchProductImage(SearchProductImageRequest) returns (ProductImagesResponse);
     rpc UpdateProductImage(UpdateProductImageRequest) returns (ProductImagesResponse);
     rpc DeleteProductImage(DeleteProductImageRequest) returns (ProductImagesResponse);
+    rpc SyncProductImages(SyncProductImagesRequest) returns (ProductImagesResponse);
 
     // Inventory
     rpc CreateInventoryItem(CreateInventoryItemRequest) returns (InventoryItemsResponse);

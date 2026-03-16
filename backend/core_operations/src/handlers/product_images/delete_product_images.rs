@@ -29,14 +29,9 @@ pub async fn delete_product_image(
                                 product_id: model.product_id,
                                 image_base64: String::new(),
                                 alt_text: None,
-                                url: model
-                                    .urls
-                                    .get("1")
-                                    .or_else(|| model.urls.get("0"))
-                                    .and_then(|v| v.as_str())
-                                    .map(String::from),
+                                url: Some(model.url.clone()),
                                 cdn_path: None,
-                                thumbnail_url: None,
+                                thumbnail_url: Some(model.url),
                             }],
                         };
                         Ok(Response::new(response))

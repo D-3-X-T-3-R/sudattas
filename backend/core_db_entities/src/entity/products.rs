@@ -40,7 +40,7 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     ProductCategories,
-    #[sea_orm(has_one = "super::product_images::Entity")]
+    #[sea_orm(has_many = "super::product_images::Entity")]
     ProductImages,
     #[sea_orm(has_many = "super::product_mood_mapping::Entity")]
     ProductMoodMapping,

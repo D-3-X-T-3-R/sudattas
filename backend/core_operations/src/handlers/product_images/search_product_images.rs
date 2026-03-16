@@ -1,7 +1,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::product_images;
 use proto::proto::core::{ProductImageResponse, ProductImagesResponse, SearchProductImageRequest};
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder};
 use tonic::{Request, Response, Status};
 
 pub async fn search_product_image(
@@ -10,52 +10,31 @@ pub async fn search_product_image(
 ) -> Result<Response<ProductImagesResponse>, Status> {
     let req = request.into_inner();
 
-    match product_images::Entity::find()
-        .apply_if(req.image_id, |query, v| {
-            query.filter(product_images::Column::ImageId.eq(v))
-        })
-        .apply_if(req.product_id, |query, v| {
-            query.filter(product_images::Column::ProductId.eq(v))
-        })
-        .all(txn)
-        .await
-    {
+    let mut query =
+        product_images::Entity::find().order_by_asc(product_images::Column::DisplayOrder);
+
+    if let Some(id) = req.image_id {
+        query = query.filter(product_images::Column::ImageId.eq(id));
+    }
+    if let Some(pid) = req.product_id {
+        query = query.filter(product_images::Column::ProductId.eq(pid));
+    }
+
+    match query.all(txn).await {
         Ok(models) => {
-            let mut items: Vec<ProductImageResponse> = Vec::new();
-            for model in models {
-                let mut ordered: Vec<(i32, String)> = model
-                    .urls
-                    .as_object()
-                    .map(|m| {
-                        m.iter()
-                            .filter_map(|(k, v)| {
-                                let idx = k.parse::<i32>().ok()?;
-                                let url = v.as_str()?.to_string();
-                                Some((idx, url))
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-
-                ordered.sort_by_key(|(idx, _)| *idx);
-
-                for (idx, url) in ordered {
-                    items.push(ProductImageResponse {
-                        image_id: model.image_id,
-                        product_id: model.product_id,
-                        image_base64: String::new(),
-                        alt_text: None,
-                        url: Some(url),
-                        cdn_path: None,
-                        thumbnail_url: None,
-                    });
-                    // keep compiler happy about idx until dedicated field exists
-                    let _ = idx;
-                }
-            }
-
-            let response = ProductImagesResponse { items };
-            Ok(Response::new(response))
+            let items: Vec<ProductImageResponse> = models
+                .into_iter()
+                .map(|m| ProductImageResponse {
+                    image_id: m.image_id,
+                    product_id: m.product_id,
+                    image_base64: String::new(),
+                    alt_text: None,
+                    url: Some(m.url.clone()),
+                    cdn_path: None,
+                    thumbnail_url: Some(m.url),
+                })
+                .collect();
+            Ok(Response::new(ProductImagesResponse { items }))
         }
         Err(e) => Err(map_db_error_to_status(e)),
     }

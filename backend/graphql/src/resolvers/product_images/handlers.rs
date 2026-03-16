@@ -1,13 +1,14 @@
 use proto::proto::core::{
     ConfirmImageUploadRequest, DeleteProductImageRequest, GetPresignedUploadUrlRequest,
-    SearchProductImageRequest, UpdateProductImageRequest,
+    SearchProductImageRequest, SyncProductImageItem, SyncProductImagesRequest,
+    UpdateProductImageRequest,
 };
 
 use tracing::instrument;
 
 use super::schema::{
     ConfirmImageUpload, GetPresignedUploadUrl, PresignedUploadUrl, ProductImage,
-    ProductImageMutation, SearchProductImage,
+    ProductImageMutation, SearchProductImage, SyncProductImagesInput,
 };
 use crate::resolvers::{
     convert,
@@ -110,7 +111,34 @@ pub(crate) async fn confirm_image_upload(
             key: input.key,
             alt_text: input.alt_text,
             display_order: input.display_order,
+            url: input.url,
         })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::product_image_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn sync_product_images(
+    input: SyncProductImagesInput,
+) -> Result<Vec<ProductImage>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let product_id = parse_i64(&input.product_id, "product id")?;
+    let items: Vec<SyncProductImageItem> = input
+        .items
+        .into_iter()
+        .map(|i| SyncProductImageItem {
+            image_id: i.image_id.and_then(|id| id.parse().ok()),
+            key: i.key,
+            url: i.url,
+        })
+        .collect();
+    let response = client
+        .sync_product_images(SyncProductImagesRequest { product_id, items })
         .await?;
     Ok(response
         .into_inner()

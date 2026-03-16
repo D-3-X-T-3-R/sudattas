@@ -7,26 +7,31 @@ import { adminProductFormSchema } from "@/lib/schemas";
 import {
   fetchCategories,
   fetchProductsList,
+  fetchProductById,
   fetchSizes,
   fetchColors,
   fetchFabrics,
   fetchWeaves,
   fetchOccasions,
-  searchProductAttributes,
+  searchProductMoods,
+  searchProductMoodMappingsByProduct,
+  createProductMood,
   createProductVariant,
-  createProductAttribute,
-  createProductAttributeMapping,
+  createProductMoodMapping,
+  deleteProductMoodMapping,
+  deleteProductImage,
   createInventoryItem,
   type ProductListRow,
+  type ProductImageListItem,
   type CategoryRow,
   type SizeRow,
   type ColorRow,
-  type ProductAttributeRow,
+  type ProductMoodRow,
   type FabricRow,
   type WeaveRow,
   type OccasionRow,
 } from "@/lib/admin-queries";
-import type { AdminProductVariantRow, AdminProductAttributeRow } from "@/lib/schemas";
+import type { AdminProductVariantRow } from "@/lib/schemas";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +40,7 @@ import { SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
-import { Pencil, Trash2, Filter, Package, Plus } from "lucide-react";
+import { Pencil, Trash2, Filter, Package, Plus, X } from "lucide-react";
 
 type ProductFormState = {
   name: string;
@@ -61,9 +66,60 @@ function getCategoryName(categoryId: string | null | undefined, categories: Cate
   return c ? c.name : categoryId;
 }
 
+/** Get first non-empty URL from an image (supports camelCase and snake_case from API). */
+function getImageUrl(img: ProductImageListItem | undefined): string {
+  if (!img) return "";
+  const raw = img as Record<string, unknown>;
+  const u =
+    (img.url as string | undefined) ??
+    (img.thumbnailUrl as string | undefined) ??
+    (raw.thumbnail_url as string | undefined) ??
+    (raw.url as string | undefined) ??
+    "";
+  return typeof u === "string" && u.trim() !== "" ? u : "";
+}
+
+/** URL with cache-buster so the browser doesn't show stale cached image content. Pass loadKey (e.g. from beginEdit) to force refetch when opening edit. */
+function getImageUrlWithCacheBuster(
+  img: ProductImageListItem | undefined,
+  loadKey?: string
+): string {
+  const u = getImageUrl(img);
+  if (!u) return "";
+  const raw = img as Record<string, unknown>;
+  const id =
+    (img as ProductImageListItem & { image_id?: string }).imageId ??
+    (raw.image_id as string) ??
+    "";
+  const v = loadKey ? `${id}-${loadKey}` : id;
+  const sep = u.includes("?") ? "&" : "?";
+  return `${u}${sep}v=${v}`;
+}
+
 function getProductThumbnail(p: ProductListRow): string | null {
-  const first = p.images?.[0];
-  return first?.thumbnailUrl ?? first?.url ?? null;
+  const images = p.images ?? [];
+  for (let i = 0; i < images.length; i++) {
+    const u = getImageUrl(images[i]);
+    if (u) return u;
+  }
+  return null;
+}
+
+/** Thumbnail URL with cache-buster so list card shows updated image after sync. */
+function getProductThumbnailWithCacheBuster(p: ProductListRow): string | null {
+  const images = p.images ?? [];
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
+    const u = getImageUrl(img);
+    if (!u) continue;
+    const sep = u.includes("?") ? "&" : "?";
+    const id =
+      (img as ProductImageListItem & { image_id?: string }).imageId ??
+      (img as ProductImageListItem & { image_id?: string }).image_id ??
+      "";
+    return `${u}${sep}v=${id}`;
+  }
+  return null;
 }
 
 function paiseToRupeesInput(paise?: string): string {
@@ -106,6 +162,7 @@ export default function AdminProductsPage() {
 
   const [searchName, setSearchName] = useState("");
   const [searchCategoryId, setSearchCategoryId] = useState("");
+  const [searchMoodId, setSearchMoodId] = useState("");
   const [searchFabric, setSearchFabric] = useState("");
   const [searchWeave, setSearchWeave] = useState("");
   const [searchOccasion, setSearchOccasion] = useState("");
@@ -116,6 +173,7 @@ export default function AdminProductsPage() {
   const [appliedSearch, setAppliedSearch] = useState<{
     name?: string;
     categoryId?: string;
+    moodId?: string;
     fabric?: string;
     weave?: string;
     occasion?: string;
@@ -153,9 +211,21 @@ export default function AdminProductsPage() {
     queryKey: ["admin", "occasions"],
     queryFn: fetchOccasions,
   });
-  const { data: existingAttributes = [] } = useQuery<ProductAttributeRow[], Error>({
-    queryKey: ["admin", "productAttributes"],
-    queryFn: () => searchProductAttributes({}),
+  const { data: existingMoods = [] } = useQuery<ProductMoodRow[], Error>({
+    queryKey: ["admin", "productMoods"],
+    queryFn: () => searchProductMoods({}),
+  });
+  const createMoodMutation = useMutation({
+    mutationFn: (name: string) => createProductMood(name),
+    onSuccess: (created) => {
+      if (created) {
+        queryClient.invalidateQueries({ queryKey: ["admin", "productMoods"] });
+        setSelectedMoodIds((prev) => (prev.includes(created.moodId) ? prev : [...prev, created.moodId]));
+        setNewMoodName("");
+        setMoodCreateError("");
+      }
+    },
+    onError: (err: Error) => setMoodCreateError(err.message || "Failed to create mood"),
   });
 
   const { data: fabrics = [] } = useQuery<FabricRow[], Error>({
@@ -187,7 +257,9 @@ export default function AdminProductsPage() {
     productStatusId: "",
   });
   const [variants, setVariants] = useState<AdminProductVariantRow[]>([]);
-  const [attributes, setAttributes] = useState<AdminProductAttributeRow[]>([]);
+  const [selectedMoodIds, setSelectedMoodIds] = useState<string[]>([]);
+  const [newMoodName, setNewMoodName] = useState("");
+  const [moodCreateError, setMoodCreateError] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showNewCategory, setShowNewCategory] = useState(false);
@@ -200,13 +272,33 @@ export default function AdminProductsPage() {
   } | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  /** When editing, images already linked to the product (from list row). */
+  const [existingProductImages, setExistingProductImages] = useState<ProductImageListItem[]>([]);
   const [imageError, setImageError] = useState("");
   const [imageMessage, setImageMessage] = useState("");
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  /** When editing, image IDs that were present when we opened edit (so we can delete removed ones on Update). */
+  const [initialExistingImageIdsWhenEdit, setInitialExistingImageIdsWhenEdit] = useState<string[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  /** True while uploads/refetch run after Update product (loading overlay shown). */
+  const [isUpdateReflecting, setIsUpdateReflecting] = useState(false);
+  /** Reorder images dialog: combined list (existing + new) for drag reorder while editing. */
+  type ReorderableImage =
+    | { type: "existing"; image: ProductImageListItem }
+    | { type: "new"; file: File; previewUrl: string };
+  const [reorderImagesOpen, setReorderImagesOpen] = useState(false);
+  const [reorderableImages, setReorderableImages] = useState<ReorderableImage[]>([]);
+  const [reorderDragIndex, setReorderDragIndex] = useState<number | null>(null);
+  /** When editing, Review images dialog shows all images (existing + new); this is the combined list for that dialog. */
+  const [reviewImagesList, setReviewImagesList] = useState<ReorderableImage[]>([]);
+  const [reviewDragIndex, setReviewDragIndex] = useState<number | null>(null);
+  /** When set, this is the confirmed order (existing + new interleaved). Used for display and sync so order matches Review. */
+  const [orderedProductImages, setOrderedProductImages] = useState<ReorderableImage[] | null>(null);
+  /** Key set when loading product for edit so image URLs get a fresh cache-buster and browser refetches. */
+  const [productImagesLoadKey, setProductImagesLoadKey] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Load draft from sessionStorage on first mount (product fields only; variants/attributes not persisted)
+  // Load draft from sessionStorage on first mount (product fields only; variants/moods not persisted)
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -334,24 +426,17 @@ export default function AdminProductsPage() {
             console.error("Failed to create variant/inventory:", err);
           }
         }
-        // Create or link attributes
-        for (const attr of attributes) {
-          if (!attr.attributeName?.trim() || !attr.attributeValue?.trim()) continue;
+        // Link moods
+        for (const moodId of selectedMoodIds) {
+          if (!moodId?.trim()) continue;
           try {
-            let attributeId = attr.attributeId;
-            if (!attributeId) {
-              const createdAttr = await createProductAttribute(attr.attributeName.trim(), attr.attributeValue.trim());
-              attributeId = createdAttr?.attributeId ?? undefined;
-            }
-            if (attributeId) {
-              await createProductAttributeMapping(created.productId, attributeId);
-            }
+            await createProductMoodMapping(created.productId, moodId.trim());
           } catch (err) {
-            console.error("Failed to create/link attribute:", err);
+            console.error("Failed to link mood:", err);
           }
         }
         setVariants([]);
-        setAttributes([]);
+        setSelectedMoodIds([]);
       }
       setForm((prev) => ({
         ...prev,
@@ -398,6 +483,11 @@ export default function AdminProductsPage() {
       hasBlousePiece?: boolean;
       careInstructions?: string;
       productStatusId?: string;
+      selectedMoodIds?: string[];
+      /** Current existing images (after user may have removed some); used to compute which to delete. */
+      currentExistingImages?: ProductImageListItem[];
+      /** Image IDs when edit was opened; images not in currentExistingImages will be deleted. */
+      initialExistingImageIdsWhenEdit?: string[];
     }) => {
       const product: Record<string, unknown> = {
         productId: payload.productId,
@@ -421,26 +511,186 @@ export default function AdminProductsPage() {
         }`,
         { product }
       );
-      return data?.updateProduct?.[0];
+      const updated = data?.updateProduct?.[0];
+      if (!updated?.productId) return updated ?? null;
+
+      // Sync mood mappings to match selectedMoodIds
+      const selected = new Set((payload.selectedMoodIds ?? []).map((id) => id?.trim()).filter(Boolean));
+      const current = await searchProductMoodMappingsByProduct(updated.productId);
+      const currentMoodIds = new Set(current.map((m) => m.moodId));
+
+      for (const moodId of selected) {
+        if (!currentMoodIds.has(moodId)) {
+          try {
+            await createProductMoodMapping(updated.productId, moodId);
+          } catch (err) {
+            console.error("Failed to add mood mapping:", err);
+          }
+        }
+      }
+      for (const m of current) {
+        if (!selected.has(m.moodId)) {
+          try {
+            await deleteProductMoodMapping(updated.productId, m.moodId);
+          } catch (err) {
+            console.error("Failed to remove mood mapping:", err);
+          }
+        }
+      }
+
+      return updated;
     },
     onSuccess: async (updated) => {
-      if (updated?.productId && imageFiles.length > 0) {
-        imageFiles.forEach((file, index) => {
-          uploadImageMutation.mutate({
-            file,
-            productId: updated.productId,
-            order: index,
-          });
-        });
-      }
-      setMessage(
-        updated
+      try {
+        const successText = updated
           ? `Updated: ${updated.name}${updated.formatted ? ` (${updated.formatted})` : ""}`
-          : "Product updated."
-      );
-      setEditingProductId(null);
-      setImageFiles([]);
-      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+          : "Product updated.";
+        setMessage(successText);
+        showToast({ title: "Product updated", description: successText });
+        // Sync product images: update order for kept, bulk insert new, delete removed (1 row per image)
+        setIsUpdateReflecting(true);
+        const productId = updated?.productId;
+        const hasExisting = existingProductImages.length > 0;
+        const hasNew = imageFiles.length > 0;
+        const hasOrdered = orderedProductImages != null && orderedProductImages.length > 0;
+        if (productId && (hasOrdered || hasExisting || hasNew)) {
+          try {
+            let items: Array<{ imageId?: string; key?: string; url?: string }>;
+            if (hasOrdered && orderedProductImages) {
+              // Preserve confirmed order: upload new in order, then build items in same order
+              const newKeys: string[] = [];
+              for (let i = 0; i < orderedProductImages.length; i++) {
+                const item = orderedProductImages[i];
+                if (item.type !== "new") continue;
+                const file = item.file;
+                const presigned = await gqlAdmin<{
+                  getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
+                }>(
+                  `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
+                    getPresignedUploadUrl(input: $input) { uploadUrl key }
+                  }`,
+                  {
+                    input: {
+                      productId,
+                      filename: file.name,
+                      contentType: file.type || "application/octet-stream",
+                      displayOrder: i,
+                    },
+                  }
+                );
+                const info = presigned.getPresignedUploadUrl?.[0];
+                if (!info) throw new Error("Did not receive upload URL.");
+                await fetch(info.uploadUrl, {
+                  method: "PUT",
+                  headers: { "Content-Type": file.type || "application/octet-stream" },
+                  body: file,
+                });
+                newKeys.push(info.key);
+              }
+              let newIndex = 0;
+              items = orderedProductImages.map((item) =>
+                item.type === "existing"
+                  ? { imageId: item.image.imageId ?? undefined, key: undefined, url: undefined }
+                  : { imageId: undefined, key: newKeys[newIndex++], url: undefined }
+              );
+            } else {
+              // No confirmed order: existing first, then new
+              const newKeys: string[] = [];
+              for (let i = 0; i < imageFiles.length; i++) {
+                const file = imageFiles[i];
+                const presigned = await gqlAdmin<{
+                  getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
+                }>(
+                  `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
+                    getPresignedUploadUrl(input: $input) { uploadUrl key }
+                  }`,
+                  {
+                    input: {
+                      productId,
+                      filename: file.name,
+                      contentType: file.type || "application/octet-stream",
+                      displayOrder: i,
+                    },
+                  }
+                );
+                const info = presigned.getPresignedUploadUrl?.[0];
+                if (!info) throw new Error("Did not receive upload URL.");
+                await fetch(info.uploadUrl, {
+                  method: "PUT",
+                  headers: { "Content-Type": file.type || "application/octet-stream" },
+                  body: file,
+                });
+                newKeys.push(info.key);
+              }
+              const existingItems = existingProductImages.map((im) => ({
+                imageId: im.imageId ?? undefined,
+                key: undefined,
+                url: undefined,
+              }));
+              const newItems = newKeys.map((key) => ({
+                imageId: undefined,
+                key,
+                url: undefined,
+              }));
+              items = [...existingItems, ...newItems];
+            }
+            const syncResult = await gqlAdmin<{
+              syncProductImages?: Array<{ imageId: string; productId: string; url?: string | null }>;
+            }>(
+              `mutation SyncProductImages($input: SyncProductImagesInput!) {
+                syncProductImages(input: $input) { imageId productId url }
+              }`,
+              {
+                input: {
+                  productId,
+                  items,
+                },
+              }
+            );
+            const updatedImages = syncResult.syncProductImages ?? [];
+            const mappedImages: ProductImageListItem[] = updatedImages.map((im) => ({
+              imageId: im.imageId,
+              thumbnailUrl: im.url ?? null,
+              url: im.url ?? null,
+            }));
+            if (productId) {
+              setSelectedProduct((prev) =>
+                prev?.productId === productId
+                  ? { ...prev, images: mappedImages }
+                  : prev
+              );
+              queryClient.setQueryData<ProductListRow[]>(
+                ["admin", "products", appliedSearch],
+                (old) => {
+                  if (!old) return old;
+                  return old.map((prod) =>
+                    prod.productId === productId ? { ...prod, images: mappedImages } : prod
+                  );
+                }
+              );
+            }
+          } catch (err) {
+            setImageError(err instanceof Error ? err.message : "Image update failed.");
+          }
+        }
+        await queryClient.refetchQueries({ queryKey: ["admin", "products"] });
+        if (productId) {
+          const list = queryClient.getQueryData<ProductListRow[]>([
+            "admin",
+            "products",
+            appliedSearch,
+          ]);
+          const fresh = list?.find((p) => p.productId === productId);
+          if (fresh) setSelectedProduct(fresh);
+        }
+        setEditingProductId(null);
+        setImageFiles([]);
+        setExistingProductImages([]);
+        setOrderedProductImages(null);
+        setInitialExistingImageIdsWhenEdit([]);
+      } finally {
+        setIsUpdateReflecting(false);
+      }
     },
     onError: (err: Error) => setError(err.message || "Failed to update product."),
   });
@@ -529,6 +779,9 @@ export default function AdminProductsPage() {
         hasBlousePiece,
         careInstructions: careInstructions || undefined,
         productStatusId: productStatusId || undefined,
+        selectedMoodIds,
+        currentExistingImages: existingProductImages,
+        initialExistingImageIdsWhenEdit,
       });
     } else {
       createProductMutation.mutate({
@@ -579,6 +832,22 @@ export default function AdminProductsPage() {
     };
   }, [imageFiles]);
 
+  // When Review images dialog is open and editing, show all images (preserve confirmed order when set)
+  useEffect(() => {
+    if (!imageDialogOpen || !editingProductId) return;
+    if (orderedProductImages != null && orderedProductImages.length > 0) {
+      setReviewImagesList(orderedProductImages);
+    } else {
+      const existing = existingProductImages.map((image) => ({ type: "existing" as const, image }));
+      const newItems = imagePreviews.map((url, i) => ({
+        type: "new" as const,
+        file: imageFiles[i],
+        previewUrl: url,
+      }));
+      setReviewImagesList([...existing, ...newItems]);
+    }
+  }, [imageDialogOpen, editingProductId, existingProductImages, imagePreviews, imageFiles, orderedProductImages]);
+
   const categoriesAuthLike =
     categoriesError &&
     categoriesErrorObj &&
@@ -589,6 +858,7 @@ export default function AdminProductsPage() {
     const next: {
       name?: string;
       categoryId?: string;
+      moodId?: string;
       fabric?: string;
       weave?: string;
       occasion?: string;
@@ -601,6 +871,7 @@ export default function AdminProductsPage() {
     const trimmedLimit = searchLimit.trim();
     if (trimmedName) next.name = trimmedName;
     if (searchCategoryId) next.categoryId = searchCategoryId;
+    if (searchMoodId) next.moodId = searchMoodId;
     if (searchFabric) next.fabric = searchFabric;
     if (searchWeave) next.weave = searchWeave;
     if (searchOccasion) next.occasion = searchOccasion;
@@ -616,6 +887,7 @@ export default function AdminProductsPage() {
   const handleSearchClear = () => {
     setSearchName("");
     setSearchCategoryId("");
+    setSearchMoodId("");
     setSearchFabric("");
     setSearchWeave("");
     setSearchOccasion("");
@@ -652,32 +924,66 @@ export default function AdminProductsPage() {
     );
   };
 
-  const beginEditProduct = (p: ProductListRow) => {
+  const loadProductEditData = async (productId: string) => {
+    try {
+      const mappings = await searchProductMoodMappingsByProduct(productId);
+      setSelectedMoodIds(mappings.map((m) => m.moodId));
+    } catch (err) {
+      console.error("Failed to load product moods for edit:", err);
+    }
+  };
+
+  const beginEditProduct = async (p: ProductListRow) => {
     setActiveTab("add");
     setEditingProductId(p.productId);
+    setError("");
+    setMessage(`Loading product…`);
+    let product: ProductListRow = p;
+    try {
+      const [fresh] = await Promise.all([
+        fetchProductById(p.productId),
+        loadProductEditData(p.productId),
+      ]);
+      if (fresh) product = fresh;
+    } catch (err) {
+      console.error("Failed to load product for edit:", err);
+      setError("Failed to load product. Using list data.");
+    }
     setForm((prev) => ({
       ...prev,
-      name: p.name ?? "",
-      description: p.description ?? "",
-      priceRupees: paiseToRupeesInput(p.amountPaise),
-      categoryId: p.categoryId ?? prev.categoryId ?? "",
-      // Keep optional fields editable by user; existing values are not returned in product list query.
-      sku: "",
-      slug: "",
-      fabric: "",
-      weave: "",
-      occasion: "",
-      hasBlousePiece: true,
-      careInstructions: "",
-      productStatusId: "",
+      name: product.name ?? "",
+      description: product.description ?? "",
+      priceRupees: paiseToRupeesInput(product.amountPaise),
+      stockQuantity: product.stockQuantity ?? "",
+      categoryId: product.categoryId ?? prev.categoryId ?? "",
+      sku: product.sku ?? "",
+      slug: product.slug ?? "",
+      fabric: product.fabric ?? "",
+      weave: product.weave ?? "",
+      occasion: product.occasion ?? "",
+      hasBlousePiece: product.hasBlousePiece ?? true,
+      careInstructions: product.careInstructions ?? "",
+      productStatusId: product.productStatusId ?? "",
     }));
     setVariants([]);
-    setAttributes([]);
+    setSelectedMoodIds([]);
     setImageFiles([]);
     setImageError("");
     setImageMessage("");
-    setError("");
-    setMessage(`Editing product: ${p.name}`);
+    const images = product.images ?? [];
+    setExistingProductImages(images);
+    setOrderedProductImages(null);
+    setProductImagesLoadKey(String(Date.now()));
+    setInitialExistingImageIdsWhenEdit(
+      images
+        .map(
+          (im) =>
+            (im as ProductImageListItem & { image_id?: string }).imageId ??
+            (im as ProductImageListItem & { image_id?: string }).image_id
+        )
+        .filter((id): id is string => !!id)
+    );
+    setMessage(`Editing product: ${product.name}`);
   };
 
   const uploadImageMutation = useMutation({
@@ -804,7 +1110,13 @@ export default function AdminProductsPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("add")}
+          onClick={() => {
+            setActiveTab("add");
+            setEditingProductId(null);
+            setExistingProductImages([]);
+            setOrderedProductImages(null);
+            setInitialExistingImageIdsWhenEdit([]);
+          }}
           className={cn(
             "rounded-full px-4 py-1.5 font-medium transition-colors",
             activeTab === "add"
@@ -879,6 +1191,27 @@ export default function AdminProductsPage() {
                     <option value="1">Draft</option>
                     <option value="2">Active</option>
                     <option value="3">Archived</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="products-mood" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Mood
+                  </label>
+                  <select
+                    id="products-mood"
+                    className={cn(
+                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+                    )}
+                    value={searchMoodId}
+                    onChange={(e) => setSearchMoodId(e.target.value)}
+                  >
+                    <option value="">All moods</option>
+                    {existingMoods.map((m) => (
+                      <option key={m.moodId} value={m.moodId}>
+                        {m.moodName}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="min-w-[14rem]">
@@ -1053,7 +1386,7 @@ export default function AdminProductsPage() {
               {!productsLoading && !productsError && products.length > 0 && (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                   {products.map((p) => {
-                    const thumb = getProductThumbnail(p);
+                    const thumb = getProductThumbnailWithCacheBuster(p);
                     return (
                       <div
                         key={p.productId}
@@ -1152,7 +1485,16 @@ export default function AdminProductsPage() {
           {selectedProduct && (
             (() => {
               const imageUrls = (selectedProduct.images ?? [])
-                .map((img) => img.thumbnailUrl || img.url || "")
+                .map((img) => {
+                  const u = getImageUrl(img);
+                  if (!u) return "";
+                  const sep = u.includes("?") ? "&" : "?";
+                  const id =
+                    (img as ProductImageListItem & { image_id?: string }).imageId ??
+                    (img as ProductImageListItem & { image_id?: string }).image_id ??
+                    "";
+                  return `${u}${sep}v=${id}`;
+                })
                 .filter((u) => !!u);
               const hasImages = imageUrls.length > 0;
               const activeImage = hasImages
@@ -1312,7 +1654,19 @@ export default function AdminProductsPage() {
             )}
             {editingProductId ? "Edit product" : "Add new product"}
           </CardTitle>
-          <CardContent className="mt-6">
+          <CardContent className="mt-6 relative">
+            {isUpdateReflecting && (
+              <div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl bg-[var(--color-ivory)]/95"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <Spinner />
+                <p className="text-sm font-medium text-[var(--color-ink)]">
+                  Updating images &amp; refreshing…
+                </p>
+              </div>
+            )}
             {categoriesError && (
               <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                 <p className="font-medium">Can&apos;t load categories.</p>
@@ -1712,88 +2066,72 @@ export default function AdminProductsPage() {
               </div>
               <div className="mt-6 border-t border-[var(--color-line)] pt-4">
                 <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                  Attributes (optional)
+                  Moods (optional)
                 </h3>
                 <p className="mt-2 text-xs text-[var(--color-muted)]">
-                  Link attributes (e.g. Material = Cotton). Select an existing attribute or enter name + value to create and link.
+                  Select one or more moods to link to this product.
                 </p>
-                <div className="mt-3 space-y-2">
-                  {attributes.map((attr, idx) => (
-                    <div
-                      key={idx}
-                      className="flex flex-wrap items-end gap-2 rounded-lg border border-[var(--color-line)] bg-white/40 p-3"
+                <div className="mt-3 grid grid-cols-4 gap-x-6 gap-y-2">
+                  {existingMoods.map((m) => (
+                    <label
+                      key={m.moodId}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2 text-sm",
+                        "focus-within:outline-none focus-within:ring-2 focus-within:ring-[var(--color-accent-gold)]/50 focus-within:ring-offset-1 rounded"
+                      )}
                     >
-                      <select
-                        className={cn(
-                          "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                          "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-                        )}
-                        value={attr.attributeId ?? ""}
-                        onChange={(e) => {
-                          const opt = existingAttributes.find((a) => a.attributeId === e.target.value);
-                          setAttributes((prev) => {
-                            const next = [...prev];
-                            next[idx] = opt
-                              ? { attributeId: opt.attributeId, attributeName: opt.attributeName, attributeValue: opt.attributeValue }
-                              : { attributeName: "", attributeValue: "" };
-                            return next;
-                          });
+                      <input
+                        type="checkbox"
+                        checked={selectedMoodIds.includes(m.moodId)}
+                        onChange={() => {
+                          setSelectedMoodIds((prev) =>
+                            prev.includes(m.moodId)
+                              ? prev.filter((id) => id !== m.moodId)
+                              : [...prev, m.moodId]
+                          );
                         }}
-                      >
-                        <option value="">New or select…</option>
-                        {existingAttributes.map((a) => (
-                          <option key={a.attributeId} value={a.attributeId}>
-                            {a.attributeName} = {a.attributeValue}
-                          </option>
-                        ))}
-                      </select>
-                      <Input
-                        type="text"
-                        placeholder="Name"
-                        value={attr.attributeName}
-                        onChange={(e) =>
-                          setAttributes((prev) => {
-                            const next = [...prev];
-                            next[idx] = { ...next[idx], attributeName: e.target.value };
-                            return next;
-                          })
-                        }
-                        className="h-9 w-32 rounded-md"
+                        className="h-4 w-4 rounded border-[var(--color-line)] text-[var(--color-accent-gold)] focus:ring-[var(--color-accent-gold)]/50"
                       />
-                      <Input
-                        type="text"
-                        placeholder="Value"
-                        value={attr.attributeValue}
-                        onChange={(e) =>
-                          setAttributes((prev) => {
-                            const next = [...prev];
-                            next[idx] = { ...next[idx], attributeValue: e.target.value };
-                            return next;
-                          })
-                        }
-                        className="h-9 w-32 rounded-md"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 text-red-600"
-                        onClick={() => setAttributes((prev) => prev.filter((_, i) => i !== idx))}
-                      >
-                        Remove
-                      </Button>
-                    </div>
+                      <span>{m.moodName}</span>
+                    </label>
                   ))}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Input
+                    placeholder="New mood name"
+                    value={newMoodName}
+                    onChange={(e) => {
+                      setNewMoodName(e.target.value);
+                      setMoodCreateError("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const name = newMoodName.trim();
+                        if (name) createMoodMutation.mutate(name);
+                      }
+                    }}
+                    className="max-w-[14rem] rounded-md border border-[var(--color-line)] bg-white px-3 py-1.5 text-sm"
+                  />
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="rounded-lg border-[var(--color-line)]"
-                    onClick={() => setAttributes((prev) => [...prev, { attributeName: "", attributeValue: "" }])}
+                    disabled={!newMoodName.trim() || createMoodMutation.isPending}
+                    onClick={() => {
+                      const name = newMoodName.trim();
+                      if (name) createMoodMutation.mutate(name);
+                    }}
                   >
-                    + Add attribute
+                    {createMoodMutation.isPending ? "Adding…" : "Add mood"}
                   </Button>
                 </div>
+                {moodCreateError && (
+                  <p className="mt-2 text-xs text-red-600" role="alert">{moodCreateError}</p>
+                )}
+                {existingMoods.length === 0 && !newMoodName && (
+                  <p className="mt-2 text-xs text-[var(--color-muted)]">No moods in the system yet. Add one above or add moods from seed data.</p>
+                )}
               </div>
               <div className="mt-8 border-t border-[var(--color-line)] pt-4">
                 <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
@@ -1828,6 +2166,7 @@ export default function AdminProductsPage() {
                       multiple
                       onChange={(e) => {
                         const files = Array.from(e.target.files ?? []);
+                        setOrderedProductImages(null);
                         setImageFiles(files);
                         setImageError("");
                         setImageMessage("");
@@ -1847,25 +2186,202 @@ export default function AdminProductsPage() {
                     </Button>
                   </div>
                   <p className="text-[11px] text-[var(--color-muted)]">
-                    All selected images will be uploaded when you click{" "}
-                    <span className="font-semibold">Add product</span>.
+                    {editingProductId
+                      ? "Add more images below; they will upload when you click Update product."
+                      : "All selected images will be uploaded when you click Add product."}
                   </p>
-                  {imageFiles.length > 0 && (
-                    <p className="text-[10px] text-[var(--color-muted)]">
-                      {imageFiles.length} image
-                      {imageFiles.length === 1 ? "" : "s"} selected.
-                    </p>
+                  {(orderedProductImages !== null ||
+                    existingProductImages.length > 0 ||
+                    imagePreviews.length > 0) && (
+                    <div className="mt-4">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-[var(--color-ink)]">
+                          Added images
+                          {orderedProductImages != null
+                            ? ` (${orderedProductImages.length})`
+                            : existingProductImages.length > 0 && imagePreviews.length > 0
+                              ? ` (${existingProductImages.length} existing, ${imagePreviews.length} new)`
+                              : existingProductImages.length > 0
+                                ? ` (${existingProductImages.length})`
+                                : ` (${imagePreviews.length} selected)`}
+                        </p>
+                        {editingProductId &&
+                          (existingProductImages.length > 0 || imagePreviews.length > 0) && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-8 rounded-full border-[var(--color-line)] px-3 text-xs"
+                              onClick={() => {
+                                const list =
+                                  orderedProductImages ??
+                                  [
+                                    ...existingProductImages.map((image) => ({
+                                      type: "existing" as const,
+                                      image,
+                                    })),
+                                    ...imagePreviews.map((previewUrl, i) => ({
+                                      type: "new" as const,
+                                      file: imageFiles[i],
+                                      previewUrl,
+                                    })),
+                                  ];
+                                setReorderableImages(list);
+                                setReorderImagesOpen(true);
+                              }}
+                            >
+                              Reorder images
+                            </Button>
+                          )}
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        {orderedProductImages != null
+                          ? orderedProductImages.map((item, idx) => (
+                              <div
+                                key={
+                                  item.type === "existing"
+                                    ? `existing-${idx}-${item.image.imageId ?? item.image.url ?? ""}`
+                                    : `new-${idx}-${item.previewUrl}`
+                                }
+                                className={`relative aspect-square w-24 shrink-0 overflow-hidden rounded-lg border bg-[var(--color-ivory)] ${
+                                  item.type === "existing"
+                                    ? "border-[var(--color-line)]"
+                                    : "border-dashed border-[var(--color-line)]"
+                                }`}
+                              >
+                                {item.type === "existing" ? (
+                                  (() => {
+                                    const src = getImageUrlWithCacheBuster(
+                                      item.image,
+                                      productImagesLoadKey
+                                    );
+                                    return src ? (
+                                      <img
+                                        src={src}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center bg-[var(--color-line)]/30 text-[10px] text-[var(--color-muted)]">
+                                        No image
+                                      </div>
+                                    );
+                                  })()
+                                ) : (
+                                  <img
+                                    src={item.previewUrl}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                )}
+                                <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
+                                  {item.type === "existing" ? "Existing" : "New"}
+                                </span>
+                                {editingProductId && (
+                                  <button
+                                    type="button"
+                                    aria-label="Remove image (saved when you click Update product)"
+                                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
+                                    onClick={() => {
+                                      setOrderedProductImages((prev) =>
+                                        prev ? prev.filter((_, i) => i !== idx) : prev
+                                      );
+                                      setImageMessage(
+                                        "Image will be removed when you click Update product."
+                                      );
+                                    }}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            ))
+                          : (
+                            <>
+                              {existingProductImages.map((img, idx) => (
+                                <div
+                                  key={`existing-${idx}-${img.imageId ?? img.url ?? img.thumbnailUrl ?? ""}`}
+                                  className="relative aspect-square w-24 shrink-0 overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-ivory)]"
+                                >
+                                  {getImageUrlWithCacheBuster(img, productImagesLoadKey) ? (
+                                    <img
+                                      src={getImageUrlWithCacheBuster(img, productImagesLoadKey)}
+                                      alt=""
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center bg-[var(--color-line)]/30 text-[10px] text-[var(--color-muted)]">
+                                      No image
+                                    </div>
+                                  )}
+                                  {editingProductId && (
+                                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
+                                      Existing
+                                    </span>
+                                  )}
+                                  {editingProductId && (
+                                    <button
+                                      type="button"
+                                      aria-label="Remove image (saved when you click Update product)"
+                                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
+                                      onClick={() => {
+                                        const toRemove = img;
+                                        setExistingProductImages((prev) => {
+                                          const i = prev.findIndex((im) => im === toRemove);
+                                          if (i === -1) return prev;
+                                          return prev.filter((_, j) => j !== i);
+                                        });
+                                        setImageMessage(
+                                          "Image will be removed when you click Update product."
+                                        );
+                                      }}
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                              {imagePreviews.map((url, idx) => (
+                                <div
+                                  key={`new-${idx}-${url}`}
+                                  className="relative aspect-square w-24 shrink-0 overflow-hidden rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-ivory)]"
+                                >
+                                  <img
+                                    src={url}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                  <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
+                                    New
+                                  </span>
+                                  <button
+                                    type="button"
+                                    aria-label="Remove image"
+                                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
+                                    onClick={() => {
+                                      setImageFiles((prev) => prev.filter((_, i) => i !== idx));
+                                      setImageError("");
+                                      setImageMessage("");
+                                    }}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
               <div className="mt-4 flex items-center gap-2">
                 <Button
                   type="submit"
-                  disabled={createProductMutation.isPending || updateProductMutation.isPending}
+                  disabled={createProductMutation.isPending || updateProductMutation.isPending || isUpdateReflecting}
                   className="rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
                 >
                   {editingProductId
-                    ? updateProductMutation.isPending
+                    ? updateProductMutation.isPending || isUpdateReflecting
                       ? "Updating…"
                       : "Update product"
                     : createProductMutation.isPending
@@ -1893,8 +2409,11 @@ export default function AdminProductsPage() {
                         productStatusId: "",
                       }));
                       setVariants([]);
-                      setAttributes([]);
+                      setSelectedMoodIds([]);
                       setImageFiles([]);
+                      setExistingProductImages([]);
+                      setOrderedProductImages(null);
+                      setInitialExistingImageIdsWhenEdit([]);
                       setImageError("");
                       setImageMessage("");
                     }}
@@ -1916,57 +2435,132 @@ export default function AdminProductsPage() {
         >
           <div className="space-y-4 text-sm text-[var(--color-muted)]">
             <p className="font-medium text-[var(--color-ink)]">
-              Add your product images
+              {editingProductId
+                ? "All product images — drag to reorder. First is the thumbnail."
+                : "Add your product images"}
             </p>
-            <div className="grid grid-cols-3 gap-2">
-              {imagePreviews.length > 0
-                ? imagePreviews.map((url, idx) => (
-                    <div
-                      key={imageFiles[idx]?.name ?? idx}
-                      className={cn(
-                        "relative aspect-square overflow-hidden rounded border border-dashed border-[var(--color-line)] bg-white cursor-move transition-transform duration-150",
-                        dragIndex === idx && "scale-[1.03] border-[var(--color-ink)]"
-                      )}
-                      draggable
-                      onDragStart={() => setDragIndex(idx)}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        if (dragIndex === null || dragIndex === idx) return;
-                        setImageFiles((prev) => {
-                          const next = [...prev];
-                          const [moved] = next.splice(dragIndex, 1);
-                          next.splice(idx, 0, moved);
-                          return next;
-                        });
-                        setDragIndex(idx);
-                      }}
-                      onDrop={() => {
-                        setDragIndex(null);
-                      }}
-                    >
+            {editingProductId && (existingProductImages.length > 0 || imagePreviews.length > 0) ? (
+              <div className="grid max-h-[60vh] grid-cols-3 gap-2 overflow-y-auto">
+                {(reviewImagesList.length > 0
+                  ? reviewImagesList
+                  : [
+                      ...existingProductImages.map((image) => ({
+                        type: "existing" as const,
+                        image,
+                      })),
+                      ...imagePreviews.map((url, i) => ({
+                        type: "new" as const,
+                        file: imageFiles[i],
+                        previewUrl: url,
+                      })),
+                    ]
+                ).map((item, idx) => (
+                  <div
+                    key={
+                      item.type === "existing"
+                        ? `existing-${item.image.imageId ?? item.image.url ?? idx}`
+                        : `new-${idx}-${item.previewUrl}`
+                    }
+                    className={cn(
+                      "relative aspect-square cursor-move overflow-hidden rounded border bg-[var(--color-ivory)] transition-transform duration-150",
+                      item.type === "existing"
+                        ? "border border-[var(--color-line)]"
+                        : "border border-dashed border-[var(--color-line)]",
+                      reviewDragIndex === idx &&
+                        "scale-[1.03] border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]"
+                    )}
+                    draggable
+                    onDragStart={() => setReviewDragIndex(idx)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (reviewDragIndex === null || reviewDragIndex === idx) return;
+                      setReviewImagesList((prev) => {
+                        const next = [...prev];
+                        const [moved] = next.splice(reviewDragIndex, 1);
+                        next.splice(idx, 0, moved);
+                        return next;
+                      });
+                      setReviewDragIndex(idx);
+                    }}
+                    onDragEnd={() => setReviewDragIndex(null)}
+                    onDrop={() => setReviewDragIndex(null)}
+                  >
+                    {item.type === "existing" ? (
                       <img
-                        src={url}
-                        alt={imageFiles[idx]?.name ?? "Preview"}
+                        src={getImageUrlWithCacheBuster(item.image)}
+                        alt=""
                         className="h-full w-full object-cover"
                       />
-                      {idx === 0 && (
-                        <div className="absolute left-1 top-1 rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-medium text-white">
-                          Thumbnail
-                        </div>
-                      )}
-                    </div>
-                  ))
-                : Array.from({ length: 6 }).map((_, idx) => (
-                    <div
-                      key={idx}
-                      className="aspect-square rounded border border-dashed border-[var(--color-line)] bg-white"
-                    />
-                  ))}
-            </div>
-            {imagePreviews.length > 0 && (
+                    ) : (
+                      <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
+                    )}
+                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
+                      {item.type === "existing" ? "Existing" : "New"}
+                    </span>
+                    {idx === 0 && (
+                      <span className="absolute left-1 top-1 rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-medium text-white">
+                        Thumbnail
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {imagePreviews.length > 0
+                  ? imagePreviews.map((url, idx) => (
+                      <div
+                        key={imageFiles[idx]?.name ?? idx}
+                        className={cn(
+                          "relative aspect-square overflow-hidden rounded border border-dashed border-[var(--color-line)] bg-white cursor-move transition-transform duration-150",
+                          dragIndex === idx && "scale-[1.03] border-[var(--color-ink)]"
+                        )}
+                        draggable
+                        onDragStart={() => setDragIndex(idx)}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (dragIndex === null || dragIndex === idx) return;
+                          setImageFiles((prev) => {
+                            const next = [...prev];
+                            const [moved] = next.splice(dragIndex, 1);
+                            next.splice(idx, 0, moved);
+                            return next;
+                          });
+                          setDragIndex(idx);
+                        }}
+                        onDrop={() => setDragIndex(null)}
+                      >
+                        <img
+                          src={url}
+                          alt={imageFiles[idx]?.name ?? "Preview"}
+                          className="h-full w-full object-cover"
+                        />
+                        {idx === 0 && (
+                          <div className="absolute left-1 top-1 rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-medium text-white">
+                            Thumbnail
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  : Array.from({ length: 6 }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        className="aspect-square rounded border border-dashed border-[var(--color-line)] bg-white"
+                      />
+                    ))}
+              </div>
+            )}
+            {!editingProductId && imagePreviews.length > 0 && (
               <p className="text-[11px] text-[var(--color-muted)]">
                 {imageFiles.length} image
                 {imageFiles.length === 1 ? "" : "s"} selected.
+              </p>
+            )}
+            {editingProductId && (existingProductImages.length > 0 || imagePreviews.length > 0) && (
+              <p className="text-[11px] text-[var(--color-muted)]">
+                {existingProductImages.length + imagePreviews.length} image
+                {existingProductImages.length + imagePreviews.length === 1 ? "" : "s"} — drag to
+                reorder.
               </p>
             )}
             <div className="flex justify-end gap-2 pt-2">
@@ -1976,6 +2570,7 @@ export default function AdminProductsPage() {
                 className="rounded-full border-[var(--color-line)] px-4"
                 onClick={() => {
                   setImageDialogOpen(false);
+                  setReviewDragIndex(null);
                 }}
               >
                 Cancel
@@ -1983,11 +2578,143 @@ export default function AdminProductsPage() {
               <Button
                 type="button"
                 className="rounded-full bg-[var(--color-ink)] px-4 text-white hover:bg-[var(--color-ink)]/90"
-                onClick={() => setImageDialogOpen(false)}
+                onClick={() => {
+                  if (
+                    editingProductId &&
+                    (existingProductImages.length > 0 || imagePreviews.length > 0)
+                  ) {
+                    const listToApply =
+                      reviewImagesList.length > 0
+                        ? reviewImagesList
+                        : ([
+                            ...existingProductImages.map((image) => ({
+                              type: "existing" as const,
+                              image,
+                            })),
+                            ...imagePreviews.map((url, i) => ({
+                              type: "new" as const,
+                              file: imageFiles[i],
+                              previewUrl: url,
+                            })),
+                          ] as ReorderableImage[]);
+                    setOrderedProductImages(listToApply);
+                    const existing = listToApply
+                      .filter(
+                        (x): x is { type: "existing"; image: ProductImageListItem } =>
+                          x.type === "existing"
+                      )
+                      .map((x) => x.image);
+                    const newFiles = listToApply
+                      .filter(
+                        (x): x is { type: "new"; file: File; previewUrl: string } => x.type === "new"
+                      )
+                      .map((x) => x.file);
+                    setExistingProductImages(existing);
+                    setImageFiles(newFiles);
+                    setReviewDragIndex(null);
+                  }
+                  setImageDialogOpen(false);
+                }}
               >
                 Confirm
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={reorderImagesOpen} onOpenChange={setReorderImagesOpen}>
+        <DialogContent
+          title="Reorder product images"
+          showClose
+          onEscapeKeyDown={() => setReorderImagesOpen(false)}
+          onPointerDownOutside={() => setReorderImagesOpen(false)}
+        >
+          <p className="mb-3 text-xs text-[var(--color-muted)]">
+            Drag to change order. First image is the thumbnail.
+          </p>
+          <div className="grid max-h-[60vh] grid-cols-3 gap-2 overflow-y-auto">
+            {reorderableImages.map((item, idx) => (
+              <div
+                key={
+                  item.type === "existing"
+                    ? `existing-${item.image.imageId ?? item.image.url ?? idx}`
+                    : `new-${idx}-${item.previewUrl}`
+                }
+                className={cn(
+                  "relative aspect-square cursor-move overflow-hidden rounded border bg-[var(--color-ivory)] transition-transform duration-150",
+                  item.type === "existing"
+                    ? "border border-[var(--color-line)]"
+                    : "border border-dashed border-[var(--color-line)]",
+                  reorderDragIndex === idx && "scale-[1.03] border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]"
+                )}
+                draggable
+                onDragStart={() => setReorderDragIndex(idx)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (reorderDragIndex === null || reorderDragIndex === idx) return;
+                  setReorderableImages((prev) => {
+                    const next = [...prev];
+                    const [moved] = next.splice(reorderDragIndex, 1);
+                    next.splice(idx, 0, moved);
+                    return next;
+                  });
+                  setReorderDragIndex(idx);
+                }}
+                onDragEnd={() => setReorderDragIndex(null)}
+                onDrop={() => setReorderDragIndex(null)}
+              >
+                {item.type === "existing" ? (
+                  <img
+                    src={getImageUrlWithCacheBuster(item.image, productImagesLoadKey)}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <img
+                    src={item.previewUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                )}
+                <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
+                  {item.type === "existing" ? "Existing" : "New"}
+                </span>
+                {idx === 0 && (
+                  <span className="absolute left-1 top-1 rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-medium text-white">
+                    Thumbnail
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full border-[var(--color-line)] px-4"
+              onClick={() => setReorderImagesOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="rounded-full bg-[var(--color-ink)] px-4 text-white hover:bg-[var(--color-ink)]/90"
+              onClick={() => {
+                setOrderedProductImages(reorderableImages);
+                const existing = reorderableImages
+                  .filter((x): x is { type: "existing"; image: ProductImageListItem } => x.type === "existing")
+                  .map((x) => x.image);
+                const newFiles = reorderableImages
+                  .filter((x): x is { type: "new"; file: File; previewUrl: string } => x.type === "new")
+                  .map((x) => x.file);
+                setExistingProductImages(existing);
+                setImageFiles(newFiles);
+                setReorderImagesOpen(false);
+                setReorderDragIndex(null);
+              }}
+            >
+              Apply order
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -57,6 +57,7 @@ impl ProductImage {
             weave: None,
             occasion: None,
             product_status_id: None,
+            mood_id: None,
             limit: None,
             offset: None,
         })
@@ -118,4 +119,23 @@ pub struct ConfirmImageUpload {
     pub key: String,
     pub alt_text: Option<String>,
     pub display_order: Option<i32>,
+    /// When set, use this URL for the given display_order (for re-adding existing images after deleting the row).
+    pub url: Option<String>,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "One item in the ordered list for sync product images")]
+pub struct SyncProductImageItemInput {
+    pub image_id: Option<String>,
+    pub key: Option<String>,
+    pub url: Option<String>,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(
+    description = "Sync product images: update order for kept, bulk insert new, delete removed"
+)]
+pub struct SyncProductImagesInput {
+    pub product_id: String,
+    pub items: Vec<SyncProductImageItemInput>,
 }

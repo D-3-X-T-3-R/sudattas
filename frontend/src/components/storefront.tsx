@@ -61,7 +61,6 @@ import { Header } from "@/components/header";
 import { HeroSection } from "@/components/hero-section";
 import { CollectionsSection } from "@/components/collections-section";
 import { EditorialBlock } from "@/components/editorial-block";
-import { SectionNav } from "@/components/section-nav";
 import { ShopSection } from "@/components/shop-section";
 import { StorySection } from "@/components/story-section";
 import { Footer } from "@/components/footer";
@@ -290,7 +289,6 @@ export function Storefront() {
         reduceMotion={!!reduceMotion}
       />
 
-      <SectionNav />
 
       <div className="h-16 md:hidden" />
     </div>

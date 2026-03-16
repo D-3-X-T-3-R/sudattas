@@ -37,7 +37,7 @@ const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
     sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
-    images { thumbnailUrl url }
+    images { imageId thumbnailUrl url }
   }
 }`;
 
@@ -45,7 +45,7 @@ const PRODUCT_BY_ID_QUERY = `query ProductById($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
     sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
-    images { thumbnailUrl url }
+    images { imageId thumbnailUrl url }
     variantStock { sizeId sizeName quantity }
   }
 }`;
@@ -67,6 +67,7 @@ export async function fetchProductsList(params: {
   productStatusId?: string;
   startingPricePaise?: string;
   endingPricePaise?: string;
+  moodId?: string;
 }): Promise<ProductListRow[]> {
   const search: Record<string, string> = {};
   if (params.name) search.name = params.name;
@@ -78,10 +79,27 @@ export async function fetchProductsList(params: {
   if (params.productStatusId) search.productStatusId = params.productStatusId;
   if (params.startingPricePaise) search.startingPricePaise = params.startingPricePaise;
   if (params.endingPricePaise) search.endingPricePaise = params.endingPricePaise;
+  if (params.moodId) search.moodId = params.moodId;
 
   const variables = { search: Object.keys(search).length ? search : { limit: "50" } };
   const data = await gqlAdmin<{ searchProduct?: ProductListRow[] }>(PRODUCTS_QUERY, variables);
-  return data?.searchProduct ?? [];
+  const raw = data?.searchProduct ?? [];
+  return raw.map(normalizeProductImages);
+}
+
+/** Ensure each product's images have url/imageId/thumbnailUrl in a consistent shape (camelCase). */
+function normalizeProductImages(p: ProductListRow): ProductListRow {
+  const rawImages = p.images;
+  if (!rawImages?.length) return p;
+  const images: ProductImageListItem[] = rawImages.map((img: unknown) => {
+    const o = img as Record<string, unknown>;
+    const url =
+      (o.url as string) ?? (o.thumbnailUrl as string) ?? (o.thumbnail_url as string) ?? "";
+    const imageId = (o.imageId as string) ?? (o.image_id as string) ?? "";
+    const thumbnailUrl = (o.thumbnailUrl as string) ?? (o.thumbnail_url as string) ?? url;
+    return { imageId: imageId || undefined, thumbnailUrl: thumbnailUrl || null, url: url || null };
+  });
+  return { ...p, images };
 }
 
 /** Fetch a single product by id with variant stock (for storefront detail when no session). */
@@ -93,7 +111,8 @@ export async function fetchProductById(
     { search: { productId, limit: "1" } }
   );
   const list = data?.searchProduct ?? [];
-  return list[0] ?? null;
+  const first = list[0];
+  return first ? normalizeProductImages(first) as ProductListRowWithVariantStock : null;
 }
 
 /** Delete a product by ID. Returns remaining products (backend returns deleted product in list). */
@@ -103,6 +122,31 @@ export async function deleteProduct(productId: string): Promise<void> {
       deleteProduct(productId: $productId) { productId }
     }`,
     { productId }
+  );
+}
+
+/** Search product images (one row per image). Filter by productId to load images for a product. */
+export async function searchProductImage(params: {
+  productId?: string;
+}): Promise<{ imageId: string; productId: string; url?: string | null }[]> {
+  const data = await gqlAdmin<{
+    searchProductImage?: Array<{ imageId: string; productId: string; url?: string | null }>;
+  }>(
+    `query SearchProductImage($search: SearchProductImage!) {
+      searchProductImage(search: $search) { imageId productId url }
+    }`,
+    { search: { productId: params.productId ?? undefined } }
+  );
+  return data?.searchProductImage ?? [];
+}
+
+/** Delete a product image by id. */
+export async function deleteProductImage(imageId: string): Promise<void> {
+  await gqlAdmin<{ deleteProductImage?: unknown[] }>(
+    `mutation DeleteProductImage($imageId: String!) {
+      deleteProductImage(imageId: $imageId) { imageId productId }
+    }`,
+    { imageId }
   );
 }
 
@@ -165,53 +209,78 @@ export async function fetchOccasions(): Promise<OccasionRow[]> {
   return data?.searchOccasion ?? [];
 }
 
-/** Product attribute (name/value) for linking to products */
-export interface ProductAttributeRow {
-  attributeId: string;
-  attributeName: string;
-  attributeValue: string;
+/** Product mood (id + name) for linking to products */
+export interface ProductMoodRow {
+  moodId: string;
+  moodName: string;
 }
 
-export async function searchProductAttributes(params?: {
-  attributeName?: string;
-  attributeValue?: string;
-}): Promise<ProductAttributeRow[]> {
+export async function searchProductMoods(params?: {
+  moodId?: string;
+  moodName?: string;
+}): Promise<ProductMoodRow[]> {
   const input: Record<string, string> = {};
-  if (params?.attributeName) input.attributeName = params.attributeName;
-  if (params?.attributeValue) input.attributeValue = params.attributeValue;
-  const data = await gqlAdmin<{ searchProductAttribute?: ProductAttributeRow[] }>(
-    `query SearchProductAttributes($input: SearchProductAttributeInput!) {
-      searchProductAttribute(input: $input) { attributeId attributeName attributeValue }
+  if (params?.moodId) input.moodId = params.moodId;
+  if (params?.moodName) input.moodName = params.moodName;
+  const data = await gqlAdmin<{ searchProductMood?: ProductMoodRow[] }>(
+    `query SearchProductMoods($input: SearchProductMoodInput!) {
+      searchProductMood(input: $input) { moodId moodName }
     }`,
     { input: Object.keys(input).length ? input : {} }
   );
-  return data?.searchProductAttribute ?? [];
+  return data?.searchProductMood ?? [];
 }
 
-/** Create a product attribute (name/value). Returns created attribute with attributeId. */
-export async function createProductAttribute(
-  attributeName: string,
-  attributeValue: string
-): Promise<ProductAttributeRow | null> {
-  const data = await gqlAdmin<{ createProductAttribute?: ProductAttributeRow[] }>(
-    `mutation CreateProductAttribute($input: NewProductAttribute!) {
-      createProductAttribute(input: $input) { attributeId attributeName attributeValue }
+/** Create a new product mood. Returns the created mood (with moodId and moodName). */
+export async function createProductMood(moodName: string): Promise<ProductMoodRow | null> {
+  const name = moodName?.trim();
+  if (!name) return null;
+  const data = await gqlAdmin<{ createProductMood?: ProductMoodRow[] }>(
+    `mutation CreateProductMood($input: NewProductMood!) {
+      createProductMood(input: $input) { moodId moodName }
     }`,
-    { input: { attributeName, attributeValue } }
+    { input: { moodName: name } }
   );
-  return data?.createProductAttribute?.[0] ?? null;
+  const list = data?.createProductMood ?? [];
+  return list.length > 0 ? list[0] : null;
 }
 
-/** Link a product to an attribute. */
-export async function createProductAttributeMapping(
-  productId: string,
-  attributeId: string
-): Promise<void> {
-  await gqlAdmin<{ createProductAttributeMapping?: unknown[] }>(
-    `mutation CreateProductAttributeMapping($input: NewProductAttributeMapping!) {
-      createProductAttributeMapping(input: $input) { productId attributeId }
+/** List mood mappings for a product (for edit form). Returns array of { productId, moodId }. */
+export async function searchProductMoodMappingsByProduct(
+  productId: string
+): Promise<{ productId: string; moodId: string }[]> {
+  const data = await gqlAdmin<{ searchProductMoodMapping?: { productId: string; moodId: string }[] }>(
+    `mutation SearchProductMoodMappings($input: SearchProductMoodMappingInput!) {
+      searchProductMoodMapping(input: $input) { productId moodId }
     }`,
-    { input: { productId, attributeId } }
+    { input: { productId } }
+  );
+  return data?.searchProductMoodMapping ?? [];
+}
+
+/** Link a product to a mood. */
+export async function createProductMoodMapping(
+  productId: string,
+  moodId: string
+): Promise<void> {
+  await gqlAdmin<{ createProductMoodMapping?: unknown[] }>(
+    `mutation CreateProductMoodMapping($input: NewProductMoodMapping!) {
+      createProductMoodMapping(input: $input) { productId moodId }
+    }`,
+    { input: { productId, moodId } }
+  );
+}
+
+/** Unlink a product from a mood. */
+export async function deleteProductMoodMapping(
+  productId: string,
+  moodId: string
+): Promise<void> {
+  await gqlAdmin<{ deleteProductMoodMapping?: unknown[] }>(
+    `mutation DeleteProductMoodMapping($input: DeleteProductMoodMappingInput!) {
+      deleteProductMoodMapping(input: $input) { productId moodId }
+    }`,
+    { input: { productId, moodId } }
   );
 }
 

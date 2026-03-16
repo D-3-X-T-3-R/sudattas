@@ -1,6 +1,6 @@
--- MySQL dump 10.13  Distrib 9.6.0, for Linux (x86_64)
+﻿-- MySQL dump 10.13  Distrib 9.6.0, for Linux (x86_64)
 --
--- Host: localhost    Database: SUDATTAS
+-- Host: 127.0.0.1    Database: SUDATTAS
 -- ------------------------------------------------------
 -- Server version	9.6.0
 
@@ -14,14 +14,6 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-SET @MYSQLDUMP_TEMP_LOG_BIN = @@SESSION.SQL_LOG_BIN;
-SET @@SESSION.SQL_LOG_BIN= 0;
-
---
--- GTID state at the beginning of the backup 
---
-
-SET @@GLOBAL.GTID_PURGED=/*!80000 '+'*/ '98984a2d-1a15-11f1-a670-2605f9dbbb1a:1-161';
 
 --
 -- Table structure for table `Cart`
@@ -33,7 +25,7 @@ DROP TABLE IF EXISTS `Cart`;
 CREATE TABLE `Cart` (
   `CartID` bigint NOT NULL AUTO_INCREMENT,
   `UserID` bigint DEFAULT NULL COMMENT 'NULL for guest carts',
-  `session_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'For guest checkout',
+  `session_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'For guest checkout',
   `VariantID` bigint NOT NULL,
   `Quantity` bigint NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -67,7 +59,7 @@ DROP TABLE IF EXISTS `Colors`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Colors` (
   `ColorID` bigint NOT NULL AUTO_INCREMENT,
-  `ColorName` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `ColorName` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`ColorID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -124,7 +116,7 @@ DROP TABLE IF EXISTS `CouponScope`;
 CREATE TABLE `CouponScope` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `coupon_id` bigint NOT NULL,
-  `scope_type` enum('product','category') COLLATE utf8mb4_general_ci NOT NULL,
+  `scope_type` enum('product','category') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `scope_id` bigint NOT NULL,
   `is_allowlist` tinyint(1) NOT NULL COMMENT '1=allow (cart must match at least one), 0=deny (cart must not match any)',
   PRIMARY KEY (`id`),
@@ -151,14 +143,14 @@ DROP TABLE IF EXISTS `Coupons`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Coupons` (
   `coupon_id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `discount_type` enum('percentage','fixed_amount') COLLATE utf8mb4_general_ci NOT NULL,
+  `code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `discount_type` enum('percentage','fixed_amount') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `discount_value` int NOT NULL,
   `min_order_value_paise` int DEFAULT '0',
   `usage_limit` int DEFAULT NULL,
   `usage_count` int DEFAULT '0',
   `max_uses_per_customer` int DEFAULT NULL COMMENT 'If set, each user may use this coupon at most this many times',
-  `coupon_status` enum('active','inactive') COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `coupon_status` enum('active','inactive') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'active',
   `starts_at` timestamp NOT NULL,
   `ends_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -187,8 +179,8 @@ DROP TABLE IF EXISTS `EventLogs`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `EventLogs` (
   `LogID` bigint NOT NULL AUTO_INCREMENT,
-  `EventType` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `EventDescription` text COLLATE utf8mb4_general_ci,
+  `EventType` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `EventDescription` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `UserID` bigint DEFAULT NULL,
   `EventTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`LogID`),
@@ -215,7 +207,7 @@ DROP TABLE IF EXISTS `Fabrics`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Fabrics` (
   `FabricID` bigint NOT NULL AUTO_INCREMENT,
-  `Name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `Name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`FabricID`),
   UNIQUE KEY `uq_fabric_name` (`Name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -240,11 +232,11 @@ DROP TABLE IF EXISTS `IdempotencyKeys`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `IdempotencyKeys` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `scope` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `key` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `request_hash` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `response_ref` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `status` enum('pending','processed','failed','needs_review','client_verified') COLLATE utf8mb4_general_ci NOT NULL,
+  `scope` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `key` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `request_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `response_ref` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('pending','processed','failed','needs_review','client_verified') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `expires_at` timestamp NOT NULL,
   PRIMARY KEY (`id`),
@@ -303,8 +295,8 @@ CREATE TABLE `InventoryLog` (
   `VariantID` bigint NOT NULL,
   `ChangeQuantity` bigint NOT NULL,
   `LogTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `Reason` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `actor_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'P1 admin audit: who changed',
+  `Reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `actor_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'P1 admin audit: who changed',
   `quantity_before` bigint DEFAULT NULL COMMENT 'P1 admin audit',
   `quantity_after` bigint DEFAULT NULL COMMENT 'P1 admin audit',
   PRIMARY KEY (`LogID`),
@@ -331,7 +323,7 @@ DROP TABLE IF EXISTS `NewsletterSubscribers`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `NewsletterSubscribers` (
   `SubscriberID` bigint NOT NULL AUTO_INCREMENT,
-  `Email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `Email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `SubscriptionDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `unsubscribed_at` timestamp NULL DEFAULT NULL COMMENT 'P2: when set, do not send newsletters',
   PRIMARY KEY (`SubscriberID`),
@@ -357,7 +349,7 @@ DROP TABLE IF EXISTS `Occasions`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Occasions` (
   `OccasionID` bigint NOT NULL AUTO_INCREMENT,
-  `Name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `Name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`OccasionID`),
   UNIQUE KEY `uq_occasion_name` (`Name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -389,8 +381,8 @@ CREATE TABLE `OrderDetails` (
   `unit_price_minor` int NOT NULL,
   `discount_minor` int DEFAULT NULL,
   `tax_minor` int DEFAULT NULL,
-  `sku` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `title` varchar(512) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `sku` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `title` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `line_attrs` json DEFAULT NULL,
   PRIMARY KEY (`OrderDetailID`),
   KEY `idx_order_details_order_id` (`OrderID`),
@@ -419,11 +411,11 @@ DROP TABLE IF EXISTS `OrderEvents`;
 CREATE TABLE `OrderEvents` (
   `event_id` bigint NOT NULL AUTO_INCREMENT,
   `order_id` bigint NOT NULL,
-  `event_type` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `from_status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `to_status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `actor_type` enum('customer','admin','system') COLLATE utf8mb4_general_ci NOT NULL,
-  `message` text COLLATE utf8mb4_general_ci,
+  `event_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `from_status` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `to_status` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `actor_type` enum('customer','admin','system') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`event_id`),
   KEY `idx_order` (`order_id`,`created_at`),
@@ -449,7 +441,7 @@ DROP TABLE IF EXISTS `OrderStatus`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `OrderStatus` (
   `StatusID` bigint NOT NULL AUTO_INCREMENT,
-  `StatusName` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `StatusName` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`StatusID`),
   UNIQUE KEY `uq_order_status_name` (`StatusName`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -474,15 +466,15 @@ DROP TABLE IF EXISTS `Orders`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Orders` (
   `OrderID` bigint NOT NULL AUTO_INCREMENT,
-  `order_number` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'SUD-2024-00001',
+  `order_number` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'SUD-2024-00001',
   `UserID` bigint NOT NULL,
   `OrderDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `ShippingAddressID` bigint NOT NULL,
   `TotalAmount` decimal(10,2) DEFAULT NULL COMMENT 'Legacy field, do not use; use *_minor columns instead',
   `StatusID` bigint NOT NULL,
-  `payment_status` enum('pending','authorized','captured','failed','needs_review') COLLATE utf8mb4_general_ci DEFAULT 'pending',
-  `payment_method` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `currency` varchar(3) COLLATE utf8mb4_general_ci DEFAULT 'INR',
+  `payment_status` enum('pending','authorized','captured','failed','needs_review') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `payment_method` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'INR',
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `subtotal_minor` bigint NOT NULL,
   `shipping_minor` bigint DEFAULT '0',
@@ -490,7 +482,7 @@ CREATE TABLE `Orders` (
   `discount_total_minor` bigint DEFAULT '0',
   `grand_total_minor` bigint NOT NULL,
   `applied_coupon_id` bigint DEFAULT NULL,
-  `applied_coupon_code` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `applied_coupon_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `applied_discount_paise` int DEFAULT NULL,
   PRIMARY KEY (`OrderID`),
   UNIQUE KEY `order_number` (`order_number`),
@@ -526,11 +518,11 @@ DROP TABLE IF EXISTS `OutboxEvents`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `OutboxEvents` (
   `event_id` bigint NOT NULL AUTO_INCREMENT,
-  `event_type` varchar(50) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'OrderPlaced, PaymentCaptured, Shipped, Delivered, Refunded',
-  `aggregate_type` varchar(50) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'order',
-  `aggregate_id` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `event_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'OrderPlaced, PaymentCaptured, Shipped, Delivered, Refunded',
+  `aggregate_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'order',
+  `aggregate_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `payload` json NOT NULL,
-  `status` enum('pending','processed','failed','needs_review','client_verified') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending' COMMENT 'processed = published for delivery',
+  `status` enum('pending','processed','failed','needs_review','client_verified') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending' COMMENT 'processed = published for delivery',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `published_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`event_id`),
@@ -557,13 +549,13 @@ DROP TABLE IF EXISTS `PaymentIntents`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `PaymentIntents` (
   `intent_id` bigint NOT NULL AUTO_INCREMENT,
-  `razorpay_order_id` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `razorpay_order_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `order_id` bigint DEFAULT NULL,
   `user_id` bigint DEFAULT NULL,
   `amount_paise` int NOT NULL,
-  `currency` varchar(3) COLLATE utf8mb4_general_ci DEFAULT 'INR',
-  `status` enum('pending','processed','failed','needs_review','client_verified') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
-  `razorpay_payment_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'INR',
+  `status` enum('pending','processed','failed','needs_review','client_verified') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
+  `razorpay_payment_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `metadata` json DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `expires_at` timestamp NOT NULL,
@@ -599,7 +591,7 @@ DROP TABLE IF EXISTS `ProductCategories`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ProductCategories` (
   `CategoryID` bigint NOT NULL AUTO_INCREMENT,
-  `Name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `Name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`CategoryID`),
   UNIQUE KEY `uq_category_name` (`Name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -616,7 +608,7 @@ INSERT INTO `ProductCategories` VALUES (13,'Accessories'),(11,'Bags & Clutches')
 UNLOCK TABLES;
 
 --
--- Table structure for table `ProductImages` (one row per image; ordered by display_order)
+-- Table structure for table `ProductImages`
 --
 
 DROP TABLE IF EXISTS `ProductImages`;
@@ -625,13 +617,13 @@ DROP TABLE IF EXISTS `ProductImages`;
 CREATE TABLE `ProductImages` (
   `ImageID` bigint NOT NULL AUTO_INCREMENT,
   `ProductID` bigint NOT NULL,
-  `display_order` int NOT NULL DEFAULT 0,
-  `url` varchar(2048) NOT NULL COMMENT 'CDN URL for this image',
+  `urls` json NOT NULL COMMENT 'JSON object of CDN image URLs for this product, e.g. {"1": "hero_url", "2": "detail_url"}',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`ImageID`),
-  KEY `idx_product_order` (`ProductID`,`display_order`),
+  UNIQUE KEY `uq_product_images_product` (`ProductID`),
+  KEY `idx_product_order` (`ProductID`),
   CONSTRAINT `ProductImages_ibfk_1` FOREIGN KEY (`ProductID`) REFERENCES `Products` (`ProductID`)
-) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -640,32 +632,59 @@ CREATE TABLE `ProductImages` (
 
 LOCK TABLES `ProductImages` WRITE;
 /*!40000 ALTER TABLE `ProductImages` DISABLE KEYS */;
-INSERT INTO `ProductImages` (`ImageID`,`ProductID`,`display_order`,`url`,`created_at`) VALUES
-(1,1,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_1.jpeg','2026-03-07 11:09:06'),
-(2,1,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_2.jpeg','2026-03-07 11:09:06'),
-(3,1,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_3.jpeg','2026-03-07 11:09:06'),
-(4,1,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_4.jpeg','2026-03-07 11:09:06'),
-(5,2,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_1.jpeg','2026-03-07 23:16:26'),
-(6,2,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_2.jpeg','2026-03-07 23:16:26'),
-(7,2,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_3.jpeg','2026-03-07 23:16:26'),
-(8,2,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_4.jpeg','2026-03-07 23:16:26'),
-(9,3,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_1.jpeg','2026-03-07 23:17:52'),
-(10,3,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_2.jpeg','2026-03-07 23:17:52'),
-(11,3,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_3.jpeg','2026-03-07 23:17:52'),
-(12,3,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_4.jpeg','2026-03-07 23:17:52'),
-(13,4,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_1.jpeg','2026-03-07 23:19:09'),
-(14,4,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_2.jpeg','2026-03-07 23:19:09'),
-(15,4,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_3.jpeg','2026-03-07 23:19:09'),
-(16,5,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_1.jpeg','2026-03-07 23:20:23'),
-(17,5,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_2.jpeg','2026-03-07 23:20:23'),
-(18,5,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_3.jpeg','2026-03-07 23:20:23'),
-(19,6,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_1.jpeg','2026-03-07 23:21:42'),
-(20,6,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_2.jpeg','2026-03-07 23:21:42'),
-(21,7,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_1.jpeg','2026-03-07 23:22:36'),
-(22,7,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_2.jpeg','2026-03-07 23:22:36'),
-(23,7,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_3.jpeg','2026-03-07 23:22:36'),
-(24,7,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_4.jpeg','2026-03-07 23:22:36');
+INSERT INTO `ProductImages` VALUES (1,1,'{\"0\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_1.jpeg\", \"1\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_2.jpeg\", \"2\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_3.jpeg\", \"3\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_4.jpeg\"}','2026-03-07 11:09:06'),(2,2,'{\"0\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_1.jpeg\", \"1\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_2.jpeg\", \"2\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_3.jpeg\", \"3\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_4.jpeg\"}','2026-03-07 23:16:26'),(3,3,'{\"0\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_1.jpeg\", \"1\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_2.jpeg\", \"2\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_3.jpeg\", \"3\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_4.jpeg\"}','2026-03-07 23:17:52'),(4,4,'{\"0\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_1.jpeg\", \"1\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_2.jpeg\", \"2\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_3.jpeg\"}','2026-03-07 23:19:09'),(5,5,'{\"0\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_1.jpeg\", \"1\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_2.jpeg\", \"2\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_3.jpeg\"}','2026-03-07 23:20:23'),(6,6,'{\"0\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_1.jpeg\", \"1\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_2.jpeg\"}','2026-03-07 23:21:42'),(7,7,'{\"0\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_1.jpeg\", \"1\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_2.jpeg\", \"2\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_3.jpeg\", \"3\": \"https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_4.jpeg\"}','2026-03-07 23:22:36');
 /*!40000 ALTER TABLE `ProductImages` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `ProductMoodMapping`
+--
+
+DROP TABLE IF EXISTS `ProductMoodMapping`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ProductMoodMapping` (
+  `ProductID` bigint NOT NULL,
+  `MoodID` bigint NOT NULL,
+  PRIMARY KEY (`ProductID`,`MoodID`),
+  KEY `idx_mood_product` (`MoodID`,`ProductID`),
+  CONSTRAINT `ProductMoodMapping_ibfk_1` FOREIGN KEY (`ProductID`) REFERENCES `Products` (`ProductID`) ON DELETE CASCADE,
+  CONSTRAINT `ProductMoodMapping_ibfk_2` FOREIGN KEY (`MoodID`) REFERENCES `ProductMoods` (`MoodID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `ProductMoodMapping`
+--
+
+LOCK TABLES `ProductMoodMapping` WRITE;
+/*!40000 ALTER TABLE `ProductMoodMapping` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ProductMoodMapping` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `ProductMoods`
+--
+
+DROP TABLE IF EXISTS `ProductMoods`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ProductMoods` (
+  `MoodID` bigint NOT NULL AUTO_INCREMENT,
+  `MoodName` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`MoodID`),
+  UNIQUE KEY `uq_mood_name` (`MoodName`)
+) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `ProductMoods`
+--
+
+LOCK TABLES `ProductMoods` WRITE;
+/*!40000 ALTER TABLE `ProductMoods` DISABLE KEYS */;
+INSERT INTO `ProductMoods` VALUES (3,'Amar Kolkata'),(11,'Aura of Tussar'),(6,'Cotton Carnival'),(9,'Daily Diva'),(2,'Doodh e Alta'),(12,'Gamcha Fusion Series'),(4,'Kanchi Canvas'),(14,'Kantha Tussar Treasures'),(5,'Khadi Roots'),(10,'Mom chitra'),(13,'Silken Whispers'),(8,'Summer Softs'),(1,'TANT-ER-SAAJ'),(17,'Test Mood'),(15,'The Jamdani Tussar Series'),(7,'The Weaver\'s Whisper'),(16,'Tussar Embroidered Tales');
+/*!40000 ALTER TABLE `ProductMoods` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -677,7 +696,7 @@ DROP TABLE IF EXISTS `ProductStatuses`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ProductStatuses` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `code` (`code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -735,17 +754,17 @@ DROP TABLE IF EXISTS `Products`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Products` (
   `ProductID` bigint NOT NULL AUTO_INCREMENT,
-  `sku` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `Name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `slug` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `Description` text COLLATE utf8mb4_general_ci,
-  `price_paise` int NOT NULL COMMENT 'Price in paise (₹499.00 = 49900)',
+  `sku` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `slug` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `price_paise` int NOT NULL COMMENT 'Price in paise (╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├«├ëΓò¼├┤Γö£ΓûôΓö£Γòæ499.00 = 49900)',
   `CategoryID` bigint NOT NULL,
-  `fabric` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Common values: Cotton, Silk, Linen, Chiffon, Georgette, Crepe, Organza, Net, Rayon, Viscose, Satin, Velvet, Brocade, Khadi, Muslin, Tussar Silk, Banarasi Silk, Art Silk, Polyester, Cotton Silk',
-  `weave` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `occasion` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `fabric` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Common values: Cotton, Silk, Linen, Chiffon, Georgette, Crepe, Organza, Net, Rayon, Viscose, Satin, Velvet, Brocade, Khadi, Muslin, Tussar Silk, Banarasi Silk, Art Silk, Polyester, Cotton Silk',
+  `weave` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `occasion` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `has_blouse_piece` tinyint(1) DEFAULT '1',
-  `care_instructions` text COLLATE utf8mb4_general_ci,
+  `care_instructions` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `product_status_id` bigint DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -782,10 +801,10 @@ DROP TABLE IF EXISTS `Refunds`;
 CREATE TABLE `Refunds` (
   `refund_id` bigint NOT NULL AUTO_INCREMENT,
   `order_id` bigint NOT NULL,
-  `gateway_refund_id` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Idempotency: same id returns same refund',
+  `gateway_refund_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Idempotency: same id returns same refund',
   `amount_paise` int NOT NULL,
-  `currency` varchar(3) COLLATE utf8mb4_general_ci DEFAULT 'INR',
-  `status` enum('pending','processed','failed','needs_review','client_verified') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'INR',
+  `status` enum('pending','processed','failed','needs_review','client_verified') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'pending',
   `line_items_refunded` json DEFAULT NULL COMMENT 'Optional: [{order_detail_id, quantity_refunded, amount_paise}]',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`refund_id`),
@@ -817,8 +836,8 @@ CREATE TABLE `Reviews` (
   `ProductID` bigint DEFAULT NULL,
   `UserID` bigint DEFAULT NULL,
   `Rating` tinyint NOT NULL,
-  `Comment` text COLLATE utf8mb4_general_ci,
-  `review_status` enum('pending','approved','rejected') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `Comment` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `review_status` enum('pending','approved','rejected') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'pending',
   `is_verified_purchase` tinyint(1) DEFAULT '0' COMMENT 'Derived from order history; not user-controlled',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`ReviewID`),
@@ -849,8 +868,8 @@ DROP TABLE IF EXISTS `SecurityAuditLog`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `SecurityAuditLog` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `event_type` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'e.g. secrets_rotation, config_reload',
-  `details` text COLLATE utf8mb4_general_ci,
+  `event_type` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'e.g. secrets_rotation, config_reload',
+  `details` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_security_audit_created` (`created_at`)
@@ -874,10 +893,10 @@ DROP TABLE IF EXISTS `Sessions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Sessions` (
-  `session_id` varchar(128) COLLATE utf8mb4_general_ci NOT NULL,
+  `session_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `user_id` bigint DEFAULT NULL,
   `data` json NOT NULL,
-  `ip_address` varchar(45) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `ip_address` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `last_activity` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `expires_at` timestamp NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -907,10 +926,10 @@ DROP TABLE IF EXISTS `Shipments`;
 CREATE TABLE `Shipments` (
   `shipment_id` bigint NOT NULL AUTO_INCREMENT,
   `order_id` bigint NOT NULL,
-  `shiprocket_order_id` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `awb_code` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `carrier` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `status` enum('pending','picked_up','in_transit','delivered','failed') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `shiprocket_order_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `awb_code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `carrier` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('pending','picked_up','in_transit','delivered','failed') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'pending',
   `tracking_events` json DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `delivered_at` timestamp NULL DEFAULT NULL,
@@ -940,12 +959,12 @@ DROP TABLE IF EXISTS `ShippingAddresses`;
 CREATE TABLE `ShippingAddresses` (
   `ShippingAddressID` bigint NOT NULL AUTO_INCREMENT,
   `UserID` bigint DEFAULT NULL,
-  `Country` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `StateRegion` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `City` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `PostalCode` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
-  `Road` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `ApartmentNoOrName` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Country` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `StateRegion` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `City` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `PostalCode` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `Road` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `ApartmentNoOrName` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`ShippingAddressID`),
   KEY `idx_shipping_user` (`UserID`),
   CONSTRAINT `ShippingAddresses_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `Users` (`UserID`)
@@ -970,9 +989,9 @@ DROP TABLE IF EXISTS `ShippingMethods`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ShippingMethods` (
   `MethodID` bigint NOT NULL AUTO_INCREMENT,
-  `MethodName` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `MethodName` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `Cost` decimal(10,2) DEFAULT NULL,
-  `EstimatedDeliveryTime` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `EstimatedDeliveryTime` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`MethodID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -995,7 +1014,7 @@ DROP TABLE IF EXISTS `Sizes`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Sizes` (
   `SizeID` bigint NOT NULL AUTO_INCREMENT,
-  `SizeName` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `SizeName` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`SizeID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -1022,7 +1041,7 @@ CREATE TABLE `Transactions` (
   `UserID` bigint NOT NULL,
   `Amount` decimal(10,2) NOT NULL,
   `TransactionDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `Type` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `Type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`TransactionID`),
   KEY `UserID` (`UserID`),
   CONSTRAINT `Transactions_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `Users` (`UserID`)
@@ -1048,9 +1067,9 @@ DROP TABLE IF EXISTS `UserActivity`;
 CREATE TABLE `UserActivity` (
   `ActivityID` bigint NOT NULL AUTO_INCREMENT,
   `UserID` bigint DEFAULT NULL,
-  `ActivityType` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `ActivityType` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `ActivityTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `ActivityDetails` text COLLATE utf8mb4_general_ci,
+  `ActivityDetails` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   PRIMARY KEY (`ActivityID`),
   KEY `UserID` (`UserID`),
   CONSTRAINT `UserActivity_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `Users` (`UserID`)
@@ -1075,7 +1094,7 @@ DROP TABLE IF EXISTS `UserRoles`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `UserRoles` (
   `RoleID` bigint NOT NULL AUTO_INCREMENT,
-  `RoleName` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `RoleName` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`RoleID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -1098,7 +1117,7 @@ DROP TABLE IF EXISTS `UserStatuses`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `UserStatuses` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `code` (`code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -1123,16 +1142,16 @@ DROP TABLE IF EXISTS `Users`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Users` (
   `UserID` bigint NOT NULL AUTO_INCREMENT,
-  `Username` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `auth_provider` enum('email','google') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'email' COMMENT 'Login method for this account',
-  `password_hash` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Argon2id hash; NULL for google accounts',
-  `google_sub` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Google subject ID (sub claim); NULL for email accounts',
-  `Email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `Username` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `auth_provider` enum('email','google') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'email' COMMENT 'Login method for this account',
+  `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Argon2id hash; NULL for google accounts',
+  `google_sub` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Google subject ID (sub claim); NULL for email accounts',
+  `Email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `email_verified` tinyint(1) DEFAULT '0',
   `email_verified_at` timestamp NULL DEFAULT NULL,
-  `FullName` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `Address` text COLLATE utf8mb4_general_ci,
-  `Phone` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `FullName` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `Phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `user_status_id` bigint DEFAULT NULL,
   `role_id` bigint DEFAULT NULL,
   `last_login_at` timestamp NULL DEFAULT NULL,
@@ -1172,7 +1191,7 @@ DROP TABLE IF EXISTS `Weaves`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Weaves` (
   `WeaveID` bigint NOT NULL AUTO_INCREMENT,
-  `Name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `Name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`WeaveID`),
   UNIQUE KEY `uq_weave_name` (`Name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -1197,12 +1216,12 @@ DROP TABLE IF EXISTS `WebhookEvents`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `WebhookEvents` (
   `event_id` bigint NOT NULL AUTO_INCREMENT,
-  `provider` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `event_type` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `webhook_id` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `provider_event_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'e.g. x-razorpay-event-id for replay protection',
+  `provider` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `event_type` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `webhook_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `provider_event_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'e.g. x-razorpay-event-id for replay protection',
   `payload` json NOT NULL,
-  `status` enum('pending','processed','failed','needs_review','client_verified') COLLATE utf8mb4_general_ci DEFAULT 'pending',
+  `status` enum('pending','processed','failed','needs_review','client_verified') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'pending',
   `received_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`event_id`),
   UNIQUE KEY `uq_webhook_provider_id` (`provider`,`webhook_id`),
@@ -1249,7 +1268,6 @@ LOCK TABLES `Wishlist` WRITE;
 /*!40000 ALTER TABLE `Wishlist` DISABLE KEYS */;
 /*!40000 ALTER TABLE `Wishlist` ENABLE KEYS */;
 UNLOCK TABLES;
-SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -1260,4 +1278,4 @@ SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-03-08  1:27:30
+-- Dump completed on 2026-03-15  0:34:17

@@ -1,36 +1,30 @@
-//! Unit tests for product_images handlers (confirm/delete). R2 client is not exercised here.
+//! Unit tests for product_images handlers (confirm/delete/search/sync). R2 client is not exercised here.
 
 use core_db_entities::entity::product_images;
 use proto::proto::core::{
     ConfirmImageUploadRequest, DeleteProductImageRequest, ProductImagesResponse,
-    SearchProductImageRequest, UpdateProductImageRequest,
+    SearchProductImageRequest, SyncProductImagesRequest, UpdateProductImageRequest,
 };
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
-use serde_json::json;
 use tonic::Request;
 
 #[tokio::test]
-async fn confirm_image_upload_inserts_row_and_maps_urls() {
+async fn confirm_image_upload_inserts_row_with_url() {
     use core_operations::handlers::product_images::confirm_image_upload;
 
-    // Simulate no existing row first, then the inserted row returned by SeaORM.
-    let urls = json!({ "1": "https://cdn.example.com/products/5/uuid/file.png" });
     let inserted_model = product_images::Model {
         image_id: 10,
         product_id: 5,
-        urls,
+        display_order: 1,
+        url: "https://cdn.example.com/products/5/uuid/file.png".to_string(),
         created_at: None,
     };
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        // First query: lookup by product_id returns no rows.
-        .append_query_results(vec![Vec::<product_images::Model>::new()])
-        // Exec for insert.
         .append_exec_results(vec![MockExecResult {
             last_insert_id: 10,
             rows_affected: 1,
         }])
-        // Query used by insert() to load the inserted row.
         .append_query_results(vec![vec![inserted_model]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
@@ -42,6 +36,7 @@ async fn confirm_image_upload_inserts_row_and_maps_urls() {
         key: "products/5/uuid/file.png".into(),
         display_order: Some(1),
         alt_text: Some("alt".into()),
+        url: None,
     });
     let result = confirm_image_upload(&txn, req).await;
     if let Err(status) = &result {
@@ -99,17 +94,18 @@ async fn update_product_image_not_found_yields_not_found_status() {
 async fn update_product_image_updates_product_id_and_preserves_url() {
     use core_operations::handlers::product_images::update_product_image;
 
-    let urls = serde_json::json!({ "1": "https://cdn.example.com/products/1/img.png" });
     let existing = product_images::Model {
         image_id: 20,
         product_id: 5,
-        urls: urls.clone(),
+        display_order: 0,
+        url: "https://cdn.example.com/products/1/img.png".to_string(),
         created_at: None,
     };
     let updated = product_images::Model {
         image_id: 20,
         product_id: 7,
-        urls,
+        display_order: 0,
+        url: "https://cdn.example.com/products/1/img.png".to_string(),
         created_at: None,
     };
 
@@ -143,11 +139,11 @@ async fn update_product_image_updates_product_id_and_preserves_url() {
 async fn search_product_image_filters_by_image_and_product_id() {
     use core_operations::handlers::product_images::search_product_image;
 
-    let urls = serde_json::json!({ "1": "https://cdn.example.com/products/1/img.png" });
     let model = product_images::Model {
         image_id: 30,
         product_id: 9,
-        urls,
+        display_order: 0,
+        url: "https://cdn.example.com/products/1/img.png".to_string(),
         created_at: None,
     };
 
@@ -169,4 +165,26 @@ async fn search_product_image_filters_by_image_and_product_id() {
     assert_eq!(img.image_id, 30);
     assert_eq!(img.product_id, 9);
     assert!(img.url.is_some());
+}
+
+#[tokio::test]
+async fn sync_product_images_empty_items_deletes_all_for_product() {
+    use core_operations::handlers::product_images::sync_product_images;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 2,
+        }])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SyncProductImagesRequest {
+        product_id: 5,
+        items: vec![],
+    });
+    let result = sync_product_images(&txn, req).await;
+    assert!(result.is_ok());
+    let ProductImagesResponse { items } = result.unwrap().into_inner();
+    assert!(items.is_empty());
 }

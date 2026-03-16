@@ -18,26 +18,21 @@ pub async fn update_product_image(
     let model = product_images::ActiveModel {
         image_id: ActiveValue::Set(existing.image_id),
         product_id: ActiveValue::Set(req.product_id),
-        urls: ActiveValue::Set(existing.urls),
+        display_order: ActiveValue::Set(existing.display_order),
+        url: ActiveValue::Set(existing.url),
         created_at: ActiveValue::NotSet,
     };
     match model.update(txn).await {
         Ok(updated) => {
-            let url = updated
-                .urls
-                .get("1")
-                .or_else(|| updated.urls.get("0"))
-                .and_then(|v| v.as_str())
-                .map(String::from);
             let response = ProductImagesResponse {
                 items: vec![ProductImageResponse {
                     image_id: updated.image_id,
                     product_id: updated.product_id,
                     image_base64: String::new(),
                     alt_text: None,
-                    url,
+                    url: Some(updated.url.clone()),
                     cdn_path: None,
-                    thumbnail_url: None,
+                    thumbnail_url: Some(updated.url),
                 }],
             };
             Ok(Response::new(response))

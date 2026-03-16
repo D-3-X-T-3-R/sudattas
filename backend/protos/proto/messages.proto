@@ -116,6 +116,7 @@ message SearchProductRequest {
     optional string weave = 10;
     optional string occasion = 11;
     optional int64 product_status_id = 12;
+    optional int64 mood_id = 13;  // filter products that have this mood linked
 }
 
 message GetProductsByIdRequest {
@@ -522,9 +523,21 @@ message PresignedUploadUrlResponse {
 
 message ConfirmImageUploadRequest {
     int64 product_id = 1;
-    string key = 2;
+    string key = 2;           // R2 object key (required when url is not set; used for new uploads)
     optional string alt_text = 3;
     optional int32 display_order = 4;
+    optional string url = 5;  // when set, use this URL for this display_order (for re-adding existing images after delete)
+}
+
+// Sync product images: update display_order for kept, bulk insert new, delete removed (1 row per image).
+message SyncProductImageItem {
+    optional int64 image_id = 1;  // existing row to keep; set its display_order to index
+    optional string key = 2;      // new upload; insert row with url built from key
+    optional string url = 3;      // when key empty, use this url for new row
+}
+message SyncProductImagesRequest {
+    int64 product_id = 1;
+    repeated SyncProductImageItem items = 2;  // ordered list; index = display_order
 }
 
 // Inventory (schema: VariantID; no supplier)
@@ -896,7 +909,7 @@ message CreateProductMoodMappingRequest {
 
 message SearchProductMoodMappingRequest {
     int64 product_id = 1;
-    int64 mood_id = 2;
+    optional int64 mood_id = 2;  // when absent or 0: return all mappings for product_id
 }
 
 message DeleteProductMoodMappingRequest {
