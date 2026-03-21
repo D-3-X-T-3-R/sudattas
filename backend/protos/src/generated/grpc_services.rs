@@ -1165,6 +1165,34 @@ pub struct ProductMoodsResponse {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<ProductMoodResponse>,
 }
+/// Storefront: distinct moods from the newest products (scan recent products, collect mood ids in order).
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShopHighlightMoodsRequest {
+    /// products to scan, default 100, max 500
+    #[prost(int64, optional, tag = "1")]
+    pub recent_product_limit: ::core::option::Option<i64>,
+    /// max moods to return, default 4, max 20
+    #[prost(int64, optional, tag = "2")]
+    pub max_moods: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShopHighlightMoodItem {
+    #[prost(int64, tag = "1")]
+    pub mood_id: i64,
+    #[prost(string, tag = "2")]
+    pub mood_name: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShopHighlightMoodsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<ShopHighlightMoodItem>,
+}
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -3909,6 +3937,33 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn shop_highlight_moods(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ShopHighlightMoodsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ShopHighlightMoodsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/ShopHighlightMoods",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "ShopHighlightMoods"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn update_product_mood(
             &mut self,
             request: impl tonic::IntoRequest<super::UpdateProductMoodRequest>,
@@ -6288,6 +6343,13 @@ pub mod grpc_services_server {
             request: tonic::Request<super::SearchProductMoodRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ProductMoodsResponse>,
+            tonic::Status,
+        >;
+        async fn shop_highlight_moods(
+            &self,
+            request: tonic::Request<super::ShopHighlightMoodsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ShopHighlightMoodsResponse>,
             tonic::Status,
         >;
         async fn update_product_mood(
@@ -9448,6 +9510,53 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = SearchProductMoodSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/ShopHighlightMoods" => {
+                    #[allow(non_camel_case_types)]
+                    struct ShopHighlightMoodsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::ShopHighlightMoodsRequest>
+                    for ShopHighlightMoodsSvc<T> {
+                        type Response = super::ShopHighlightMoodsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ShopHighlightMoodsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::shop_highlight_moods(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = ShopHighlightMoodsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

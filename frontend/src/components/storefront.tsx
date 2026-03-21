@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { ensureGuestSession, getGuestSessionId, clearGuestSession } from "@/lib/session";
@@ -10,14 +10,21 @@ import { useStorefront } from "@/context/storefront-context";
 
 type ProductsResponse = { products: Product[]; error: string | null };
 
-async function fetchStorefrontProducts(sessionId: string | null): Promise<{
+async function fetchStorefrontProducts(
+  sessionId: string | null,
+  moodId?: string | null
+): Promise<{
   products: Product[];
   error: string | null;
 }> {
   try {
     const headers: Record<string, string> = {};
     if (sessionId) headers["X-Session-Id"] = sessionId;
-    const res = await fetch("/api/products", { headers });
+    const qs =
+      moodId && moodId.trim() !== ""
+        ? `?moodId=${encodeURIComponent(moodId.trim())}`
+        : "";
+    const res = await fetch(`/api/products${qs}`, { headers });
     const data = (await res.json()) as ProductsResponse | Product[];
     if (Array.isArray(data)) {
       return { products: data, error: null };
@@ -34,23 +41,28 @@ async function fetchStorefrontProducts(sessionId: string | null): Promise<{
 type StorefrontFiltersResponse = {
   categories: { categoryId: string; name: string }[];
   occasions: { occasionId: string; occasionName: string }[];
+  moods: { moodId: string; moodName: string; thumbnailUrl?: string }[];
   error: string | null;
 };
 
 async function fetchStorefrontFilters(sessionId: string | null): Promise<StorefrontFiltersResponse> {
-  if (!sessionId) return { categories: [], occasions: [], error: null };
   try {
-    const res = await fetch("/api/storefront-filters", {
-      headers: { "X-Session-Id": sessionId },
-    });
-    const data = (await res.json()) as StorefrontFiltersResponse;
+    const headers: Record<string, string> = {};
+    if (sessionId) headers["X-Session-Id"] = sessionId;
+    console.log("[DEBUG] fetchStorefrontFilters: fetching with sessionId =", sessionId);
+    const res = await fetch("/api/storefront-filters", { headers });
+    const raw = await res.text();
+    console.log("[DEBUG] fetchStorefrontFilters: HTTP", res.status, "| raw body:", raw);
+    const data = JSON.parse(raw) as StorefrontFiltersResponse;
     return {
       categories: data.categories ?? [],
       occasions: data.occasions ?? [],
+      moods: data.moods ?? [],
       error: data.error ?? null,
     };
-  } catch {
-    return { categories: [], occasions: [], error: "Network error" };
+  } catch (e) {
+    console.error("[DEBUG] fetchStorefrontFilters: caught", e);
+    return { categories: [], occasions: [], moods: [], error: "Network error" };
   }
 }
 import { useActiveSection } from "@/hooks/use-active-section";
@@ -62,6 +74,7 @@ import { HeroSection } from "@/components/hero-section";
 import { CollectionsSection } from "@/components/collections-section";
 import { EditorialBlock } from "@/components/editorial-block";
 import { ShopSection } from "@/components/shop-section";
+import { ExploreSection } from "@/components/explore-section";
 import { StorySection } from "@/components/story-section";
 import { Footer } from "@/components/footer";
 import { MenuDrawer } from "@/components/menu-drawer";
@@ -98,6 +111,9 @@ export function Storefront() {
   const [productsBannerDismissed, setProductsBannerDismissed] = useState(false);
   const [categories, setCategories] = useState<{ categoryId: string; name: string }[]>([]);
   const [occasions, setOccasions] = useState<{ occasionId: string; occasionName: string }[]>([]);
+  const [moods, setMoods] = useState<{ moodId: string; moodName: string; thumbnailUrl?: string }[]>([]);
+  /** When set, product list is loaded from GraphQL searchProduct with this moodId. */
+  const [shopMoodId, setShopMoodId] = useState<string | null>(null);
   const [loadingProducts, setLoadingProducts] = useState(false);
 
   const { paymentMessage, paymentLoading, runTest } = useRazorpayTest();
@@ -109,61 +125,135 @@ export function Storefront() {
   }, []);
 
   useEffect(() => {
-    // Use guest session so backend allows searchProduct without admin key
+    // Guest session → Next /api/products + /api/storefront-filters → GraphQL (see route files).
     async function loadProducts() {
       setLoadingProducts(true);
+      console.log("[DEBUG] loadProducts: start");
       await ensureGuestSession();
       let sessionId = getGuestSessionId();
-      let { products: list, error } = await fetchStorefrontProducts(sessionId);
-      // If backend says session invalid/expired (e.g. Redis was restarted), clear and retry with a new session
-      const sessionInvalid =
-        error &&
-        (error.includes("Session invalid") ||
-          error.includes("Session not found") ||
-          error.includes("expired"));
-      if (sessionInvalid && sessionId) {
+      console.log("[DEBUG] loadProducts: sessionId after ensureGuestSession =", sessionId);
+
+      async function loadCatalog(sid: string | null, mood: string | null) {
+        console.log("[DEBUG] loadCatalog: calling with sid =", sid);
+        const [pr, fr] = await Promise.all([
+          fetchStorefrontProducts(sid, mood),
+          fetchStorefrontFilters(sid),
+        ]);
+        console.log("[DEBUG] loadCatalog: products.length =", pr.products.length, "products.error =", pr.error);
+        console.log("[DEBUG] loadCatalog: moods.length =", fr.moods.length, "filters.error =", fr.error, "moods =", fr.moods);
+        return { pr, fr };
+      }
+
+      let { pr, fr } = await loadCatalog(sessionId, null);
+
+      const looksLikeBadSession = (msg: string | null) =>
+        !!msg &&
+        (msg.includes("Session invalid") ||
+          msg.includes("Session not found") ||
+          msg.includes("expired") ||
+          msg.includes("Unauthorized"));
+
+      const hasError = !!(pr.error || fr.error);
+      console.log("[DEBUG] hasError =", hasError, "| pr.error =", pr.error, "| fr.error =", fr.error);
+      if (hasError && (looksLikeBadSession(pr.error) || looksLikeBadSession(fr.error) || !sessionId)) {
+        console.log("[DEBUG] BAD SESSION detected — clearing and retrying");
         clearGuestSession();
         await ensureGuestSession();
         sessionId = getGuestSessionId();
-        const retry = await fetchStorefrontProducts(sessionId);
-        list = retry.products;
-        error = retry.error;
+        console.log("[DEBUG] retry: new sessionId =", sessionId);
+        if (sessionId) {
+          ({ pr, fr } = await loadCatalog(sessionId, null));
+        } else {
+          console.error("[DEBUG] retry: ensureGuestSession still returned null — backend unreachable?");
+        }
       }
+
+      const { products: list, error } = pr;
+      console.log("[DEBUG] final products.length =", list.length, "| final moods =", fr.moods);
       if (list.length > 0) {
         setProducts(list);
         setProductsError(null);
-      } else {
+      } else if (error) {
         setProductsError(error ?? "No products from backend");
-        if (error) {
-          showToast({
-            title: "Catalog",
-            description:
-              "Having trouble connecting. Your bag is saved on this device.",
-          });
-        }
+        showToast({
+          title: "Catalog",
+          description:
+            "Having trouble connecting. Your bag is saved on this device.",
+        });
+      } else {
+        setProducts([]);
+        setProductsError(null);
       }
-      const sid = getGuestSessionId();
-      const { categories: cats, occasions: occs } = await fetchStorefrontFilters(sid);
-      setCategories(cats);
-      setOccasions(occs);
+
+      setCategories(fr.categories);
+      setOccasions(fr.occasions);
+      setMoods(fr.moods);
+      console.log("[DEBUG] setMoods called with", fr.moods.length, "moods:", fr.moods);
+      if (process.env.NODE_ENV === "development" && fr.error) {
+        console.warn("[storefront-filters]", fr.error);
+      }
       setLoadingProducts(false);
     }
     loadProducts();
   }, []);
 
+  /** Re-fetch catalog with GraphQL searchProduct + moodId (or full list when null). */
+  const applyShopMoodFilter = useCallback(
+    async (nextMoodId: string | null) => {
+      setShopMoodId(nextMoodId);
+      setLoadingProducts(true);
+      await ensureGuestSession();
+      let sid = getGuestSessionId();
+      let pr = await fetchStorefrontProducts(sid, nextMoodId);
+      const badSession = (msg: string | null) =>
+        !!msg &&
+        (msg.includes("Session invalid") ||
+          msg.includes("Session not found") ||
+          msg.includes("expired"));
+      if (sid && badSession(pr.error)) {
+        clearGuestSession();
+        await ensureGuestSession();
+        sid = getGuestSessionId();
+        pr = await fetchStorefrontProducts(sid, nextMoodId);
+      }
+      if (pr.products.length > 0) {
+        setProducts(pr.products);
+        setProductsError(null);
+      } else if (pr.error) {
+        setProductsError(pr.error);
+        showToast({
+          title: "Catalog",
+          description:
+            "Having trouble connecting. Your bag is saved on this device.",
+        });
+      } else {
+        setProducts([]);
+        setProductsError(null);
+      }
+      setLoadingProducts(false);
+    },
+    [showToast]
+  );
+
   const occasionOptions = useMemo(() => {
-    if (occasions.length > 0) {
-      return ["All", ...occasions.map((o) => o.occasionName)];
-    }
     const fromProducts = new Set(products.map((p) => p.occasion).filter(Boolean));
+    if (occasions.length > 0) {
+      const matched = occasions
+        .map((o) => o.occasionName)
+        .filter((name) => fromProducts.has(name));
+      return ["All", ...matched];
+    }
     return ["All", ...Array.from(fromProducts)];
   }, [occasions, products]);
 
   const collectionOptions = useMemo(() => {
-    if (categories.length > 0) {
-      return ["All", ...categories.map((c) => c.name)];
-    }
     const fromProducts = new Set(products.map((p) => p.collection).filter(Boolean));
+    if (categories.length > 0) {
+      const matched = categories
+        .map((c) => c.name)
+        .filter((name) => fromProducts.has(name));
+      return ["All", ...matched];
+    }
     return ["All", ...Array.from(fromProducts)];
   }, [categories, products]);
 
@@ -231,6 +321,10 @@ export function Storefront() {
 
       <CollectionsSection
         setCollection={setCollection}
+        moods={moods}
+        onPickMood={(m) => {
+          void applyShopMoodFilter(m.moodId);
+        }}
         reduceMotion={!!reduceMotion}
       />
 
@@ -239,22 +333,35 @@ export function Storefront() {
           <Spinner />
         </div>
       ) : (
-        <ShopSection
-          filtered={filtered}
-          totalCount={products.length}
-          collection={collection}
-          occasion={occasion}
-          sort={sort}
-          setCollection={setCollection}
-          setOccasion={setOccasion}
-          setSort={setSort}
-          occasions={occasionOptions}
-          collections={collectionOptions}
-          wishlist={wishlist}
-          onToggleWish={toggleWish}
-          onAddToCart={addToCart}
-          onQuickView={goToProduct}
-        />
+        <>
+          <ShopSection
+            products={products}
+            wishlist={wishlist}
+            onToggleWish={toggleWish}
+            onAddToCart={addToCart}
+            onQuickView={goToProduct}
+            reduceMotion={!!reduceMotion}
+          />
+
+          <ExploreSection
+            filtered={filtered}
+            collection={collection}
+            occasion={occasion}
+            sort={sort}
+            setCollection={setCollection}
+            setOccasion={setOccasion}
+            setSort={setSort}
+            occasions={occasionOptions}
+            collections={collectionOptions}
+            moods={moods}
+            shopMoodId={shopMoodId}
+            onMoodChange={(id) => void applyShopMoodFilter(id)}
+            wishlist={wishlist}
+            onToggleWish={toggleWish}
+            onAddToCart={addToCart}
+            onQuickView={goToProduct}
+          />
+        </>
       )}
 
       <EditorialBlock />

@@ -122,7 +122,7 @@ export function DashboardStats() {
 
   if (isLoading) {
     return (
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[...ORDER_STATS_CONFIG, ...EXTRA_STATS_CONFIG].map(({ label, cardClass }) => (
           <div
             key={label}
@@ -149,7 +149,7 @@ export function DashboardStats() {
   }
 
   return (
-    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
       {ORDER_STATS_CONFIG.map(({ key, label, format, icon: Icon, cardClass, overlayClass }) => (
         <div
           key={key}

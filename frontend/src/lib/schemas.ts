@@ -87,6 +87,7 @@ export type AdminNewCategory = z.infer<typeof adminNewCategorySchema>;
 
 /** One variant row for add-product form (size, color, extra price, initial stock) */
 export interface AdminProductVariantRow {
+  variantId?: string;
   sizeId: string;
   colorId?: string;
   additionalPricePaise: string;

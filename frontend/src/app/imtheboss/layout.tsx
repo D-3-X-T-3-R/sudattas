@@ -42,7 +42,9 @@ export default function ImTheBossLayout({
     <>
       <AdminAuthSync />
       <AppErrorBoundary>
-        <AdminShell>{children}</AdminShell>
+        <div className="admin-root min-h-screen">
+          <AdminShell>{children}</AdminShell>
+        </div>
       </AppErrorBoundary>
     </>
   );

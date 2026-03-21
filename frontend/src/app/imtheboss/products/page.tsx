@@ -17,11 +17,16 @@ import {
   searchProductMoodMappingsByProduct,
   createProductMood,
   createProductVariant,
+  updateProductVariant,
+  deleteProductVariant,
   createProductMoodMapping,
   deleteProductMoodMapping,
   deleteProductImage,
   createInventoryItem,
+  searchInventoryByVariantId,
+  updateInventoryItem,
   type ProductListRow,
+  type ProductListRowWithVariantStock,
   type ProductImageListItem,
   type CategoryRow,
   type SizeRow,
@@ -279,6 +284,7 @@ export default function AdminProductsPage() {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   /** When editing, image IDs that were present when we opened edit (so we can delete removed ones on Update). */
   const [initialExistingImageIdsWhenEdit, setInitialExistingImageIdsWhenEdit] = useState<string[]>([]);
+  const [initialVariantIdsWhenEdit, setInitialVariantIdsWhenEdit] = useState<string[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   /** True while uploads/refetch run after Update product (loading overlay shown). */
   const [isUpdateReflecting, setIsUpdateReflecting] = useState(false);
@@ -484,6 +490,8 @@ export default function AdminProductsPage() {
       careInstructions?: string;
       productStatusId?: string;
       selectedMoodIds?: string[];
+      variants?: AdminProductVariantRow[];
+      initialVariantIdsWhenEdit?: string[];
       /** Current existing images (after user may have removed some); used to compute which to delete. */
       currentExistingImages?: ProductImageListItem[];
       /** Image IDs when edit was opened; images not in currentExistingImages will be deleted. */
@@ -534,6 +542,67 @@ export default function AdminProductsPage() {
             await deleteProductMoodMapping(updated.productId, m.moodId);
           } catch (err) {
             console.error("Failed to remove mood mapping:", err);
+          }
+        }
+      }
+
+      // Sync variants + inventory (persist stock edits and new variants on update)
+      const incomingVariants = payload.variants ?? [];
+      const keptVariantIds = new Set<string>();
+      for (const v of incomingVariants) {
+        try {
+          const sizeId = v.sizeId?.trim() || undefined;
+          const colorId = v.colorId?.trim() || undefined;
+          const additionalPricePaise = v.additionalPricePaise?.trim() || undefined;
+          const quantityAvailable = (v.quantityAvailable?.trim() || "0").replace(/^$/, "0");
+          const reorderLevel = v.reorderLevel?.trim() || undefined;
+
+          let variantId = v.variantId?.trim() || "";
+          if (!variantId) {
+            const createdVariant = await createProductVariant({
+              productId: updated.productId,
+              sizeId,
+              colorId,
+              additionalPricePaise,
+            });
+            variantId = createdVariant?.variantId ?? "";
+          } else {
+            await updateProductVariant({
+              variantId,
+              productId: updated.productId,
+              sizeId,
+              colorId,
+              additionalPricePaise,
+            });
+          }
+          if (!variantId) continue;
+          keptVariantIds.add(variantId);
+
+          const inventoryRows = await searchInventoryByVariantId(variantId);
+          if (inventoryRows.length > 0) {
+            await updateInventoryItem({
+              inventoryId: inventoryRows[0].inventoryId,
+              quantityAvailable,
+              reorderLevel,
+            });
+          } else {
+            await createInventoryItem({
+              variantId,
+              quantityAvailable,
+              reorderLevel,
+            });
+          }
+        } catch (err) {
+          console.error("Failed to sync variant/inventory:", err);
+        }
+      }
+      // Delete variants removed from the edit form
+      for (const oldVariantId of payload.initialVariantIdsWhenEdit ?? []) {
+        if (!keptVariantIds.has(oldVariantId)) {
+          try {
+            await deleteProductVariant(oldVariantId);
+          } catch (err) {
+            console.error("Failed to delete removed variant:", err);
           }
         }
       }
@@ -688,6 +757,7 @@ export default function AdminProductsPage() {
         setExistingProductImages([]);
         setOrderedProductImages(null);
         setInitialExistingImageIdsWhenEdit([]);
+        setInitialVariantIdsWhenEdit([]);
       } finally {
         setIsUpdateReflecting(false);
       }
@@ -749,7 +819,7 @@ export default function AdminProductsPage() {
       setError("Enter a valid price (e.g. 499.00).");
       return;
     }
-    if (!editingProductId && variants.length === 0) {
+    if (variants.length === 0) {
       setError("Add at least one variant (size) with stock.");
       return;
     }
@@ -780,6 +850,8 @@ export default function AdminProductsPage() {
         careInstructions: careInstructions || undefined,
         productStatusId: productStatusId || undefined,
         selectedMoodIds,
+        variants,
+        initialVariantIdsWhenEdit,
         currentExistingImages: existingProductImages,
         initialExistingImageIdsWhenEdit,
       });
@@ -924,12 +996,13 @@ export default function AdminProductsPage() {
     );
   };
 
-  const loadProductEditData = async (productId: string) => {
+  const loadProductEditData = async (productId: string): Promise<string[]> => {
     try {
       const mappings = await searchProductMoodMappingsByProduct(productId);
-      setSelectedMoodIds(mappings.map((m) => m.moodId));
+      return mappings.map((m) => m.moodId);
     } catch (err) {
       console.error("Failed to load product moods for edit:", err);
+      return [];
     }
   };
 
@@ -939,12 +1012,14 @@ export default function AdminProductsPage() {
     setError("");
     setMessage(`Loading product…`);
     let product: ProductListRow = p;
+    let moodIds: string[] = [];
     try {
-      const [fresh] = await Promise.all([
+      const [fresh, loadedMoodIds] = await Promise.all([
         fetchProductById(p.productId),
         loadProductEditData(p.productId),
       ]);
       if (fresh) product = fresh;
+      moodIds = loadedMoodIds;
     } catch (err) {
       console.error("Failed to load product for edit:", err);
       setError("Failed to load product. Using list data.");
@@ -965,8 +1040,23 @@ export default function AdminProductsPage() {
       careInstructions: product.careInstructions ?? "",
       productStatusId: product.productStatusId ?? "",
     }));
-    setVariants([]);
-    setSelectedMoodIds([]);
+    const variantRows = (product as ProductListRowWithVariantStock).variantStock ?? [];
+    setVariants(
+      variantRows.map((v) => ({
+        variantId: v.variantId,
+        sizeId: v.sizeId ?? "",
+        colorId: undefined,
+        additionalPricePaise: "0",
+        quantityAvailable: String(v.quantity ?? 0),
+        reorderLevel: undefined,
+      }))
+    );
+    setInitialVariantIdsWhenEdit(
+      variantRows
+        .map((v) => v.variantId)
+        .filter((id): id is string => !!id)
+    );
+    setSelectedMoodIds(moodIds);
     setImageFiles([]);
     setImageError("");
     setImageMessage("");
@@ -1116,6 +1206,7 @@ export default function AdminProductsPage() {
             setExistingProductImages([]);
             setOrderedProductImages(null);
             setInitialExistingImageIdsWhenEdit([]);
+        setInitialVariantIdsWhenEdit([]);
           }}
           className={cn(
             "rounded-full px-4 py-1.5 font-medium transition-colors",
@@ -1943,10 +2034,10 @@ export default function AdminProductsPage() {
               </div>
               <div className="mt-8 border-t border-[var(--color-line)] pt-4">
                 <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                  Variants (optional)
+                  Variants *
                 </h3>
                 <p className="mt-2 text-xs text-[var(--color-muted)]">
-                  Add size/color combinations. Each variant can have an extra price (paise) and initial stock. If no variants are added, the product can still be created; you can add variants later.
+                  Add size/color combinations. Each variant can have an extra price (paise) and initial stock.
                 </p>
                 <div className="mt-3 space-y-2">
                   {variants.map((v, idx) => (
@@ -2414,6 +2505,7 @@ export default function AdminProductsPage() {
                       setExistingProductImages([]);
                       setOrderedProductImages(null);
                       setInitialExistingImageIdsWhenEdit([]);
+            setInitialVariantIdsWhenEdit([]);
                       setImageError("");
                       setImageMessage("");
                     }}

@@ -1,6 +1,6 @@
 use proto::proto::core::{
     CreateProductMoodRequest, DeleteProductMoodRequest, ProductMoodResponse, ProductMoodsResponse,
-    SearchProductMoodRequest, UpdateProductMoodRequest,
+    SearchProductMoodRequest, ShopHighlightMoodsRequest, UpdateProductMoodRequest,
 };
 use tracing::instrument;
 
@@ -49,6 +49,31 @@ pub(crate) async fn search_product_mood(
         })
         .await?;
     Ok(moods_response_to_vec(resp.into_inner()))
+}
+
+/// Storefront: up to `max_moods` distinct moods from the newest `recent_product_limit` products.
+#[instrument]
+pub(crate) async fn shop_highlight_moods(
+    recent_product_limit: Option<i32>,
+    max_moods: Option<i32>,
+) -> Result<Vec<ProductMood>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let resp = client
+        .shop_highlight_moods(ShopHighlightMoodsRequest {
+            recent_product_limit: recent_product_limit.map(|v| v as i64),
+            max_moods: max_moods.map(|v| v as i64),
+        })
+        .await?;
+    let out: Vec<ProductMood> = resp
+        .into_inner()
+        .items
+        .into_iter()
+        .map(|i| ProductMood {
+            mood_id: i.mood_id.to_string(),
+            mood_name: i.mood_name,
+        })
+        .collect();
+    Ok(out)
 }
 
 #[instrument]

@@ -33,11 +33,13 @@ export default function RootLayout({
       <body
         className={`${playfair.variable} ${sans.variable} font-sans antialiased bg-[var(--background)] text-[var(--foreground)]`}
       >
-        <Providers>
-          <AppErrorBoundary>
-            <StorefrontProvider>{children}</StorefrontProvider>
-          </AppErrorBoundary>
-        </Providers>
+        <div className="storefront-root min-h-screen">
+          <Providers>
+            <AppErrorBoundary>
+              <StorefrontProvider>{children}</StorefrontProvider>
+            </AppErrorBoundary>
+          </Providers>
+        </div>
       </body>
     </html>
   );

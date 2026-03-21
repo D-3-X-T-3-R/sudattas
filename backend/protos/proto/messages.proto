@@ -634,6 +634,21 @@ message ProductMoodsResponse {
     repeated ProductMoodResponse items = 1;
 }
 
+// Storefront: distinct moods from the newest products (scan recent products, collect mood ids in order).
+message ShopHighlightMoodsRequest {
+    optional int64 recent_product_limit = 1; // products to scan, default 100, max 500
+    optional int64 max_moods = 2;           // max moods to return, default 4, max 20
+}
+
+message ShopHighlightMoodItem {
+    int64 mood_id = 1;
+    string mood_name = 2;
+}
+
+message ShopHighlightMoodsResponse {
+    repeated ShopHighlightMoodItem items = 1;
+}
+
 // ShippingMethods
 
 message CreateShippingMethodRequest {

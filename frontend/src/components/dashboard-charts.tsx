@@ -80,7 +80,8 @@ function buildEmptyBuckets(g: Granularity): Record<string, number> {
   const buckets: Record<string, number> = {};
   const now = new Date();
   if (g === "day") {
-    for (let i = 29; i >= 0; i--) {
+    // Last 7 days including today
+    for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       buckets[dayKey(d)] = 0;
@@ -146,16 +147,6 @@ const chartTheme = {
         fill: "#6b7280",
         fontSize: 11,
       },
-      line: {
-        stroke: "#e5e7eb",
-        strokeWidth: 1,
-      },
-    },
-    domain: {
-      line: {
-        stroke: "#e5e7eb",
-        strokeWidth: 1,
-      },
     },
   },
   grid: {
@@ -166,8 +157,8 @@ const chartTheme = {
   },
   tooltip: {
     container: {
-      background: "var(--color-paper)",
-      border: "1px solid var(--color-line)",
+      background: "#ffffff",
+      border: "1px solid #e5e7eb",
       borderRadius: 8,
       padding: "8px 12px",
     },
@@ -177,7 +168,7 @@ const chartTheme = {
 function BarChart({
   data,
   valueFormat = (v) => String(v),
-  barColor = "var(--color-accent-brown)",
+  barColor = "#fb923c",
   className,
 }: {
   data: BarDatum[];
@@ -194,23 +185,23 @@ function BarChart({
   return (
     <div className={className}>
       <div
-        className="rounded-lg bg-white"
-        style={{ height: 260, width: "100%", padding: "12px 8px 8px 8px" }}
+        className="rounded-2xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+        style={{ height: 260, width: "100%", padding: "18px 12px 12px 16px" }}
       >
         <ResponsiveBar
           data={data}
           indexBy="label"
           keys={["value"]}
           valueScale={{ type: "linear", min: 0, max: maxVal, clamp: true }}
-          margin={{ top: 12, right: 12, left: 36, bottom: 32 }}
-          padding={0.4}
+          margin={{ top: 12, right: 12, left: 40, bottom: 40 }}
+          padding={0.3}
           theme={chartTheme}
           colors={[barColor]}
-          borderRadius={6}
+          borderRadius={8}
           axisBottom={{
             tickSize: 0,
-            tickPadding: 8,
-            tickRotation: 0,
+            tickPadding: 10,
+            tickRotation: -40,
           }}
           axisLeft={{
             tickSize: 0,

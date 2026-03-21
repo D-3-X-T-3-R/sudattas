@@ -40,6 +40,19 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Restore skipped or failed (no backup file or DB not ready)." -ForegroundColor Gray
 }
 
+# Keep only the latest 5 DB dumps under database/db-backups
+Write-Host "Pruning old DB backups (keeping latest 5)..." -ForegroundColor Yellow
+$BackupDirForPrune = Join-Path $BackendRoot "database\db-backups"
+if (Test-Path -Path $BackupDirForPrune -PathType Container) {
+    Get-ChildItem -Path $BackupDirForPrune -Filter "db-backup-*.sql" -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -Skip 5 |
+        ForEach-Object {
+            Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+            Write-Host "  Removed: $($_.Name)" -ForegroundColor Gray
+        }
+}
+
 Write-Host ""
 Write-Host "Done. All services running in Docker:" -ForegroundColor Green
 Write-Host "  MySQL (3306), Redis (6379), Core Operations (50051), GraphQL (8080)" -ForegroundColor Gray

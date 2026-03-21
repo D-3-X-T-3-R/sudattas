@@ -127,6 +127,17 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Distinct moods from the newest products (storefront Shop by mood).
+    #[instrument(err, ret)]
+    async fn shop_highlight_moods(
+        recent_product_limit: Option<i32>,
+        max_moods: Option<i32>,
+    ) -> FieldResult<Vec<ProductMood>> {
+        product_moods::handlers::shop_highlight_moods(recent_product_limit, max_moods)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     /// P2 Recommendations: get related products for a given product.
     #[instrument(err, ret)]
     async fn get_related_products(input: GetRelatedProducts) -> FieldResult<Vec<Product>> {
