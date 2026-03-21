@@ -44,20 +44,24 @@ function mapToStorefrontProduct(
 
 export async function GET(request: Request) {
   const sessionId = request.headers.get("x-session-id")?.trim() || null;
+  const moodId =
+    new URL(request.url).searchParams.get("moodId")?.trim() || undefined;
 
   try {
     let productsList: ProductListRow[];
     let categories: { categoryId: string; name: string }[];
 
+    const listParams = { limit: "200" as const, ...(moodId ? { moodId } : {}) };
+
     if (sessionId) {
       // Session only; no admin fallback when session fails
       [productsList, categories] = await Promise.all([
-        fetchProductsListWithSession(sessionId, { limit: "200" }),
+        fetchProductsListWithSession(sessionId, listParams),
         fetchCategoriesWithSession(sessionId),
       ]);
     } else {
       [productsList, categories] = await Promise.all([
-        fetchProductsList({ limit: "200" }),
+        fetchProductsList(listParams),
         fetchCategories(),
       ]);
     }

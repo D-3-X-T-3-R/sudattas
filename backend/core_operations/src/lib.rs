@@ -51,11 +51,11 @@ use proto::proto::core::{
     SearchReviewRequest, SearchShippingMethodRequest, SearchSizeRequest, SearchTransactionRequest,
     SearchUserActivityRequest, SearchUserRequest, SearchUserRoleRequest, SearchWeaveRequest,
     SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
-    ShippingMethodsResponse, SizesResponse, SyncProductImagesRequest, TransactionsResponse,
-    UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest,
-    UpdateEventLogRequest, UpdateFabricRequest, UpdateInventoryItemRequest,
-    UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOccasionRequest,
-    UpdateOrderDetailRequest, UpdateOrderRequest, UpdateProductImageRequest,
+    ShippingMethodsResponse, ShopHighlightMoodsRequest, ShopHighlightMoodsResponse, SizesResponse,
+    SyncProductImagesRequest, TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest,
+    UpdateColorRequest, UpdateCouponRequest, UpdateEventLogRequest, UpdateFabricRequest,
+    UpdateInventoryItemRequest, UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest,
+    UpdateOccasionRequest, UpdateOrderDetailRequest, UpdateOrderRequest, UpdateProductImageRequest,
     UpdateProductMoodRequest, UpdateProductRequest, UpdateProductVariantRequest,
     UpdateReviewRequest, UpdateShipmentRequest, UpdateShippingAddressRequest,
     UpdateShippingMethodRequest, UpdateSizeRequest, UpdateTransactionRequest,
@@ -1013,6 +1013,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::product_moods::search_product_mood(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn shop_highlight_moods(
+        &self,
+        request: Request<ShopHighlightMoodsRequest>,
+    ) -> Result<Response<ShopHighlightMoodsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::product_moods::shop_highlight_moods(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

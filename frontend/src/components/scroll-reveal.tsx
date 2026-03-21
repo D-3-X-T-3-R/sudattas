@@ -28,12 +28,14 @@ export function ScrollReveal({
   direction = "up",
 }: ScrollRevealProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "0px 0px -40px 0px" });
+  // Positive bottom margin makes elements count as “in view” a bit earlier (avoids blank sections).
+  const inView = useInView(ref, { once: true, margin: "0px 0px 180px 0px" });
   const reduceMotion = useReducedMotion();
   const offset = directionOffset[direction];
 
   const initial = { opacity: 0, ...offset };
-  const animate = inView ? { opacity: 1, x: 0, y: 0 } : initial;
+  const visible = Boolean(reduceMotion) || inView;
+  const animate = visible ? { opacity: 1, x: 0, y: 0 } : initial;
   const transition = {
     duration: reduceMotion ? 0 : MOTION_DURATION,
     ease: "easeOut" as const,

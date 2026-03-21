@@ -36,16 +36,21 @@ export function clearGuestSession(): void {
  */
 export async function ensureGuestSession(): Promise<string | null> {
   const existing = getGuestSessionId();
-  if (existing) return existing;
+  if (existing) {
+    console.log("[session] existing session found:", existing);
+    return existing;
+  }
 
   const base = getBaseUrl();
+  console.log("[session] no session in localStorage — posting to", `${base}/session/guest`);
   try {
     const res = await fetch(`${base}/session/guest`, { method: "POST" });
     const text = await res.text();
+    console.log("[session] POST /session/guest status:", res.status, "body:", text);
     if (!res.ok) {
       try {
         const err = JSON.parse(text) as { error?: string };
-        if (err?.error) console.warn("Guest session failed:", err.error);
+        if (err?.error) console.warn("[session] Guest session failed:", err.error);
       } catch {
         // ignore
       }
@@ -55,11 +60,13 @@ export async function ensureGuestSession(): Promise<string | null> {
     const sessionId = data?.session_id;
     if (sessionId) {
       setGuestSessionId(sessionId);
+      console.log("[session] new session stored:", sessionId);
       return sessionId;
     }
+    console.warn("[session] POST succeeded but no session_id in response:", text);
   } catch (e) {
     console.warn(
-      "Guest session request failed:",
+      "[session] Guest session request failed:",
       (e as Error)?.message ?? e
     );
   }

@@ -87,6 +87,7 @@ service GRPCServices {
     // ProductMoods
     rpc CreateProductMood(CreateProductMoodRequest) returns (ProductMoodsResponse);
     rpc SearchProductMood(SearchProductMoodRequest) returns (ProductMoodsResponse);
+    rpc ShopHighlightMoods(ShopHighlightMoodsRequest) returns (ShopHighlightMoodsResponse);
     rpc UpdateProductMood(UpdateProductMoodRequest) returns (ProductMoodsResponse);
     rpc DeleteProductMood(DeleteProductMoodRequest) returns (ProductMoodsResponse);
 

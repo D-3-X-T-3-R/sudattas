@@ -51,7 +51,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const title = getTitle(pathname);
 
   return (
-    <div className="flex min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]">
+    <div className="flex min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       {sidebarOpen && (
         <button
           type="button"
@@ -64,12 +64,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-64 flex flex-col",
-          "border-r border-[var(--color-line)] bg-white transition-transform duration-200 ease-out",
+          "border-r border-[var(--admin-border-subtle)] bg-[var(--admin-sidebar-bg)] transition-transform duration-200 ease-out",
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className="flex h-16 items-center justify-between border-b border-[var(--color-line)] px-5">
-          <span className="text-sm font-semibold uppercase tracking-wider text-[var(--color-muted)]">
+        <div className="flex h-16 items-center justify-between border-b border-[var(--admin-border-subtle)] px-5">
+          <span className="text-sm font-semibold uppercase tracking-wider text-[var(--admin-sidebar-text-muted)]">
             Admin
           </span>
           <Button
@@ -96,8 +96,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors border-l-2",
                   isActive
-                    ? "border-[var(--color-accent-gold)] bg-[var(--color-line)]/30 text-[var(--color-ink)]"
-                    : "border-transparent text-[var(--color-muted)] hover:border-[var(--color-line)] hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)]"
+                    ? "border-[var(--admin-sidebar-accent)] bg-[var(--admin-sidebar-active)] text-[var(--admin-sidebar-text)]"
+                    : "border-transparent text-[var(--admin-sidebar-text-muted)] hover:border-[var(--admin-sidebar-hover)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
                 )}
                 aria-current={isActive ? "page" : undefined}
               >
@@ -107,17 +107,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t border-[var(--color-line)] space-y-0.5 p-4">
+        <div className="border-t border-[var(--admin-border-subtle)] space-y-0.5 p-4">
           <Link
             href={STORE_URL}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)]"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--admin-sidebar-text-muted)] transition-colors hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
           >
             ← Back to store
           </Link>
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--color-muted)] transition-colors hover:bg-[var(--color-warm-white)] hover:text-[var(--color-ink)] text-left"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--admin-sidebar-text-muted)] transition-colors hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)] text-left"
           >
             <LogOut className="h-4 w-4 shrink-0" />
             Sign out
@@ -126,7 +126,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex flex-1 flex-col min-w-0 md:ml-64">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-ivory)]/95 px-4 md:px-6 backdrop-blur">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[var(--admin-border-subtle)] bg-[var(--admin-surface)]/95 px-4 md:px-6 backdrop-blur">
           <Button
             variant="outline"
             size="icon"
@@ -138,7 +138,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </Button>
           <SectionHeading className="text-xl md:text-2xl">{title}</SectionHeading>
         </header>
-        <div className="flex-1 p-4 md:p-6 lg:p-8">{children}</div>
+        <div className="flex-1 p-4 md:p-6 lg:p-8 bg-[var(--background)]/95">{children}</div>
       </main>
     </div>
   );

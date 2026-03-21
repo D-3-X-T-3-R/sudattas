@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  /* Original light theme palette */
+  /* Base palette shared by storefront + admin */
   --color-ivory: #F5EFE6;
   --color-ink: #1a1814;
   --color-muted: #6b6560;
@@ -11,17 +11,33 @@
   --color-accent-gold: #a68b5b;
   --color-warm-white: #faf8f5;
 
+  /* Default (storefront) theme */
   --background: var(--color-ivory);
   --foreground: var(--color-ink);
 
-  /* Admin dashboard (Logistix-style) */
-  --admin-sidebar-bg: #0f172a;
-  --admin-sidebar-text: #e2e8f0;
-  --admin-sidebar-text-muted: #94a3b8;
-  --admin-sidebar-hover: #1e293b;
-  --admin-sidebar-active: #334155;
+  /* Admin dashboard palette tokens (overridden inside .admin-root) */
+  --admin-sidebar-bg: #ffffff;
+  --admin-sidebar-text: #1f2933;
+  --admin-sidebar-text-muted: #6b7280;
+  --admin-sidebar-hover: #f3f4f6;
+  --admin-sidebar-active: #e5e7eb;
   --admin-sidebar-accent: #a68b5b;
-  --admin-card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+  --admin-surface: #f9fafb;
+  --admin-surface-muted: #ffffff;
+  --admin-border-subtle: rgba(148, 163, 184, 0.4);
+  --admin-card-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+/* Storefront skin (keeps current light look) */
+.storefront-root {
+  --background: var(--color-ivory);
+  --foreground: var(--color-ink);
+}
+
+/* Admin skin (light shell, slightly more neutral than storefront) */
+.admin-root {
+  --background: #f3f4f6;
+  --foreground: #111827;
 }
 
 @theme inline {

@@ -1,11 +1,36 @@
 /**
  * GraphQL client that uses only X-Session-Id (guest session).
  * Used by the storefront to load products without requiring admin credentials.
+ *
+ * When Next.js API routes call this from the server, the GraphQL service may enforce
+ * CSRF for session auth (ALLOWED_ORIGINS). Set STOREFRONT_ORIGIN or NEXT_PUBLIC_SITE_URL
+ * to your real site origin (e.g. http://localhost:3000) so Origin can be sent.
  */
 
 const GRAPHQL_URL =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_URL) ||
   "http://localhost:8080/v2";
+
+function sessionFetchHeaders(sessionId: string): Record<string, string> {
+  const h: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Session-Id": sessionId,
+  };
+  const raw =
+    (typeof process !== "undefined" && process.env.STOREFRONT_ORIGIN) ||
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_SITE_URL) ||
+    (typeof process !== "undefined" &&
+      process.env.VERCEL_URL &&
+      `https://${process.env.VERCEL_URL}`);
+  if (!raw) return h;
+  try {
+    const url = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+    h.Origin = new URL(url).origin;
+  } catch {
+    /* ignore bad env */
+  }
+  return h;
+}
 
 export async function gqlWithSession<T = unknown>(
   sessionId: string,
@@ -14,10 +39,7 @@ export async function gqlWithSession<T = unknown>(
 ): Promise<T> {
   const res = await fetch(GRAPHQL_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Session-Id": sessionId,
-    },
+    headers: sessionFetchHeaders(sessionId),
     body: JSON.stringify({ query, variables }),
   });
   const text = await res.text();

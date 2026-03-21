@@ -9,3 +9,6 @@ pub use update_product_mood::*;
 
 pub mod delete_product_mood;
 pub use delete_product_mood::*;
+
+pub mod shop_highlight_moods;
+pub use shop_highlight_moods::*;

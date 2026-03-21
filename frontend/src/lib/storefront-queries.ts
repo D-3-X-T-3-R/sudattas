@@ -14,6 +14,12 @@ import type {
 const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { categoryId name } }`;
 
 const OCCASIONS_MUTATION = `mutation Occasions { searchOccasion(input: { occasionId: "0" }) { occasionId occasionName } }`;
+/** Moods tied to the newest products (see backend ShopHighlightMoods). */
+const SHOP_HIGHLIGHT_MOODS_QUERY = `query ShopHighlightMoods($recentProductLimit: Int, $maxMoods: Int) {
+  shopHighlightMoods(recentProductLimit: $recentProductLimit, maxMoods: $maxMoods) {
+    moodId moodName
+  }
+}`;
 
 const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
   searchProduct(search: $search) {
@@ -39,6 +45,11 @@ export type { CategoryRow, OccasionRow, ProductListRow, ProductListRowWithVarian
 export interface SizeRow {
   sizeId: string;
   sizeName: string;
+}
+
+export interface StorefrontMoodRow {
+  moodId: string;
+  moodName: string;
 }
 
 /** Fetch all sizes (for storefront size selector). */
@@ -68,15 +79,48 @@ export async function fetchOccasionsWithSession(sessionId: string): Promise<Occa
 
 export async function fetchProductsListWithSession(
   sessionId: string,
-  params: { limit?: string } = {}
+  params: { limit?: string; moodId?: string } = {}
 ): Promise<ProductListRow[]> {
-  const search = params.limit ? { limit: params.limit } : { limit: "200" };
+  const search: { limit?: string; moodId?: string } = params.limit
+    ? { limit: params.limit }
+    : { limit: "200" };
+  if (params.moodId) search.moodId = params.moodId;
   const data = await gqlWithSession<{ searchProduct?: ProductListRow[] }>(
     sessionId,
     PRODUCTS_QUERY,
     { search }
   );
   return data?.searchProduct ?? [];
+}
+
+/** All moods (for fallback when shop highlight is empty). */
+const MOODS_ALL_QUERY = `query MoodsAll($input: SearchProductMoodInput!) {
+  searchProductMood(input: $input) { moodId moodName }
+}`;
+
+export async function fetchProductMoodsWithSession(sessionId: string): Promise<StorefrontMoodRow[]> {
+  const data = await gqlWithSession<{ searchProductMood?: StorefrontMoodRow[] }>(
+    sessionId,
+    MOODS_ALL_QUERY,
+    { input: {} }
+  );
+  return data?.searchProductMood ?? [];
+}
+
+/** Up to `maxMoods` distinct moods from the newest `recentProductLimit` products. */
+export async function fetchShopHighlightMoodsWithSession(
+  sessionId: string,
+  opts: { recentProductLimit?: number; maxMoods?: number } = {}
+): Promise<StorefrontMoodRow[]> {
+  const data = await gqlWithSession<{ shopHighlightMoods?: StorefrontMoodRow[] }>(
+    sessionId,
+    SHOP_HIGHLIGHT_MOODS_QUERY,
+    {
+      recentProductLimit: opts.recentProductLimit ?? 100,
+      maxMoods: opts.maxMoods ?? 12,
+    }
+  );
+  return data?.shopHighlightMoods ?? [];
 }
 
 /** Fetch a single product by id with variant stock (for detail page size selector). */

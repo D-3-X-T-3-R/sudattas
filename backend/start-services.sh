@@ -40,6 +40,21 @@ if ! "$BACKEND_ROOT/restore-db.sh" 2>/dev/null; then
   echo "Restore skipped or failed (no backup file or DB not ready)."
 fi
 
+# Keep only the latest 5 DB dumps under database/db-backups
+echo "Pruning old DB backups (keeping latest 5)..."
+BACKUP_PRUNE_DIR="$BACKEND_ROOT/database/db-backups"
+if [[ -d "$BACKUP_PRUNE_DIR" ]]; then
+  _i=0
+  while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    _i=$((_i + 1))
+    if ((_i > 5)); then
+      rm -f "$f"
+      echo "  Removed: $(basename "$f")"
+    fi
+  done < <(ls -t "$BACKUP_PRUNE_DIR"/db-backup-*.sql 2>/dev/null)
+fi
+
 echo ""
 echo "Done. All services running in Docker:"
 echo "  MySQL (3306), Redis (6379), Core Operations (50051), GraphQL (8080)"

@@ -231,6 +231,25 @@ export async function searchProductMoods(params?: {
   return data?.searchProductMood ?? [];
 }
 
+/** Moods from newest products (storefront; backend walks recent products for distinct mood ids). */
+export async function fetchShopHighlightMoods(opts?: {
+  recentProductLimit?: number;
+  maxMoods?: number;
+}): Promise<ProductMoodRow[]> {
+  const data = await gqlAdmin<{ shopHighlightMoods?: ProductMoodRow[] }>(
+    `query ShopHighlightMoods($recentProductLimit: Int, $maxMoods: Int) {
+      shopHighlightMoods(recentProductLimit: $recentProductLimit, maxMoods: $maxMoods) {
+        moodId moodName
+      }
+    }`,
+    {
+      recentProductLimit: opts?.recentProductLimit ?? 100,
+      maxMoods: opts?.maxMoods ?? 12,
+    }
+  );
+  return data?.shopHighlightMoods ?? [];
+}
+
 /** Create a new product mood. Returns the created mood (with moodId and moodName). */
 export async function createProductMood(moodName: string): Promise<ProductMoodRow | null> {
   const name = moodName?.trim();
@@ -312,6 +331,45 @@ export async function createProductVariant(params: {
   return data?.createProductVariant?.[0] ?? null;
 }
 
+/** Update a product variant (size/color/additional price). */
+export async function updateProductVariant(params: {
+  variantId: string;
+  productId?: string;
+  sizeId?: string;
+  colorId?: string;
+  additionalPricePaise?: string;
+}): Promise<void> {
+  const input: Record<string, string> = { variantId: params.variantId };
+  if (params.productId) input.productId = params.productId;
+  if (params.sizeId !== undefined) input.sizeId = params.sizeId;
+  if (params.colorId !== undefined) input.colorId = params.colorId;
+  if (params.additionalPricePaise !== undefined) {
+    input.additionalPricePaise = params.additionalPricePaise;
+  }
+  await gqlAdmin<{ updateProductVariant?: unknown[] }>(
+    `mutation UpdateProductVariant($input: ProductVariantMutation!) {
+      updateProductVariant(input: $input) {
+        variantId
+        productId
+        sizeId
+        colorId
+        additionalPricePaise
+      }
+    }`,
+    { input }
+  );
+}
+
+/** Delete a variant by id. */
+export async function deleteProductVariant(variantId: string): Promise<void> {
+  await gqlAdmin<{ deleteProductVariant?: unknown[] }>(
+    `mutation DeleteProductVariant($input: DeleteProductVariantInput!) {
+      deleteProductVariant(input: $input) { variantId }
+    }`,
+    { input: { variantId } }
+  );
+}
+
 /** Create inventory for a variant (quantity and optional reorder level). */
 export async function createInventoryItem(params: {
   variantId: string;
@@ -326,6 +384,53 @@ export async function createInventoryItem(params: {
   await gqlAdmin<{ createInventoryItem?: unknown[] }>(
     `mutation CreateInventoryItem($input: NewInventoryItem!) {
       createInventoryItem(input: $input) { inventoryId variantId quantityAvailable reorderLevel }
+    }`,
+    { input }
+  );
+}
+
+export interface InventoryItemRow {
+  inventoryId: string;
+  variantId: string;
+  quantityAvailable: string;
+  reorderLevel: string;
+}
+
+/** Find inventory rows by variant id (usually 0 or 1 row). */
+export async function searchInventoryByVariantId(
+  variantId: string
+): Promise<InventoryItemRow[]> {
+  const data = await gqlAdmin<{ searchInventoryItem?: InventoryItemRow[] }>(
+    `query SearchInventoryByVariant($input: SearchInventoryItem!) {
+      searchInventoryItem(input: $input) {
+        inventoryId
+        variantId
+        quantityAvailable
+        reorderLevel
+      }
+    }`,
+    { input: { variantId } }
+  );
+  return data?.searchInventoryItem ?? [];
+}
+
+/** Update inventory row quantity/reorder level. */
+export async function updateInventoryItem(params: {
+  inventoryId: string;
+  quantityAvailable?: string;
+  reorderLevel?: string;
+}): Promise<void> {
+  const input: Record<string, string> = { inventoryId: params.inventoryId };
+  if (params.quantityAvailable != null) input.quantityAvailable = params.quantityAvailable;
+  if (params.reorderLevel != null) input.reorderLevel = params.reorderLevel;
+  await gqlAdmin<{ updateInventoryItem?: unknown[] }>(
+    `mutation UpdateInventoryItem($input: InventoryItemMutation!) {
+      updateInventoryItem(input: $input) {
+        inventoryId
+        variantId
+        quantityAvailable
+        reorderLevel
+      }
     }`,
     { input }
   );
