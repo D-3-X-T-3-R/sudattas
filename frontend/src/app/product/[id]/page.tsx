@@ -5,8 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Header } from "@/components/header";
-import { WishlistDrawer } from "@/components/wishlist-drawer";
+import { SiteHeader } from "@/components/site-header";
 import { ProductDetailView } from "@/components/product-detail-view";
 import { useStorefront } from "@/context/storefront-context";
 import type { Product } from "@/lib/schemas";
@@ -16,21 +15,12 @@ export default function ProductPage() {
   const params = useParams();
   const router = useRouter();
   const id = typeof params.id === "string" ? params.id : "";
-  const {
-    wishlist,
-    toggleWish,
-    addToCart,
-    wishOpen,
-    setWishOpen,
-    cartCount,
-    wishCount,
-  } = useStorefront();
+  const { wishlist, toggleWish, addToCart } = useStorefront();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [sizes, setSizes] = useState<{ sizeId: string; sizeName: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [wishedProducts, setWishedProducts] = useState<Product[]>([]);
 
   useEffect(() => {
     if (!id) {
@@ -65,41 +55,11 @@ export default function ProductPage() {
     };
   }, [id]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const sessionId = getGuestSessionId();
-    const headers: Record<string, string> = {};
-    if (sessionId) headers["X-Session-Id"] = sessionId;
-    fetch("/api/products", { headers })
-      .then((res) => res.json())
-      .then((data: { products?: Product[] } | Product[]) => {
-        if (cancelled) return;
-        const list = Array.isArray(data) ? data : data.products ?? [];
-        if (list.length === 0) return;
-        setWishedProducts(list.filter((p) => wishlist[p.id]));
-      })
-      .catch(() => {
-        if (!cancelled) setWishedProducts([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [wishlist]);
-
   const goToHome = () => router.push("/");
 
   return (
     <div className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]">
-      <Header
-        query=""
-        setQuery={() => {}}
-        cartCount={cartCount}
-        wishCount={wishCount}
-        setMenuOpen={() => {}}
-        setCartOpen={() => {}}
-        setWishOpen={setWishOpen}
-        goTo={goToHome}
-      />
+      <SiteHeader />
 
       <div className="mx-auto min-w-0 max-w-[2000px] px-4 py-4">
         <Button
@@ -137,16 +97,6 @@ export default function ProductPage() {
           />
         )}
       </div>
-
-      <WishlistDrawer
-        open={wishOpen}
-        onClose={() => setWishOpen(false)}
-        wishCount={wishCount}
-        wishedProducts={wishedProducts}
-        onQuickView={(p) => router.push(`/product/${p.id}`)}
-        onAddToCart={addToCart}
-        onToggleWish={toggleWish}
-      />
     </div>
   );
 }

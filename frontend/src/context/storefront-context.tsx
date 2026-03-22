@@ -62,10 +62,9 @@ type StorefrontContextValue = {
   addToCart: (p: Product, qty?: number, sizeName?: string | null) => void;
   decCart: (lineId: string) => void;
   incCart: (lineId: string) => void;
+  removeCart: (lineId: string) => void;
   cartOpen: boolean;
   setCartOpen: (open: boolean) => void;
-  wishOpen: boolean;
-  setWishOpen: (open: boolean) => void;
   cartLines: CartLine[];
   cartCount: number;
   cartSubtotal: number;
@@ -79,7 +78,6 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [cart, setCart] = useState<CartState>({});
   const [cartOpen, setCartOpen] = useState(false);
-  const [wishOpen, setWishOpen] = useState(false);
   const [cartLoading, setCartLoading] = useState(true);
   const { showToast } = useToast();
   const lastToastRef = useRef<{ key: string; at: number } | null>(null);
@@ -101,8 +99,13 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
 
   const toggleWish = useCallback(
     (p: Product) => {
+      let next = false;
       setWishlist((prev) => {
-        const next = !prev[p.id];
+        next = !prev[p.id];
+        return { ...prev, [p.id]: next };
+      });
+      // Defer toast — must not call showToast inside setWishlist updater (updates another provider during render).
+      queueMicrotask(() => {
         const now = Date.now();
         const toastKey = `wish-${p.id}-${next ? "on" : "off"}`;
         const last = lastToastRef.current;
@@ -114,7 +117,6 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
           });
           lastToastRef.current = { key: toastKey, at: now };
         }
-        return { ...prev, [p.id]: next };
       });
     },
     [showToast]
@@ -239,6 +241,17 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     });
   }, [cart]);
 
+  const removeCart = useCallback(async (id: string) => {
+    const sessionId = getGuestSessionId();
+    if (isBackendCartId(id) && sessionId) {
+      const lines = await deleteCartItem(id, sessionId);
+      if (lines) setCart(cartLinesToState(lines));
+      else setCart((prev) => { const { [id]: _, ...rest } = prev; return rest; });
+      return;
+    }
+    setCart((prev) => { const { [id]: _, ...rest } = prev; return rest; });
+  }, []);
+
   const cartLines = useMemo<CartLine[]>(() => Object.values(cart), [cart]);
   const cartCount = useMemo(
     () => cartLines.reduce((s, l) => s + l.qty, 0),
@@ -263,13 +276,12 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       incCart,
       cartOpen,
       setCartOpen,
-      wishOpen,
-      setWishOpen,
       cartLines,
       cartCount,
       cartSubtotal,
       wishCount,
       cartLoading,
+      removeCart,
     }),
     [
       wishlist,
@@ -278,8 +290,8 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       addToCart,
       decCart,
       incCart,
+      removeCart,
       cartOpen,
-      wishOpen,
       cartLines,
       cartCount,
       cartSubtotal,

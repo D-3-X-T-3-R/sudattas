@@ -1,12 +1,19 @@
 "use client";
 
 import Image from "next/image";
+import { motion } from "framer-motion";
+import { useReducedMotion } from "framer-motion";
 
 export function HeroSection() {
+  const reduce = useReducedMotion();
   return (
-    <section className="relative bg-[var(--background)]">
+    <motion.section
+      className="relative bg-[var(--background)]"
+      initial={{ opacity: 0, y: reduce ? 0 : 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reduce ? 0 : 0.8, ease: [0.22, 1, 0.36, 1] }}
+    >
       <div className="mx-auto w-full max-w-[2000px] px-4 py-0">
-        {/* Mobile: models-only hero image */}
         <div className="block md:hidden">
           <Image
             src="/hero/hero-sudattas-6.png"
@@ -17,8 +24,6 @@ export function HeroSection() {
             priority
           />
         </div>
-
-        {/* Desktop / tablet: composite hero image */}
         <div className="hidden md:block">
           <Image
             src="/hero/hero-sudattas-full-2.png"
@@ -30,6 +35,6 @@ export function HeroSection() {
           />
         </div>
       </div>
-    </section>
+    </motion.section>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { ensureGuestSession, getGuestSessionId, clearGuestSession } from "@/lib/session";
 import { PRODUCTS_SEED } from "@/lib/seed-data";
@@ -39,7 +39,7 @@ async function fetchStorefrontProducts(
 }
 
 type StorefrontFiltersResponse = {
-  categories: { categoryId: string; name: string }[];
+  categories: { categoryId: string; name: string; thumbnailUrl?: string }[];
   occasions: { occasionId: string; occasionName: string }[];
   moods: { moodId: string; moodName: string; thumbnailUrl?: string }[];
   error: string | null;
@@ -49,41 +49,39 @@ async function fetchStorefrontFilters(sessionId: string | null): Promise<Storefr
   try {
     const headers: Record<string, string> = {};
     if (sessionId) headers["X-Session-Id"] = sessionId;
-    console.log("[DEBUG] fetchStorefrontFilters: fetching with sessionId =", sessionId);
     const res = await fetch("/api/storefront-filters", { headers });
-    const raw = await res.text();
-    console.log("[DEBUG] fetchStorefrontFilters: HTTP", res.status, "| raw body:", raw);
-    const data = JSON.parse(raw) as StorefrontFiltersResponse;
+    const data = (await res.json()) as StorefrontFiltersResponse;
     return {
       categories: data.categories ?? [],
       occasions: data.occasions ?? [],
       moods: data.moods ?? [],
       error: data.error ?? null,
     };
-  } catch (e) {
-    console.error("[DEBUG] fetchStorefrontFilters: caught", e);
+  } catch {
     return { categories: [], occasions: [], moods: [], error: "Network error" };
   }
 }
 import { useActiveSection } from "@/hooks/use-active-section";
 import { useLockBodyScroll } from "@/hooks/use-lock-body-scroll";
 import { useRazorpayTest } from "@/hooks/use-razorpay-test";
-import { goTo } from "@/hooks/use-scroll-to";
+import { clearPendingHomeSection, goTo, peekPendingHomeSection } from "@/hooks/use-scroll-to";
 import { Header } from "@/components/header";
 import { HeroSection } from "@/components/hero-section";
 import { CollectionsSection } from "@/components/collections-section";
+import { CategoriesSection } from "@/components/categories-section";
 import { EditorialBlock } from "@/components/editorial-block";
 import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
 import { StorySection } from "@/components/story-section";
 import { Footer } from "@/components/footer";
 import { MenuDrawer } from "@/components/menu-drawer";
-import { WishlistDrawer } from "@/components/wishlist-drawer";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
+import { Section } from "@/components/ui/section";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
 
 export function Storefront() {
+  const pathname = usePathname();
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const { showToast } = useToast();
@@ -94,8 +92,6 @@ export function Storefront() {
     addToCart,
     decCart,
     incCart,
-    wishOpen,
-    setWishOpen,
     cartLines,
     cartCount,
     cartSubtotal,
@@ -109,38 +105,108 @@ export function Storefront() {
   const [products, setProducts] = useState<Product[]>(PRODUCTS_SEED);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [productsBannerDismissed, setProductsBannerDismissed] = useState(false);
-  const [categories, setCategories] = useState<{ categoryId: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ categoryId: string; name: string; thumbnailUrl?: string }[]>([]);
   const [occasions, setOccasions] = useState<{ occasionId: string; occasionName: string }[]>([]);
   const [moods, setMoods] = useState<{ moodId: string; moodName: string; thumbnailUrl?: string }[]>([]);
   /** When set, product list is loaded from GraphQL searchProduct with this moodId. */
   const [shopMoodId, setShopMoodId] = useState<string | null>(null);
-  const [loadingProducts, setLoadingProducts] = useState(false);
+  /** Start true so #shop / #explore are never missing during the first catalog fetch. */
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
   const { paymentMessage, paymentLoading, runTest } = useRazorpayTest();
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
-  useLockBodyScroll(menuOpen || wishOpen);
+  useLockBodyScroll(menuOpen);
 
   useEffect(() => {
     ensureGuestSession();
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const prev = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => {
+      window.history.scrollRestoration = prev;
+    };
+  }, []);
+
+  /**
+   * Cross-route nav: sessionStorage + optional hash; scroll after target exists in DOM.
+   * Moods/Collections (`#collections`, `#category-collections`) are always mounted above the
+   * catalog gate. `#shop` / `#explore` only exist as placeholders while `loadingProducts` is
+   * true, then swap to real sections — we must not clear pending until catalog is ready, or the
+   * effect won't run again to scroll to the final layout.
+   */
+  useEffect(() => {
+    if (pathname !== "/") return;
+    const hashId = typeof window !== "undefined" ? window.location.hash.slice(1) : "";
+    const { id: pendingId, fromOtherPage } = peekPendingHomeSection();
+    const id = hashId || pendingId;
+    if (!id) return;
+
+    /* From other routes: top first, then same as Header on landing — `goTo(id, false)`. */
+    const scrollViaTop = Boolean(pendingId) && fromOtherPage && !hashId;
+
+    let cancelled = false;
+    let attempts = 0;
+    const finish = () => {
+      if (!pendingId) return;
+      const waitForCatalog =
+        loadingProducts && (id === "shop" || id === "explore");
+      if (waitForCatalog) return;
+      clearPendingHomeSection();
+    };
+    const tryScroll = () => {
+      if (cancelled) return;
+      if (document.getElementById(id)) {
+        if (scrollViaTop) {
+          window.scrollTo({ top: 0, behavior: "auto" });
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (!cancelled) {
+                goTo(id, false);
+                finish();
+              }
+            });
+          });
+        } else {
+          goTo(id, !!reduceMotion);
+          finish();
+        }
+        return;
+      }
+      attempts += 1;
+      if (attempts < 120) window.setTimeout(tryScroll, 50);
+    };
+    tryScroll();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, reduceMotion, loadingProducts]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      if (window.location.pathname !== "/") return;
+      const id = window.location.hash.slice(1);
+      if (!id) return;
+      goTo(id, !!reduceMotion);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [reduceMotion]);
+
+  useEffect(() => {
     // Guest session → Next /api/products + /api/storefront-filters → GraphQL (see route files).
     async function loadProducts() {
       setLoadingProducts(true);
-      console.log("[DEBUG] loadProducts: start");
       await ensureGuestSession();
       let sessionId = getGuestSessionId();
-      console.log("[DEBUG] loadProducts: sessionId after ensureGuestSession =", sessionId);
 
       async function loadCatalog(sid: string | null, mood: string | null) {
-        console.log("[DEBUG] loadCatalog: calling with sid =", sid);
         const [pr, fr] = await Promise.all([
           fetchStorefrontProducts(sid, mood),
           fetchStorefrontFilters(sid),
         ]);
-        console.log("[DEBUG] loadCatalog: products.length =", pr.products.length, "products.error =", pr.error);
-        console.log("[DEBUG] loadCatalog: moods.length =", fr.moods.length, "filters.error =", fr.error, "moods =", fr.moods);
         return { pr, fr };
       }
 
@@ -154,22 +220,16 @@ export function Storefront() {
           msg.includes("Unauthorized"));
 
       const hasError = !!(pr.error || fr.error);
-      console.log("[DEBUG] hasError =", hasError, "| pr.error =", pr.error, "| fr.error =", fr.error);
       if (hasError && (looksLikeBadSession(pr.error) || looksLikeBadSession(fr.error) || !sessionId)) {
-        console.log("[DEBUG] BAD SESSION detected — clearing and retrying");
         clearGuestSession();
         await ensureGuestSession();
         sessionId = getGuestSessionId();
-        console.log("[DEBUG] retry: new sessionId =", sessionId);
         if (sessionId) {
           ({ pr, fr } = await loadCatalog(sessionId, null));
-        } else {
-          console.error("[DEBUG] retry: ensureGuestSession still returned null — backend unreachable?");
         }
       }
 
       const { products: list, error } = pr;
-      console.log("[DEBUG] final products.length =", list.length, "| final moods =", fr.moods);
       if (list.length > 0) {
         setProducts(list);
         setProductsError(null);
@@ -188,10 +248,6 @@ export function Storefront() {
       setCategories(fr.categories);
       setOccasions(fr.occasions);
       setMoods(fr.moods);
-      console.log("[DEBUG] setMoods called with", fr.moods.length, "moods:", fr.moods);
-      if (process.env.NODE_ENV === "development" && fr.error) {
-        console.warn("[storefront-filters]", fr.error);
-      }
       setLoadingProducts(false);
     }
     loadProducts();
@@ -274,13 +330,9 @@ export function Storefront() {
     if (sort === "Price: Low") xs = [...xs].sort((a, b) => a.price - b.price);
     if (sort === "Price: High") xs = [...xs].sort((a, b) => b.price - a.price);
     if (sort === "Rating") xs = [...xs].sort((a, b) => b.rating - a.rating);
+    if (sort === "Latest") xs = [...xs].sort((a, b) => parseInt(b.id) - parseInt(a.id) || b.id.localeCompare(a.id));
     return xs;
   }, [products, query, collection, occasion, sort]);
-
-  const wishedProducts = useMemo(
-    () => products.filter((p) => wishlist[p.id]),
-    [products, wishlist]
-  );
 
   const goToProduct = (p: Product) => router.push(`/product/${p.id}`);
   const goToWithMotion = (id: string, instant?: boolean) =>
@@ -295,7 +347,6 @@ export function Storefront() {
         wishCount={wishCount}
         setMenuOpen={setMenuOpen}
         setCartOpen={() => {}}
-        setWishOpen={setWishOpen}
         goTo={goToWithMotion}
       />
 
@@ -328,10 +379,27 @@ export function Storefront() {
         reduceMotion={!!reduceMotion}
       />
 
+      <CategoriesSection
+        categories={categories.filter((c) =>
+          collectionOptions.includes(c.name)
+        )}
+        onPickCategory={(name) => setCollection(name)}
+        reduceMotion={!!reduceMotion}
+      />
+
       {loadingProducts ? (
-        <div className="flex justify-center py-16">
-          <Spinner />
-        </div>
+        <>
+          <Section id="shop">
+            <div className="flex justify-center py-16">
+              <Spinner />
+            </div>
+          </Section>
+          <Section id="explore">
+            <div className="flex justify-center py-16">
+              <Spinner />
+            </div>
+          </Section>
+        </>
       ) : (
         <>
           <ShopSection
@@ -341,6 +409,10 @@ export function Storefront() {
             onAddToCart={addToCart}
             onQuickView={goToProduct}
             reduceMotion={!!reduceMotion}
+            onViewAll={() => {
+              setSort("Latest");
+              goTo("explore", !!reduceMotion);
+            }}
           />
 
           <ExploreSection
@@ -377,21 +449,10 @@ export function Storefront() {
         reduceMotion={!!reduceMotion}
       />
 
-      <WishlistDrawer
-        open={wishOpen}
-        onClose={() => setWishOpen(false)}
-        wishCount={wishCount}
-        wishedProducts={wishedProducts}
-        onQuickView={goToProduct}
-        onAddToCart={addToCart}
-        onToggleWish={toggleWish}
-      />
-
       <MobileBottomBar
         activeSection={activeSection}
         wishCount={wishCount}
         cartCount={cartCount}
-        onWishOpen={() => setWishOpen(true)}
         onCartOpen={() => router.push("/bag")}
         reduceMotion={!!reduceMotion}
       />

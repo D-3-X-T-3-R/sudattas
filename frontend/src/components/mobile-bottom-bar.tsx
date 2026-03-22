@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Heart, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { goTo } from "@/hooks/use-scroll-to";
@@ -9,7 +10,6 @@ export interface MobileBottomBarProps {
   activeSection: string;
   wishCount: number;
   cartCount: number;
-  onWishOpen: () => void;
   onCartOpen: () => void;
   reduceMotion?: boolean;
 }
@@ -18,7 +18,6 @@ export function MobileBottomBar({
   activeSection,
   wishCount,
   cartCount,
-  onWishOpen,
   onCartOpen,
   reduceMotion = false,
 }: MobileBottomBarProps) {
@@ -39,19 +38,21 @@ export function MobileBottomBar({
             <Button
               variant="outline"
               size="icon"
-              onClick={onWishOpen}
               aria-label="Wishlist"
               className={cn(
                 "relative border-[var(--color-line)] bg-white",
-                wishCount > 0 && "text-[var(--color-accent-gold)] border-[var(--color-accent-gold)]"
+                wishCount > 0 && "border-[var(--color-accent-gold)] text-[var(--color-accent-gold)]"
               )}
+              asChild
             >
-              <Heart className="h-5 w-5" />
-              {wishCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
-                  {wishCount}
-                </span>
-              )}
+              <Link href="/wishlist">
+                <Heart className="h-5 w-5" />
+                {wishCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
+                    {wishCount}
+                  </span>
+                )}
+              </Link>
             </Button>
             <Button
               variant="outline"

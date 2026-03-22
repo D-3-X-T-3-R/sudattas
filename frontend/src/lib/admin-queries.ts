@@ -38,6 +38,7 @@ const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
     productId name description amountPaise formatted stockQuantity categoryId
     sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
     images { imageId thumbnailUrl url }
+    variantStock { variantId sizeId sizeName quantity }
   }
 }`;
 
@@ -68,7 +69,7 @@ export async function fetchProductsList(params: {
   startingPricePaise?: string;
   endingPricePaise?: string;
   moodId?: string;
-}): Promise<ProductListRow[]> {
+}): Promise<ProductListRowWithVariantStock[]> {
   const search: Record<string, string> = {};
   if (params.name) search.name = params.name;
   if (params.categoryId) search.categoryId = params.categoryId;
@@ -82,13 +83,16 @@ export async function fetchProductsList(params: {
   if (params.moodId) search.moodId = params.moodId;
 
   const variables = { search: Object.keys(search).length ? search : { limit: "50" } };
-  const data = await gqlAdmin<{ searchProduct?: ProductListRow[] }>(PRODUCTS_QUERY, variables);
+  const data = await gqlAdmin<{ searchProduct?: ProductListRowWithVariantStock[] }>(
+    PRODUCTS_QUERY,
+    variables
+  );
   const raw = data?.searchProduct ?? [];
   return raw.map(normalizeProductImages);
 }
 
 /** Ensure each product's images have url/imageId/thumbnailUrl in a consistent shape (camelCase). */
-function normalizeProductImages(p: ProductListRow): ProductListRow {
+function normalizeProductImages(p: ProductListRowWithVariantStock): ProductListRowWithVariantStock {
   const rawImages = p.images;
   if (!rawImages?.length) return p;
   const images: ProductImageListItem[] = rawImages.map((img: unknown) => {
