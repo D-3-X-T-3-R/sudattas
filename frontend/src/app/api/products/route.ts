@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Product } from "@/lib/schemas";
 import { fetchProductsList, fetchCategories } from "@/lib/admin-queries";
-import type { ProductListRow } from "@/lib/graphql-types";
+import type { ProductListRowWithVariantStock } from "@/lib/graphql-types";
 import {
   fetchProductsListWithSession,
   fetchCategoriesWithSession,
@@ -9,7 +9,7 @@ import {
 
 /** Map backend product list row + category names to storefront Product shape. */
 function mapToStorefrontProduct(
-  row: ProductListRow,
+  row: ProductListRowWithVariantStock,
   categoryNameById: Record<string, string>
 ): Product {
   const pricePaise = row.amountPaise ? parseInt(row.amountPaise, 10) : 0;
@@ -22,6 +22,16 @@ function mapToStorefrontProduct(
     imageList?.map((i) => i.url || i.thumbnailUrl || "").filter(Boolean) ?? [];
   const imageUrl = allUrls[0] ?? "";
   const hoverUrl = allUrls[1] ?? imageUrl;
+
+  const variantStock = row.variantStock?.map((v) => ({
+    variantId: v.variantId,
+    sizeId: v.sizeId,
+    sizeName: v.sizeName,
+    quantity:
+      typeof v.quantity === "number"
+        ? v.quantity
+        : parseInt(String(v.quantity ?? "0"), 10) || 0,
+  }));
 
   return {
     id: row.productId,
@@ -39,6 +49,7 @@ function mapToStorefrontProduct(
     hoverImage: hoverUrl || undefined,
     images: allUrls.length > 0 ? allUrls : undefined,
     imageAlt: row.name,
+    ...(variantStock && variantStock.length > 0 ? { variantStock } : {}),
   };
 }
 
@@ -48,7 +59,7 @@ export async function GET(request: Request) {
     new URL(request.url).searchParams.get("moodId")?.trim() || undefined;
 
   try {
-    let productsList: ProductListRow[];
+    let productsList: ProductListRowWithVariantStock[];
     let categories: { categoryId: string; name: string }[];
 
     const listParams = { limit: "200" as const, ...(moodId ? { moodId } : {}) };

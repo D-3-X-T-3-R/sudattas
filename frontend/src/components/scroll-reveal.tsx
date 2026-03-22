@@ -4,8 +4,7 @@ import { useRef } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-const MOTION_DURATION = 0.5;
-const MOTION_OFFSET = 10;
+const MOTION_OFFSET = 24;
 
 interface ScrollRevealProps {
   children: React.ReactNode;
@@ -28,7 +27,6 @@ export function ScrollReveal({
   direction = "up",
 }: ScrollRevealProps) {
   const ref = useRef<HTMLDivElement>(null);
-  // Positive bottom margin makes elements count as “in view” a bit earlier (avoids blank sections).
   const inView = useInView(ref, { once: true, margin: "0px 0px 180px 0px" });
   const reduceMotion = useReducedMotion();
   const offset = directionOffset[direction];
@@ -36,18 +34,21 @@ export function ScrollReveal({
   const initial = { opacity: 0, ...offset };
   const visible = Boolean(reduceMotion) || inView;
   const animate = visible ? { opacity: 1, x: 0, y: 0 } : initial;
-  const transition = {
-    duration: reduceMotion ? 0 : MOTION_DURATION,
-    ease: "easeOut" as const,
-    delay,
-  };
 
   return (
     <motion.div
       ref={ref}
       initial={initial}
       animate={animate}
-      transition={transition}
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : {
+              opacity: { duration: 0.55, ease: [0.22, 1, 0.36, 1], delay },
+              x: { type: "spring", stiffness: 60, damping: 18, delay },
+              y: { type: "spring", stiffness: 60, damping: 18, delay },
+            }
+      }
       className={cn(className)}
     >
       {children}

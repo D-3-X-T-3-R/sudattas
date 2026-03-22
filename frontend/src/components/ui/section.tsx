@@ -14,7 +14,6 @@ export interface SectionProps {
 
 /**
  * Standardizes vertical section rhythm for editorial layout.
- * Desktop: py-20 to py-28, Mobile: py-14 to py-18
  */
 export function Section({
   children,
@@ -27,7 +26,7 @@ export function Section({
     <section
       id={id}
       className={cn(
-        compact ? "py-8 md:py-10" : "py-14 sm:py-16 md:py-24 lg:py-28",
+        compact ? "pt-8 md:pt-10" : "pt-16 md:pt-20",
         !fullWidth && "mx-auto max-w-[2000px] px-4",
         className
       )}

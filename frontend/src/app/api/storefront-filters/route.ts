@@ -14,6 +14,7 @@ import {
 } from "@/lib/storefront-queries";
 
 type MoodSummary = { moodId: string; moodName: string; thumbnailUrl?: string };
+type CategorySummary = { categoryId: string; name: string; thumbnailUrl?: string };
 
 function normalizeMoodRows(rows: unknown): MoodSummary[] {
   const list = Array.isArray(rows) ? rows : [];
@@ -29,32 +30,51 @@ function normalizeMoodRows(rows: unknown): MoodSummary[] {
   return out;
 }
 
-async function attachMoodThumbnails(
-  moods: MoodSummary[],
-  sessionId: string | null
-): Promise<MoodSummary[]> {
-  const thumbs = await Promise.all(
-    moods.map(async (m) => {
-      try {
-        const products = sessionId
-          ? await fetchProductsListWithSession(sessionId, { moodId: m.moodId, limit: "1" })
-          : [];
-        const thumb = products[0]?.images?.[0]?.thumbnailUrl ?? undefined;
-        return { ...m, thumbnailUrl: thumb };
-      } catch {
-        return m;
-      }
-    })
-  );
-  return thumbs;
+/** Simple module-level TTL cache so repeated page loads don't refetch thumbnails. */
+type CacheEntry = { moodThumbs: Record<string, string>; categoryThumbs: Record<string, string>; expiresAt: number };
+const thumbCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+async function fetchThumbnails(
+  sessionId: string,
+  moods: { moodId: string }[],
+  categories: { categoryId: string }[]
+): Promise<{ moodThumbs: Record<string, string>; categoryThumbs: Record<string, string> }> {
+  const cacheKey = `${sessionId}:${moods.map((m) => m.moodId).join(",")}:${categories.map((c) => c.categoryId).join(",")}`;
+  const cached = thumbCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached;
+
+  const moodThumbs: Record<string, string> = {};
+  const categoryThumbs: Record<string, string> = {};
+
+  // Derive category thumbnails from a single bulk product fetch.
+  try {
+    const allProducts = await fetchProductsListWithSession(sessionId, { limit: "200" });
+    for (const c of categories) {
+      const match = allProducts.find((p) => p.categoryId === c.categoryId);
+      const thumb = match?.images?.[0]?.thumbnailUrl;
+      if (thumb) categoryThumbs[c.categoryId] = thumb;
+    }
+  } catch { /* skip */ }
+
+  // Mood thumbnails require per-mood calls — fetch sequentially to stay under rate limits.
+  for (const m of moods) {
+    try {
+      const products = await fetchProductsListWithSession(sessionId, { moodId: m.moodId, limit: "1" });
+      const thumb = products[0]?.images?.[0]?.thumbnailUrl;
+      if (thumb) moodThumbs[m.moodId] = thumb;
+    } catch { /* skip */ }
+  }
+
+  const entry: CacheEntry = { moodThumbs, categoryThumbs, expiresAt: Date.now() + CACHE_TTL_MS };
+  thumbCache.set(cacheKey, entry);
+  return entry;
 }
 
 const HIGHLIGHT = { recentProductLimit: 100, maxMoods: 12 } as const;
 
-/** Categories, occasions, and moods from newest products (distinct mood order from product walk). */
 export async function GET(request: Request) {
   const sessionId = request.headers.get("x-session-id")?.trim() || null;
-  console.log("[storefront-filters] GET called | sessionId =", sessionId);
 
   try {
     const [categories, occasions, moodsRes] = sessionId
@@ -69,33 +89,43 @@ export async function GET(request: Request) {
           fetchShopHighlightMoods(HIGHLIGHT),
         ]);
 
-    console.log("[storefront-filters] moodsRes raw:", JSON.stringify(moodsRes));
     let moods = normalizeMoodRows(moodsRes as unknown[]);
-    console.log("[storefront-filters] after normalize:", moods.length, "moods");
-    // Highlight needs mood mappings on recent products; if none, show newest mood labels from DB
     if (moods.length === 0) {
-      console.log("[storefront-filters] highlight empty — trying fallback searchProductMoods");
       const fallbackRaw = sessionId
         ? await fetchProductMoodsWithSession(sessionId)
         : await searchProductMoods({});
-      console.log("[storefront-filters] fallbackRaw:", JSON.stringify(fallbackRaw));
       moods = normalizeMoodRows(fallbackRaw as unknown[]).sort(
         (a, b) => (parseInt(b.moodId, 10) || 0) - (parseInt(a.moodId, 10) || 0)
       );
       moods = moods.slice(0, HIGHLIGHT.maxMoods);
     }
 
-    console.log("[storefront-filters] returning", moods.length, "moods");
-    moods = await attachMoodThumbnails(moods, sessionId);
-    return NextResponse.json({
-      categories: categories.map((c) => ({ categoryId: c.categoryId, name: c.name })),
-      occasions: occasions.map((o) => ({ occasionId: o.occasionId, occasionName: o.occasionName })),
-      moods,
-      error: null,
-    });
+    const rawCategories = categories.map((c) => ({ categoryId: c.categoryId, name: c.name }));
+
+    const { moodThumbs, categoryThumbs } = sessionId
+      ? await fetchThumbnails(sessionId, moods, rawCategories)
+      : { moodThumbs: {}, categoryThumbs: {} };
+
+    const moodsWithThumbs: MoodSummary[] = moods.map((m) => ({
+      ...m,
+      thumbnailUrl: moodThumbs[m.moodId],
+    }));
+    const categoriesWithThumbs: CategorySummary[] = rawCategories.map((c) => ({
+      ...c,
+      thumbnailUrl: categoryThumbs[c.categoryId],
+    }));
+
+    return NextResponse.json(
+      {
+        categories: categoriesWithThumbs,
+        occasions: occasions.map((o) => ({ occasionId: o.occasionId, occasionName: o.occasionName })),
+        moods: moodsWithThumbs,
+        error: null,
+      },
+      { headers: { "Cache-Control": "private, max-age=300" } }
+    );
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to load filters";
-    console.error("[storefront-filters] CAUGHT ERROR:", message, e);
     return NextResponse.json(
       { categories: [], occasions: [], moods: [], error: message },
       { status: 200 }

@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Hide main document scrollbar; scrolling still works (wheel, touch, keys). */
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}
+
 :root {
   /* Base palette shared by storefront + admin */
   --color-ivory: #F5EFE6;
@@ -49,9 +58,14 @@
 
 body {
   min-height: 100vh;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+body::-webkit-scrollbar {
+  display: none;
 }
 
 /* Subtle grain for warmth (optional; reduce opacity if too strong) */
@@ -68,6 +82,28 @@ body::before {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* Smooth transitions on all interactive elements */
+button,
+a,
+input,
+select,
+textarea {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Image zoom containers — clip overflow */
+.img-zoom-wrap {
+  overflow: hidden;
+}
+.img-zoom-wrap img {
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.img-zoom-wrap:hover img {
+  transform: scale(1.04);
 }
 
 /* Scroll reveal: same DOM on server and client; class toggled after hydration */

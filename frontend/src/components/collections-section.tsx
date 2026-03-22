@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { ChevronRight } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { COLLECTIONS } from "@/lib/constants";
 import { COLLECTION_IMAGES } from "@/lib/seed-data";
 import { goTo } from "@/hooks/use-scroll-to";
@@ -17,7 +19,7 @@ export interface CollectionsSectionProps {
   reduceMotion?: boolean;
 }
 
-type DisplayCollection = {
+export type DisplayCollection = {
   key: string;
   blurb: string;
   isMood?: boolean;
@@ -25,7 +27,7 @@ type DisplayCollection = {
   thumbnailUrl?: string;
 };
 
-function CollectionCard({
+export function CollectionCard({
   c,
   idx,
   setCollection,
@@ -71,12 +73,15 @@ function CollectionCard({
       </div>
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 p-6 text-left sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">
+          {c.isMood ? "Mood" : "Collection"}
+        </p>
         <span
-          className={`mt-2 block uppercase tracking-[0.18em] font-semibold text-[var(--color-accent-gold)] [-webkit-text-stroke:0.3px_white] ${large ? "text-2xl sm:text-3xl md:text-4xl" : "text-2xl sm:text-3xl"}`}
+          className={`mt-1 block uppercase tracking-[0.18em] font-semibold text-[var(--color-accent-gold)] [text-shadow:0_1px_4px_rgba(0,0,0,0.55)] ${large ? "text-2xl sm:text-3xl md:text-4xl" : "text-2xl sm:text-3xl"}`}
         >
           {c.blurb}
         </span>
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full border-2 border-[#1a4a2e] bg-transparent px-5 py-2.5 text-xs font-semibold text-white transition-colors group-hover:bg-[#1a4a2e] group-hover:text-white sm:mt-5">
+        <div className="mt-4 inline-flex items-center gap-2 rounded-full border-2 border-[var(--color-accent-gold)] bg-transparent px-5 py-2.5 text-xs font-semibold text-white transition-colors group-hover:bg-[var(--color-accent-gold)] group-hover:text-white sm:mt-5">
           Explore
           <ChevronRight className="h-4 w-4" />
         </div>
@@ -91,62 +96,66 @@ export function CollectionsSection({
   onPickMood,
   reduceMotion = false,
 }: CollectionsSectionProps) {
+  const [showAll, setShowAll] = useState(false);
+
+  const allMoodItems: DisplayCollection[] = moods.map((m) => ({
+    key: m.moodName,
+    blurb: m.moodName,
+    isMood: true,
+    moodId: m.moodId,
+    thumbnailUrl: m.thumbnailUrl,
+  }));
+
   const displayCollections: DisplayCollection[] =
     moods.length > 0
-      ? moods.slice(0, 4).map((m) => ({
-          key: m.moodName,
-          blurb: m.moodName,
-          isMood: true,
-          moodId: m.moodId,
-          thumbnailUrl: m.thumbnailUrl,
-        }))
+      ? (showAll ? allMoodItems : allMoodItems.slice(0, 4))
       : [...COLLECTIONS];
-
-  const first = displayCollections[0];
-  const second = displayCollections[1];
-  const third = displayCollections[2];
-  const fourth = displayCollections[3];
 
   return (
     <Section id="collections">
       <ScrollReveal>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <Kicker className="text-[var(--color-muted)] invisible">Collections</Kicker>
-            <SectionHeading size="lg" className="mt-3 uppercase tracking-[0.18em] text-[var(--color-accent-gold)]">
-              {"This week's moods"}
-            </SectionHeading>
-          </div>
+        <div className="flex flex-col gap-4 border-b border-[var(--color-line)] pb-8 sm:flex-row sm:items-end sm:justify-between">
+          <SectionHeading size="lg" className="uppercase tracking-[0.18em] text-[var(--color-accent-gold)]">
+            {"This week's moods"}
+          </SectionHeading>
           <button
             type="button"
-            onClick={() => goTo("shop", reduceMotion)}
+            onClick={() => moods.length > 0 ? setShowAll((v) => !v) : goTo("shop", reduceMotion)}
             className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent-brown)] sm:inline-flex"
           >
-            View all
+            {moods.length > 0 && showAll ? "Show less" : "View all"}
           </button>
         </div>
       </ScrollReveal>
 
       {moods.length > 0 ? (
         <div className="mt-12 grid grid-cols-2 gap-4 md:grid-cols-4">
-          {[first, second, third, fourth].filter(Boolean).map((item, idx) => (
-            <div key={`${item!.key}-${idx}`}>
-              <CollectionCard
-                c={item!}
-                idx={idx}
-                setCollection={setCollection}
-                onPickMood={onPickMood}
-                reduceMotion={reduceMotion}
-              />
-            </div>
-          ))}
+          <AnimatePresence initial={false}>
+            {displayCollections.map((item, idx) => (
+              <motion.div
+                key={item.key}
+                initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 16, scale: 0.97 }}
+                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1], delay: idx < 4 ? 0 : (idx - 4) * 0.06 }}
+              >
+                <CollectionCard
+                  c={item}
+                  idx={idx}
+                  setCollection={setCollection}
+                  onPickMood={onPickMood}
+                  reduceMotion={reduceMotion}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       ) : (
         <div className="mt-12 grid gap-6 md:grid-cols-2 md:grid-rows-2">
-          {first && (
+          {displayCollections[0] && (
             <div className="md:row-span-2">
               <CollectionCard
-                c={first}
+                c={displayCollections[0]}
                 idx={0}
                 setCollection={setCollection}
                 onPickMood={onPickMood}
@@ -155,10 +164,10 @@ export function CollectionsSection({
               />
             </div>
           )}
-          {second && (
+          {displayCollections[1] && (
             <div>
               <CollectionCard
-                c={second}
+                c={displayCollections[1]}
                 idx={1}
                 setCollection={setCollection}
                 onPickMood={onPickMood}
@@ -166,10 +175,10 @@ export function CollectionsSection({
               />
             </div>
           )}
-          {third && (
+          {displayCollections[2] && (
             <div>
               <CollectionCard
-                c={third}
+                c={displayCollections[2]}
                 idx={2}
                 setCollection={setCollection}
                 onPickMood={onPickMood}

@@ -5,7 +5,6 @@ import type { Product } from "@/lib/schemas";
 import { Section } from "@/components/ui/section";
 import { SectionHeading, Kicker } from "@/components/ui/typography";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { goTo } from "@/hooks/use-scroll-to";
 
 export interface ShopSectionProps {
   products: Product[];
@@ -13,6 +12,7 @@ export interface ShopSectionProps {
   onToggleWish: (p: Product) => void;
   onAddToCart: (p: Product) => void;
   onQuickView: (p: Product) => void;
+  onViewAll?: () => void;
   reduceMotion?: boolean;
 }
 
@@ -22,22 +22,23 @@ export function ShopSection({
   onToggleWish,
   onAddToCart,
   onQuickView,
+  onViewAll,
   reduceMotion = false,
 }: ShopSectionProps) {
   const preview = products.slice(0, 4);
   return (
     <Section id="shop">
       <ScrollReveal>
-        <div className="flex items-end justify-between border-y border-[var(--color-line)] py-10">
+        <div className="flex items-end justify-between border-b border-[var(--color-line)] pb-8">
           <div>
             <Kicker className="invisible text-[var(--color-muted)]">Shop</Kicker>
-            <SectionHeading size="lg" className="mt-3 font-sans uppercase tracking-[0.18em] text-[var(--color-accent-gold)]">
+            <SectionHeading size="lg" className="mt-3 uppercase tracking-[0.18em] text-[var(--color-accent-gold)]">
               New arrivals
             </SectionHeading>
           </div>
           <button
             type="button"
-            onClick={() => goTo("explore", reduceMotion)}
+            onClick={onViewAll}
             className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent-brown)]"
           >
             View all

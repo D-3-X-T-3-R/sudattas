@@ -26,6 +26,7 @@ const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
     productId name description amountPaise formatted stockQuantity categoryId
     sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
     images { thumbnailUrl url }
+    variantStock { variantId sizeId sizeName quantity }
   }
 }`;
 
@@ -79,13 +80,14 @@ export async function fetchOccasionsWithSession(sessionId: string): Promise<Occa
 
 export async function fetchProductsListWithSession(
   sessionId: string,
-  params: { limit?: string; moodId?: string } = {}
-): Promise<ProductListRow[]> {
-  const search: { limit?: string; moodId?: string } = params.limit
+  params: { limit?: string; moodId?: string; categoryId?: string } = {}
+): Promise<ProductListRowWithVariantStock[]> {
+  const search: { limit?: string; moodId?: string; categoryId?: string } = params.limit
     ? { limit: params.limit }
     : { limit: "200" };
   if (params.moodId) search.moodId = params.moodId;
-  const data = await gqlWithSession<{ searchProduct?: ProductListRow[] }>(
+  if (params.categoryId) search.categoryId = params.categoryId;
+  const data = await gqlWithSession<{ searchProduct?: ProductListRowWithVariantStock[] }>(
     sessionId,
     PRODUCTS_QUERY,
     { search }

@@ -6,7 +6,7 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 
 export function StorySection() {
   return (
-    <Section id="story">
+    <Section id="story" className="pb-24 md:pb-32">
       <ScrollReveal>
         <div className="grid gap-16 md:grid-cols-2">
           <div className="relative border-t border-[var(--color-line)] pt-14">

@@ -48,9 +48,9 @@ export function ExploreSection({
   return (
     <Section id="explore">
       <ScrollReveal>
-        <div className="flex flex-col gap-6 border-y border-[var(--color-line)] py-10">
+        <div className="flex flex-col gap-6 border-b border-[var(--color-line)] pb-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <SectionHeading size="lg" className="font-sans uppercase tracking-[0.18em] text-[var(--color-accent-gold)]">
+            <SectionHeading size="lg" className="uppercase tracking-[0.18em] text-[var(--color-accent-gold)]">
               Explore
             </SectionHeading>
 
@@ -103,6 +103,7 @@ export function ExploreSection({
                   className="rounded-full border border-[var(--color-line)] bg-white/70 px-4 py-2 text-sm outline-none focus:bg-white"
                 >
                   <option>Featured</option>
+                  <option>Latest</option>
                   <option>Price: Low</option>
                   <option>Price: High</option>
                   <option>Rating</option>

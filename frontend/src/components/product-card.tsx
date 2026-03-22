@@ -50,7 +50,7 @@ export function ProductCard({
           type="button"
           onClick={() => onQuickView(product)}
           className={cn(
-            "relative w-full cursor-pointer text-left rounded-sm transition-[box-shadow,border-color] duration-200 group-hover:shadow-[0_0_0_1px_var(--color-accent-gold)]",
+            "relative w-full cursor-pointer text-left rounded-sm overflow-hidden transition-[box-shadow,border-color] duration-300 group-hover:shadow-[0_0_0_1px_var(--color-accent-gold)]",
             featured ? "min-h-[280px] flex-1 basis-0 aspect-[4/5]" : "aspect-[4/5]"
           )}
           aria-label={`Quick view ${product.name}`}
@@ -59,10 +59,12 @@ export function ProductCard({
             src={product.image || PLACEHOLDER_IMAGE}
             alt={product.imageAlt || product.name}
             fill
-            className="object-cover"
+            className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             unoptimized={isExternalProductImage(product.image)}
           />
+          {/* Hover overlay */}
+          <div className="absolute inset-0 bg-[var(--color-ink)]/0 transition-colors duration-300 group-hover:bg-[var(--color-ink)]/10" />
         </button>
 
         {/* Hover-only: wishlist */}
@@ -74,7 +76,7 @@ export function ProductCard({
             e.stopPropagation();
             onToggleWish(product);
           }}
-          className="absolute right-3 top-3 z-10 h-10 w-10 rounded-full border-[var(--color-line)] bg-white/90 backdrop-blur opacity-0 transition-opacity duration-300 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+          className="absolute right-3 top-3 z-10 h-10 w-10 rounded-full border-[var(--color-line)] bg-white/90 backdrop-blur opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0 translate-y-1 md:opacity-0 md:group-hover:opacity-100"
           aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
         >
           <Heart
