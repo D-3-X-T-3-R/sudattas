@@ -12,13 +12,13 @@ use graphql::security::session_validator;
 use graphql::seo;
 use graphql::webhooks;
 use metrics_exporter_prometheus::PrometheusBuilder;
-use reqwest::StatusCode;
 use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 use uuid::Uuid;
+use warp::http::StatusCode;
 use warp::{http::Response, reply, Filter, Rejection, Reply};
 
 #[derive(Debug)]
