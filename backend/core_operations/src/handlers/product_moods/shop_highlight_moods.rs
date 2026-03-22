@@ -81,12 +81,10 @@ pub async fn shop_highlight_moods(
         ordered_mood_ids
             .into_iter()
             .filter_map(|id| {
-                name_by_id
-                    .get(&id)
-                    .map(|name| ShopHighlightMoodItem {
-                        mood_id: id,
-                        mood_name: name.clone(),
-                    })
+                name_by_id.get(&id).map(|name| ShopHighlightMoodItem {
+                    mood_id: id,
+                    mood_name: name.clone(),
+                })
             })
             .collect()
     };
@@ -106,7 +104,9 @@ pub async fn shop_highlight_moods(
                 mood_name: m.mood_name,
             })
             .collect();
-        return Ok(Response::new(ShopHighlightMoodsResponse { items: fallback }));
+        return Ok(Response::new(ShopHighlightMoodsResponse {
+            items: fallback,
+        }));
     }
 
     Ok(Response::new(ShopHighlightMoodsResponse { items }))
