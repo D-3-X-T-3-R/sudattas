@@ -26,6 +26,8 @@ type CartState = Record<
   { id: string; product: Product; qty: number; sizeName?: string | null }
 >;
 
+const CART_CACHE_KEY = "sudattas_cart_cache_v1";
+
 function cartLinesToState(lines: CartLineMapped[]): CartState {
   const state: CartState = {};
   for (const line of lines) {
@@ -83,11 +85,26 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   const lastToastRef = useRef<{ key: string; at: number } | null>(null);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(CART_CACHE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as CartState;
+      if (parsed && typeof parsed === "object") {
+        setCart(parsed);
+      }
+    } catch {
+      // ignore malformed cache
+    }
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     setCartLoading(true);
     fetchCartLines()
       .then((lines) => {
-        if (!cancelled) setCart(cartLinesToState(lines));
+        if (cancelled || lines == null) return;
+        setCart(cartLinesToState(lines));
       })
       .finally(() => {
         if (!cancelled) setCartLoading(false);
@@ -96,6 +113,15 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(CART_CACHE_KEY, JSON.stringify(cart));
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [cart]);
 
   const toggleWish = useCallback(
     (p: Product) => {
