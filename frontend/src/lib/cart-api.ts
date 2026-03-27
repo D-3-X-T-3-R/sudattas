@@ -162,14 +162,14 @@ export type CartLineMapped = {
 
 /**
  * Fetch cart from backend and return lines in storefront shape.
- * Returns [] if no session or API error (caller can keep local state).
+ * Returns null on API/session failure so caller can keep existing local state.
  */
-export async function fetchCartLines(): Promise<CartLineMapped[]> {
-  if (typeof window === "undefined") return [];
+export async function fetchCartLines(): Promise<CartLineMapped[] | null> {
+  if (typeof window === "undefined") return null;
   const { ensureGuestSession } = await import("@/lib/session");
   await ensureGuestSession();
   const sessionId = getGuestSessionId();
-  if (!sessionId) return [];
+  if (!sessionId) return null;
 
   try {
     const data = await gql<{ getCartItems?: CartItemGql[] }>(GET_CART_ITEMS, {
@@ -191,7 +191,7 @@ export async function fetchCartLines(): Promise<CartLineMapped[]> {
       };
     }).filter((line): line is CartLineMapped => line != null);
   } catch {
-    return [];
+    return null;
   }
 }
 

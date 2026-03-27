@@ -356,47 +356,38 @@ export default function BagPage() {
   }, []);
 
   const normalizedDigits = identifier.replace(/\D/g, "");
-  const identifierTrimmed = identifier.trim();
-  const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifierTrimmed);
   const looksLikePhone = normalizedDigits.length === 10;
 
-  const adaptiveActionLabel = looksLikeEmail
-    ? "Send Login Link"
-    : looksLikePhone
-      ? otpSent
-        ? "Resend Code on WhatsApp"
-        : "Get Code on WhatsApp"
-      : "Continue";
-
-  const handleAdaptiveContinue = () => {
-    if (looksLikeEmail) {
-      setLoginNote("Magic link login will be enabled next. Use Google or WhatsApp OTP for now.");
+  const handleContinue = () => {
+    if (otpSent) {
+      handleOtpLogin();
       return;
     }
     if (!looksLikePhone) {
-      setLoginNote("Enter a valid email or 10-digit phone number.");
+      setLoginNote("Please enter your phone number.");
       return;
     }
 
     const digits = normalizedDigits;
-    if (digits.length !== 10) {
-      setLoginNote("Please enter a valid 10-digit phone number.");
-      return;
-    }
+    setOtpSent(false);
+    setOtp("");
     setOtpBusy(true);
     setLoginNote(null);
+
     void fetch(`${getBackendBaseUrl()}/auth/phone-otp/request`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone: digits, channel: "whatsapp" }),
     })
       .then(async (res) => {
-        const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        const json = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+        };
         if (!res.ok || !json.ok) {
           throw new Error(json.error ?? "OTP_SEND_FAILED");
         }
         setOtpSent(true);
-        setLoginNote("Code sent on WhatsApp.");
       })
       .catch(() => {
         setLoginNote("Could not send code. Please try again.");
@@ -673,106 +664,141 @@ export default function BagPage() {
 
       <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
         <DialogContent
-          className="max-w-xl overflow-hidden rounded-[28px] bg-[#F6F3EA] shadow-[0_20px_70px_rgba(0,0,0,0.22)]"
+          className="max-w-5xl w-[92vw] overflow-hidden rounded-[28px] bg-[#F6F3EA] shadow-[0_20px_70px_rgba(0,0,0,0.22)]"
           contentClassName="space-y-0 p-0"
           showClose={false}
         >
-          <div className="p-6 sm:p-8">
-            <div className="space-y-4">
-              {passkeySupported && (
-                <button
-                  type="button"
-                  onClick={() => setLoginNote("Passkey login is coming next. Use Google or WhatsApp OTP for now.")}
-                  className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-[#0F3D2E]/12 bg-white px-5 text-sm font-medium tracking-[0.12em] text-[#0F3D2E] shadow-[0_8px_24px_rgba(15,61,46,0.06)] transition hover:-translate-y-0.5 hover:border-[#C9A646]/40 hover:shadow-[0_12px_30px_rgba(15,61,46,0.10)]"
-                >
-                  <FingerprintIcon className="h-4 w-4 text-[#C9A646]" />
-                  <span>Continue with Face ID / Fingerprint</span>
-                </button>
-              )}
+          <div className="grid w-full overflow-hidden md:grid-cols-[1.05fr_0.95fr]">
+            {/* Left branding panel (desktop only) */}
+            <section className="relative hidden min-h-[640px] overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(231,207,130,0.18),_transparent_32%),linear-gradient(135deg,_#0F3D2E_0%,_#113A2D_55%,_#0B2D22_100%)] p-10 md:flex md:flex-col md:justify-between">
+              <div className="absolute inset-0 opacity-10 [background-image:radial-gradient(#F6F3EA_0.8px,transparent_0.8px)] [background-size:18px_18px]" />
 
-              <button
-                type="button"
-                onClick={() => signIn("google", { callbackUrl: "/bag" })}
-                className="flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#C9A646] px-5 text-sm font-semibold tracking-[0.12em] text-white shadow-[0_14px_30px_rgba(201,166,70,0.28)] transition hover:-translate-y-0.5 hover:bg-[#B89435]"
-              >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white">
-                  <GoogleIcon className="h-4 w-4" />
-                </span>
-                <span>Continue with Google</span>
-              </button>
-            </div>
+              <div className="relative z-10">
+                <div className="inline-flex items-center rounded-full border border-[#C9A646]/25 bg-white/5 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.3em] text-[#C9A646]">
+                  Sudatta’s
+                </div>
 
-            <div className="my-7 flex items-center gap-4">
-              <div className="h-px flex-1 bg-[#0F3D2E]/10" />
-              <span className="text-[11px] font-medium uppercase tracking-[0.28em] text-[#9B927E]">
-                Or
-              </span>
-              <div className="h-px flex-1 bg-[#0F3D2E]/10" />
-            </div>
+                <div className="mt-12 max-w-md">
+                  <h1 className="font-display text-5xl leading-tight text-[#F6F3EA]">
+                    Timeless elegance
+                  </h1>
+                  <p className="mt-5 text-sm leading-7 text-[#F6F3EA]/75">
+                    A premium sign-in experience designed for effortless checkout.
+                  </p>
+                </div>
+              </div>
+            </section>
 
-            <div className="rounded-2xl border border-[#0F3D2E]/10 bg-white p-4">
-              <label
-                htmlFor="adaptive-identifier"
-                className="mb-2.5 block text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8B816D]"
-              >
-                Email or phone number
-              </label>
-              <Input
-                id="adaptive-identifier"
-                inputMode="email"
-                autoComplete="username"
-                placeholder="Enter your email or phone number"
-                value={identifier}
-                onChange={(e) => {
-                  setIdentifier(e.target.value);
-                  if (loginNote) setLoginNote(null);
-                  if (otpSent) {
-                    setOtpSent(false);
-                    setOtp("");
-                  }
-                }}
-                className="h-14 w-full rounded-2xl border border-[#0F3D2E]/10 bg-white px-4 text-sm text-[#1B1B1B] outline-none transition placeholder:text-[#B8AE9A] focus:border-[#C9A646] focus:shadow-[0_0_0_4px_rgba(201,166,70,0.14)]"
-              />
+            {/* Right login form panel */}
+            <section className="p-6 sm:p-8 md:p-10 lg:p-12">
+              <div className="mx-auto flex min-h-[640px] w-full max-w-md flex-col justify-center">
+                <div className="mb-8 text-center md:hidden">
+                  <span className="font-display text-2xl tracking-wide text-[#0F3D2E]">
+                    Sudatta’s
+                  </span>
+                </div>
 
-              <button
-                type="button"
-                onClick={handleAdaptiveContinue}
-                disabled={otpBusy}
-                className="mt-4 h-14 w-full rounded-full bg-[#0F3D2E] px-5 text-sm font-semibold tracking-[0.14em] text-[#F6F3EA] shadow-[0_18px_32px_rgba(15,61,46,0.18)] transition hover:-translate-y-0.5 hover:bg-[#0C3126] disabled:opacity-60"
-              >
-                {otpBusy ? "Processing..." : adaptiveActionLabel}
-              </button>
+                <div className="mb-8 text-center md:mb-10 md:text-left">
+                  <div className="mb-5 hidden md:block">
+                    <span className="font-display text-2xl tracking-wide text-[#0F3D2E]">
+                      Sudatta’s
+                    </span>
+                  </div>
+                  <h2 className="font-display text-4xl text-[#0F3D2E] sm:text-5xl">
+                    Welcome back
+                  </h2>
+                  <p className="mt-3 text-sm leading-7 text-[#5E5A52] sm:text-base">
+                    Access your account securely
+                  </p>
+                </div>
 
-              {looksLikePhone && otpSent && (
-                <>
-                  <Input
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="Enter OTP"
-                    value={otp}
-                    onChange={(e) => {
-                      setOtp(e.target.value.replace(/\D/g, "").slice(0, 8));
-                      if (loginNote) setLoginNote(null);
-                    }}
-                    className="mt-3 h-12 w-full rounded-2xl border border-[#0F3D2E]/10 bg-white px-4 text-sm text-[#1B1B1B] outline-none transition placeholder:text-[#B8AE9A] focus:border-[#C9A646] focus:shadow-[0_0_0_4px_rgba(201,166,70,0.14)]"
-                  />
+                <div className="space-y-4">
                   <button
                     type="button"
-                    onClick={handleOtpLogin}
-                    disabled={otpBusy}
-                    className="mt-3 h-12 w-full rounded-full bg-[#C9A646] px-5 text-sm font-semibold tracking-[0.12em] text-white shadow-[0_14px_30px_rgba(201,166,70,0.28)] transition hover:-translate-y-0.5 hover:bg-[#B89435] disabled:opacity-60"
+                    onClick={() =>
+                      setLoginNote(
+                        passkeySupported
+                          ? "Passkey sign-in is coming next. Use Google or WhatsApp OTP for now."
+                          : "Face ID / Fingerprint is not available on this browser yet. Use Google or WhatsApp OTP for now."
+                      )
+                    }
+                    className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-[#0F3D2E]/12 bg-white px-5 text-sm font-medium tracking-[0.12em] text-[#0F3D2E] shadow-[0_8px_24px_rgba(15,61,46,0.06)] transition hover:-translate-y-0.5 hover:border-[#C9A646]/40 hover:shadow-[0_12px_30px_rgba(15,61,46,0.10)]"
                   >
-                    {otpBusy ? "Verifying..." : "Verify Code & Sign in"}
+                    <FingerprintIcon className="h-4 w-4 text-[#C9A646]" />
+                    <span>Continue with Face ID / Fingerprint</span>
                   </button>
-                </>
-              )}
-            </div>
 
-            {loginNote && (
-              <p className="mt-4 text-center text-xs leading-6 text-[#7B7568]">
-                {loginNote}
-              </p>
-            )}
+                  <button
+                    type="button"
+                    onClick={() => signIn("google", { callbackUrl: "/bag" })}
+                    className="flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#C9A646] px-5 text-sm font-semibold tracking-[0.12em] text-white shadow-[0_14px_30px_rgba(201,166,70,0.28)] transition hover:-translate-y-0.5 hover:bg-[#B89435]"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white">
+                      <GoogleIcon className="h-4 w-4" />
+                    </span>
+                    <span>Continue with Google</span>
+                  </button>
+                </div>
+
+                <div className="my-7 flex items-center gap-4">
+                  <div className="h-px flex-1 bg-[#0F3D2E]/10" />
+                  <span className="text-[11px] font-medium uppercase tracking-[0.28em] text-[#5E5A52]">
+                    OR
+                  </span>
+                  <div className="h-px flex-1 bg-[#0F3D2E]/10" />
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label
+                      htmlFor="phone-identifier"
+                      className="mb-2.5 block text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5E5A52]"
+                    >
+                      phone number
+                    </label>
+                  <input
+                      id="phone-identifier"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete={otpSent ? "one-time-code" : "tel"}
+                      placeholder={
+                        otpSent ? "Enter OTP" : "Enter your phone number"
+                      }
+                    className="h-14 w-full rounded-2xl border border-[#0F3D2E]/10 bg-white px-4 text-sm text-[#0F3D2E] outline-none transition placeholder:text-[#5E5A52] focus:border-[#C9A646] focus:shadow-[0_0_0_4px_rgba(201,166,70,0.14)]"
+                      value={otpSent ? otp : identifier}
+                      onChange={(e) => {
+                        const next = e.target.value.replace(/\D/g, "");
+                        if (otpSent) {
+                          setOtp(next.slice(0, 8));
+                        } else {
+                          setIdentifier(next.slice(0, 10));
+                        }
+                        if (loginNote) setLoginNote(null);
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleContinue}
+                    disabled={otpBusy}
+                    className="h-14 w-full rounded-full bg-[#0F3D2E] px-5 text-sm font-semibold tracking-[0.14em] text-[#F6F3EA] shadow-[0_18px_32px_rgba(15,61,46,0.18)] transition hover:-translate-y-0.5 hover:bg-[#0C3126] disabled:opacity-60"
+                  >
+                    Continue
+                  </button>
+
+                  {loginNote && (
+                    <p className="pt-1 text-center text-xs leading-6 text-[#5E5A52]">
+                      {loginNote}
+                    </p>
+                  )}
+                </div>
+
+                <p className="mt-7 text-center text-xs leading-6 text-[#5E5A52]">
+                  Terms & Privacy Policy
+                </p>
+              </div>
+            </section>
           </div>
         </DialogContent>
       </Dialog>

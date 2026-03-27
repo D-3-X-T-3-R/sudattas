@@ -11,6 +11,19 @@ const GRAPHQL_URL =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_URL) ||
   "http://localhost:8080/v2";
 
+const MAX_RETRIES_429 = 2;
+const RETRY_BASE_MS = 150;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function jitteredBackoffMs(attempt: number): number {
+  const exp = RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1);
+  const jitter = Math.floor(Math.random() * 120);
+  return exp + jitter;
+}
+
 function sessionFetchHeaders(sessionId: string): Record<string, string> {
   const h: Record<string, string> = {
     "Content-Type": "application/json",
@@ -35,7 +48,8 @@ function sessionFetchHeaders(sessionId: string): Record<string, string> {
 export async function gqlWithSession<T = unknown>(
   sessionId: string,
   query: string,
-  variables: Record<string, unknown> = {}
+  variables: Record<string, unknown> = {},
+  retryCount = 0
 ): Promise<T> {
   const res = await fetch(GRAPHQL_URL, {
     method: "POST",
@@ -43,6 +57,11 @@ export async function gqlWithSession<T = unknown>(
     body: JSON.stringify({ query, variables }),
   });
   const text = await res.text();
+
+  if (res.status === 429 && retryCount < MAX_RETRIES_429) {
+    await sleep(jitteredBackoffMs(retryCount + 1));
+    return gqlWithSession<T>(sessionId, query, variables, retryCount + 1);
+  }
 
   if (res.status === 401) {
     throw new Error("Session invalid or expired");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { ensureGuestSession, getGuestSessionId, clearGuestSession } from "@/lib/session";
@@ -112,6 +112,7 @@ export function Storefront() {
   const [shopMoodId, setShopMoodId] = useState<string | null>(null);
   /** Start true so #shop / #explore are never missing during the first catalog fetch. */
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const didInitialLoadRef = useRef(false);
 
   const { paymentMessage, paymentLoading, runTest } = useRazorpayTest();
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
@@ -196,6 +197,9 @@ export function Storefront() {
   }, [reduceMotion]);
 
   useEffect(() => {
+    if (didInitialLoadRef.current) return;
+    didInitialLoadRef.current = true;
+
     // Guest session → Next /api/products + /api/storefront-filters → GraphQL (see route files).
     async function loadProducts() {
       setLoadingProducts(true);
