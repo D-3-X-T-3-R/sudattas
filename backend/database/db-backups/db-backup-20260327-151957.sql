@@ -270,7 +270,7 @@ CREATE TABLE `Inventory` (
   PRIMARY KEY (`InventoryID`),
   KEY `idx_inventory_variant_id` (`VariantID`),
   CONSTRAINT `Inventory_ibfk_1` FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants` (`VariantID`)
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -279,7 +279,7 @@ CREATE TABLE `Inventory` (
 
 LOCK TABLES `Inventory` WRITE;
 /*!40000 ALTER TABLE `Inventory` DISABLE KEYS */;
-INSERT INTO `Inventory` VALUES (1,1,1,0,0,'2026-03-07 11:09:06'),(2,2,5,0,0,'2026-03-07 23:16:25'),(3,3,5,0,0,'2026-03-07 23:16:25'),(4,4,5,0,0,'2026-03-07 23:16:25'),(5,5,5,0,0,'2026-03-07 23:16:25'),(6,6,5,0,0,'2026-03-07 23:16:26'),(7,7,5,0,0,'2026-03-07 23:17:51'),(8,8,5,0,0,'2026-03-07 23:17:51'),(9,9,3,0,0,'2026-03-07 23:17:51'),(10,10,2,0,0,'2026-03-07 23:17:51'),(11,11,2,0,0,'2026-03-07 23:19:08'),(12,12,1,0,0,'2026-03-07 23:19:08'),(13,13,1,0,0,'2026-03-07 23:20:23'),(14,14,10,0,0,'2026-03-07 23:21:42'),(15,15,1,0,0,'2026-03-07 23:21:42'),(16,16,2,0,0,'2026-03-07 23:22:36'),(17,17,1,0,0,'2026-03-07 23:22:36');
+INSERT INTO `Inventory` VALUES (1,1,1,0,0,'2026-03-07 11:09:06'),(2,2,5,0,0,'2026-03-07 23:16:25'),(3,3,5,0,0,'2026-03-07 23:16:25'),(4,4,5,0,0,'2026-03-07 23:16:25'),(5,5,5,0,0,'2026-03-07 23:16:25'),(6,6,5,0,0,'2026-03-07 23:16:26'),(7,7,5,0,0,'2026-03-07 23:17:51'),(8,8,5,0,0,'2026-03-07 23:17:51'),(9,9,3,0,0,'2026-03-07 23:17:51'),(10,10,2,0,0,'2026-03-07 23:17:51'),(11,11,2,0,0,'2026-03-07 23:19:08'),(12,12,1,0,0,'2026-03-07 23:19:08'),(13,13,1,0,0,'2026-03-07 23:20:23'),(14,14,10,0,0,'2026-03-07 23:21:42'),(15,15,1,0,0,'2026-03-07 23:21:42'),(16,16,2,0,0,'2026-03-07 23:22:36'),(17,17,1,0,0,'2026-03-07 23:22:36'),(18,18,0,0,0,'2026-03-19 21:05:27'),(19,19,3,0,0,'2026-03-19 21:32:19'),(20,20,5,0,0,'2026-03-21 11:03:17'),(21,21,5,0,0,'2026-03-21 11:03:17'),(22,22,3,0,0,'2026-03-21 11:03:17'),(23,23,2,0,0,'2026-03-21 11:03:17'),(24,24,2,0,0,'2026-03-21 11:03:35'),(25,25,1,0,0,'2026-03-21 11:03:36'),(26,26,1,0,0,'2026-03-21 11:03:47'),(27,27,10,0,0,'2026-03-21 11:04:01'),(28,28,1,0,0,'2026-03-21 11:04:02'),(29,29,2,0,0,'2026-03-21 11:04:16'),(30,30,1,0,0,'2026-03-21 11:04:17');
 /*!40000 ALTER TABLE `Inventory` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -618,12 +618,12 @@ CREATE TABLE `ProductImages` (
   `ImageID` bigint NOT NULL AUTO_INCREMENT,
   `ProductID` bigint NOT NULL,
   `display_order` int NOT NULL DEFAULT '0',
-  `url` varchar(2048) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'CDN URL for this image',
+  `url` varchar(2048) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'CDN URL for this image',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`ImageID`),
   KEY `idx_product_order` (`ProductID`,`display_order`),
   CONSTRAINT `ProductImages_ibfk_1` FOREIGN KEY (`ProductID`) REFERENCES `Products` (`ProductID`)
-) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -632,7 +632,7 @@ CREATE TABLE `ProductImages` (
 
 LOCK TABLES `ProductImages` WRITE;
 /*!40000 ALTER TABLE `ProductImages` DISABLE KEYS */;
-INSERT INTO `ProductImages` VALUES (1,1,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_1.jpeg','2026-03-07 11:09:06'),(2,1,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_2.jpeg','2026-03-07 11:09:06'),(3,1,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_3.jpeg','2026-03-07 11:09:06'),(4,1,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_4.jpeg','2026-03-07 11:09:06'),(5,2,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_1.jpeg','2026-03-07 23:16:26'),(6,2,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_2.jpeg','2026-03-07 23:16:26'),(7,2,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_3.jpeg','2026-03-07 23:16:26'),(8,2,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_4.jpeg','2026-03-07 23:16:26'),(9,3,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_1.jpeg','2026-03-07 23:17:52'),(10,3,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_2.jpeg','2026-03-07 23:17:52'),(11,3,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_3.jpeg','2026-03-07 23:17:52'),(12,3,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_4.jpeg','2026-03-07 23:17:52'),(13,4,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_1.jpeg','2026-03-07 23:19:09'),(14,4,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_2.jpeg','2026-03-07 23:19:09'),(15,4,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_3.jpeg','2026-03-07 23:19:09'),(16,5,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_1.jpeg','2026-03-07 23:20:23'),(17,5,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_2.jpeg','2026-03-07 23:20:23'),(18,5,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_3.jpeg','2026-03-07 23:20:23'),(19,6,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_1.jpeg','2026-03-07 23:21:42'),(20,6,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_2.jpeg','2026-03-07 23:21:42'),(21,7,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_1.jpeg','2026-03-07 23:22:36'),(22,7,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_2.jpeg','2026-03-07 23:22:36'),(23,7,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_3.jpeg','2026-03-07 23:22:36'),(24,7,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_4.jpeg','2026-03-07 23:22:36');
+INSERT INTO `ProductImages` VALUES (1,1,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_1.jpeg','2026-03-07 11:09:06'),(2,1,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_2.jpeg','2026-03-07 11:09:06'),(5,2,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_1.jpeg','2026-03-07 23:16:26'),(6,2,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_2.jpeg','2026-03-07 23:16:26'),(7,2,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_3.jpeg','2026-03-07 23:16:26'),(8,2,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_4.jpeg','2026-03-07 23:16:26'),(9,3,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_1.jpeg','2026-03-07 23:17:52'),(10,3,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_2.jpeg','2026-03-07 23:17:52'),(11,3,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_3.jpeg','2026-03-07 23:17:52'),(12,3,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_4.jpeg','2026-03-07 23:17:52'),(13,4,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_1.jpeg','2026-03-07 23:19:09'),(14,4,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_2.jpeg','2026-03-07 23:19:09'),(15,4,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_3.jpeg','2026-03-07 23:19:09'),(16,5,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_1.jpeg','2026-03-07 23:20:23'),(17,5,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_2.jpeg','2026-03-07 23:20:23'),(18,5,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_3.jpeg','2026-03-07 23:20:23'),(19,6,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_1.jpeg','2026-03-07 23:21:42'),(20,6,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_2.jpeg','2026-03-07 23:21:42'),(21,7,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_1.jpeg','2026-03-07 23:22:36'),(22,7,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_2.jpeg','2026-03-07 23:22:36'),(23,7,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_3.jpeg','2026-03-07 23:22:36'),(24,7,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_4.jpeg','2026-03-07 23:22:36'),(27,1,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_1_47563e66.png','2026-03-16 01:22:16'),(28,8,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/8_0009_2_c734d1bd.jpeg','2026-03-19 21:05:28'),(29,8,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/8_0009_1_29f285e8.jpeg','2026-03-19 21:05:28'),(30,8,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/8_0009_3_ca64213b.jpeg','2026-03-19 21:05:28');
 /*!40000 ALTER TABLE `ProductImages` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -659,6 +659,7 @@ CREATE TABLE `ProductMoodMapping` (
 
 LOCK TABLES `ProductMoodMapping` WRITE;
 /*!40000 ALTER TABLE `ProductMoodMapping` DISABLE KEYS */;
+INSERT INTO `ProductMoodMapping` VALUES (1,10),(2,5),(3,5),(4,5),(5,7),(6,7),(7,4),(8,3);
 /*!40000 ALTER TABLE `ProductMoodMapping` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -671,7 +672,7 @@ DROP TABLE IF EXISTS `ProductMoods`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ProductMoods` (
   `MoodID` bigint NOT NULL AUTO_INCREMENT,
-  `MoodName` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `MoodName` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`MoodID`),
   UNIQUE KEY `uq_mood_name` (`MoodName`)
 ) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -732,7 +733,7 @@ CREATE TABLE `ProductVariants` (
   CONSTRAINT `ProductVariants_ibfk_1` FOREIGN KEY (`ProductID`) REFERENCES `Products` (`ProductID`),
   CONSTRAINT `ProductVariants_ibfk_2` FOREIGN KEY (`SizeID`) REFERENCES `Sizes` (`SizeID`),
   CONSTRAINT `ProductVariants_ibfk_3` FOREIGN KEY (`ColorID`) REFERENCES `Colors` (`ColorID`)
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -741,7 +742,7 @@ CREATE TABLE `ProductVariants` (
 
 LOCK TABLES `ProductVariants` WRITE;
 /*!40000 ALTER TABLE `ProductVariants` DISABLE KEYS */;
-INSERT INTO `ProductVariants` VALUES (1,1,1,NULL,NULL),(2,2,3,NULL,NULL),(3,2,2,NULL,NULL),(4,2,4,NULL,NULL),(5,2,5,NULL,NULL),(6,2,6,NULL,NULL),(7,3,2,NULL,NULL),(8,3,3,NULL,NULL),(9,3,4,NULL,NULL),(10,3,6,NULL,NULL),(11,4,7,NULL,NULL),(12,4,8,NULL,NULL),(13,5,8,NULL,NULL),(14,6,3,NULL,NULL),(15,6,5,NULL,NULL),(16,7,4,NULL,NULL),(17,7,7,NULL,NULL);
+INSERT INTO `ProductVariants` VALUES (1,1,1,NULL,NULL),(2,2,3,NULL,NULL),(3,2,2,NULL,NULL),(4,2,4,NULL,NULL),(5,2,5,NULL,NULL),(6,2,6,NULL,NULL),(7,3,2,NULL,NULL),(8,3,3,NULL,NULL),(9,3,4,NULL,NULL),(10,3,6,NULL,NULL),(11,4,7,NULL,NULL),(12,4,8,NULL,NULL),(13,5,8,NULL,NULL),(14,6,3,NULL,NULL),(15,6,5,NULL,NULL),(16,7,4,NULL,NULL),(17,7,7,NULL,NULL),(18,8,1,NULL,NULL),(19,8,1,NULL,0),(20,3,2,NULL,0),(21,3,3,NULL,0),(22,3,4,NULL,0),(23,3,6,NULL,0),(24,4,7,NULL,0),(25,4,8,NULL,0),(26,5,8,NULL,0),(27,6,3,NULL,0),(28,6,5,NULL,0),(29,7,4,NULL,0),(30,7,7,NULL,0);
 /*!40000 ALTER TABLE `ProductVariants` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -758,7 +759,7 @@ CREATE TABLE `Products` (
   `Name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `slug` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `Description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
-  `price_paise` int NOT NULL COMMENT 'Price in paise (Γé╣499.00 = 49900)',
+  `price_paise` int NOT NULL COMMENT 'Price in paise (╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├╗├┤╬ô├╢┬╝╬ô├▓┬ÑΓò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓòóΓö£ΓûÆ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├│╬ô├╢┬╝Γö£Γòæ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬úΓö¼┬╜╬ô├╢┬úΓö£┬╜Γò¼├┤Γö£ΓûôΓö¼Γò¥╬ô├╢┬ú╬ô├╢├▒Γò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓòùΓö£ΓöñΓò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓûôΓö£┬¬499.00 = 49900)',
   `CategoryID` bigint NOT NULL,
   `fabric` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Common values: Cotton, Silk, Linen, Chiffon, Georgette, Crepe, Organza, Net, Rayon, Viscose, Satin, Velvet, Brocade, Khadi, Muslin, Tussar Silk, Banarasi Silk, Art Silk, Polyester, Cotton Silk',
   `weave` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
@@ -778,7 +779,7 @@ CREATE TABLE `Products` (
   KEY `idx_fabric` (`fabric`),
   CONSTRAINT `fk_products_product_status` FOREIGN KEY (`product_status_id`) REFERENCES `ProductStatuses` (`id`),
   CONSTRAINT `Products_ibfk_1` FOREIGN KEY (`CategoryID`) REFERENCES `ProductCategories` (`CategoryID`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -787,7 +788,7 @@ CREATE TABLE `Products` (
 
 LOCK TABLES `Products` WRITE;
 /*!40000 ALTER TABLE `Products` DISABLE KEYS */;
-INSERT INTO `Products` VALUES (1,'001_saree_1','saree_1',NULL,'saree_1',899999,1,'Satin','Kanjivaram','Puja',1,'saree_1',2,'2026-03-07 11:09:06','2026-03-07 11:09:06'),(2,'0001','kurti_1',NULL,'kurti_1',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:16:25','2026-03-07 23:16:25'),(3,'002','kurti_2',NULL,'kurti_2',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:17:51','2026-03-07 23:17:51'),(4,'003','kurti_3',NULL,'kurti_3',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:19:08','2026-03-07 23:19:08'),(5,'004','kurti_4',NULL,'kurti_4',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:20:23','2026-03-07 23:20:23'),(6,'005','kurti_5',NULL,'kurti_5',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:21:41','2026-03-07 23:21:41'),(7,'006','kurti_6',NULL,'kurti_6',79999,2,'Cotton','Handloom','Daily Wear',0,NULL,2,'2026-03-07 23:22:36','2026-03-07 23:22:36');
+INSERT INTO `Products` VALUES (1,'001_saree_1','saree_1',NULL,'saree_1',899999,1,'Satin','Kanjivaram','Puja',1,'saree_1',2,'2026-03-07 11:09:06','2026-03-07 11:09:06'),(2,'0001','kurti_1',NULL,'kurti_1',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:16:25','2026-03-07 23:16:25'),(3,'002','kurti_2',NULL,'kurti_2',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:17:51','2026-03-07 23:17:51'),(4,'003','kurti_3',NULL,'kurti_3',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:19:08','2026-03-07 23:19:08'),(5,'004','kurti_4',NULL,'kurti_4',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:20:23','2026-03-07 23:20:23'),(6,'005','kurti_5',NULL,'kurti_5',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:21:41','2026-03-07 23:21:41'),(7,'006','kurti_6',NULL,'kurti_6',79999,2,'Cotton','Handloom','Daily Wear',0,NULL,2,'2026-03-07 23:22:36','2026-03-07 23:22:36'),(8,'0009','saree_2',NULL,'desc saree_2',799900,1,'Net','Kota','Festive',1,NULL,2,'2026-03-19 21:05:27','2026-03-19 21:05:27');
 /*!40000 ALTER TABLE `Products` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1278,4 +1279,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-03-15 23:06:02
+-- Dump completed on 2026-03-27  9:50:00

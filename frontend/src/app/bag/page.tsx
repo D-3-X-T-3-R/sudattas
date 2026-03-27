@@ -9,10 +9,63 @@ import { SiteHeader } from "@/components/site-header";
 import { getGuestSessionId } from "@/lib/session";
 import type { Product } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { signIn, useSession } from "next-auth/react";
 
 type CatalogSize = { sizeId: string; sizeName: string };
+
+function FingerprintIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M12 3a7 7 0 0 0-7 7v1" />
+      <path d="M19 11v-1a7 7 0 0 0-14 0v3" />
+      <path d="M8 14v-4a4 4 0 1 1 8 0v1" />
+      <path d="M12 17v-3" />
+      <path d="M17 14c0 4-2 7-5 7s-5-3-5-7" />
+      <path d="M21 14c0 5.5-3.6 10-9 10" />
+    </svg>
+  );
+}
+
+function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
+      <path
+        fill="#EA4335"
+        d="M12 10.2v3.9h5.4c-.2 1.3-1.7 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6s2.7-6 5.9-6c1.8 0 3 .8 3.7 1.4l2.5-2.4C16.7 3.6 14.6 2.7 12 2.7 6.9 2.7 2.8 6.8 2.8 12S6.9 21.3 12 21.3c6.9 0 9.1-4.8 9.1-7.3 0-.5 0-.9-.1-1.3H12Z"
+      />
+      <path
+        fill="#34A853"
+        d="M2.8 12c0 1.9.7 3.7 1.9 5.1l3.1-2.4c-.4-.8-.7-1.7-.7-2.7s.2-1.8.7-2.7L4.7 6.9A9.2 9.2 0 0 0 2.8 12Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M12 21.3c2.5 0 4.6-.8 6.2-2.3l-3-2.4c-.8.5-1.8.8-3.1.8-2.4 0-4.4-1.6-5.1-3.8l-3.2 2.4c1.6 3.1 4.7 5.3 8.2 5.3Z"
+      />
+      <path
+        fill="#4285F4"
+        d="M18.2 19c1.8-1.7 2.9-4.1 2.9-7 0-.5 0-.9-.1-1.3H12v3.9h5.4c-.2 1.1-.8 2.1-1.7 2.8l2.5 1.6Z"
+      />
+    </svg>
+  );
+}
+
+function getBackendBaseUrl(): string {
+  const url = process.env.NEXT_PUBLIC_GRAPHQL_URL || "http://localhost:8080/v2";
+  return url.replace(/\/v2\/?$/, "");
+}
 
 /** Only sizes that are in stock for this product. */
 function buildSizeOptions(
@@ -53,11 +106,13 @@ function BagSizeDropdown({
   sizeName,
   hasCurrent,
   onSelectSize,
+  onOpenChange,
 }: {
   options: { sizeId: string; sizeName: string }[];
   sizeName: string | null | undefined;
   hasCurrent: boolean;
   onSelectSize: (newSize: string) => void | Promise<void>;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -76,6 +131,11 @@ function BagSizeDropdown({
       document.removeEventListener("keydown", onKey);
     };
   }, []);
+
+  useEffect(() => {
+    onOpenChange?.(open);
+    return () => onOpenChange?.(false);
+  }, [open, onOpenChange]);
 
   const display = hasCurrent && sizeName ? sizeName : "Choose";
 
@@ -149,6 +209,7 @@ function OrderSummaryPanel({
   paymentLoading,
   paymentMessage,
   runTest,
+  onCheckout,
 }: {
   cartLines: ReturnType<typeof useStorefront>["cartLines"];
   cartSubtotal: number;
@@ -156,6 +217,7 @@ function OrderSummaryPanel({
   paymentLoading: boolean;
   paymentMessage: string | null;
   runTest: () => void;
+  onCheckout: () => void;
 }) {
   return (
     <div className="rounded-xl border border-[var(--color-line)] bg-white p-8">
@@ -193,10 +255,10 @@ function OrderSummaryPanel({
       </p>
 
       <button
-        onClick={() => alert("Checkout flow not wired yet")}
+        onClick={onCheckout}
         className="mt-6 w-full rounded-full bg-[var(--color-accent-gold)] py-4 text-sm font-semibold uppercase tracking-[0.2em] text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
       >
-        Place Order
+        Checkout
       </button>
       <button
         onClick={runTest}
@@ -213,6 +275,7 @@ function OrderSummaryPanel({
 }
 
 export default function BagPage() {
+  const { status } = useSession();
   const {
     cartLines,
     cartSubtotal,
@@ -227,6 +290,14 @@ export default function BagPage() {
   const { paymentLoading, paymentMessage, runTest } = useRazorpayTest();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openSizeForId, setOpenSizeForId] = useState<string | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [loginNote, setLoginNote] = useState<string | null>(null);
+  const [passkeySupported, setPasskeySupported] = useState(false);
 
   // Keep selection in sync when cart lines change (e.g. item removed)
   useEffect(() => {
@@ -267,6 +338,103 @@ export default function BagPage() {
       .then((d: { sizes?: CatalogSize[] }) => setCatalogSizes(d.sizes ?? []))
       .catch(() => setCatalogSizes([]));
   }, []);
+
+  const handleCheckout = () => {
+    if (status !== "authenticated") {
+      setLoginOpen(true);
+      return;
+    }
+    alert("Checkout flow not wired yet");
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ok =
+      "PublicKeyCredential" in window &&
+      typeof window.PublicKeyCredential !== "undefined";
+    setPasskeySupported(ok);
+  }, []);
+
+  const normalizedDigits = identifier.replace(/\D/g, "");
+  const identifierTrimmed = identifier.trim();
+  const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifierTrimmed);
+  const looksLikePhone = normalizedDigits.length === 10;
+
+  const adaptiveActionLabel = looksLikeEmail
+    ? "Send Login Link"
+    : looksLikePhone
+      ? otpSent
+        ? "Resend Code on WhatsApp"
+        : "Get Code on WhatsApp"
+      : "Continue";
+
+  const handleAdaptiveContinue = () => {
+    if (looksLikeEmail) {
+      setLoginNote("Magic link login will be enabled next. Use Google or WhatsApp OTP for now.");
+      return;
+    }
+    if (!looksLikePhone) {
+      setLoginNote("Enter a valid email or 10-digit phone number.");
+      return;
+    }
+
+    const digits = normalizedDigits;
+    if (digits.length !== 10) {
+      setLoginNote("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    setOtpBusy(true);
+    setLoginNote(null);
+    void fetch(`${getBackendBaseUrl()}/auth/phone-otp/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: digits, channel: "whatsapp" }),
+    })
+      .then(async (res) => {
+        const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error ?? "OTP_SEND_FAILED");
+        }
+        setOtpSent(true);
+        setLoginNote("Code sent on WhatsApp.");
+      })
+      .catch(() => {
+        setLoginNote("Could not send code. Please try again.");
+      })
+      .finally(() => setOtpBusy(false));
+  };
+
+  const handleOtpLogin = () => {
+    const digits = normalizedDigits;
+    if (digits.length !== 10) {
+      setLoginNote("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    if (!/^\d{4,8}$/.test(otp.trim())) {
+      setLoginNote("Please enter a valid OTP.");
+      return;
+    }
+    setOtpBusy(true);
+    setLoginNote(null);
+    void signIn("phone-otp", {
+      phone: digits,
+      otp: otp.trim(),
+      redirect: false,
+      callbackUrl: "/bag",
+    })
+      .then((res) => {
+        if (res?.ok) {
+          setLoginOpen(false);
+          setOtp("");
+          setOtpSent(false);
+          setLoginNote(null);
+          return;
+        }
+        setLoginNote("Invalid OTP. Please try again.");
+      })
+      .catch(() => setLoginNote("Login failed. Please try again."))
+      .finally(() => setOtpBusy(false));
+  };
 
   return (
     <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
@@ -348,7 +516,10 @@ export default function BagPage() {
                         opacity: { duration: 0.25 },
                         y: { duration: 0.3 },
                       }}
-                      className="will-change-transform"
+                      className={cn(
+                        "relative will-change-transform",
+                        openSizeForId === id ? "z-30" : "z-0"
+                      )}
                     >
                       {idx > 0 && <div className="mx-4 h-px bg-[var(--color-line)]" />}
 
@@ -419,6 +590,11 @@ export default function BagPage() {
                                   options={options}
                                   sizeName={sizeName}
                                   hasCurrent={hasCurrent}
+                                  onOpenChange={(isOpen) =>
+                                    setOpenSizeForId((prev) =>
+                                      isOpen ? id : prev === id ? null : prev
+                                    )
+                                  }
                                   onSelectSize={async (newSize) => {
                                     if (!newSize || newSize === sizeName) return;
                                     await removeCart(id);
@@ -486,6 +662,7 @@ export default function BagPage() {
                   paymentLoading={paymentLoading}
                   paymentMessage={paymentMessage}
                   runTest={runTest}
+                  onCheckout={handleCheckout}
                 />
               </div>
             </div>
@@ -493,6 +670,112 @@ export default function BagPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
+        <DialogContent
+          className="max-w-xl overflow-hidden rounded-[28px] bg-[#F6F3EA] shadow-[0_20px_70px_rgba(0,0,0,0.22)]"
+          contentClassName="space-y-0 p-0"
+          showClose={false}
+        >
+          <div className="p-6 sm:p-8">
+            <div className="space-y-4">
+              {passkeySupported && (
+                <button
+                  type="button"
+                  onClick={() => setLoginNote("Passkey login is coming next. Use Google or WhatsApp OTP for now.")}
+                  className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-[#0F3D2E]/12 bg-white px-5 text-sm font-medium tracking-[0.12em] text-[#0F3D2E] shadow-[0_8px_24px_rgba(15,61,46,0.06)] transition hover:-translate-y-0.5 hover:border-[#C9A646]/40 hover:shadow-[0_12px_30px_rgba(15,61,46,0.10)]"
+                >
+                  <FingerprintIcon className="h-4 w-4 text-[#C9A646]" />
+                  <span>Continue with Face ID / Fingerprint</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => signIn("google", { callbackUrl: "/bag" })}
+                className="flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#C9A646] px-5 text-sm font-semibold tracking-[0.12em] text-white shadow-[0_14px_30px_rgba(201,166,70,0.28)] transition hover:-translate-y-0.5 hover:bg-[#B89435]"
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white">
+                  <GoogleIcon className="h-4 w-4" />
+                </span>
+                <span>Continue with Google</span>
+              </button>
+            </div>
+
+            <div className="my-7 flex items-center gap-4">
+              <div className="h-px flex-1 bg-[#0F3D2E]/10" />
+              <span className="text-[11px] font-medium uppercase tracking-[0.28em] text-[#9B927E]">
+                Or
+              </span>
+              <div className="h-px flex-1 bg-[#0F3D2E]/10" />
+            </div>
+
+            <div className="rounded-2xl border border-[#0F3D2E]/10 bg-white p-4">
+              <label
+                htmlFor="adaptive-identifier"
+                className="mb-2.5 block text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8B816D]"
+              >
+                Email or phone number
+              </label>
+              <Input
+                id="adaptive-identifier"
+                inputMode="email"
+                autoComplete="username"
+                placeholder="Enter your email or phone number"
+                value={identifier}
+                onChange={(e) => {
+                  setIdentifier(e.target.value);
+                  if (loginNote) setLoginNote(null);
+                  if (otpSent) {
+                    setOtpSent(false);
+                    setOtp("");
+                  }
+                }}
+                className="h-14 w-full rounded-2xl border border-[#0F3D2E]/10 bg-white px-4 text-sm text-[#1B1B1B] outline-none transition placeholder:text-[#B8AE9A] focus:border-[#C9A646] focus:shadow-[0_0_0_4px_rgba(201,166,70,0.14)]"
+              />
+
+              <button
+                type="button"
+                onClick={handleAdaptiveContinue}
+                disabled={otpBusy}
+                className="mt-4 h-14 w-full rounded-full bg-[#0F3D2E] px-5 text-sm font-semibold tracking-[0.14em] text-[#F6F3EA] shadow-[0_18px_32px_rgba(15,61,46,0.18)] transition hover:-translate-y-0.5 hover:bg-[#0C3126] disabled:opacity-60"
+              >
+                {otpBusy ? "Processing..." : adaptiveActionLabel}
+              </button>
+
+              {looksLikePhone && otpSent && (
+                <>
+                  <Input
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="Enter OTP"
+                    value={otp}
+                    onChange={(e) => {
+                      setOtp(e.target.value.replace(/\D/g, "").slice(0, 8));
+                      if (loginNote) setLoginNote(null);
+                    }}
+                    className="mt-3 h-12 w-full rounded-2xl border border-[#0F3D2E]/10 bg-white px-4 text-sm text-[#1B1B1B] outline-none transition placeholder:text-[#B8AE9A] focus:border-[#C9A646] focus:shadow-[0_0_0_4px_rgba(201,166,70,0.14)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleOtpLogin}
+                    disabled={otpBusy}
+                    className="mt-3 h-12 w-full rounded-full bg-[#C9A646] px-5 text-sm font-semibold tracking-[0.12em] text-white shadow-[0_14px_30px_rgba(201,166,70,0.28)] transition hover:-translate-y-0.5 hover:bg-[#B89435] disabled:opacity-60"
+                  >
+                    {otpBusy ? "Verifying..." : "Verify Code & Sign in"}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {loginNote && (
+              <p className="mt-4 text-center text-xs leading-6 text-[#7B7568]">
+                {loginNote}
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Mobile sticky footer ── */}
       {cartLines.length > 0 && (
@@ -505,11 +788,11 @@ export default function BagPage() {
               </p>
             </div>
             <button
-              onClick={() => alert("Checkout flow not wired yet")}
+              onClick={handleCheckout}
               disabled={selectedCount === 0}
               className="flex-1 rounded-full bg-[var(--color-accent-gold)] py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              Place Order ({selectedCount})
+              Checkout ({selectedCount})
             </button>
           </div>
         </div>
