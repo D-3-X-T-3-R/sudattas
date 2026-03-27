@@ -8,6 +8,7 @@ use graphql::security::csrf;
 use graphql::security::guest_session;
 use graphql::security::jwks_loader::load_jwks;
 use graphql::security::jwt_validator::validate_token;
+use graphql::security::phone_otp;
 use graphql::security::session_validator;
 use graphql::seo;
 use graphql::webhooks;
@@ -18,8 +19,21 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 use uuid::Uuid;
+use serde::Deserialize;
 use warp::http::StatusCode;
 use warp::{http::Response, reply, Filter, Rejection, Reply};
+
+#[derive(Deserialize)]
+struct PhoneOtpRequestBody {
+    phone: String,
+    channel: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct PhoneOtpVerifyBody {
+    phone: String,
+    otp: String,
+}
 
 #[derive(Debug)]
 struct Unauthorized {}
@@ -414,6 +428,95 @@ async fn main() {
             Ok::<_, Rejection>(reply)
         });
 
+    // Public auth helper routes (no session/JWT required):
+    // POST /auth/phone-otp/request { phone }
+    // POST /auth/phone-otp/verify  { phone, otp }
+    let otp_request_inner = warp::post()
+        .and(warp::path("auth"))
+        .and(warp::path("phone-otp"))
+        .and(warp::path("request"))
+        .and(warp::path::end())
+        .and(warp::body::json::<PhoneOtpRequestBody>())
+        .and_then(|body: PhoneOtpRequestBody| async move {
+            let (status, payload) = match phone_otp::request_sms_otp(&body.phone, body.channel.as_deref()).await {
+                Ok(()) => (
+                    StatusCode::OK,
+                    serde_json::json!({ "ok": true }).to_string(),
+                ),
+                Err(code) => match code.as_str() {
+                    "INVALID_PHONE" => (
+                        StatusCode::BAD_REQUEST,
+                        serde_json::json!({ "ok": false, "error": code }).to_string(),
+                    ),
+                    "INVALID_CHANNEL" => (
+                        StatusCode::BAD_REQUEST,
+                        serde_json::json!({ "ok": false, "error": code }).to_string(),
+                    ),
+                    "OTP_NOT_CONFIGURED" => (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        serde_json::json!({ "ok": false, "error": code }).to_string(),
+                    ),
+                    _ => (
+                        StatusCode::BAD_GATEWAY,
+                        serde_json::json!({ "ok": false, "error": code }).to_string(),
+                    ),
+                },
+            };
+            Ok::<_, Rejection>(
+                warp::reply::with_header(
+                    warp::reply::with_status(payload, status),
+                    "content-type",
+                    "application/json",
+                )
+                .into_response(),
+            )
+        });
+    let otp_request_route = rate_limit_filter
+        .clone()
+        .and(otp_request_inner)
+        .map(|_, reply| reply);
+
+    let otp_verify_inner = warp::post()
+        .and(warp::path("auth"))
+        .and(warp::path("phone-otp"))
+        .and(warp::path("verify"))
+        .and(warp::path::end())
+        .and(warp::body::json::<PhoneOtpVerifyBody>())
+        .and_then(|body: PhoneOtpVerifyBody| async move {
+            let (status, payload) = match phone_otp::verify_sms_otp(&body.phone, &body.otp).await {
+                Ok(approved) => (
+                    StatusCode::OK,
+                    serde_json::json!({ "ok": approved, "approved": approved }).to_string(),
+                ),
+                Err(code) => match code.as_str() {
+                    "INVALID_PHONE" | "INVALID_OTP" => (
+                        StatusCode::BAD_REQUEST,
+                        serde_json::json!({ "ok": false, "error": code }).to_string(),
+                    ),
+                    "OTP_NOT_CONFIGURED" => (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        serde_json::json!({ "ok": false, "error": code }).to_string(),
+                    ),
+                    _ => (
+                        StatusCode::BAD_GATEWAY,
+                        serde_json::json!({ "ok": false, "error": code }).to_string(),
+                    ),
+                },
+            };
+            Ok::<_, Rejection>(
+                warp::reply::with_header(
+                    warp::reply::with_status(payload, status),
+                    "content-type",
+                    "application/json",
+                )
+                .into_response(),
+            )
+        });
+    let otp_verify_route = rate_limit_filter
+        .clone()
+        .and(otp_verify_inner)
+        .map(|_, reply| reply);
+
     info!(listen_addr = %listen_addr, "GraphQL service starting");
 
     // No catch-all route: unmatched paths reject. Top-level recover turns NotFound -> 404.
@@ -422,6 +525,8 @@ async fn main() {
         .or(metrics_route)
         .or(guest_session_get.with(cors.clone()))
         .or(guest_session_route.with(cors.clone()))
+        .or(otp_request_route.with(cors.clone()))
+        .or(otp_verify_route.with(cors.clone()))
         .or(robots_route)
         .or(sitemap_route)
         .or(graphql_copy)

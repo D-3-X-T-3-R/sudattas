@@ -47,27 +47,31 @@ const DialogContent = React.forwardRef<
       )}
       {...props}
     >
-      <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
-        {title ? (
-          <DialogPrimitive.Title
-            className={cn(
-              "text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]",
-              titleClassName
-            )}
-          >
-            {title}
-          </DialogPrimitive.Title>
-        ) : (
-          <DialogPrimitive.Title className="sr-only">Dialog</DialogPrimitive.Title>
-        )}
-        {showClose && (
-          <DialogPrimitive.Close asChild>
-            <Button variant="outline" size="icon" aria-label="Close">
-              <X className="h-5 w-5" />
-            </Button>
-          </DialogPrimitive.Close>
-        )}
-      </div>
+      {(title || showClose) ? (
+        <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
+          {title ? (
+            <DialogPrimitive.Title
+              className={cn(
+                "text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]",
+                titleClassName
+              )}
+            >
+              {title}
+            </DialogPrimitive.Title>
+          ) : (
+            <DialogPrimitive.Title className="sr-only">Dialog</DialogPrimitive.Title>
+          )}
+          {showClose && (
+            <DialogPrimitive.Close asChild>
+              <Button variant="outline" size="icon" aria-label="Close">
+                <X className="h-5 w-5" />
+              </Button>
+            </DialogPrimitive.Close>
+          )}
+        </div>
+      ) : (
+        <DialogPrimitive.Title className="sr-only">Dialog</DialogPrimitive.Title>
+      )}
       <div className={cn("p-5", contentClassName)}>{children}</div>
     </DialogPrimitive.Content>
   </DialogPortal>
