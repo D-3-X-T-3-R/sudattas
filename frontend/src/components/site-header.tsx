@@ -26,7 +26,6 @@ export function SiteHeader() {
         cartCount={cartCount}
         wishCount={wishCount}
         setMenuOpen={setMenuOpen}
-        setCartOpen={() => {}}
         goTo={() => {}}
         navUseHashLinks
       />

@@ -25,7 +25,6 @@ export interface ProductCardProps {
   product: Product;
   wished: boolean;
   onToggleWish: (p: Product) => void;
-  onAddToCart: (p: Product) => void;
   onQuickView: (p: Product) => void;
   featured?: boolean;
 }
@@ -34,7 +33,6 @@ export function ProductCard({
   product,
   wished,
   onToggleWish,
-  onAddToCart,
   onQuickView,
   featured = false,
 }: ProductCardProps) {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -21,7 +21,6 @@ import {
   deleteProductVariant,
   createProductMoodMapping,
   deleteProductMoodMapping,
-  deleteProductImage,
   createInventoryItem,
   searchInventoryByVariantId,
   updateInventoryItem,
@@ -40,12 +39,19 @@ import type { AdminProductVariantRow } from "@/lib/schemas";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ProductsFiltersCard } from "@/domains/admin/products/components/products-filters-card";
+import { ProductsGridCard } from "@/domains/admin/products/components/products-grid-card";
+import { ProductPreviewDialog } from "@/domains/admin/products/components/product-preview-dialog";
+import { ArchiveProductDialog } from "@/domains/admin/products/components/archive-product-dialog";
+import {
+  ProductImagesDialogs,
+  type AdminReorderableImage,
+} from "@/domains/admin/products/components/product-images-dialogs";
 import { SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
-import { Pencil, Trash2, Filter, Package, Plus, X } from "lucide-react";
+import { Pencil, Package, Plus, X } from "lucide-react";
 import {
   MAX_MONEY_PAISE,
   optionalRupeesInputToPaise,
@@ -71,12 +77,6 @@ type ProductFormState = {
 };
 
 const DRAFT_KEY = "sudattas_admin_product_draft";
-
-function getCategoryName(categoryId: string | null | undefined, categories: CategoryRow[]): string {
-  if (!categoryId) return "—";
-  const c = categories.find((x) => x.categoryId === categoryId);
-  return c ? c.name : categoryId;
-}
 
 /** Get first non-empty URL from an image (supports camelCase and snake_case from API). */
 function getImageUrl(img: ProductImageListItem | undefined): string {
@@ -108,15 +108,6 @@ function getImageUrlWithCacheBuster(
   return `${u}${sep}v=${v}`;
 }
 
-function getProductThumbnail(p: ProductListRow): string | null {
-  const images = p.images ?? [];
-  for (let i = 0; i < images.length; i++) {
-    const u = getImageUrl(images[i]);
-    if (u) return u;
-  }
-  return null;
-}
-
 /** Thumbnail URL with cache-buster so list card shows updated image after sync. */
 function getProductThumbnailWithCacheBuster(p: ProductListRow): string | null {
   const images = p.images ?? [];
@@ -135,7 +126,7 @@ function getProductThumbnailWithCacheBuster(p: ProductListRow): string | null {
 }
 
 function getProductStatusLabel(statusId?: string | null): string {
-  if (!statusId) return "—";
+  if (!statusId) return "â€”";
   if (statusId === "1") return "Draft";
   if (statusId === "2") return "Active";
   if (statusId === "3") return "Archived";
@@ -166,6 +157,7 @@ export default function AdminProductsPage() {
   const [searchPriceMinRupees, setSearchPriceMinRupees] = useState("");
   const [searchPriceMaxRupees, setSearchPriceMaxRupees] = useState("");
   const [searchLimit, setSearchLimit] = useState("20");
+  const [activeTab, setActiveTab] = useState<"view" | "add">("view");
   const [appliedSearch, setAppliedSearch] = useState<{
     name?: string;
     categoryId?: string;
@@ -194,10 +186,12 @@ export default function AdminProductsPage() {
   const { data: sizes = [] } = useQuery<SizeRow[], Error>({
     queryKey: ["admin", "sizes"],
     queryFn: fetchSizes,
+    enabled: activeTab === "add",
   });
   const { data: colors = [] } = useQuery<ColorRow[], Error>({
     queryKey: ["admin", "colors"],
     queryFn: fetchColors,
+    enabled: activeTab === "add",
   });
   const { data: weaves = [] } = useQuery<WeaveRow[], Error>({
     queryKey: ["admin", "weaves"],
@@ -231,10 +225,7 @@ export default function AdminProductsPage() {
 
   const [archiveConfirm, setArchiveConfirm] = useState<ProductListRow | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ProductListRow | null>(null);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"view" | "add">("view");
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   const [form, setForm] = useState<ProductFormState>({
@@ -262,10 +253,6 @@ export default function AdminProductsPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryError, setCategoryError] = useState("");
 
-  const [lastCreatedProduct, setLastCreatedProduct] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   /** When editing, images already linked to the product (from list row). */
@@ -280,17 +267,16 @@ export default function AdminProductsPage() {
   /** True while uploads/refetch run after Update product (loading overlay shown). */
   const [isUpdateReflecting, setIsUpdateReflecting] = useState(false);
   /** Reorder images dialog: combined list (existing + new) for drag reorder while editing. */
-  type ReorderableImage =
-    | { type: "existing"; image: ProductImageListItem }
-    | { type: "new"; file: File; previewUrl: string };
   const [reorderImagesOpen, setReorderImagesOpen] = useState(false);
-  const [reorderableImages, setReorderableImages] = useState<ReorderableImage[]>([]);
+  const [reorderableImages, setReorderableImages] = useState<AdminReorderableImage[]>([]);
   const [reorderDragIndex, setReorderDragIndex] = useState<number | null>(null);
   /** When editing, Review images dialog shows all images (existing + new); this is the combined list for that dialog. */
-  const [reviewImagesList, setReviewImagesList] = useState<ReorderableImage[]>([]);
+  const [reviewImagesList, setReviewImagesList] = useState<AdminReorderableImage[]>([]);
   const [reviewDragIndex, setReviewDragIndex] = useState<number | null>(null);
   /** When set, this is the confirmed order (existing + new interleaved). Used for display and sync so order matches Review. */
-  const [orderedProductImages, setOrderedProductImages] = useState<ReorderableImage[] | null>(null);
+  const [orderedProductImages, setOrderedProductImages] = useState<AdminReorderableImage[] | null>(
+    null
+  );
   /** Key set when loading product for edit so image URLs get a fresh cache-buster and browser refetches. */
   const [productImagesLoadKey, setProductImagesLoadKey] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -316,7 +302,7 @@ export default function AdminProductsPage() {
     if (categories.length > 0 && !form.categoryId) {
       setForm((prev) => ({ ...prev, categoryId: categories[0].categoryId }));
     }
-  }, [categories]);
+  }, [categories, form.categoryId]);
 
   const createCategoryMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -390,7 +376,6 @@ export default function AdminProductsPage() {
         description: "Product created.",
       });
       if (created?.productId) {
-        setLastCreatedProduct({ id: created.productId, name: created.name });
         if (imageFiles.length > 0) {
           imageFiles.forEach((file, index) => {
             uploadImageMutation.mutate({
@@ -888,10 +873,6 @@ export default function AdminProductsPage() {
     return () => clearTimeout(t);
   }, [imageMessage]);
 
-  useEffect(() => {
-    setSelectedImageIndex(0);
-  }, [selectedProduct?.productId]);
-
   // Build and clean up object URLs for image previews
   useEffect(() => {
     if (imageFiles.length === 0) {
@@ -929,6 +910,7 @@ export default function AdminProductsPage() {
     productsError && productsErrorObj
       ? toRouteFailureUi("admin", productsErrorObj)
       : null;
+  const categoryNameById = Object.fromEntries(categories.map((c) => [c.categoryId, c.name]));
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1019,7 +1001,7 @@ export default function AdminProductsPage() {
     setActiveTab("add");
     setEditingProductId(p.productId);
     setError("");
-    setMessage(`Loading product…`);
+    setMessage(`Loading productâ€¦`);
     let product: ProductListRow = p;
     let moodIds: string[] = [];
     try {
@@ -1230,517 +1212,72 @@ export default function AdminProductsPage() {
 
       {activeTab === "view" && (
         <>
-          <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-blue-500 bg-white shadow-[var(--admin-card-shadow)]">
-            <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
-              <Filter className="h-4 w-4 text-blue-500" />
-              Filters
-            </CardTitle>
-            <CardContent className="mt-3">
-              <form
-                onSubmit={handleSearchSubmit}
-                className="flex flex-wrap items-end gap-3"
-              >
-                <div>
-                  <label htmlFor="products-name" className="mb-1 block text-xs text-[var(--color-muted)]">
-                    Name
-                  </label>
-                  <Input
-                    id="products-name"
-                    type="text"
-                    value={searchName}
-                    onChange={(e) => setSearchName(e.target.value)}
-                    placeholder="e.g. silk"
-                    className="h-9 w-40 rounded-md"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="products-category" className="mb-1 block text-xs text-[var(--color-muted)]">
-                    Category
-                  </label>
-                  <select
-                    id="products-category"
-                    className={cn(
-                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-                    )}
-                    value={searchCategoryId}
-                    onChange={(e) => setSearchCategoryId(e.target.value)}
-                  >
-                    <option value="">All categories</option>
-                    {categories.map((c) => (
-                      <option key={c.categoryId} value={c.categoryId}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="products-status" className="mb-1 block text-xs text-[var(--color-muted)]">
-                    Status
-                  </label>
-                  <select
-                    id="products-status"
-                    className={cn(
-                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-                    )}
-                    value={searchProductStatusId}
-                    onChange={(e) => setSearchProductStatusId(e.target.value)}
-                  >
-                    <option value="">All statuses</option>
-                    <option value="1">Draft</option>
-                    <option value="2">Active</option>
-                    <option value="3">Archived</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="products-mood" className="mb-1 block text-xs text-[var(--color-muted)]">
-                    Mood
-                  </label>
-                  <select
-                    id="products-mood"
-                    className={cn(
-                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-                    )}
-                    value={searchMoodId}
-                    onChange={(e) => setSearchMoodId(e.target.value)}
-                  >
-                    <option value="">All moods</option>
-                    {existingMoods.map((m) => (
-                      <option key={m.moodId} value={m.moodId}>
-                        {m.moodName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="min-w-[14rem]">
-                  <label htmlFor="products-price-min" className="mb-1 block text-xs text-[var(--color-muted)]">
-                    Price range (₹)
-                  </label>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="products-price-min"
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        placeholder="Min"
-                        value={searchPriceMinRupees}
-                        onChange={(e) => setSearchPriceMinRupees(e.target.value)}
-                        className="h-9 w-24 rounded-md"
-                      />
-                      <span className="text-xs text-[var(--color-muted)]">–</span>
-                      <Input
-                        id="products-price-max"
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        placeholder="Max"
-                        value={searchPriceMaxRupees}
-                        onChange={(e) => setSearchPriceMaxRupees(e.target.value)}
-                        className="h-9 w-24 rounded-md"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min={0}
-                        max={50000}
-                        step={100}
-                        value={Math.min(Number(searchPriceMinRupees) || 0, 50000)}
-                        onChange={(e) => setSearchPriceMinRupees(e.target.value)}
-                        className="h-2 w-24 flex-1 cursor-pointer appearance-none rounded-lg bg-[var(--color-line)] accent-[var(--color-accent-brown)]"
-                        aria-label="Min price (₹)"
-                      />
-                      <input
-                        type="range"
-                        min={0}
-                        max={50000}
-                        step={100}
-                        value={searchPriceMaxRupees === "" ? 50000 : Math.min(Number(searchPriceMaxRupees), 50000)}
-                        onChange={(e) => setSearchPriceMaxRupees(e.target.value)}
-                        className="h-2 w-24 flex-1 cursor-pointer appearance-none rounded-lg bg-[var(--color-line)] accent-[var(--color-accent-brown)]"
-                        aria-label="Max price (₹)"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="products-limit" className="mb-1 block text-xs text-[var(--color-muted)]">
-                    Limit
-                  </label>
-                  <Input
-                    id="products-limit"
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={searchLimit}
-                    onChange={(e) => setSearchLimit(e.target.value)}
-                    className="h-9 w-20 rounded-md"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="products-fabric" className="mb-1 block text-xs text-[var(--color-muted)]">
-                    Fabric
-                  </label>
-                  <select
-                    id="products-fabric"
-                    className={cn(
-                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-                    )}
-                    value={searchFabric}
-                    onChange={(e) => setSearchFabric(e.target.value)}
-                  >
-                    <option value="">All fabrics</option>
-                    {fabrics.map((f) => (
-                      <option key={f.fabricId} value={f.fabricName}>
-                        {f.fabricName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="products-weave" className="mb-1 block text-xs text-[var(--color-muted)]">
-                    Weave
-                  </label>
-                  <select
-                    id="products-weave"
-                    className={cn(
-                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-                    )}
-                    value={searchWeave}
-                    onChange={(e) => setSearchWeave(e.target.value)}
-                  >
-                    <option value="">All weaves</option>
-                    {weaves.map((w) => (
-                      <option key={w.weaveId} value={w.weaveName}>
-                        {w.weaveName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="products-occasion" className="mb-1 block text-xs text-[var(--color-muted)]">
-                    Occasion
-                  </label>
-                  <select
-                    id="products-occasion"
-                    className={cn(
-                      "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-                    )}
-                    value={searchOccasion}
-                    onChange={(e) => setSearchOccasion(e.target.value)}
-                  >
-                    <option value="">All occasions</option>
-                    {occasions.map((o) => (
-                      <option key={o.occasionId} value={o.occasionName}>
-                        {o.occasionName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex gap-2">
-                  <Button type="submit" size="sm">
-                    Apply
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={handleSearchClear}>
-                    Clear
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => refetchProducts()}>
-                    Refresh
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+          <ProductsFiltersCard
+            filters={{
+              searchName,
+              searchCategoryId,
+              searchProductStatusId,
+              searchMoodId,
+              searchPriceMinRupees,
+              searchPriceMaxRupees,
+              searchLimit,
+              searchFabric,
+              searchWeave,
+              searchOccasion,
+            }}
+            categories={categories.map((c) => ({ id: c.categoryId, name: c.name }))}
+            moods={existingMoods.map((m) => ({ id: m.moodId, name: m.moodName }))}
+            fabrics={fabrics.map((f) => ({ id: f.fabricId, name: f.fabricName }))}
+            weaves={weaves.map((w) => ({ id: w.weaveId, name: w.weaveName }))}
+            occasions={occasions.map((o) => ({ id: o.occasionId, name: o.occasionName }))}
+            onFiltersChange={(next) => {
+              setSearchName(next.searchName);
+              setSearchCategoryId(next.searchCategoryId);
+              setSearchProductStatusId(next.searchProductStatusId);
+              setSearchMoodId(next.searchMoodId);
+              setSearchPriceMinRupees(next.searchPriceMinRupees);
+              setSearchPriceMaxRupees(next.searchPriceMaxRupees);
+              setSearchLimit(next.searchLimit);
+              setSearchFabric(next.searchFabric);
+              setSearchWeave(next.searchWeave);
+              setSearchOccasion(next.searchOccasion);
+            }}
+            onApply={handleSearchSubmit}
+            onClear={handleSearchClear}
+            onRefresh={() => {
+              void refetchProducts();
+            }}
+          />
+          <ProductsGridCard
+            products={products}
+            productsLoading={productsLoading}
+            productsError={productsError}
+            productsErrorUi={productsErrorUi}
+            categoryNameById={categoryNameById}
+            getThumbnail={getProductThumbnailWithCacheBuster}
+            onRetry={() => {
+              void refetchProducts();
+            }}
+            onOpenProduct={setSelectedProduct}
+            onEditProduct={beginEditProduct}
+            onArchiveProduct={setArchiveConfirm}
+          />
 
-          <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-violet-500 bg-white shadow-[var(--admin-card-shadow)]">
-            <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
-              <Package className="h-4 w-4 text-violet-500" />
-              Products
-            </CardTitle>
-            <CardContent className="mt-3">
-              {productsError && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  <p className="font-medium">{productsErrorUi?.title ?? "Could not load products."}</p>
-                  <p className="mt-1 text-xs">{productsErrorUi?.message ?? "Please try again."}</p>
-                  <Button variant="outline" size="sm" className="mt-2" onClick={() => refetchProducts()}>
-                    Try again
-                  </Button>
-                </div>
-              )}
-              {productsLoading && !productsError && (
-                <div className="flex justify-center py-8">
-                  <Spinner />
-                </div>
-              )}
-              {!productsLoading && !productsError && products.length === 0 && (
-                <p className="py-8 text-center text-sm text-[var(--color-muted)]">
-                  No products match. Create some in the <strong>Add product</strong> tab.
-                </p>
-              )}
-              {!productsLoading && !productsError && products.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                  {products.map((p) => {
-                    const thumb = getProductThumbnailWithCacheBuster(p);
-                    return (
-                      <div
-                        key={p.productId}
-                        className="overflow-hidden rounded-xl border border-[var(--color-line)] bg-white"
-                        onClick={() => setSelectedProduct(p)}
-                      >
-                        <div className="aspect-square w-full bg-[var(--color-surface)]">
-                          {thumb ? (
-                            <img
-                              src={thumb}
-                              alt={p.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-xs text-[var(--color-muted)]">
-                              No image
-                            </div>
-                          )}
-                        </div>
-                        <div className="space-y-1.5 p-2">
-                          <div className="line-clamp-1 text-xs font-semibold text-[var(--color-ink)]">
-                            {p.name}
-                          </div>
-                          <div className="text-[11px] text-[var(--color-muted)]">
-                            {getCategoryName(p.categoryId, categories)}
-                          </div>
-                          <div className="text-xs text-[var(--color-ink)]">{p.formatted}</div>
-                          <div className="text-[11px] text-[var(--color-muted)]">
-                            Stock: {p.stockQuantity ?? "—"}
-                          </div>
-                          <div className="flex items-center justify-between pt-1">
-                            <span className="font-mono text-[11px] text-[var(--color-muted)]">
-                              #{p.productId}
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="h-8 w-8 p-0"
-                                aria-label={`Edit ${p.name}`}
-                                title="Edit"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  beginEditProduct(p);
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="h-8 w-8 p-0 text-red-600 border-red-200 hover:bg-red-50"
-                                aria-label={`Archive ${p.name}`}
-                                title="Archive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setArchiveConfirm(p);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <ArchiveProductDialog
+            product={archiveConfirm}
+            isPending={updateProductMutation.isPending}
+            onClose={() => setArchiveConfirm(null)}
+            onConfirm={handleArchiveConfirm}
+          />
 
-          {archiveConfirm && (
-            <Dialog open={!!archiveConfirm} onOpenChange={(open) => !open && setArchiveConfirm(null)}>
-              <DialogContent className="sm:max-w-md">
-                <p className="text-sm text-[var(--color-ink)]">
-                  Archive product <strong>{archiveConfirm.name}</strong> (ID: {archiveConfirm.productId})? Its status will be set to Archived; it will not be deleted.
-                </p>
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setArchiveConfirm(null)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-red-200 text-red-600 hover:bg-red-50"
-                    onClick={handleArchiveConfirm}
-                    disabled={updateProductMutation.isPending}
-                  >
-                    {updateProductMutation.isPending ? "Archiving…" : "Archive"}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
-
-          {selectedProduct && (
-            (() => {
-              const imageUrls = (selectedProduct.images ?? [])
-                .map((img) => {
-                  const u = getImageUrl(img);
-                  if (!u) return "";
-                  const sep = u.includes("?") ? "&" : "?";
-                  const id =
-                    (img as ProductImageListItem & { image_id?: string }).imageId ??
-                    (img as ProductImageListItem & { image_id?: string }).image_id ??
-                    "";
-                  return `${u}${sep}v=${id}`;
-                })
-                .filter((u) => !!u);
-              const hasImages = imageUrls.length > 0;
-              const activeImage = hasImages
-                ? imageUrls[Math.min(selectedImageIndex, imageUrls.length - 1)]
-                : null;
-              return (
-            <Dialog
-              open={!!selectedProduct}
-              onOpenChange={(open) => !open && setSelectedProduct(null)}
-            >
-              <DialogContent className="sm:max-w-2xl">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div
-                    className="relative overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)]"
-                    onTouchStart={(e) => setTouchStartX(e.changedTouches[0]?.clientX ?? null)}
-                    onTouchEnd={(e) => {
-                      if (!hasImages || imageUrls.length <= 1 || touchStartX == null) return;
-                      const endX = e.changedTouches[0]?.clientX ?? touchStartX;
-                      const delta = endX - touchStartX;
-                      if (delta > 40) {
-                        setSelectedImageIndex((prev) =>
-                          prev === 0 ? imageUrls.length - 1 : prev - 1
-                        );
-                      } else if (delta < -40) {
-                        setSelectedImageIndex((prev) =>
-                          prev === imageUrls.length - 1 ? 0 : prev + 1
-                        );
-                      }
-                      setTouchStartX(null);
-                    }}
-                  >
-                    {activeImage ? (
-                      <img
-                        src={activeImage}
-                        alt={selectedProduct.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex aspect-square items-center justify-center text-sm text-[var(--color-muted)]">
-                        No image
-                      </div>
-                    )}
-                    {imageUrls.length > 1 && (
-                      <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
-                        <div className="rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white">
-                          {selectedImageIndex + 1} / {imageUrls.length}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <h3 className="text-base font-semibold text-[var(--color-ink)]">
-                      {selectedProduct.name}
-                    </h3>
-                    <p className="text-[var(--color-muted)]">
-                      {selectedProduct.description || "No description"}
-                    </p>
-                    <div className="rounded-md border border-[var(--color-line)] p-3">
-                      <p>
-                        <span className="font-medium">Product ID:</span>{" "}
-                        <span className="font-mono">{selectedProduct.productId}</span>
-                      </p>
-                      <p>
-                        <span className="font-medium">Category:</span>{" "}
-                        {getCategoryName(selectedProduct.categoryId, categories)}
-                      </p>
-                      <p>
-                        <span className="font-medium">Price:</span>{" "}
-                        {selectedProduct.formatted}
-                      </p>
-                      <p>
-                        <span className="font-medium">Stock:</span>{" "}
-                        {selectedProduct.stockQuantity ?? "—"}
-                      </p>
-                      <p>
-                        <span className="font-medium">SKU:</span>{" "}
-                        {selectedProduct.sku ?? "—"}
-                      </p>
-                      <p>
-                        <span className="font-medium">Slug:</span>{" "}
-                        {selectedProduct.slug ?? "—"}
-                      </p>
-                      <p>
-                        <span className="font-medium">Fabric:</span>{" "}
-                        {selectedProduct.fabric ?? "—"}
-                      </p>
-                      <p>
-                        <span className="font-medium">Weave:</span>{" "}
-                        {selectedProduct.weave ?? "—"}
-                      </p>
-                      <p>
-                        <span className="font-medium">Occasion:</span>{" "}
-                        {selectedProduct.occasion ?? "—"}
-                      </p>
-                      <p>
-                        <span className="font-medium">Has blouse piece:</span>{" "}
-                        {selectedProduct.hasBlousePiece == null
-                          ? "—"
-                          : selectedProduct.hasBlousePiece
-                            ? "Yes"
-                            : "No"}
-                      </p>
-                      <p>
-                        <span className="font-medium">Care instructions:</span>{" "}
-                        {selectedProduct.careInstructions ?? "—"}
-                      </p>
-                      <p>
-                        <span className="font-medium">Product status:</span>{" "}
-                        {getProductStatusLabel(selectedProduct.productStatusId)}
-                      </p>
-                    </div>
-                    {imageUrls.length > 1 && (
-                      <div className="flex gap-2 pt-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setSelectedImageIndex((prev) =>
-                              prev === 0 ? imageUrls.length - 1 : prev - 1
-                            )
-                          }
-                        >
-                          Prev
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setSelectedImageIndex((prev) =>
-                              prev === imageUrls.length - 1 ? 0 : prev + 1
-                            )
-                          }
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-              );
-            })()
-          )}
+          <ProductPreviewDialog
+            key={selectedProduct?.productId ?? "preview-none"}
+            product={selectedProduct}
+            open={!!selectedProduct}
+            onClose={() => setSelectedProduct(null)}
+            categoryNameById={categoryNameById}
+            getProductStatusLabel={getProductStatusLabel}
+          />
         </>
       )}
 
@@ -1763,7 +1300,7 @@ export default function AdminProductsPage() {
               >
                 <Spinner />
                 <p className="text-sm font-medium text-[var(--color-ink)]">
-                  Updating images &amp; refreshing…
+                  Updating images &amp; refreshingâ€¦
                 </p>
               </div>
             )}
@@ -1831,7 +1368,7 @@ export default function AdminProductsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
-                    Price (₹) *
+                    Price (â‚¹) *
                   </label>
                   <Input
                     type="text"
@@ -1858,7 +1395,7 @@ export default function AdminProductsPage() {
                   required
                 >
                   <option value="">
-                    {categoriesLoading ? "Loading categories…" : "Select category"}
+                    {categoriesLoading ? "Loading categoriesâ€¦" : "Select category"}
                   </option>
                   {categories.map((c) => (
                     <option key={c.categoryId} value={c.categoryId}>
@@ -1901,7 +1438,7 @@ export default function AdminProductsPage() {
                       disabled={createCategoryMutation.isPending}
                       className="rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
                     >
-                      {createCategoryMutation.isPending ? "Adding…" : "Add category"}
+                      {createCategoryMutation.isPending ? "Addingâ€¦" : "Add category"}
                     </Button>
                     {categoryError && (
                       <p className="w-full text-sm text-red-600" role="alert">
@@ -2033,7 +1570,7 @@ export default function AdminProductsPage() {
                     "w-full max-w-xs rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                   )}
                 >
-                  <option value="">— Not set —</option>
+                  <option value="">â€” Not set â€”</option>
                   <option value="1">Draft</option>
                   <option value="2">Active</option>
                   <option value="3">Archived</option>
@@ -2221,7 +1758,7 @@ export default function AdminProductsPage() {
                       if (name) createMoodMutation.mutate(name);
                     }}
                   >
-                    {createMoodMutation.isPending ? "Adding…" : "Add mood"}
+                    {createMoodMutation.isPending ? "Addingâ€¦" : "Add mood"}
                   </Button>
                 </div>
                 {moodCreateError && (
@@ -2280,7 +1817,7 @@ export default function AdminProductsPage() {
                       className="h-9 rounded-full border-[var(--color-line)] px-4 text-xs"
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      Choose images…
+                      Choose imagesâ€¦
                     </Button>
                   </div>
                   <p className="text-[11px] text-[var(--color-muted)]">
@@ -2480,10 +2017,10 @@ export default function AdminProductsPage() {
                 >
                   {editingProductId
                     ? updateProductMutation.isPending || isUpdateReflecting
-                      ? "Updating…"
+                      ? "Updatingâ€¦"
                       : "Update product"
                     : createProductMutation.isPending
-                      ? "Creating…"
+                      ? "Creatingâ€¦"
                       : "Add product"}
                 </Button>
                 {editingProductId && (
@@ -2512,7 +2049,7 @@ export default function AdminProductsPage() {
                       setExistingProductImages([]);
                       setOrderedProductImages(null);
                       setInitialExistingImageIdsWhenEdit([]);
-            setInitialVariantIdsWhenEdit([]);
+                      setInitialVariantIdsWhenEdit([]);
                       setImageError("");
                       setImageMessage("");
                     }}
@@ -2525,298 +2062,32 @@ export default function AdminProductsPage() {
           </CardContent>
         </Card>
       )}
-      <Dialog open={imageDialogOpen} onOpenChange={setImageDialogOpen}>
-        <DialogContent
-          title="Review images"
-          showClose
-          onEscapeKeyDown={() => setImageDialogOpen(false)}
-          onPointerDownOutside={() => setImageDialogOpen(false)}
-        >
-          <div className="space-y-4 text-sm text-[var(--color-muted)]">
-            <p className="font-medium text-[var(--color-ink)]">
-              {editingProductId
-                ? "All product images — drag to reorder. First is the thumbnail."
-                : "Add your product images"}
-            </p>
-            {editingProductId && (existingProductImages.length > 0 || imagePreviews.length > 0) ? (
-              <div className="grid max-h-[60vh] grid-cols-3 gap-2 overflow-y-auto">
-                {(reviewImagesList.length > 0
-                  ? reviewImagesList
-                  : [
-                      ...existingProductImages.map((image) => ({
-                        type: "existing" as const,
-                        image,
-                      })),
-                      ...imagePreviews.map((url, i) => ({
-                        type: "new" as const,
-                        file: imageFiles[i],
-                        previewUrl: url,
-                      })),
-                    ]
-                ).map((item, idx) => (
-                  <div
-                    key={
-                      item.type === "existing"
-                        ? `existing-${item.image.imageId ?? item.image.url ?? idx}`
-                        : `new-${idx}-${item.previewUrl}`
-                    }
-                    className={cn(
-                      "relative aspect-square cursor-move overflow-hidden rounded border bg-[var(--color-ivory)] transition-transform duration-150",
-                      item.type === "existing"
-                        ? "border border-[var(--color-line)]"
-                        : "border border-dashed border-[var(--color-line)]",
-                      reviewDragIndex === idx &&
-                        "scale-[1.03] border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]"
-                    )}
-                    draggable
-                    onDragStart={() => setReviewDragIndex(idx)}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      if (reviewDragIndex === null || reviewDragIndex === idx) return;
-                      setReviewImagesList((prev) => {
-                        const next = [...prev];
-                        const [moved] = next.splice(reviewDragIndex, 1);
-                        next.splice(idx, 0, moved);
-                        return next;
-                      });
-                      setReviewDragIndex(idx);
-                    }}
-                    onDragEnd={() => setReviewDragIndex(null)}
-                    onDrop={() => setReviewDragIndex(null)}
-                  >
-                    {item.type === "existing" ? (
-                      <img
-                        src={getImageUrlWithCacheBuster(item.image)}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
-                    )}
-                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
-                      {item.type === "existing" ? "Existing" : "New"}
-                    </span>
-                    {idx === 0 && (
-                      <span className="absolute left-1 top-1 rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-medium text-white">
-                        Thumbnail
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {imagePreviews.length > 0
-                  ? imagePreviews.map((url, idx) => (
-                      <div
-                        key={imageFiles[idx]?.name ?? idx}
-                        className={cn(
-                          "relative aspect-square overflow-hidden rounded border border-dashed border-[var(--color-line)] bg-white cursor-move transition-transform duration-150",
-                          dragIndex === idx && "scale-[1.03] border-[var(--color-ink)]"
-                        )}
-                        draggable
-                        onDragStart={() => setDragIndex(idx)}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          if (dragIndex === null || dragIndex === idx) return;
-                          setImageFiles((prev) => {
-                            const next = [...prev];
-                            const [moved] = next.splice(dragIndex, 1);
-                            next.splice(idx, 0, moved);
-                            return next;
-                          });
-                          setDragIndex(idx);
-                        }}
-                        onDrop={() => setDragIndex(null)}
-                      >
-                        <img
-                          src={url}
-                          alt={imageFiles[idx]?.name ?? "Preview"}
-                          className="h-full w-full object-cover"
-                        />
-                        {idx === 0 && (
-                          <div className="absolute left-1 top-1 rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-medium text-white">
-                            Thumbnail
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  : Array.from({ length: 6 }).map((_, idx) => (
-                      <div
-                        key={idx}
-                        className="aspect-square rounded border border-dashed border-[var(--color-line)] bg-white"
-                      />
-                    ))}
-              </div>
-            )}
-            {!editingProductId && imagePreviews.length > 0 && (
-              <p className="text-[11px] text-[var(--color-muted)]">
-                {imageFiles.length} image
-                {imageFiles.length === 1 ? "" : "s"} selected.
-              </p>
-            )}
-            {editingProductId && (existingProductImages.length > 0 || imagePreviews.length > 0) && (
-              <p className="text-[11px] text-[var(--color-muted)]">
-                {existingProductImages.length + imagePreviews.length} image
-                {existingProductImages.length + imagePreviews.length === 1 ? "" : "s"} — drag to
-                reorder.
-              </p>
-            )}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-full border-[var(--color-line)] px-4"
-                onClick={() => {
-                  setImageDialogOpen(false);
-                  setReviewDragIndex(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                className="rounded-full bg-[var(--color-ink)] px-4 text-white hover:bg-[var(--color-ink)]/90"
-                onClick={() => {
-                  if (
-                    editingProductId &&
-                    (existingProductImages.length > 0 || imagePreviews.length > 0)
-                  ) {
-                    const listToApply =
-                      reviewImagesList.length > 0
-                        ? reviewImagesList
-                        : ([
-                            ...existingProductImages.map((image) => ({
-                              type: "existing" as const,
-                              image,
-                            })),
-                            ...imagePreviews.map((url, i) => ({
-                              type: "new" as const,
-                              file: imageFiles[i],
-                              previewUrl: url,
-                            })),
-                          ] as ReorderableImage[]);
-                    setOrderedProductImages(listToApply);
-                    const existing = listToApply
-                      .filter(
-                        (x): x is { type: "existing"; image: ProductImageListItem } =>
-                          x.type === "existing"
-                      )
-                      .map((x) => x.image);
-                    const newFiles = listToApply
-                      .filter(
-                        (x): x is { type: "new"; file: File; previewUrl: string } => x.type === "new"
-                      )
-                      .map((x) => x.file);
-                    setExistingProductImages(existing);
-                    setImageFiles(newFiles);
-                    setReviewDragIndex(null);
-                  }
-                  setImageDialogOpen(false);
-                }}
-              >
-                Confirm
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={reorderImagesOpen} onOpenChange={setReorderImagesOpen}>
-        <DialogContent
-          title="Reorder product images"
-          showClose
-          onEscapeKeyDown={() => setReorderImagesOpen(false)}
-          onPointerDownOutside={() => setReorderImagesOpen(false)}
-        >
-          <p className="mb-3 text-xs text-[var(--color-muted)]">
-            Drag to change order. First image is the thumbnail.
-          </p>
-          <div className="grid max-h-[60vh] grid-cols-3 gap-2 overflow-y-auto">
-            {reorderableImages.map((item, idx) => (
-              <div
-                key={
-                  item.type === "existing"
-                    ? `existing-${item.image.imageId ?? item.image.url ?? idx}`
-                    : `new-${idx}-${item.previewUrl}`
-                }
-                className={cn(
-                  "relative aspect-square cursor-move overflow-hidden rounded border bg-[var(--color-ivory)] transition-transform duration-150",
-                  item.type === "existing"
-                    ? "border border-[var(--color-line)]"
-                    : "border border-dashed border-[var(--color-line)]",
-                  reorderDragIndex === idx && "scale-[1.03] border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]"
-                )}
-                draggable
-                onDragStart={() => setReorderDragIndex(idx)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (reorderDragIndex === null || reorderDragIndex === idx) return;
-                  setReorderableImages((prev) => {
-                    const next = [...prev];
-                    const [moved] = next.splice(reorderDragIndex, 1);
-                    next.splice(idx, 0, moved);
-                    return next;
-                  });
-                  setReorderDragIndex(idx);
-                }}
-                onDragEnd={() => setReorderDragIndex(null)}
-                onDrop={() => setReorderDragIndex(null)}
-              >
-                {item.type === "existing" ? (
-                  <img
-                    src={getImageUrlWithCacheBuster(item.image, productImagesLoadKey)}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <img
-                    src={item.previewUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                )}
-                <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
-                  {item.type === "existing" ? "Existing" : "New"}
-                </span>
-                {idx === 0 && (
-                  <span className="absolute left-1 top-1 rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-medium text-white">
-                    Thumbnail
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-full border-[var(--color-line)] px-4"
-              onClick={() => setReorderImagesOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className="rounded-full bg-[var(--color-ink)] px-4 text-white hover:bg-[var(--color-ink)]/90"
-              onClick={() => {
-                setOrderedProductImages(reorderableImages);
-                const existing = reorderableImages
-                  .filter((x): x is { type: "existing"; image: ProductImageListItem } => x.type === "existing")
-                  .map((x) => x.image);
-                const newFiles = reorderableImages
-                  .filter((x): x is { type: "new"; file: File; previewUrl: string } => x.type === "new")
-                  .map((x) => x.file);
-                setExistingProductImages(existing);
-                setImageFiles(newFiles);
-                setReorderImagesOpen(false);
-                setReorderDragIndex(null);
-              }}
-            >
-              Apply order
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ProductImagesDialogs
+        imageDialogOpen={imageDialogOpen}
+        setImageDialogOpen={setImageDialogOpen}
+        reorderImagesOpen={reorderImagesOpen}
+        setReorderImagesOpen={setReorderImagesOpen}
+        editingProductId={editingProductId}
+        existingProductImages={existingProductImages}
+        imagePreviews={imagePreviews}
+        imageFiles={imageFiles}
+        reviewImagesList={reviewImagesList}
+        setReviewImagesList={setReviewImagesList}
+        reviewDragIndex={reviewDragIndex}
+        setReviewDragIndex={setReviewDragIndex}
+        dragIndex={dragIndex}
+        setDragIndex={setDragIndex}
+        setImageFiles={setImageFiles}
+        setOrderedProductImages={setOrderedProductImages}
+        setExistingProductImages={setExistingProductImages}
+        reorderableImages={reorderableImages}
+        setReorderableImages={setReorderableImages}
+        reorderDragIndex={reorderDragIndex}
+        setReorderDragIndex={setReorderDragIndex}
+        productImagesLoadKey={productImagesLoadKey}
+        getImageUrlWithCacheBuster={getImageUrlWithCacheBuster}
+      />
     </div>
   );
 }
+

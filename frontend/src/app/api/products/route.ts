@@ -94,9 +94,6 @@ export async function GET(request: Request) {
   }
 
   const loader = (async (): Promise<ProductsApiPayload> => {
-    let productsList: ProductListRowWithVariantStock[];
-    let categories: { categoryId: string; name: string }[];
-
     const listParams = { limit: "200" as const, ...(moodId ? { moodId } : {}) };
 
     const recovered = await withRecoveredGuestSession(
@@ -110,8 +107,8 @@ export async function GET(request: Request) {
         return { list, cats };
       }
     );
-    productsList = recovered.value.list;
-    categories = recovered.value.cats;
+    const productsList = recovered.value.list;
+    const categories = recovered.value.cats;
 
     const categoryNameById: Record<string, string> = {};
     for (const c of categories) {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { User } from "lucide-react";
@@ -9,7 +10,7 @@ import { useSession } from "next-auth/react";
 import { ensureGuestSession, getGuestSessionId, clearGuestSession } from "@/lib/session";
 import { toRouteFailureUi } from "@/lib/route-state";
 import { PRODUCTS_SEED } from "@/lib/seed-data";
-import type { Product, CartLine } from "@/lib/schemas";
+import type { Product } from "@/lib/schemas";
 import { useStorefront } from "@/context/storefront-context";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
 
@@ -68,22 +69,55 @@ async function fetchStorefrontFilters(sessionId: string | null): Promise<Storefr
 }
 import { useActiveSection } from "@/hooks/use-active-section";
 import { useLockBodyScroll } from "@/hooks/use-lock-body-scroll";
-import { useRazorpayTest } from "@/hooks/use-razorpay-test";
 import { clearPendingHomeSection, goTo, peekPendingHomeSection } from "@/hooks/use-scroll-to";
 import { Header } from "@/components/header";
 import { HeroSection } from "@/components/hero-section";
 import { CollectionsSection } from "@/components/collections-section";
 import { CategoriesSection } from "@/components/categories-section";
-import { EditorialBlock } from "@/components/editorial-block";
 import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
-import { StorySection } from "@/components/story-section";
-import { Footer } from "@/components/footer";
 import { MenuDrawer } from "@/components/menu-drawer";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
 import { Section } from "@/components/ui/section";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
+
+const EditorialBlock = dynamic(
+  () => import("@/components/editorial-block").then((m) => m.EditorialBlock),
+  {
+    loading: () => (
+      <Section>
+        <div className="flex justify-center py-16">
+          <Spinner />
+        </div>
+      </Section>
+    ),
+  }
+);
+const StorySection = dynamic(
+  () => import("@/components/story-section").then((m) => m.StorySection),
+  {
+    loading: () => (
+      <Section id="story">
+        <div className="flex justify-center py-12">
+          <Spinner />
+        </div>
+      </Section>
+    ),
+  }
+);
+const Footer = dynamic(
+  () => import("@/components/footer").then((m) => m.Footer),
+  {
+    loading: () => (
+      <footer className="border-t border-[var(--color-line)] py-10">
+        <div className="mx-auto max-w-[2000px] px-4">
+          <div className="h-16 animate-pulse rounded bg-[var(--color-line)]/40" />
+        </div>
+      </footer>
+    ),
+  }
+);
 
 export function Storefront() {
   const pathname = usePathname();
@@ -95,13 +129,7 @@ export function Storefront() {
   const {
     wishlist,
     toggleWish,
-    cart,
-    addToCart,
-    decCart,
-    incCart,
-    cartLines,
     cartCount,
-    cartSubtotal,
     wishCount,
   } = useStorefront();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -121,13 +149,12 @@ export function Storefront() {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const didInitialLoadRef = useRef(false);
 
-  const { paymentMessage, paymentLoading, runTest } = useRazorpayTest();
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
   useLockBodyScroll(menuOpen);
 
   useEffect(() => {
     ensureGuestSession();
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -360,7 +387,6 @@ export function Storefront() {
         cartCount={cartCount}
         wishCount={wishCount}
         setMenuOpen={setMenuOpen}
-        setCartOpen={() => {}}
         goTo={goToWithMotion}
         authEnabled
         authButtons={
@@ -444,9 +470,7 @@ export function Storefront() {
             products={products}
             wishlist={wishlist}
             onToggleWish={toggleWish}
-            onAddToCart={addToCart}
             onQuickView={goToProduct}
-            reduceMotion={!!reduceMotion}
             onViewAll={() => {
               setSort("Latest");
               goTo("explore", !!reduceMotion);
@@ -468,7 +492,6 @@ export function Storefront() {
             onMoodChange={(id) => void applyShopMoodFilter(id)}
             wishlist={wishlist}
             onToggleWish={toggleWish}
-            onAddToCart={addToCart}
             onQuickView={goToProduct}
           />
         </>

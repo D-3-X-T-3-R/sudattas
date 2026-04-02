@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Heart, X } from "lucide-react";
 import { INR } from "@/lib/constants";
 import type { Product } from "@/lib/schemas";
@@ -100,15 +100,6 @@ export function WishlistGrid({
   const [sizeDialogProduct, setSizeDialogProduct] = useState<Product | null>(null);
   const [selectedSizeName, setSelectedSizeName] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!sizeDialogProduct) {
-      setSelectedSizeName(null);
-      return;
-    }
-    const opts = sizeOptionsForWishlist(sizeDialogProduct, catalogSizes);
-    setSelectedSizeName(opts[0]?.sizeName ?? null);
-  }, [sizeDialogProduct, catalogSizes]);
-
   const sizeDialogOptions = sizeDialogProduct
     ? sizeOptionsForWishlist(sizeDialogProduct, catalogSizes)
     : [];
@@ -119,12 +110,20 @@ export function WishlistGrid({
       onAddToBag(p, null);
       return;
     }
+    const opts = sizeOptionsForWishlist(p, catalogSizes);
+    setSelectedSizeName(opts[0]?.sizeName ?? null);
     setSizeDialogProduct(p);
   };
 
   const confirmSizeAndAdd = () => {
-    if (!sizeDialogProduct || !selectedSizeName) return;
-    onAddToBag(sizeDialogProduct, selectedSizeName);
+    if (!sizeDialogProduct) return;
+    const effectiveSizeName =
+      selectedSizeName ??
+      sizeOptionsForWishlist(sizeDialogProduct, catalogSizes)[0]?.sizeName ??
+      null;
+    if (!effectiveSizeName) return;
+    onAddToBag(sizeDialogProduct, effectiveSizeName);
+    setSelectedSizeName(null);
     setSizeDialogProduct(null);
   };
 
@@ -157,7 +156,10 @@ export function WishlistGrid({
       <Dialog
         open={!!sizeDialogProduct}
         onOpenChange={(open) => {
-          if (!open) setSizeDialogProduct(null);
+          if (!open) {
+            setSizeDialogProduct(null);
+            setSelectedSizeName(null);
+          }
         }}
       >
         <DialogContent

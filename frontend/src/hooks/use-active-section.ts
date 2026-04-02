@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 export function useActiveSection(ids: string[]): string {
   const [active, setActive] = useState(ids[0] ?? "");
-  const idsRef = useRef(ids);
-  idsRef.current = ids;
 
   useEffect(() => {
-    const targets = idsRef.current
+    const targets = ids
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el != null);
     if (targets.length === 0) return;
@@ -28,7 +26,7 @@ export function useActiveSection(ids: string[]): string {
 
     targets.forEach((t) => obs.observe(t));
     return () => obs.disconnect();
-  }, []);
+  }, [ids]);
 
   return active;
 }

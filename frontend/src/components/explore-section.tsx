@@ -22,7 +22,6 @@ export interface ExploreSectionProps {
   onMoodChange?: (moodId: string | null) => void;
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
-  onAddToCart: (p: Product) => void;
   onQuickView: (p: Product) => void;
 }
 
@@ -41,7 +40,6 @@ export function ExploreSection({
   onMoodChange,
   wishlist,
   onToggleWish,
-  onAddToCart,
   onQuickView,
 }: ExploreSectionProps) {
   const collectionList = collections.length > 0 ? collections : COLLECTIONS.map((c) => c.key);
@@ -140,7 +138,6 @@ export function ExploreSection({
                 product={p}
                 wished={!!wishlist[p.id]}
                 onToggleWish={onToggleWish}
-                onAddToCart={onAddToCart}
                 onQuickView={onQuickView}
               />
             </ScrollReveal>

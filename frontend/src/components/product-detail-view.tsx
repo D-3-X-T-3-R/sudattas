@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { INR } from "@/lib/constants";
@@ -82,17 +82,8 @@ export function ProductDetailView({
       ? getStockForSize(variantStock, selectedSize)
       : (variantStock[0]?.quantity ?? 999);
 
-  useEffect(() => {
-    setSelectedSize(
-      sizeNames.find((name) => getStockForSize(variantStock, name) > 0) ?? sizeNames[0] ?? null
-    );
-  }, [product.id]);
-
-  useEffect(() => {
-    setQuantity((q) =>
-      maxQuantity < 1 ? 1 : Math.min(Math.max(1, q), maxQuantity)
-    );
-  }, [selectedSize, maxQuantity]);
+  const safeQuantity =
+    maxQuantity < 1 ? 1 : Math.min(Math.max(1, quantity), maxQuantity);
 
   const images = useMemo(() => {
     if (product.images?.length) return product.images;
@@ -207,20 +198,30 @@ export function ProductDetailView({
           <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              disabled={quantity <= 1}
+              onClick={() =>
+                setQuantity((q) => {
+                  const clamped = maxQuantity < 1 ? 1 : Math.min(Math.max(1, q), maxQuantity);
+                  return Math.max(1, clamped - 1);
+                })
+              }
+              disabled={safeQuantity <= 1}
               aria-label="Decrease quantity"
               className="flex h-10 w-10 items-center justify-center rounded border border-[var(--color-line)] text-lg font-medium hover:bg-[var(--color-line)]/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               −
             </button>
             <span className="min-w-[2rem] text-center font-sans text-sm font-medium">
-              {quantity}
+              {safeQuantity}
             </span>
             <button
               type="button"
-              onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
-              disabled={quantity >= maxQuantity}
+              onClick={() =>
+                setQuantity((q) => {
+                  const clamped = maxQuantity < 1 ? 1 : Math.min(Math.max(1, q), maxQuantity);
+                  return Math.min(maxQuantity, clamped + 1);
+                })
+              }
+              disabled={safeQuantity >= maxQuantity}
               aria-label="Increase quantity"
               className="flex h-10 w-10 items-center justify-center rounded border border-[var(--color-line)] text-lg font-medium hover:bg-[var(--color-line)]/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -230,7 +231,7 @@ export function ProductDetailView({
         </div>
 
         <Button
-          onClick={() => onAddToCart(product, quantity, selectedSize)}
+          onClick={() => onAddToCart(product, safeQuantity, selectedSize)}
           disabled={maxQuantity < 1}
           className="mt-6 w-full rounded-full bg-[var(--color-accent-gold)] py-6 text-base font-semibold text-[var(--color-ink)] hover:bg-[var(--color-accent-gold)]/90 disabled:cursor-not-allowed disabled:opacity-50"
         >

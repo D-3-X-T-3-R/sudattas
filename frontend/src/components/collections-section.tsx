@@ -8,7 +8,7 @@ import { COLLECTIONS } from "@/lib/constants";
 import { COLLECTION_IMAGES } from "@/lib/seed-data";
 import { goTo } from "@/hooks/use-scroll-to";
 import { Section } from "@/components/ui/section";
-import { SectionHeading, Kicker } from "@/components/ui/typography";
+import { SectionHeading } from "@/components/ui/typography";
 import { ScrollReveal } from "@/components/scroll-reveal";
 
 export interface CollectionsSectionProps {

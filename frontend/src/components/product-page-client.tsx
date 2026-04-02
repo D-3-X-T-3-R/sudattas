@@ -34,6 +34,7 @@ export function ProductPageClient({ product, sizes }: ProductPageClientProps) {
         </Button>
 
         <ProductDetailView
+          key={product.id}
           product={product}
           sizes={sizes}
           wished={!!wishlist[product.id]}

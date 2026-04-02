@@ -64,10 +64,6 @@ export async function GET(
   let refreshedGuestSessionId: string | null = null;
 
   try {
-    let row: ProductListRowWithVariantStock | null;
-    let categories: { categoryId: string; name: string }[];
-    let sizes: { sizeId: string; sizeName: string }[];
-
     const recovered = await withRecoveredGuestSession(
       sessionId,
       forwardedHeaders,
@@ -85,9 +81,9 @@ export async function GET(
       }
     );
     refreshedGuestSessionId = recovered.refreshedSessionId;
-    row = recovered.value.resolvedRow;
-    categories = recovered.value.resolvedCategories;
-    sizes = recovered.value.resolvedSizes;
+    const row = recovered.value.resolvedRow;
+    const categories = recovered.value.resolvedCategories;
+    const sizes = recovered.value.resolvedSizes;
 
     if (!row) {
       return NextResponse.json({ product: null, sizes: [], error: "Not found" }, { status: 404 });
