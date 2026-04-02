@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+/* eslint-disable max-lines */
+/* eslint-disable max-lines-per-function */
 
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -129,7 +131,7 @@ function getProductThumbnailWithCacheBuster(p: ProductListRow): string | null {
 }
 
 function getProductStatusLabel(statusId?: string | null): string {
-  if (!statusId) return "â€”";
+  if (!statusId) return "—";
   if (statusId === "1") return "Draft";
   if (statusId === "2") return "Active";
   if (statusId === "3") return "Archived";
@@ -1004,7 +1006,7 @@ export default function AdminProductsPage() {
     setActiveTab("add");
     setEditingProductId(p.productId);
     setError("");
-    setMessage(`Loading productâ€¦`);
+    setMessage(`Loading product…`);
     let product: ProductListRow = p;
     let moodIds: string[] = [];
     try {
@@ -1303,7 +1305,7 @@ export default function AdminProductsPage() {
               >
                 <Spinner />
                 <p className="text-sm font-medium text-[var(--color-ink)]">
-                  Updating images &amp; refreshingâ€¦
+                  Updating images &amp; refreshing…
                 </p>
               </div>
             )}
@@ -1371,7 +1373,7 @@ export default function AdminProductsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
-                    Price (â‚¹) *
+                    Price (₹) *
                   </label>
                   <Input
                     type="text"
@@ -1398,7 +1400,7 @@ export default function AdminProductsPage() {
                   required
                 >
                   <option value="">
-                    {categoriesLoading ? "Loading categoriesâ€¦" : "Select category"}
+                    {categoriesLoading ? "Loading categories…" : "Select category"}
                   </option>
                   {categories.map((c) => (
                     <option key={c.categoryId} value={c.categoryId}>
@@ -1441,7 +1443,7 @@ export default function AdminProductsPage() {
                       disabled={createCategoryMutation.isPending}
                       className="rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
                     >
-                      {createCategoryMutation.isPending ? "Addingâ€¦" : "Add category"}
+                      {createCategoryMutation.isPending ? "Adding…" : "Add category"}
                     </Button>
                     {categoryError && (
                       <p className="w-full text-sm text-red-600" role="alert">
@@ -1573,7 +1575,7 @@ export default function AdminProductsPage() {
                     "w-full max-w-xs rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                   )}
                 >
-                  <option value="">â€” Not set â€”</option>
+                  <option value="">— Not set —</option>
                   <option value="1">Draft</option>
                   <option value="2">Active</option>
                   <option value="3">Archived</option>
@@ -1622,10 +1624,10 @@ export default function AdminProductsPage() {
                 >
                   {editingProductId
                     ? updateProductMutation.isPending || isUpdateReflecting
-                      ? "Updatingâ€¦"
+                      ? "Updating…"
                       : "Update product"
                     : createProductMutation.isPending
-                      ? "Creatingâ€¦"
+                      ? "Creating…"
                       : "Add product"}
                 </Button>
                 {editingProductId && (
@@ -1695,5 +1697,7 @@ export default function AdminProductsPage() {
     </div>
   );
 }
+
+
 
 

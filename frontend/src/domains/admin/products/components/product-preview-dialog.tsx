@@ -82,6 +82,7 @@ export function ProductPreviewDialog({
             }}
           >
             {activeImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={activeImage}
                 alt={product.name}
