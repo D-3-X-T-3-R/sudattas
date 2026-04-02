@@ -1,5 +1,3 @@
-"use client";
-
 import { Section } from "@/components/ui/section";
 import { SectionHeading, Kicker } from "@/components/ui/typography";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -69,9 +67,8 @@ export function StorySection() {
                 className="flex-1 rounded-full border border-[var(--color-line)] bg-white/70 px-5 py-3.5 text-sm outline-none focus:border-[var(--color-accent-gold)] focus:bg-white focus:ring-1 focus:ring-[var(--color-accent-gold)]"
               />
               <button
-                type="button"
+                type="submit"
                 className="rounded-full bg-[var(--color-ink)] px-8 py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                onClick={() => alert("Mock: wire to backend later")}
               >
                 Notify me
               </button>
