@@ -11,6 +11,7 @@ import {
   fetchOrderStatuses,
   type OrderListRow,
 } from "@/lib/admin-queries";
+import { toRouteFailureUi } from "@/lib/route-state";
 import { cn } from "@/lib/utils";
 import { Filter, ListOrdered } from "lucide-react";
 
@@ -112,6 +113,7 @@ export default function AdminOrdersPage() {
     queryKey: ["admin", "orders", filters],
     queryFn: () => fetchOrdersList(filters),
   });
+  const ordersErrorUi = isError ? toRouteFailureUi("admin", error) : null;
 
   return (
     <div className="mx-auto max-w-6xl w-full">
@@ -228,8 +230,8 @@ export default function AdminOrdersPage() {
           )}
           {isError && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              <p className="font-medium">Could not load orders.</p>
-              <p className="mt-1 text-xs">{error?.message ?? "Unknown error"}</p>
+              <p className="font-medium">{ordersErrorUi?.title ?? "Could not load orders."}</p>
+              <p className="mt-1 text-xs">{ordersErrorUi?.message ?? "Please try again."}</p>
             </div>
           )}
           {!isLoading && !isError && orders.length === 0 && (

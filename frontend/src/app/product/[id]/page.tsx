@@ -10,6 +10,7 @@ import { ProductDetailView } from "@/components/product-detail-view";
 import { useStorefront } from "@/context/storefront-context";
 import type { Product } from "@/lib/schemas";
 import { ensureGuestSession, getGuestSessionId, setGuestSessionId } from "@/lib/session";
+import { toRouteFailureUi } from "@/lib/route-state";
 
 export default function ProductPage() {
   const params = useParams();
@@ -25,7 +26,7 @@ export default function ProductPage() {
   useEffect(() => {
     if (!id) {
       setLoading(false);
-      setError("Invalid product");
+      setError("This product could not be found.");
       return;
     }
     let cancelled = false;
@@ -47,14 +48,17 @@ export default function ProductPage() {
           error: string | null;
         };
         if (cancelled) return;
-        if (data.error) setError(data.error);
+        if (data.error) {
+          setError(toRouteFailureUi("public", new Error(data.error)).message);
+        }
         else {
           setProduct(data.product ?? null);
           setSizes(data.sizes ?? []);
         }
       } catch (e) {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) {
+          setError(toRouteFailureUi("public", e).message);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

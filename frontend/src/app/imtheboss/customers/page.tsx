@@ -15,6 +15,7 @@ import {
   type OrderListRow,
 } from "@/lib/admin-queries";
 import { formatInrFromPaise, paiseToRupeesInput } from "@/lib/money";
+import { toRouteFailureUi } from "@/lib/route-state";
 import { cn } from "@/lib/utils";
 import { ArrowUpDown, ArrowDown, ArrowUp, Download, ExternalLink, User, Filter, Users } from "lucide-react";
 
@@ -113,6 +114,7 @@ export default function AdminCustomersPage() {
     queryKey: ["admin", "customers"],
     queryFn: fetchAllCustomersList,
   });
+  const customersErrorUi = isError ? toRouteFailureUi("admin", error) : null;
 
   const { data: allOrders = [] } = useQuery<OrderListRow[], Error>({
     queryKey: ["admin", "orders", "all-for-stats"],
@@ -296,8 +298,8 @@ export default function AdminCustomersPage() {
           )}
           {isError && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              <p className="font-medium">Could not load customers.</p>
-              <p className="mt-1 text-xs">{error?.message ?? "Unknown error"}</p>
+              <p className="font-medium">{customersErrorUi?.title ?? "Could not load customers."}</p>
+              <p className="mt-1 text-xs">{customersErrorUi?.message ?? "Please try again."}</p>
               <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
                 Try again
               </Button>

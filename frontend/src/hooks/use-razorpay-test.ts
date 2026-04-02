@@ -6,6 +6,7 @@ import {
   paymentIntentSchema,
   verifyRazorpayPayloadSchema,
 } from "@/lib/schemas";
+import { toRouteFailureUi } from "@/lib/route-state";
 
 declare global {
   interface Window {
@@ -14,6 +15,23 @@ declare global {
       on: (event: string, handler: () => void) => void;
     };
   }
+}
+
+type OrderReconcilePayload = {
+  statusName: string;
+  paymentState: string;
+  fulfillmentState: string;
+};
+
+const FINAL_PAYMENT_STATES = new Set([
+  "paid",
+  "failed",
+  "refunded",
+  "needs_review",
+]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function loadRazorpayScript(): Promise<void> {
@@ -31,6 +49,26 @@ function loadRazorpayScript(): Promise<void> {
 export function useRazorpayTest() {
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const pollOrderReconciliation = useCallback(async (orderId: string) => {
+    const maxAttempts = 6;
+    const delayMs = 4000;
+
+    for (let i = 0; i < maxAttempts; i += 1) {
+      await sleep(delayMs);
+      const detail = await fetchApiEnvelope<{
+        paymentState: string;
+        fulfillmentState: string;
+        statusName: string;
+      }>(`/api/account/orders/${encodeURIComponent(orderId)}`, {
+        cache: "no-store",
+      });
+      if (FINAL_PAYMENT_STATES.has(detail.paymentState)) {
+        return detail as OrderReconcilePayload;
+      }
+    }
+    return null;
+  }, []);
 
   const runCheckout = useCallback(async (input?: { shippingAddressId?: string }) => {
     const shippingAddressId = input?.shippingAddressId?.trim();
@@ -112,13 +150,7 @@ export function useRazorpayTest() {
               paymentIntent: { status: verifyResult.paymentState },
             });
             if (verifyParsed.success && verifyResult.verified) {
-              const finalPaymentStates = new Set([
-                "paid",
-                "failed",
-                "refunded",
-                "needs_review",
-              ]);
-              if (finalPaymentStates.has(verifyResult.paymentState)) {
+              if (FINAL_PAYMENT_STATES.has(verifyResult.paymentState)) {
                 setPaymentMessage(
                   `Payment ${verifyResult.paymentState}. Order state: ${verifyResult.orderUiState}.`
                 );
@@ -126,14 +158,28 @@ export function useRazorpayTest() {
                 setPaymentMessage(
                   `Payment verification received. Current state: ${verifyResult.paymentState}; awaiting final backend/webhook reconciliation.`
                 );
+                try {
+                  const reconciled = await pollOrderReconciliation(orderId);
+                  if (reconciled) {
+                    setPaymentMessage(
+                      `Payment ${reconciled.paymentState}. Order state: ${reconciled.statusName}.`
+                    );
+                  } else {
+                    setPaymentMessage(
+                      "Verification received. Final payment state is still processing; please refresh your profile orders shortly."
+                    );
+                  }
+                } catch (pollError) {
+                  setPaymentMessage(
+                    toRouteFailureUi("account", pollError).message
+                  );
+                }
               }
             } else {
               setPaymentMessage("Verify failed or invalid response.");
             }
           } catch (e) {
-            setPaymentMessage(
-              "Verify failed: " + ((e as Error).message || String(e))
-            );
+            setPaymentMessage(toRouteFailureUi("account", e).message);
           }
         },
       };
@@ -143,13 +189,11 @@ export function useRazorpayTest() {
       });
       rzp.open();
     } catch (e) {
-      setPaymentMessage(
-        "Error: " + ((e as Error).message || String(e))
-      );
+      setPaymentMessage(toRouteFailureUi("account", e).message);
     } finally {
       setPaymentLoading(false);
     }
-  }, []);
+  }, [pollOrderReconciliation]);
 
   const runTest = useCallback(async () => {
     setPaymentMessage("Use checkout flow from /checkout/address.");

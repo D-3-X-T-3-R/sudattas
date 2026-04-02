@@ -7,6 +7,7 @@ import { useReducedMotion } from "framer-motion";
 import { User } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { ensureGuestSession, getGuestSessionId, clearGuestSession } from "@/lib/session";
+import { toRouteFailureUi } from "@/lib/route-state";
 import { PRODUCTS_SEED } from "@/lib/seed-data";
 import type { Product, CartLine } from "@/lib/schemas";
 import { useStorefront } from "@/context/storefront-context";
@@ -244,7 +245,7 @@ export function Storefront() {
         setProducts(list);
         setProductsError(null);
       } else if (error) {
-        setProductsError(error ?? "No products from backend");
+        setProductsError(toRouteFailureUi("public", new Error(error)).message);
         showToast({
           title: "Catalog",
           description:
@@ -286,7 +287,7 @@ export function Storefront() {
         setProducts(pr.products);
         setProductsError(null);
       } else if (pr.error) {
-        setProductsError(pr.error);
+        setProductsError(toRouteFailureUi("public", new Error(pr.error)).message);
         showToast({
           title: "Catalog",
           description:
@@ -393,7 +394,7 @@ export function Storefront() {
           <div className="mx-auto flex max-w-[2000px] items-start justify-between gap-3">
             <p className="min-w-0">
               <strong>Catalog temporarily unavailable.</strong> We could not load
-              products right now ({productsError}). Please retry in a moment.
+              products right now. {productsError}
             </p>
             <button
               type="button"

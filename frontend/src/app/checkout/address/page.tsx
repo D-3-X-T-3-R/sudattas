@@ -25,6 +25,7 @@ import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { useStorefront } from "@/context/storefront-context";
 import { useRazorpayTest } from "@/hooks/use-razorpay-test";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
+import { toRouteFailureUi } from "@/lib/route-state";
 import { addressInputSchema } from "@/lib/validation-schemas";
 import { cn } from "@/lib/utils";
 
@@ -128,7 +129,7 @@ export default function CheckoutAddressPage() {
         return list[0]?.shippingAddressId ?? null;
       });
     } catch (e) {
-      setLoadError((e as Error).message || "Could not load addresses.");
+      setLoadError(toRouteFailureUi("account", e).message);
       setAddresses([]);
     } finally {
       setLoadingList(false);
@@ -227,7 +228,7 @@ export default function CheckoutAddressPage() {
       await loadAddresses();
       setSelectedId(created.shippingAddressId);
     } catch (e) {
-      setSaveAddressError((e as Error).message || "Could not save address.");
+      setSaveAddressError(toRouteFailureUi("account", e).message);
     } finally {
       setSavingAddress(false);
     }
