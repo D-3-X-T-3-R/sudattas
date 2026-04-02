@@ -27,6 +27,12 @@
 
 - Each request gets a `request_id` (UUID) in the tracing span (or from `x-request-id` header if provided). Use it for log correlation.
 - The same ID is propagated to gRPC as `x-request-id` metadata for place_order and capture_payment (and can be extended to other resolvers via `connect_grpc_client_from_context(ctx)`).
+- Checkout/payment mutation logs include structured correlation fields:
+  - `request_id`
+  - `client_action` (from `X-Client-Action`)
+  - `auth_mode`
+  - `has_idempotency_key`
+  - operation-specific ids (`order_id`, `user_id`, `amount_paise` where relevant)
 
 ## Webhooks
 

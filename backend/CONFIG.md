@@ -42,6 +42,7 @@ For orchestrators (e.g. Kubernetes):
 ## Cross-layer route contract
 
 Frontend and backend boundary rules are documented in [`../docs/CROSS_LAYER_CONTRACT.md`](../docs/CROSS_LAYER_CONTRACT.md).
+Staging/production security parity rules are documented in [`../docs/STAGING_PRODUCTION_PARITY.md`](../docs/STAGING_PRODUCTION_PARITY.md).
 
 This includes:
 
