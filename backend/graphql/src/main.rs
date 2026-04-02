@@ -11,6 +11,7 @@ use graphql::security::jwt_validator::validate_token;
 use graphql::security::phone_otp;
 use graphql::security::session_validator;
 use graphql::seo;
+mod startup_config;
 use graphql::webhooks;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use serde::Deserialize;
@@ -51,16 +52,6 @@ impl warp::reject::Reject for RateLimited {}
 #[derive(Debug)]
 struct CsrfRejected {}
 impl warp::reject::Reject for CsrfRejected {}
-
-fn env_bool(var: &str, default: bool) -> bool {
-    match std::env::var(var) {
-        Ok(v) => {
-            let s = v.trim().to_ascii_lowercase();
-            matches!(s.as_str(), "1" | "true" | "yes" | "on")
-        }
-        Err(_) => default,
-    }
-}
 
 fn parse_first_forwarded_ip(raw: &str) -> Option<IpAddr> {
     for part in raw.split(',') {
@@ -145,28 +136,13 @@ async fn main() {
         .json()
         .init();
 
+    let startup = startup_config::StartupConfig::from_env()
+        .unwrap_or_else(|e| panic!("invalid startup environment: {e}"));
     let jwks = load_jwks().await.expect("Failed to load JWKS");
-
-    let redis_url = std::env::var("REDIS_URL").ok();
-
-    // P2 Security: when set, session-authenticated POSTs must have Origin/Referer in this list.
-    let allowed_origins: Vec<String> = std::env::var("ALLOWED_ORIGINS")
-        .unwrap_or_default()
-        .split(',')
-        .map(|s| s.trim().to_lowercase())
-        .filter(|s| !s.is_empty())
-        .collect();
-    let allowed_origins = if allowed_origins.is_empty() {
-        None
-    } else {
-        Some(Arc::new(allowed_origins))
-    };
-
-    let rate_limit_per_minute: u32 = std::env::var("RATE_LIMIT_PER_MINUTE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(240);
-    let trust_proxy_headers = env_bool("RATE_LIMIT_TRUST_PROXY_HEADERS", false);
+    let redis_url = startup.redis_url.clone();
+    let allowed_origins = startup.allowed_origins.clone().map(Arc::new);
+    let rate_limit_per_minute = startup.rate_limit_per_minute;
+    let trust_proxy_headers = startup.trust_proxy_headers;
     let rate_limiter: Option<Arc<governor::DefaultKeyedRateLimiter<String>>> =
         if rate_limit_per_minute == 0 {
             None
@@ -214,10 +190,7 @@ async fn main() {
             .map(|_| ())
     };
 
-    let webhook_limit_per_minute: u32 = std::env::var("RATE_LIMIT_WEBHOOK_PER_MINUTE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(120);
+    let webhook_limit_per_minute = startup.webhook_rate_limit_per_minute;
     let webhook_rate_limiter: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>> =
         if webhook_limit_per_minute == 0 {
             None
@@ -472,10 +445,7 @@ async fn main() {
         .map(|_, reply| reply);
 
     // Bind address is configurable via GRAPHQL_LISTEN_ADDR (default: 0.0.0.0:8080)
-    let listen_addr: std::net::SocketAddr = std::env::var("GRAPHQL_LISTEN_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
-        .parse()
-        .expect("GRAPHQL_LISTEN_ADDR must be a valid socket address");
+    let listen_addr = startup.listen_addr;
 
     let prom_handle = PrometheusBuilder::new()
         .install_recorder()
