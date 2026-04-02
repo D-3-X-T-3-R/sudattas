@@ -163,7 +163,7 @@ export function Storefront() {
     return () => {
       window.history.scrollRestoration = prev;
     };
-  }, []);
+  }, [showToast]);
 
   /**
    * Cross-route nav: sessionStorage + optional hash; scroll after target exists in DOM.
@@ -289,7 +289,7 @@ export function Storefront() {
       setLoadingProducts(false);
     }
     loadProducts();
-  }, []);
+  }, [showToast]);
 
   /** Re-fetch catalog with GraphQL searchProduct + moodId (or full list when null). */
   const applyShopMoodFilter = useCallback(

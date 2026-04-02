@@ -47,11 +47,14 @@ import {
   ProductImagesDialogs,
   type AdminReorderableImage,
 } from "@/domains/admin/products/components/product-images-dialogs";
+import { ProductVariantsSection } from "@/domains/admin/products/components/product-variants-section";
+import { ProductMoodsSection } from "@/domains/admin/products/components/product-moods-section";
+import { ProductImagesSection } from "@/domains/admin/products/components/product-images-section";
 import { SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
-import { Pencil, Package, Plus, X } from "lucide-react";
+import { Pencil, Package, Plus } from "lucide-react";
 import {
   MAX_MONEY_PAISE,
   optionalRupeesInputToPaise,
@@ -1576,440 +1579,42 @@ export default function AdminProductsPage() {
                   <option value="3">Archived</option>
                 </select>
               </div>
-              <div className="mt-8 border-t border-[var(--color-line)] pt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                  Variants *
-                </h3>
-                <p className="mt-2 text-xs text-[var(--color-muted)]">
-                  Add size/color combinations. Each variant can have an extra price (paise) and initial stock.
-                </p>
-                <div className="mt-3 space-y-2">
-                  {variants.map((v, idx) => (
-                    <div
-                      key={idx}
-                      className="flex flex-wrap items-end gap-2 rounded-lg border border-[var(--color-line)] bg-white/40 p-3"
-                    >
-                      <select
-                        className={cn(
-                          "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                          "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-                        )}
-                        value={v.sizeId}
-                        onChange={(e) =>
-                          setVariants((prev) => {
-                            const next = [...prev];
-                            next[idx] = { ...next[idx], sizeId: e.target.value };
-                            return next;
-                          })
-                        }
-                      >
-                        <option value="">Select size</option>
-                        {sizes.map((s) => (
-                          <option key={s.sizeId} value={s.sizeId}>{s.sizeName}</option>
-                        ))}
-                      </select>
-                      <select
-                        className={cn(
-                          "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                          "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-                        )}
-                        value={v.colorId}
-                        onChange={(e) =>
-                          setVariants((prev) => {
-                            const next = [...prev];
-                            next[idx] = { ...next[idx], colorId: e.target.value };
-                            return next;
-                          })
-                        }
-                      >
-                        <option value="">Select color</option>
-                        {colors.map((c) => (
-                          <option key={c.colorId} value={c.colorId}>{c.colorName}</option>
-                        ))}
-                      </select>
-                      <Input
-                        type="text"
-                        placeholder="Extra price (paise)"
-                        value={v.additionalPricePaise}
-                        onChange={(e) =>
-                          setVariants((prev) => {
-                            const next = [...prev];
-                            next[idx] = { ...next[idx], additionalPricePaise: e.target.value };
-                            return next;
-                          })
-                        }
-                        className="h-9 w-28 rounded-md"
-                      />
-                      <Input
-                        type="text"
-                        placeholder="Qty"
-                        value={v.quantityAvailable}
-                        onChange={(e) =>
-                          setVariants((prev) => {
-                            const next = [...prev];
-                            next[idx] = { ...next[idx], quantityAvailable: e.target.value };
-                            return next;
-                          })
-                        }
-                        className="h-9 w-20 rounded-md"
-                      />
-                      <Input
-                        type="text"
-                        placeholder="Reorder"
-                        value={v.reorderLevel}
-                        onChange={(e) =>
-                          setVariants((prev) => {
-                            const next = [...prev];
-                            next[idx] = { ...next[idx], reorderLevel: e.target.value };
-                            return next;
-                          })
-                        }
-                        className="h-9 w-20 rounded-md"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 text-red-600"
-                        onClick={() => setVariants((prev) => prev.filter((_, i) => i !== idx))}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-lg border-[var(--color-line)]"
-                    onClick={() =>
-                      setVariants((prev) => [
-                        ...prev,
-                        {
-                          sizeId: "",
-                          colorId: "",
-                          additionalPricePaise: "",
-                          quantityAvailable: "0",
-                          reorderLevel: "",
-                        },
-                      ])
-                    }
-                  >
-                    + Add variant
-                  </Button>
-                </div>
-              </div>
-              <div className="mt-6 border-t border-[var(--color-line)] pt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                  Moods (optional)
-                </h3>
-                <p className="mt-2 text-xs text-[var(--color-muted)]">
-                  Select one or more moods to link to this product.
-                </p>
-                <div className="mt-3 grid grid-cols-4 gap-x-6 gap-y-2">
-                  {existingMoods.map((m) => (
-                    <label
-                      key={m.moodId}
-                      className={cn(
-                        "flex cursor-pointer items-center gap-2 text-sm",
-                        "focus-within:outline-none focus-within:ring-2 focus-within:ring-[var(--color-accent-gold)]/50 focus-within:ring-offset-1 rounded"
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedMoodIds.includes(m.moodId)}
-                        onChange={() => {
-                          setSelectedMoodIds((prev) =>
-                            prev.includes(m.moodId)
-                              ? prev.filter((id) => id !== m.moodId)
-                              : [...prev, m.moodId]
-                          );
-                        }}
-                        className="h-4 w-4 rounded border-[var(--color-line)] text-[var(--color-accent-gold)] focus:ring-[var(--color-accent-gold)]/50"
-                      />
-                      <span>{m.moodName}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Input
-                    placeholder="New mood name"
-                    value={newMoodName}
-                    onChange={(e) => {
-                      setNewMoodName(e.target.value);
-                      setMoodCreateError("");
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const name = newMoodName.trim();
-                        if (name) createMoodMutation.mutate(name);
-                      }
-                    }}
-                    className="max-w-[14rem] rounded-md border border-[var(--color-line)] bg-white px-3 py-1.5 text-sm"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!newMoodName.trim() || createMoodMutation.isPending}
-                    onClick={() => {
-                      const name = newMoodName.trim();
-                      if (name) createMoodMutation.mutate(name);
-                    }}
-                  >
-                    {createMoodMutation.isPending ? "Addingâ€¦" : "Add mood"}
-                  </Button>
-                </div>
-                {moodCreateError && (
-                  <p className="mt-2 text-xs text-red-600" role="alert">{moodCreateError}</p>
-                )}
-                {existingMoods.length === 0 && !newMoodName && (
-                  <p className="mt-2 text-xs text-[var(--color-muted)]">No moods in the system yet. Add one above or add moods from seed data.</p>
-                )}
-              </div>
-              <div className="mt-8 border-t border-[var(--color-line)] pt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                  Images *
-                </h3>
-                <p className="mt-2 text-xs text-[var(--color-muted)]">
-                  Select at least one image. All selected images will be uploaded
-                  and linked after the product is created.
-                </p>
-                {imageError && (
-                  <div
-                    className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
-                    role="alert"
-                  >
-                    {imageError}
-                  </div>
-                )}
-                {imageMessage && (
-                  <div
-                    className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
-                    role="status"
-                  >
-                    {imageMessage}
-                  </div>
-                )}
-                <div className="mt-3 space-y-3 text-xs text-[var(--color-muted)]">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        setOrderedProductImages(null);
-                        setImageFiles(files);
-                        setImageError("");
-                        setImageMessage("");
-                        if (files.length > 0) {
-                          setImageDialogOpen(true);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 rounded-full border-[var(--color-line)] px-4 text-xs"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Choose imagesâ€¦
-                    </Button>
-                  </div>
-                  <p className="text-[11px] text-[var(--color-muted)]">
-                    {editingProductId
-                      ? "Add more images below; they will upload when you click Update product."
-                      : "All selected images will be uploaded when you click Add product."}
-                  </p>
-                  {(orderedProductImages !== null ||
-                    existingProductImages.length > 0 ||
-                    imagePreviews.length > 0) && (
-                    <div className="mt-4">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-xs font-medium text-[var(--color-ink)]">
-                          Added images
-                          {orderedProductImages != null
-                            ? ` (${orderedProductImages.length})`
-                            : existingProductImages.length > 0 && imagePreviews.length > 0
-                              ? ` (${existingProductImages.length} existing, ${imagePreviews.length} new)`
-                              : existingProductImages.length > 0
-                                ? ` (${existingProductImages.length})`
-                                : ` (${imagePreviews.length} selected)`}
-                        </p>
-                        {editingProductId &&
-                          (existingProductImages.length > 0 || imagePreviews.length > 0) && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="h-8 rounded-full border-[var(--color-line)] px-3 text-xs"
-                              onClick={() => {
-                                const list =
-                                  orderedProductImages ??
-                                  [
-                                    ...existingProductImages.map((image) => ({
-                                      type: "existing" as const,
-                                      image,
-                                    })),
-                                    ...imagePreviews.map((previewUrl, i) => ({
-                                      type: "new" as const,
-                                      file: imageFiles[i],
-                                      previewUrl,
-                                    })),
-                                  ];
-                                setReorderableImages(list);
-                                setReorderImagesOpen(true);
-                              }}
-                            >
-                              Reorder images
-                            </Button>
-                          )}
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        {orderedProductImages != null
-                          ? orderedProductImages.map((item, idx) => (
-                              <div
-                                key={
-                                  item.type === "existing"
-                                    ? `existing-${idx}-${item.image.imageId ?? item.image.url ?? ""}`
-                                    : `new-${idx}-${item.previewUrl}`
-                                }
-                                className={`relative aspect-square w-24 shrink-0 overflow-hidden rounded-lg border bg-[var(--color-ivory)] ${
-                                  item.type === "existing"
-                                    ? "border-[var(--color-line)]"
-                                    : "border-dashed border-[var(--color-line)]"
-                                }`}
-                              >
-                                {item.type === "existing" ? (
-                                  (() => {
-                                    const src = getImageUrlWithCacheBuster(
-                                      item.image,
-                                      productImagesLoadKey
-                                    );
-                                    return src ? (
-                                      <img
-                                        src={src}
-                                        alt=""
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center bg-[var(--color-line)]/30 text-[10px] text-[var(--color-muted)]">
-                                        No image
-                                      </div>
-                                    );
-                                  })()
-                                ) : (
-                                  <img
-                                    src={item.previewUrl}
-                                    alt=""
-                                    className="h-full w-full object-cover"
-                                  />
-                                )}
-                                <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
-                                  {item.type === "existing" ? "Existing" : "New"}
-                                </span>
-                                {editingProductId && (
-                                  <button
-                                    type="button"
-                                    aria-label="Remove image (saved when you click Update product)"
-                                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
-                                    onClick={() => {
-                                      setOrderedProductImages((prev) =>
-                                        prev ? prev.filter((_, i) => i !== idx) : prev
-                                      );
-                                      setImageMessage(
-                                        "Image will be removed when you click Update product."
-                                      );
-                                    }}
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            ))
-                          : (
-                            <>
-                              {existingProductImages.map((img, idx) => (
-                                <div
-                                  key={`existing-${idx}-${img.imageId ?? img.url ?? img.thumbnailUrl ?? ""}`}
-                                  className="relative aspect-square w-24 shrink-0 overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-ivory)]"
-                                >
-                                  {getImageUrlWithCacheBuster(img, productImagesLoadKey) ? (
-                                    <img
-                                      src={getImageUrlWithCacheBuster(img, productImagesLoadKey)}
-                                      alt=""
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center bg-[var(--color-line)]/30 text-[10px] text-[var(--color-muted)]">
-                                      No image
-                                    </div>
-                                  )}
-                                  {editingProductId && (
-                                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
-                                      Existing
-                                    </span>
-                                  )}
-                                  {editingProductId && (
-                                    <button
-                                      type="button"
-                                      aria-label="Remove image (saved when you click Update product)"
-                                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
-                                      onClick={() => {
-                                        const toRemove = img;
-                                        setExistingProductImages((prev) => {
-                                          const i = prev.findIndex((im) => im === toRemove);
-                                          if (i === -1) return prev;
-                                          return prev.filter((_, j) => j !== i);
-                                        });
-                                        setImageMessage(
-                                          "Image will be removed when you click Update product."
-                                        );
-                                      }}
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                              {imagePreviews.map((url, idx) => (
-                                <div
-                                  key={`new-${idx}-${url}`}
-                                  className="relative aspect-square w-24 shrink-0 overflow-hidden rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-ivory)]"
-                                >
-                                  <img
-                                    src={url}
-                                    alt=""
-                                    className="h-full w-full object-cover"
-                                  />
-                                  <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">
-                                    New
-                                  </span>
-                                  <button
-                                    type="button"
-                                    aria-label="Remove image"
-                                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
-                                    onClick={() => {
-                                      setImageFiles((prev) => prev.filter((_, i) => i !== idx));
-                                      setImageError("");
-                                      setImageMessage("");
-                                    }}
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              ))}
-                            </>
-                          )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="mt-4 flex items-center gap-2">
+              <ProductVariantsSection
+                variants={variants}
+                setVariants={setVariants}
+                sizes={sizes}
+                colors={colors}
+              />
+              <ProductMoodsSection
+                existingMoods={existingMoods}
+                selectedMoodIds={selectedMoodIds}
+                setSelectedMoodIds={setSelectedMoodIds}
+                newMoodName={newMoodName}
+                setNewMoodName={setNewMoodName}
+                moodCreateError={moodCreateError}
+                setMoodCreateError={setMoodCreateError}
+                createMoodMutation={createMoodMutation}
+              />
+                            <ProductImagesSection
+                imageError={imageError}
+                imageMessage={imageMessage}
+                fileInputRef={fileInputRef}
+                setOrderedProductImages={setOrderedProductImages}
+                setImageFiles={setImageFiles}
+                setImageError={setImageError}
+                setImageMessage={setImageMessage}
+                setImageDialogOpen={setImageDialogOpen}
+                editingProductId={editingProductId}
+                orderedProductImages={orderedProductImages}
+                existingProductImages={existingProductImages}
+                imagePreviews={imagePreviews}
+                imageFiles={imageFiles}
+                setReorderableImages={setReorderableImages}
+                setReorderImagesOpen={setReorderImagesOpen}
+                productImagesLoadKey={productImagesLoadKey}
+                getImageUrlWithCacheBuster={getImageUrlWithCacheBuster}
+                setExistingProductImages={setExistingProductImages}
+              /><div className="mt-4 flex items-center gap-2">
                 <Button
                   type="submit"
                   disabled={createProductMutation.isPending || updateProductMutation.isPending || isUpdateReflecting}
@@ -2090,4 +1695,5 @@ export default function AdminProductsPage() {
     </div>
   );
 }
+
 

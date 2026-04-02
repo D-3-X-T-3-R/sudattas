@@ -1,78 +1,17 @@
-"use client";
+﻿"use client";
 
-import { useState, useMemo } from "react";
-import Link from "next/link";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/typography";
-import {
-  fetchOrdersList,
-  fetchOrderStatuses,
-  type OrderListRow,
-} from "@/lib/admin-queries";
+import { fetchOrdersList, fetchOrderStatuses, type OrderListRow } from "@/lib/admin-queries";
 import { toRouteFailureUi } from "@/lib/route-state";
-import { cn } from "@/lib/utils";
-import { Filter, ListOrdered } from "lucide-react";
+import { ListOrdered } from "lucide-react";
+import { OrdersFiltersCard } from "@/domains/admin/orders/components/orders-filters-card";
+import { OrdersTableCard } from "@/domains/admin/orders/components/orders-table-card";
+import { getDateRange } from "@/domains/admin/orders/utils";
+import type { DatePreset } from "@/domains/admin/orders/types";
 
-type DatePreset = "7" | "30" | "month" | "all";
 const MAX_ORDER_PAGE_SIZE = 100;
-
-function getDateRange(preset: DatePreset): { orderDateStart?: string; orderDateEnd?: string } {
-  const now = new Date();
-  const end = new Date(now);
-  end.setHours(23, 59, 59, 999);
-  const endSec = Math.floor(end.getTime() / 1000);
-
-  switch (preset) {
-    case "7": {
-      const start = new Date(now);
-      start.setDate(start.getDate() - 7);
-      start.setHours(0, 0, 0, 0);
-      return { orderDateStart: String(Math.floor(start.getTime() / 1000)), orderDateEnd: String(endSec) };
-    }
-    case "30": {
-      const start = new Date(now);
-      start.setDate(start.getDate() - 30);
-      start.setHours(0, 0, 0, 0);
-      return { orderDateStart: String(Math.floor(start.getTime() / 1000)), orderDateEnd: String(endSec) };
-    }
-    case "month": {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-      return { orderDateStart: String(Math.floor(start.getTime() / 1000)), orderDateEnd: String(endSec) };
-    }
-    default:
-      return {};
-  }
-}
-
-function formatOrderDate(orderDate: string): string {
-  try {
-    const d = new Date(orderDate);
-    if (Number.isNaN(d.getTime())) return orderDate;
-    return d.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return orderDate;
-  }
-}
-
-const PRESETS: { key: DatePreset; label: string }[] = [
-  { key: "7", label: "Last 7 days" },
-  { key: "30", label: "Last 30 days" },
-  { key: "month", label: "This month" },
-  { key: "all", label: "All" },
-];
-
-function getStatusLabel(statusId: string, statuses: { statusId: string; statusName: string }[]): string {
-  const s = statuses.find((x) => x.statusId === statusId);
-  return s ? s.statusName : statusId;
-}
 
 export default function AdminOrdersPage() {
   const userIdFromUrl =
@@ -82,7 +21,7 @@ export default function AdminOrdersPage() {
 
   const [datePreset, setDatePreset] = useState<DatePreset>("30");
   const [statusId, setStatusId] = useState("");
-  const [page, setPage] = useState(1);
+  const [page, setPageRaw] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
   const filters = useMemo(() => {
@@ -116,7 +55,7 @@ export default function AdminOrdersPage() {
   const ordersErrorUi = isError ? toRouteFailureUi("admin", error) : null;
 
   return (
-    <div className="mx-auto max-w-6xl w-full">
+    <div className="mx-auto w-full max-w-6xl">
       <div className="mb-8">
         <p className="text-sm text-[var(--color-muted)]">Orders</p>
         <SectionHeading size="default" className="mt-1">
@@ -134,169 +73,30 @@ export default function AdminOrdersPage() {
         </span>
       </div>
 
-      <Card className="rounded-xl border-[var(--color-line)] border-l-4 border-l-blue-500 bg-white shadow-[var(--admin-card-shadow)]">
-        <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
-          <Filter className="h-4 w-4 text-blue-500" />
-          Filters
-        </CardTitle>
-        <CardContent className="mt-3 flex flex-wrap items-center gap-3">
-          <div className="flex flex-wrap gap-2">
-            {PRESETS.map(({ key, label }) => (
-              <Button
-                key={key}
-                type="button"
-                variant={datePreset === key ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setPage(1);
-                  setDatePreset(key);
-                }}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
-          {userIdFromUrl && (
-            <div className="flex items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-sm">
-              <span className="text-[var(--color-muted)]">Customer:</span>
-              <span className="font-mono text-[var(--color-ink)]">{userIdFromUrl}</span>
-              <Link
-                href="/imtheboss/orders"
-                className="text-[var(--color-accent-brown)] hover:underline"
-              >
-                Clear
-              </Link>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <label htmlFor="orders-status" className="text-sm text-[var(--color-muted)]">
-              Status
-            </label>
-            <select
-              id="orders-status"
-              className={cn(
-                "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-              )}
-              value={statusId}
-              onChange={(e) => {
-                setPage(1);
-                setStatusId(e.target.value);
-              }}
-            >
-              <option value="">All statuses</option>
-              {statuses.map((s) => (
-                <option key={s.statusId} value={s.statusId}>
-                  {s.statusName}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label htmlFor="orders-page-size" className="text-sm text-[var(--color-muted)]">
-              Per page
-            </label>
-            <select
-              id="orders-page-size"
-              className={cn(
-                "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-              )}
-              value={String(pageSize)}
-              onChange={(e) => {
-                setPage(1);
-                setPageSize(Number(e.target.value));
-              }}
-            >
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
-            Refresh
-          </Button>
-        </CardContent>
-      </Card>
+      <OrdersFiltersCard
+        datePreset={datePreset}
+        setDatePreset={setDatePreset}
+        statusId={statusId}
+        setStatusId={setStatusId}
+        pageSize={pageSize}
+        setPageSize={setPageSize}
+        setPage={setPageRaw}
+        statuses={statuses}
+        userIdFromUrl={userIdFromUrl}
+        onRefresh={() => refetch()}
+      />
 
-      <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-violet-500 bg-white shadow-[var(--admin-card-shadow)]">
-        <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
-          <ListOrdered className="h-4 w-4 text-violet-500" />
-          Orders
-        </CardTitle>
-        <CardContent className="mt-3">
-          {isLoading && (
-            <p className="py-8 text-center text-sm text-[var(--color-muted)]">Loading orders…</p>
-          )}
-          {isError && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              <p className="font-medium">{ordersErrorUi?.title ?? "Could not load orders."}</p>
-              <p className="mt-1 text-xs">{ordersErrorUi?.message ?? "Please try again."}</p>
-            </div>
-          )}
-          {!isLoading && !isError && orders.length === 0 && (
-            <p className="py-8 text-center text-sm text-[var(--color-muted)]">No orders in this range.</p>
-          )}
-          {!isLoading && !isError && orders.length > 0 && (
-            <div className="space-y-4">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[600px] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
-                      <th className="pb-2 pr-4 font-medium">Order ID</th>
-                      <th className="pb-2 pr-4 font-medium">Date</th>
-                      <th className="pb-2 pr-4 font-medium">Customer (user ID)</th>
-                      <th className="pb-2 pr-4 font-medium">Amount</th>
-                      <th className="pb-2 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map((order) => (
-                      <tr
-                        key={order.orderId}
-                        className="border-b border-[var(--color-line)] last:border-0 hover:bg-[var(--color-surface)]"
-                      >
-                        <td className="py-3 pr-4 font-mono text-[var(--color-ink)]">{order.orderId}</td>
-                        <td className="py-3 pr-4 text-[var(--color-ink)]">{formatOrderDate(order.orderDate)}</td>
-                        <td className="py-3 pr-4 text-[var(--color-ink)]">{order.userId}</td>
-                        <td className="py-3 pr-4 text-[var(--color-ink)]">{order.totalAmountFormatted}</td>
-                        <td className="py-3 text-[var(--color-muted)]">
-                          {getStatusLabel(order.statusId, statuses)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-[var(--color-muted)]">
-                  Page {page} · showing up to {pageSize} rows
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1 || isLoading}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={orders.length < pageSize || isLoading}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <OrdersTableCard
+        isLoading={isLoading}
+        isError={isError}
+        errorTitle={ordersErrorUi?.title}
+        errorMessage={ordersErrorUi?.message}
+        orders={orders}
+        statuses={statuses}
+        page={page}
+        pageSize={pageSize}
+        setPage={setPageRaw}
+      />
     </div>
   );
 }

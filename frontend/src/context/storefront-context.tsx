@@ -192,7 +192,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         }
       });
     },
-    [showToast, status, wishlist]
+    [announce, showToast, status, wishlist]
   );
 
   const addToCart = useCallback(
