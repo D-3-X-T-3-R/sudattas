@@ -8,29 +8,18 @@
  */
 
 import { fetchWithResilience } from "@/lib/network-resilience";
+import { configuredStorefrontOrigin, publicGraphqlUrl } from "@/lib/env/public";
 
-const GRAPHQL_URL =
-  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_URL) ||
-  "http://localhost:8080/v2";
+const GRAPHQL_URL = publicGraphqlUrl();
 
 function sessionFetchHeaders(sessionId: string): Record<string, string> {
   const h: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Session-Id": sessionId,
   };
-  const raw =
-    (typeof process !== "undefined" && process.env.STOREFRONT_ORIGIN) ||
-    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_SITE_URL) ||
-    (typeof process !== "undefined" &&
-      process.env.VERCEL_URL &&
-      `https://${process.env.VERCEL_URL}`);
-  if (!raw) return h;
-  try {
-    const url = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
-    h.Origin = new URL(url).origin;
-  } catch {
-    /* ignore bad env */
-  }
+  const origin = configuredStorefrontOrigin();
+  if (!origin) return h;
+  h.Origin = origin;
   return h;
 }
 
@@ -78,3 +67,4 @@ export async function gqlWithSession<T = unknown>(
   }
   return json.data as T;
 }
+

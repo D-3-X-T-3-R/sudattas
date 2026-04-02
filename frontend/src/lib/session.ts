@@ -4,15 +4,12 @@
  */
 
 import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
+import { publicGraphqlUrl } from "@/lib/env/public";
 
 const STORAGE_KEY = "sudattas_guest_session";
 
 function getBaseUrl(): string {
-  const url =
-    (typeof process !== "undefined" &&
-      process.env?.NEXT_PUBLIC_GRAPHQL_URL) ||
-    "http://localhost:8080/v2";
-  return url.replace(/\/v2\/?$/, "");
+  return publicGraphqlUrl().replace(/\/v2\/?$/, "");
 }
 
 export function getGuestSessionId(): string | null {

@@ -3,9 +3,10 @@ import "server-only";
 import { getServerSession } from "next-auth";
 import type { Session } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { serverEnv } from "@/lib/env/server";
 
 function adminAllowlist(): string[] {
-  const raw = process.env.ADMIN_ALLOWED_EMAILS ?? "";
+  const raw = serverEnv.ADMIN_ALLOWED_EMAILS ?? "";
   return raw
     .split(",")
     .map((email) => email.trim().toLowerCase())

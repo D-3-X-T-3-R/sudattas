@@ -15,16 +15,11 @@ import {
   withRecoveredGuestSession,
 } from "@/lib/server-guest-session";
 import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
+import { siteUrl } from "@/lib/site-url";
 
 interface ProductPageData {
   product: Product;
   sizes: { sizeId: string; sizeName: string }[];
-}
-
-function siteUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!raw) return "https://www.sudattas.com";
-  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
 function absoluteImageUrl(base: string, image: string | undefined): string {
@@ -215,3 +210,5 @@ export default async function ProductPage({
     </>
   );
 }
+
+

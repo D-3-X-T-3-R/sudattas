@@ -5,13 +5,10 @@ import { headers as nextHeaders } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
 import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
+import { serverGraphqlUrl } from "@/lib/env/server";
 
 export function graphQlUrl(): string {
-  return (
-    process.env.GRAPHQL_URL ||
-    process.env.NEXT_PUBLIC_GRAPHQL_URL ||
-    "http://localhost:8080/v2"
-  );
+  return serverGraphqlUrl();
 }
 
 export async function requireSessionToken(): Promise<string | null> {
@@ -104,3 +101,4 @@ export function apiError(message: string, status: number, errorCode: string) {
     { status }
   );
 }
+

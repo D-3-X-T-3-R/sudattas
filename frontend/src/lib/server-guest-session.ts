@@ -1,14 +1,7 @@
 import { fetchWithResilience } from "@/lib/network-resilience";
+import { graphqlBaseUrl } from "@/lib/env/server";
 
 let mintSingleFlight: Promise<string | null> | null = null;
-
-function graphqlBaseUrl(): string {
-  const raw =
-    process.env.GRAPHQL_URL ||
-    process.env.NEXT_PUBLIC_GRAPHQL_URL ||
-    "http://localhost:8080/v2";
-  return raw.replace(/\/v2\/?$/, "");
-}
 
 export function isStaleGuestSessionError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
@@ -69,3 +62,4 @@ export async function mintGuestSessionIdSingleFlight(
   }
   return mintSingleFlight;
 }
+

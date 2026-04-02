@@ -10,10 +10,9 @@ import {
   refreshGuestSession,
 } from "@/lib/session";
 import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
+import { publicGraphqlUrl } from "@/lib/env/public";
 
-const GRAPHQL_URL =
-  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_URL) ||
-  "http://localhost:8080/v2";
+const GRAPHQL_URL = publicGraphqlUrl();
 
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
