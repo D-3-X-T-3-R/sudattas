@@ -17,10 +17,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
+import { publicEnv } from "@/lib/env/public";
 
 const ADMIN_BASE = "/imtheboss";
-const STORE_URL =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_STORE_URL) || "/";
+const STORE_URL = publicEnv.NEXT_PUBLIC_STORE_URL || "/";
 
 const NAV = [
   { href: `${ADMIN_BASE}`, icon: LayoutDashboard, label: "Dashboard" },

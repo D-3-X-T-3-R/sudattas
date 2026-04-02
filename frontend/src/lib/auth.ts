@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { graphqlBaseUrl, serverEnv } from "@/lib/env/server";
 
 function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, "");
@@ -24,11 +25,7 @@ async function verifyTwilioOtp(phoneE164: string, otp: string): Promise<boolean>
 }
 
 function getGraphqlBaseUrl(): string {
-  const gqlUrl =
-    process.env.GRAPHQL_URL ||
-    process.env.NEXT_PUBLIC_GRAPHQL_URL ||
-    "http://localhost:8080/v2";
-  return gqlUrl.replace(/\/v2\/?$/, "");
+  return graphqlBaseUrl();
 }
 
 function extractGoogleSubFromJwt(idToken: string): string | null {
@@ -112,8 +109,8 @@ export const authOptions: NextAuthOptions = {
   },
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+      clientId: serverEnv.GOOGLE_CLIENT_ID ?? "",
+      clientSecret: serverEnv.GOOGLE_CLIENT_SECRET ?? "",
       authorization: {
         params: {
           prompt: "consent",
@@ -141,7 +138,7 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
-  secret: process.env.AUTH_SECRET,
+  secret: serverEnv.AUTH_SECRET,
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "phone-otp") return true;
@@ -153,7 +150,7 @@ export const authOptions: NextAuthOptions = {
       const isAdminFlow =
         typeof account?.callbackUrl === "string" &&
         account.callbackUrl.includes("/imtheboss");
-      const allowedRaw = process.env.ADMIN_ALLOWED_EMAILS;
+      const allowedRaw = serverEnv.ADMIN_ALLOWED_EMAILS;
       if (isAdminFlow && allowedRaw?.trim()) {
         const allowed = allowedRaw
           .split(",")

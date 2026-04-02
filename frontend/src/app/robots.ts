@@ -1,10 +1,5 @@
 import type { MetadataRoute } from "next";
-
-function siteUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!raw) return "https://www.sudattas.com";
-  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
-}
+import { siteUrl } from "@/lib/site-url";
 
 export default function robots(): MetadataRoute.Robots {
   const base = siteUrl();
@@ -17,4 +12,6 @@ export default function robots(): MetadataRoute.Robots {
     sitemap: `${base}/sitemap.xml`,
   };
 }
+
+
 

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { StorefrontProvider } from "@/context/storefront-context";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
+import { siteUrl } from "@/lib/site-url";
 
 /** Headings: Playfair Display */
 const playfair = Playfair_Display({
@@ -22,12 +23,6 @@ export const metadata: Metadata = {
   title: "Sudatta's | Designer Sarees",
   description: "Minimal luxury storefront for Sudatta's sarees.",
 };
-
-function siteUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!raw) return "https://www.sudattas.com";
-  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
-}
 
 export default function RootLayout({
   children,
@@ -66,3 +61,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+
