@@ -156,7 +156,7 @@ export function ProductDetailView({
         </p>
 
         <div className="mt-4 font-sans text-2xl font-semibold text-[var(--color-accent-gold)]">
-          {product.priceFormatted ?? INR.format(product.price)} INR
+          {product.priceFormatted ?? INR.format(product.price)}
         </div>
 
         {hasSizeSelector(product) && (

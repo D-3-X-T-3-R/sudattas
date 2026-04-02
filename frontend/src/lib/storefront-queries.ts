@@ -54,33 +54,49 @@ export interface StorefrontMoodRow {
 }
 
 /** Fetch all sizes (for storefront size selector). */
-export async function fetchSizesWithSession(sessionId: string): Promise<SizeRow[]> {
+export async function fetchSizesWithSession(
+  sessionId: string,
+  extraHeaders: Record<string, string> = {}
+): Promise<SizeRow[]> {
   const data = await gqlWithSession<{ searchSize?: SizeRow[] }>(
     sessionId,
-    SIZES_QUERY
+    SIZES_QUERY,
+    {},
+    extraHeaders
   );
   return data?.searchSize ?? [];
 }
 
-export async function fetchCategoriesWithSession(sessionId: string): Promise<CategoryRow[]> {
+export async function fetchCategoriesWithSession(
+  sessionId: string,
+  extraHeaders: Record<string, string> = {}
+): Promise<CategoryRow[]> {
   const data = await gqlWithSession<{ searchCategory?: CategoryRow[] }>(
     sessionId,
-    CATEGORIES_QUERY
+    CATEGORIES_QUERY,
+    {},
+    extraHeaders
   );
   return data?.searchCategory ?? [];
 }
 
-export async function fetchOccasionsWithSession(sessionId: string): Promise<OccasionRow[]> {
+export async function fetchOccasionsWithSession(
+  sessionId: string,
+  extraHeaders: Record<string, string> = {}
+): Promise<OccasionRow[]> {
   const data = await gqlWithSession<{ searchOccasion?: OccasionRow[] }>(
     sessionId,
-    OCCASIONS_MUTATION
+    OCCASIONS_MUTATION,
+    {},
+    extraHeaders
   );
   return data?.searchOccasion ?? [];
 }
 
 export async function fetchProductsListWithSession(
   sessionId: string,
-  params: { limit?: string; moodId?: string; categoryId?: string } = {}
+  params: { limit?: string; moodId?: string; categoryId?: string } = {},
+  extraHeaders: Record<string, string> = {}
 ): Promise<ProductListRowWithVariantStock[]> {
   const search: { limit?: string; moodId?: string; categoryId?: string } = params.limit
     ? { limit: params.limit }
@@ -90,7 +106,8 @@ export async function fetchProductsListWithSession(
   const data = await gqlWithSession<{ searchProduct?: ProductListRowWithVariantStock[] }>(
     sessionId,
     PRODUCTS_QUERY,
-    { search }
+    { search },
+    extraHeaders
   );
   return data?.searchProduct ?? [];
 }
@@ -100,11 +117,15 @@ const MOODS_ALL_QUERY = `query MoodsAll($input: SearchProductMoodInput!) {
   searchProductMood(input: $input) { moodId moodName }
 }`;
 
-export async function fetchProductMoodsWithSession(sessionId: string): Promise<StorefrontMoodRow[]> {
+export async function fetchProductMoodsWithSession(
+  sessionId: string,
+  extraHeaders: Record<string, string> = {}
+): Promise<StorefrontMoodRow[]> {
   const data = await gqlWithSession<{ searchProductMood?: StorefrontMoodRow[] }>(
     sessionId,
     MOODS_ALL_QUERY,
-    { input: {} }
+    { input: {} },
+    extraHeaders
   );
   return data?.searchProductMood ?? [];
 }
@@ -112,7 +133,8 @@ export async function fetchProductMoodsWithSession(sessionId: string): Promise<S
 /** Up to `maxMoods` distinct moods from the newest `recentProductLimit` products. */
 export async function fetchShopHighlightMoodsWithSession(
   sessionId: string,
-  opts: { recentProductLimit?: number; maxMoods?: number } = {}
+  opts: { recentProductLimit?: number; maxMoods?: number } = {},
+  extraHeaders: Record<string, string> = {}
 ): Promise<StorefrontMoodRow[]> {
   const data = await gqlWithSession<{ shopHighlightMoods?: StorefrontMoodRow[] }>(
     sessionId,
@@ -120,7 +142,8 @@ export async function fetchShopHighlightMoodsWithSession(
     {
       recentProductLimit: opts.recentProductLimit ?? 100,
       maxMoods: opts.maxMoods ?? 12,
-    }
+    },
+    extraHeaders
   );
   return data?.shopHighlightMoods ?? [];
 }
@@ -128,13 +151,19 @@ export async function fetchShopHighlightMoodsWithSession(
 /** Fetch a single product by id with variant stock (for detail page size selector). */
 export async function fetchProductByIdWithVariantStock(
   sessionId: string,
-  productId: string
+  productId: string,
+  extraHeaders: Record<string, string> = {}
 ): Promise<ProductListRowWithVariantStock | null> {
   const data = await gqlWithSession<{
     searchProduct?: ProductListRowWithVariantStock[];
-  }>(sessionId, PRODUCT_BY_ID_QUERY, {
-    search: { productId, limit: "1" },
-  });
+  }>(
+    sessionId,
+    PRODUCT_BY_ID_QUERY,
+    {
+      search: { productId, limit: "1" },
+    },
+    extraHeaders
+  );
   const list = data?.searchProduct ?? [];
   return list[0] ?? null;
 }

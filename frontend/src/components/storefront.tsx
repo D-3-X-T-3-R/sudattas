@@ -1,12 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
+import { User } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { ensureGuestSession, getGuestSessionId, clearGuestSession } from "@/lib/session";
 import { PRODUCTS_SEED } from "@/lib/seed-data";
 import type { Product, CartLine } from "@/lib/schemas";
 import { useStorefront } from "@/context/storefront-context";
+import { useStorefrontLogin } from "@/context/storefront-login-context";
 
 type ProductsResponse = { products: Product[]; error: string | null };
 
@@ -83,6 +87,8 @@ import { Spinner } from "@/components/ui/loading";
 export function Storefront() {
   const pathname = usePathname();
   const router = useRouter();
+  const { status, data: session } = useSession();
+  const { openLogin } = useStorefrontLogin();
   const reduceMotion = useReducedMotion();
   const { showToast } = useToast();
   const {
@@ -341,6 +347,9 @@ export function Storefront() {
   const goToProduct = (p: Product) => router.push(`/product/${p.id}`);
   const goToWithMotion = (id: string, instant?: boolean) =>
     goTo(id, instant ?? !!reduceMotion);
+  const rawName = session?.user?.name?.trim() ?? "";
+  const looksLikePhone = /^\+?\d{10,15}$/.test(rawName);
+  const firstName = !rawName || looksLikePhone ? "Profile" : rawName.split(/\s+/)[0];
 
   return (
     <div id="top" className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -352,6 +361,29 @@ export function Storefront() {
         setMenuOpen={setMenuOpen}
         setCartOpen={() => {}}
         goTo={goToWithMotion}
+        authEnabled
+        authButtons={
+          status === "authenticated" ? (
+            <Link
+              href="/profile"
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-line)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-accent-gold)] hover:text-[var(--color-accent-gold)]"
+              aria-label="Open profile"
+            >
+              <User size={14} />
+              {firstName}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openLogin()}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-line)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-accent-gold)] hover:text-[var(--color-accent-gold)]"
+              aria-label="Sign in"
+            >
+              <User size={14} />
+              Sign In
+            </button>
+          )
+        }
       />
 
       <HeroSection />
@@ -360,7 +392,8 @@ export function Storefront() {
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <div className="mx-auto flex max-w-[2000px] items-start justify-between gap-3">
             <p className="min-w-0">
-              <strong>Sample products only.</strong> Catalog could not be loaded ({productsError}). To show your DB products: in <code className="rounded bg-amber-100 px-1">.env.local</code> set <code className="rounded bg-amber-100 px-1">NEXT_PUBLIC_GRAPHQL_URL</code> (e.g. http://localhost:8080/v2) and <code className="rounded bg-amber-100 px-1">NEXT_PUBLIC_ADMIN_API_KEY</code> to match the backend <code className="rounded bg-amber-100 px-1">ADMIN_API_KEY</code>, then restart the dev server.
+              <strong>Catalog temporarily unavailable.</strong> We could not load
+              products right now ({productsError}). Please retry in a moment.
             </p>
             <button
               type="button"

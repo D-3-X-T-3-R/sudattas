@@ -159,7 +159,7 @@ export function QuickViewModal({
               </p>
 
               <div className="mt-4 font-sans text-lg font-semibold text-[var(--color-accent-gold)]">
-                MRP {product.priceFormatted ?? INR.format(product.price)} INR
+                MRP {product.priceFormatted ?? INR.format(product.price)}
               </div>
 
               {/* Size */}

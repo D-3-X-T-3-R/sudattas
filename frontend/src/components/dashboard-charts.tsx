@@ -5,10 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { ResponsiveBar } from "@nivo/bar";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  fetchOrdersByDateRange,
-  fetchCustomersList,
+  fetchAllOrdersByDateRange,
+  fetchAllCustomersList,
   lastNYearsRange,
 } from "@/lib/admin-queries";
+import { formatInrFromPaise } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 type Granularity = "day" | "week" | "month" | "year";
@@ -249,17 +250,13 @@ function DashboardChartsInner() {
 
   const { data: orders = [] } = useQuery({
     queryKey: ["admin", "dashboard-orders-charts", years5],
-    queryFn: () =>
-      fetchOrdersByDateRange({
-        ...years5,
-        limit: "10000",
-      }),
+    queryFn: () => fetchAllOrdersByDateRange(years5),
     staleTime: 2 * 60 * 1000,
   });
 
   const { data: customers = [] } = useQuery({
     queryKey: ["admin", "customers"],
-    queryFn: () => fetchCustomersList(),
+    queryFn: () => fetchAllCustomersList(),
     staleTime: 2 * 60 * 1000,
   });
 
@@ -281,12 +278,7 @@ function DashboardChartsInner() {
     [customers, customersGranularity]
   );
 
-  const formatCurrency = (paise: number) =>
-    new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(paise / 100);
+  const formatCurrency = (paise: number) => formatInrFromPaise(paise);
 
   return (
     <div className="mt-10 space-y-6">

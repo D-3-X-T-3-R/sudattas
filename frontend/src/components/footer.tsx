@@ -26,8 +26,8 @@ export function Footer({ goTo }: FooterProps) {
             DESIGNER BOUTIQUE
           </div>
           <p className="mt-4 text-sm leading-relaxed text-[var(--color-muted)]">
-            Replace the placeholder images with your saree photos and host them
-            (S3/Cloudflare R2/etc.) for production.
+            Handcrafted sarees with timeless drape, modern detail, and
+            occasion-ready styling.
           </p>
         </div>
         <div>
@@ -65,9 +65,9 @@ export function Footer({ goTo }: FooterProps) {
         <div>
           <Kicker className="text-[var(--color-ink)]">Contact</Kicker>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-muted)]">
-            <li>support@sudattas.com</li>
-            <li>+91 90000 00000</li>
-            <li>Instagram: @sudattas</li>
+            <li>Customer support available through your account orders.</li>
+            <li>For styling and bulk queries, use the contact form.</li>
+            <li>Follow our latest drops on social channels.</li>
           </ul>
           <div className="mt-6 flex items-center gap-2 text-xs text-[var(--color-muted)]">
             <span className="h-px w-4 bg-[var(--color-accent-gold)]" />

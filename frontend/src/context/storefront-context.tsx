@@ -10,9 +10,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useSession } from "next-auth/react";
 import type { Product, CartLine } from "@/lib/schemas";
 import { useToast } from "@/components/ui/toast";
-import { getGuestSessionId } from "@/lib/session";
+import { getGuestSessionId, ensureGuestSession } from "@/lib/session";
 import {
   fetchCartLines,
   addCartItem,
@@ -20,13 +21,13 @@ import {
   deleteCartItem,
   type CartLineMapped,
 } from "@/lib/cart-api";
+import { fetchApiEnvelope } from "@/lib/api-envelope";
+import { paiseToRupeesNumber } from "@/lib/money";
 
 type CartState = Record<
   string,
   { id: string; product: Product; qty: number; sizeName?: string | null }
 >;
-
-const CART_CACHE_KEY = "sudattas_cart_cache_v1";
 
 function cartLinesToState(lines: CartLineMapped[]): CartState {
   const state: CartState = {};
@@ -77,54 +78,95 @@ type StorefrontContextValue = {
 const StorefrontContext = createContext<StorefrontContextValue | null>(null);
 
 export function StorefrontProvider({ children }: { children: ReactNode }) {
+  const { status } = useSession();
   const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [cart, setCart] = useState<CartState>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [cartLoading, setCartLoading] = useState(true);
   const { showToast } = useToast();
   const lastToastRef = useRef<{ key: string; at: number } | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const reloadCartFromBackend = useCallback(async () => {
+    setCartLoading(true);
     try {
-      const raw = window.localStorage.getItem(CART_CACHE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as CartState;
-      if (parsed && typeof parsed === "object") {
-        setCart(parsed);
-      }
-    } catch {
-      // ignore malformed cache
+      await ensureGuestSession();
+      const lines = await fetchCartLines();
+      setCart(lines ? cartLinesToState(lines) : {});
+    } finally {
+      setCartLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    void reloadCartFromBackend();
+  }, [reloadCartFromBackend]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onAuthChanged = () => {
+      void reloadCartFromBackend();
+    };
+    window.addEventListener("sudattas-auth-changed", onAuthChanged);
+    return () => window.removeEventListener("sudattas-auth-changed", onAuthChanged);
+  }, [reloadCartFromBackend]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
     let cancelled = false;
-    setCartLoading(true);
-    fetchCartLines()
-      .then((lines) => {
-        if (cancelled || lines == null) return;
-        setCart(cartLinesToState(lines));
-      })
-      .finally(() => {
-        if (!cancelled) setCartLoading(false);
-      });
+    void (async () => {
+      try {
+        const productIds = await fetchApiEnvelope<string[]>("/api/account/wishlist", {
+          cache: "no-store",
+        });
+        if (cancelled) return;
+        const next: Record<string, boolean> = {};
+        for (const id of productIds ?? []) next[id] = true;
+        setWishlist(next);
+      } catch {
+        if (!cancelled) {
+          showToast({
+            group: "wishlist",
+            title: "Wishlist",
+            description: "Could not sync wishlist right now.",
+          });
+        }
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(CART_CACHE_KEY, JSON.stringify(cart));
-    } catch {
-      // ignore storage quota errors
-    }
-  }, [cart]);
+  }, [status, showToast]);
 
   const toggleWish = useCallback(
     (p: Product) => {
+      const authenticated = status === "authenticated";
+      if (authenticated) {
+        const currentlyWished = !!wishlist[p.id];
+        const nextWished = !currentlyWished;
+        setWishlist((prev) => ({ ...prev, [p.id]: nextWished }));
+        void (async () => {
+          try {
+            await fetchApiEnvelope<boolean>("/api/account/wishlist", {
+              method: nextWished ? "POST" : "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ productId: p.id }),
+            });
+            showToast({
+              group: "wishlist",
+              title: "Wishlist",
+              description: nextWished ? "Added to wishlist." : "Removed from wishlist.",
+            });
+          } catch {
+            setWishlist((prev) => ({ ...prev, [p.id]: currentlyWished }));
+            showToast({
+              group: "wishlist",
+              title: "Wishlist",
+              description: "Could not update wishlist. Please retry.",
+            });
+          }
+        })();
+        return;
+      }
+
       let next = false;
       setWishlist((prev) => {
         next = !prev[p.id];
@@ -145,13 +187,13 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         }
       });
     },
-    [showToast]
+    [showToast, status, wishlist]
   );
 
   const addToCart = useCallback(
     async (p: Product, qty = 1, sizeName?: string | null) => {
       const variantId = getVariantId(p, sizeName);
-      const sessionId = getGuestSessionId();
+      const sessionId = (await ensureGuestSession()) ?? getGuestSessionId();
 
       if (variantId && sessionId) {
         const lines = await addCartItem(variantId, qty, sessionId);
@@ -171,28 +213,11 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
           return;
         }
       }
-
-      // Fallback: local-only when no variantId or API failed
-      const key = `${p.id}__${sizeName ?? "nosize"}`;
-      setCart((prev) => {
-        const existing = prev[key];
-        const nextQty = existing ? existing.qty + qty : qty;
-        return {
-          ...prev,
-          [key]: { id: key, product: p, qty: nextQty, sizeName: sizeName ?? null },
-        };
+      showToast({
+        group: "cart",
+        title: "Bag",
+        description: "Could not update bag right now. Please retry.",
       });
-      const now = Date.now();
-      const toastKey = `cart-${key}`;
-      const last = lastToastRef.current;
-      if (!last || last.key !== toastKey || now - last.at > 200) {
-        showToast({
-          group: "cart",
-          title: "Bag",
-          description: "Added to bag.",
-        });
-        lastToastRef.current = { key: toastKey, at: now };
-      }
     },
     [showToast]
   );
@@ -207,26 +232,15 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       if (newQty < 1) {
         const lines = await deleteCartItem(id, sessionId);
         if (lines) setCart(cartLinesToState(lines));
-        else
-          setCart((prev) => {
-            const { [id]: _, ...rest } = prev;
-            return rest;
-          });
+        else showToast({ group: "cart", title: "Bag", description: "Could not update bag right now. Please retry." });
       } else {
         const variantId = getVariantId(line.product, line.sizeName);
         if (variantId) {
           const lines = await updateCartItem(id, variantId, newQty, sessionId);
           if (lines) setCart(cartLinesToState(lines));
-          else
-            setCart((prev) => ({
-              ...prev,
-              [id]: { ...line, qty: newQty },
-            }));
+          else showToast({ group: "cart", title: "Bag", description: "Could not update bag right now. Please retry." });
         } else {
-          setCart((prev) => {
-            const { [id]: _, ...rest } = prev;
-            return rest;
-          });
+          showToast({ group: "cart", title: "Bag", description: "Could not update bag right now. Please retry." });
         }
       }
       return;
@@ -236,12 +250,13 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       const current = prev[id];
       if (!current) return prev;
       if (current.qty <= 1) {
-        const { [id]: _, ...rest } = prev;
+        const rest = { ...prev };
+        delete rest[id];
         return rest;
       }
       return { ...prev, [id]: { ...current, qty: current.qty - 1 } };
     });
-  }, [cart]);
+  }, [cart, showToast]);
 
   const incCart = useCallback(async (id: string) => {
     const line = cart[id];
@@ -254,8 +269,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         const newQty = line.qty + 1;
         const lines = await updateCartItem(id, variantId, newQty, sessionId);
         if (lines) setCart(cartLinesToState(lines));
-        else
-          setCart((prev) => ({ ...prev, [id]: { ...line, qty: newQty } }));
+        else showToast({ group: "cart", title: "Bag", description: "Could not update bag right now. Please retry." });
       }
       return;
     }
@@ -265,18 +279,22 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       if (!current) return prev;
       return { ...prev, [id]: { ...current, qty: current.qty + 1 } };
     });
-  }, [cart]);
+  }, [cart, showToast]);
 
   const removeCart = useCallback(async (id: string) => {
     const sessionId = getGuestSessionId();
     if (isBackendCartId(id) && sessionId) {
       const lines = await deleteCartItem(id, sessionId);
       if (lines) setCart(cartLinesToState(lines));
-      else setCart((prev) => { const { [id]: _, ...rest } = prev; return rest; });
+      else showToast({ group: "cart", title: "Bag", description: "Could not update bag right now. Please retry." });
       return;
     }
-    setCart((prev) => { const { [id]: _, ...rest } = prev; return rest; });
-  }, []);
+    setCart((prev) => {
+      const rest = { ...prev };
+      delete rest[id];
+      return rest;
+    });
+  }, [showToast]);
 
   const cartLines = useMemo<CartLine[]>(() => Object.values(cart), [cart]);
   const cartCount = useMemo(
@@ -284,7 +302,13 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     [cartLines]
   );
   const cartSubtotal = useMemo(
-    () => cartLines.reduce((s, l) => s + l.qty * l.product.price, 0),
+    () =>
+      paiseToRupeesNumber(
+        cartLines.reduce(
+          (s, l) => s + l.qty * (l.product.pricePaise ?? Math.round(l.product.price * 100)),
+          0
+        )
+      ),
     [cartLines]
   );
   const wishCount = useMemo(

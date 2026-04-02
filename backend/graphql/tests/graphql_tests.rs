@@ -338,6 +338,99 @@ async fn test_place_order_with_jwt_accepts_request() {
     }
 }
 
+#[tokio::test]
+async fn test_admin_mutation_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Session("guest_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"mutation { createCategory(category: { name: "Test" }) { categoryId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "admin mutation should reject non-admin auth, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(
+        err.contains("admin authorization required"),
+        "expected admin authorization error, got: {}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn test_search_user_requires_admin_authorization() {
+    std::env::set_var("ADMIN_ALLOWED_USER_IDS", "admin_user_999");
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"{ searchUser(input: { userId: "1" }) { userId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+    std::env::remove_var("ADMIN_ALLOWED_USER_IDS");
+
+    assert!(
+        !errors.is_empty(),
+        "searchUser should reject non-admin user, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"));
+}
+
+#[tokio::test]
+async fn test_search_order_rejects_cross_user_access_for_customer() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("42".to_string())),
+        request_id: None,
+        idempotency_key: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"{ searchOrder(search: { userId: "99" }) { orderId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "customer should not query another user's orders, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("own orders"));
+}
+
 // =============================================================================
 
 #[test]

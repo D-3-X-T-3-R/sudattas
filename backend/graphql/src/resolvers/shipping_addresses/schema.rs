@@ -1,6 +1,6 @@
 use juniper::{graphql_object, GraphQLInputObject};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ShippingAddress {
     pub shipping_address_id: String,
     pub user_id: Option<String>,

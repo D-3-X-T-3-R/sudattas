@@ -30,6 +30,15 @@ pub struct Context {
 }
 
 impl Context {
+    fn admin_allowlist_user_ids() -> Vec<String> {
+        std::env::var("ADMIN_ALLOWED_USER_IDS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    }
+
     /// JWKS used for JWT validation (read by auth filter).
     pub fn jwks(&self) -> &JWKSet {
         &self.jwks
@@ -61,6 +70,16 @@ impl Context {
     /// Idempotency key from header, when present; used to dedupe place_order and capture_payment.
     pub fn idempotency_key(&self) -> Option<&str> {
         self.idempotency_key.as_deref()
+    }
+
+    /// Admin is resolved from JWT user id against `ADMIN_ALLOWED_USER_IDS` (comma-separated).
+    /// Empty allowlist means no admin privileges are granted.
+    pub fn is_admin(&self) -> bool {
+        let Some(uid) = self.jwt_user_id() else {
+            return false;
+        };
+        let allowlist = Self::admin_allowlist_user_ids();
+        !allowlist.is_empty() && allowlist.iter().any(|a| a == uid)
     }
 }
 
