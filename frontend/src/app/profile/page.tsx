@@ -8,6 +8,7 @@ import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
 import { addressInputSchema } from "@/lib/validation-schemas";
 import { formatInrFromPaise } from "@/lib/money";
+import { toRouteFailureUi } from "@/lib/route-state";
 
 type ShippingAddressRow = {
   shippingAddressId: string;
@@ -178,7 +179,8 @@ export default function ProfilePage() {
       setExpandedOrderId(null);
       setOrderDetailsById({});
     } catch (e) {
-      setError((e as Error).message || "Could not load account data.");
+      const ui = toRouteFailureUi("account", e);
+      setError(ui.message);
     } finally {
       setLoadingData(false);
     }
@@ -221,7 +223,8 @@ export default function ProfilePage() {
       });
       await loadAccountData();
     } catch (e) {
-      setError((e as Error).message || "Could not save address.");
+      const ui = toRouteFailureUi("account", e);
+      setError(ui.message);
     } finally {
       setAdding(false);
     }
@@ -237,7 +240,8 @@ export default function ProfilePage() {
       });
       await loadAccountData();
     } catch (e) {
-      setError((e as Error).message || "Could not delete address.");
+      const ui = toRouteFailureUi("account", e);
+      setError(ui.message);
     }
   }
 
@@ -259,7 +263,8 @@ export default function ProfilePage() {
         setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
       }
     } catch (e) {
-      setError((e as Error).message || "Could not load order details.");
+      const ui = toRouteFailureUi("account", e);
+      setError(ui.message);
     } finally {
       setLoadingOrderDetailId((prev) => (prev === orderId ? null : prev));
     }

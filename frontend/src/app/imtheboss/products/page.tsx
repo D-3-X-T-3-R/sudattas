@@ -52,6 +52,7 @@ import {
   paiseToRupeesInput,
   rupeesInputToPaise,
 } from "@/lib/money";
+import { toRouteFailureUi } from "@/lib/route-state";
 
 type ProductFormState = {
   name: string;
@@ -920,10 +921,14 @@ export default function AdminProductsPage() {
     }
   }, [imageDialogOpen, editingProductId, existingProductImages, imagePreviews, imageFiles, orderedProductImages]);
 
-  const categoriesAuthLike =
-    categoriesError &&
-    categoriesErrorObj &&
-    /unauthorized|forbidden|admin/i.test(categoriesErrorObj.message);
+  const categoriesErrorUi =
+    categoriesError && categoriesErrorObj
+      ? toRouteFailureUi("admin", categoriesErrorObj)
+      : null;
+  const productsErrorUi =
+    productsError && productsErrorObj
+      ? toRouteFailureUi("admin", productsErrorObj)
+      : null;
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1461,8 +1466,8 @@ export default function AdminProductsPage() {
             <CardContent className="mt-3">
               {productsError && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  <p className="font-medium">Could not load products.</p>
-                  <p className="mt-1 text-xs">{productsErrorObj?.message ?? "Unknown error"}</p>
+                  <p className="font-medium">{productsErrorUi?.title ?? "Could not load products."}</p>
+                  <p className="mt-1 text-xs">{productsErrorUi?.message ?? "Please try again."}</p>
                   <Button variant="outline" size="sm" className="mt-2" onClick={() => refetchProducts()}>
                     Try again
                   </Button>
@@ -1766,9 +1771,7 @@ export default function AdminProductsPage() {
               <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                 <p className="font-medium">Can&apos;t load categories.</p>
                 <p className="mt-1 text-xs text-red-800/80">
-                  {categoriesAuthLike
-                    ? "Admin access was denied. Check your admin allowlist/session configuration."
-                    : categoriesErrorObj?.message ?? "Failed to load categories."}
+                  {categoriesErrorUi?.message ?? "Please try again."}
                 </p>
                 <button
                   type="button"
