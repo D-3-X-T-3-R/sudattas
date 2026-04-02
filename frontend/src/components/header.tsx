@@ -24,7 +24,6 @@ export interface HeaderProps {
   cartCount: number;
   wishCount: number;
   setMenuOpen: (open: boolean) => void;
-  setCartOpen: (open: boolean) => void;
   goTo: (id: string, instant?: boolean) => void;
   /**
    * When true (e.g. bag / wishlist / product), nav uses the same `<button>` + underline as the
@@ -41,7 +40,6 @@ export function Header({
   cartCount,
   wishCount,
   setMenuOpen,
-  setCartOpen,
   goTo,
   navUseHashLinks = false,
   authEnabled,

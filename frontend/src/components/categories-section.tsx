@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Section } from "@/components/ui/section";
-import { SectionHeading, Kicker } from "@/components/ui/typography";
+import { SectionHeading } from "@/components/ui/typography";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { CollectionCard, type DisplayCollection } from "@/components/collections-section";
 import { goTo } from "@/hooks/use-scroll-to";

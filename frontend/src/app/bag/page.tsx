@@ -10,7 +10,6 @@ import { SiteHeader } from "@/components/site-header";
 import { getGuestSessionId } from "@/lib/session";
 import type { Product } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
@@ -332,10 +331,8 @@ export default function BagPage() {
   const { openLogin } = useStorefrontLogin();
   const {
     cartLines,
-    cartSubtotal,
     decCart,
     incCart,
-    cartCount,
     removeCart,
     toggleWish,
     wishlist,
@@ -365,7 +362,8 @@ export default function BagPage() {
   const toggleOne = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
 
@@ -414,7 +412,7 @@ export default function BagPage() {
                 Your bag is empty
               </p>
               <p className="mt-2 text-sm text-[var(--color-muted)]">
-                Looks like you haven't added anything yet.
+                Looks like you haven&apos;t added anything yet.
               </p>
             </div>
             <Link

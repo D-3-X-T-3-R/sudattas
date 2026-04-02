@@ -8,7 +8,7 @@ type StorefrontLoginContextValue = {
 };
 
 const StorefrontLoginContext = createContext<StorefrontLoginContextValue>({
-  openLogin: (_callbackUrl?: string) => undefined,
+  openLogin: () => undefined,
 });
 
 export function StorefrontLoginProvider({
