@@ -69,6 +69,7 @@ export function ProductsGridCard({
                 >
                   <div className="aspect-square w-full bg-[var(--color-surface)]">
                     {thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={thumb}
                         alt={p.name}
@@ -134,4 +135,3 @@ export function ProductsGridCard({
     </Card>
   );
 }
-
