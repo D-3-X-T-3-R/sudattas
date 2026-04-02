@@ -274,6 +274,8 @@ async fn main() {
             "x-session-id",
             "x-request-id",
             "idempotency-key",
+            "x-client-action",
+            "x-guest-session-id",
         ])
         .allow_methods(vec!["GET", "POST", "OPTIONS"]);
 
@@ -327,6 +329,8 @@ async fn main() {
         .and(warp::header::optional::<String>("referer"))
         .and(warp::header::optional::<String>("x-request-id"))
         .and(warp::header::optional::<String>("idempotency-key"))
+        .and(warp::header::optional::<String>("x-client-action"))
+        .and(warp::header::optional::<String>("x-guest-session-id"))
         .and(warp::any().map(move || (jwks_c.clone(), redis_url_c.clone(), allowed_origins_c.clone())))
         .and_then(
             |token: Option<String>,
@@ -335,6 +339,8 @@ async fn main() {
              referer: Option<String>,
              x_request_id: Option<String>,
              idempotency_key: Option<String>,
+             x_client_action: Option<String>,
+             x_guest_session_id: Option<String>,
              (jwks, redis_url, allowed_origins): (_, Option<String>, Option<Arc<Vec<String>>>)| async move {
                 let mut auth: Option<AuthSource> = None;
 
@@ -411,6 +417,8 @@ async fn main() {
                     auth,
                     request_id,
                     idempotency_key,
+                    client_action: x_client_action,
+                    guest_session_id: x_guest_session_id,
                 })
             },
         );

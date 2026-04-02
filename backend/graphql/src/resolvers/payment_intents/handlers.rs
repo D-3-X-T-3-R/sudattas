@@ -33,8 +33,9 @@ fn payment_intent_response_to_gql(p: PaymentIntentResponse) -> PaymentIntent {
 #[instrument]
 pub(crate) async fn create_payment_intent(
     input: NewPaymentIntent,
+    request_id: Option<&str>,
 ) -> Result<Vec<PaymentIntent>, GqlError> {
-    let mut client = connect_grpc_client().await?;
+    let mut client = grpc_client::connect_grpc_client_with_metadata(request_id).await?;
     let response = client
         .create_payment_intent(CreatePaymentIntentRequest {
             order_id: parse_i64(&input.order_id, "order id")?,
@@ -94,8 +95,9 @@ pub(crate) async fn get_payment_intent(
 #[instrument]
 pub(crate) async fn verify_razorpay_payment(
     input: VerifyRazorpayPaymentInput,
+    request_id: Option<&str>,
 ) -> Result<VerifyRazorpayPaymentResult, GqlError> {
-    let mut client = connect_grpc_client().await?;
+    let mut client = grpc_client::connect_grpc_client_with_metadata(request_id).await?;
     let response: VerifyRazorpayPaymentResponse = client
         .verify_razorpay_payment(VerifyRazorpayPaymentRequest {
             order_id: parse_i64(&input.order_id, "order id")?,

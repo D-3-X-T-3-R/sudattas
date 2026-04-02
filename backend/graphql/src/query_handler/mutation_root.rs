@@ -153,6 +153,7 @@ use crate::resolvers::{
 };
 use juniper::FieldResult;
 use juniper::IntoFieldError;
+use tracing::{info, warn};
 
 pub struct MutationRoot;
 
@@ -312,6 +313,17 @@ impl MutationRoot {
 
         let request_id = context.request_id().map(|s| s.to_string());
         let idempotency_key = context.idempotency_key().map(|s| s.to_string());
+        let user_id_for_grpc = user_id.clone();
+        info!(
+            request_id = ?context.request_id(),
+            client_action = ?context.client_action(),
+            user_id = %user_id,
+            auth_mode = %context.auth_mode(),
+            shipping_address_id = %order.shipping_address_id,
+            has_coupon_code = order.coupon_code.as_ref().map(|c| !c.trim().is_empty()).unwrap_or(false),
+            has_idempotency_key = context.idempotency_key().is_some(),
+            "checkout.place_order.start"
+        );
         let result = crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "place_order",
@@ -319,7 +331,7 @@ impl MutationRoot {
             || async move {
                 orders::handlers::place_order(
                     order,
-                    user_id,
+                    user_id_for_grpc,
                     request_id.as_deref(),
                     idempotency_key.as_deref(),
                 )
@@ -338,6 +350,25 @@ impl MutationRoot {
             }
         });
         crate::metrics::record_place_order_total(result.is_ok(), reason);
+        if let Err(ref e) = result {
+            warn!(
+                request_id = ?context.request_id(),
+                client_action = ?context.client_action(),
+                user_id = %user_id,
+                auth_mode = %context.auth_mode(),
+                has_idempotency_key = context.idempotency_key().is_some(),
+                error = %e,
+                "checkout.place_order.failed"
+            );
+        } else {
+            info!(
+                request_id = ?context.request_id(),
+                client_action = ?context.client_action(),
+                user_id = %user_id,
+                auth_mode = %context.auth_mode(),
+                "checkout.place_order.success"
+            );
+        }
         result.map_err(|e| e.into_field_error())
     }
 
@@ -440,10 +471,39 @@ impl MutationRoot {
 
     // PaymentIntents
     #[instrument(err, ret)]
-    async fn create_payment_intent(input: NewPaymentIntent) -> FieldResult<Vec<PaymentIntent>> {
-        payment_intents::handlers::create_payment_intent(input)
-            .await
-            .map_err(|e| e.into_field_error())
+    async fn create_payment_intent(
+        context: &Context,
+        input: NewPaymentIntent,
+    ) -> FieldResult<Vec<PaymentIntent>> {
+        info!(
+            request_id = ?context.request_id(),
+            client_action = ?context.client_action(),
+            auth_mode = %context.auth_mode(),
+            user_id = %input.user_id,
+            order_id = %input.order_id,
+            amount_paise = %input.amount_paise,
+            has_idempotency_key = context.idempotency_key().is_some(),
+            "checkout.create_payment_intent.start"
+        );
+        let request_id = context.request_id().map(|s| s.to_string());
+        let result = payment_intents::handlers::create_payment_intent(input, request_id.as_deref()).await;
+        if let Err(ref e) = result {
+            warn!(
+                request_id = ?context.request_id(),
+                client_action = ?context.client_action(),
+                auth_mode = %context.auth_mode(),
+                error = %e,
+                "checkout.create_payment_intent.failed"
+            );
+        } else {
+            info!(
+                request_id = ?context.request_id(),
+                client_action = ?context.client_action(),
+                auth_mode = %context.auth_mode(),
+                "checkout.create_payment_intent.success"
+            );
+        }
+        result.map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
@@ -470,14 +530,42 @@ impl MutationRoot {
         context: &Context,
         input: VerifyRazorpayPaymentInput,
     ) -> FieldResult<VerifyRazorpayPaymentResult> {
-        crate::idempotency::with_idempotency(
+        info!(
+            request_id = ?context.request_id(),
+            client_action = ?context.client_action(),
+            auth_mode = %context.auth_mode(),
+            order_id = %input.order_id,
+            has_idempotency_key = context.idempotency_key().is_some(),
+            "checkout.verify_razorpay_payment.start"
+        );
+        let request_id = context.request_id().map(|s| s.to_string());
+        let result = crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "verify_razorpay_payment",
             context.idempotency_key(),
-            || async move { payment_intents::handlers::verify_razorpay_payment(input).await },
+            || async move {
+                payment_intents::handlers::verify_razorpay_payment(input, request_id.as_deref()).await
+            },
         )
-            .await
-            .map_err(|e| e.into_field_error())
+        .await;
+        if let Err(ref e) = result {
+            warn!(
+                request_id = ?context.request_id(),
+                client_action = ?context.client_action(),
+                auth_mode = %context.auth_mode(),
+                has_idempotency_key = context.idempotency_key().is_some(),
+                error = %e,
+                "checkout.verify_razorpay_payment.failed"
+            );
+        } else {
+            info!(
+                request_id = ?context.request_id(),
+                client_action = ?context.client_action(),
+                auth_mode = %context.auth_mode(),
+                "checkout.verify_razorpay_payment.success"
+            );
+        }
+        result.map_err(|e| e.into_field_error())
     }
 
     // ProductImage

@@ -130,6 +130,12 @@ export async function forwardAdminGraphql(
     ...(request.headers.get("idempotency-key")
       ? { "Idempotency-Key": request.headers.get("idempotency-key") as string }
       : {}),
+    ...(request.headers.get("x-client-action")
+      ? { "X-Client-Action": request.headers.get("x-client-action") as string }
+      : {}),
+    ...(request.headers.get("x-guest-session-id")
+      ? { "X-Guest-Session-Id": request.headers.get("x-guest-session-id") as string }
+      : {}),
   };
   const payload = JSON.stringify({
     query,

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getServerSession } from "next-auth";
+import { headers as nextHeaders } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
 import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
@@ -40,6 +41,18 @@ export async function callGraphql<T = unknown>(
 ): Promise<{ data?: T; errors?: Array<{ message?: string }> }> {
   try {
     const forwardedHeaders = await forwardedIpHeadersFromCurrentRequest();
+    const inboundHeaders = await (async () => {
+      try {
+        const h = await nextHeaders();
+        return {
+          requestId: h.get("x-request-id")?.trim() || null,
+          clientAction: h.get("x-client-action")?.trim() || null,
+          guestSessionId: h.get("x-guest-session-id")?.trim() || null,
+        };
+      } catch {
+        return { requestId: null, clientAction: null, guestSessionId: null };
+      }
+    })();
     const res = await fetchWithResilience(
       graphQlUrl(),
       {
@@ -48,6 +61,13 @@ export async function callGraphql<T = unknown>(
           "Content-Type": "application/json",
           Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}`,
           ...forwardedHeaders,
+          ...(inboundHeaders.requestId ? { "X-Request-Id": inboundHeaders.requestId } : {}),
+          ...(inboundHeaders.clientAction
+            ? { "X-Client-Action": inboundHeaders.clientAction }
+            : {}),
+          ...(inboundHeaders.guestSessionId
+            ? { "X-Guest-Session-Id": inboundHeaders.guestSessionId }
+            : {}),
           ...extraHeaders,
         },
         body: JSON.stringify({ query, variables }),
