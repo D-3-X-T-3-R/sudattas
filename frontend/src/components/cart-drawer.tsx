@@ -79,7 +79,7 @@ export function CartDrawer({
                     variant="outline"
                     size="icon"
                     onClick={() => onDecCart(id)}
-                    aria-label="Decrease"
+                    aria-label={`Decrease quantity for ${product.name}`}
                     className="border-[var(--color-line)] bg-white hover:bg-white/80"
                   >
                     −
@@ -91,7 +91,7 @@ export function CartDrawer({
                     variant="outline"
                     size="icon"
                     onClick={() => onIncCart(id)}
-                    aria-label="Increase"
+                    aria-label={`Increase quantity for ${product.name}`}
                     className="border-[var(--color-line)] bg-white hover:bg-white/80"
                   >
                     +
@@ -133,7 +133,7 @@ export function CartDrawer({
               {paymentLoading ? "Opening Razorpay…" : "Test Razorpay (₹100)"}
             </Button>
             {paymentMessage && (
-              <p className="mt-3 text-xs text-[var(--color-muted)]">
+              <p className="mt-3 text-xs text-[var(--color-muted)]" role="status" aria-live="polite">
                 {paymentMessage}
               </p>
             )}

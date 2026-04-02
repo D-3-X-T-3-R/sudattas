@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
 import {
   paymentIntentSchema,
@@ -49,6 +50,15 @@ function loadRazorpayScript(): Promise<void> {
 export function useRazorpayTest() {
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const { announce } = useLiveAnnouncer();
+
+  const setPaymentMessageWithAnnounce = useCallback(
+    (message: string | null, politeness: "polite" | "assertive" = "polite") => {
+      setPaymentMessage(message);
+      if (message) announce(message, politeness);
+    },
+    [announce]
+  );
 
   const pollOrderReconciliation = useCallback(async (orderId: string) => {
     const maxAttempts = 6;
@@ -73,11 +83,11 @@ export function useRazorpayTest() {
   const runCheckout = useCallback(async (input?: { shippingAddressId?: string }) => {
     const shippingAddressId = input?.shippingAddressId?.trim();
     if (!shippingAddressId) {
-      setPaymentMessage("Select a shipping address first.");
+      setPaymentMessageWithAnnounce("Select a shipping address first.", "assertive");
       return;
     }
 
-    setPaymentMessage(null);
+    setPaymentMessageWithAnnounce(null);
     setPaymentLoading(true);
     try {
       const placeOrderKey = `checkout-place-${crypto.randomUUID()}`;
@@ -101,15 +111,15 @@ export function useRazorpayTest() {
       });
 
       const raw = start?.paymentIntent;
-      if (!raw?.razorpayKeyId || !raw?.razorpayOrderId) {
-        setPaymentMessage(
+        if (!raw?.razorpayKeyId || !raw?.razorpayOrderId) {
+        setPaymentMessageWithAnnounce(
           "No Razorpay key/order returned. Please retry in a moment."
         );
         return;
       }
       const parsed = paymentIntentSchema.safeParse(raw);
       if (!parsed.success) {
-        setPaymentMessage("Invalid payment intent response.");
+        setPaymentMessageWithAnnounce("Invalid payment intent response.", "assertive");
         return;
       }
       const intent = parsed.data;
@@ -151,53 +161,54 @@ export function useRazorpayTest() {
             });
             if (verifyParsed.success && verifyResult.verified) {
               if (FINAL_PAYMENT_STATES.has(verifyResult.paymentState)) {
-                setPaymentMessage(
+                setPaymentMessageWithAnnounce(
                   `Payment ${verifyResult.paymentState}. Order state: ${verifyResult.orderUiState}.`
                 );
               } else {
-                setPaymentMessage(
+                setPaymentMessageWithAnnounce(
                   `Payment verification received. Current state: ${verifyResult.paymentState}; awaiting final backend/webhook reconciliation.`
                 );
                 try {
                   const reconciled = await pollOrderReconciliation(orderId);
                   if (reconciled) {
-                    setPaymentMessage(
+                    setPaymentMessageWithAnnounce(
                       `Payment ${reconciled.paymentState}. Order state: ${reconciled.statusName}.`
                     );
                   } else {
-                    setPaymentMessage(
+                    setPaymentMessageWithAnnounce(
                       "Verification received. Final payment state is still processing; please refresh your profile orders shortly."
                     );
                   }
                 } catch (pollError) {
-                  setPaymentMessage(
-                    toRouteFailureUi("account", pollError).message
+                  setPaymentMessageWithAnnounce(
+                    toRouteFailureUi("account", pollError).message,
+                    "assertive"
                   );
                 }
               }
             } else {
-              setPaymentMessage("Verify failed or invalid response.");
+              setPaymentMessageWithAnnounce("Verify failed or invalid response.", "assertive");
             }
           } catch (e) {
-            setPaymentMessage(toRouteFailureUi("account", e).message);
+            setPaymentMessageWithAnnounce(toRouteFailureUi("account", e).message, "assertive");
           }
         },
       };
       const rzp = new window.Razorpay!(options);
       rzp.on("payment.failed", () => {
-        setPaymentMessage("Payment failed or was closed.");
+        setPaymentMessageWithAnnounce("Payment failed or was closed.", "assertive");
       });
       rzp.open();
     } catch (e) {
-      setPaymentMessage(toRouteFailureUi("account", e).message);
+      setPaymentMessageWithAnnounce(toRouteFailureUi("account", e).message, "assertive");
     } finally {
       setPaymentLoading(false);
     }
-  }, [pollOrderReconciliation]);
+  }, [pollOrderReconciliation, setPaymentMessageWithAnnounce]);
 
   const runTest = useCallback(async () => {
-    setPaymentMessage("Use checkout flow from /checkout/address.");
-  }, []);
+    setPaymentMessageWithAnnounce("Use checkout flow from /checkout/address.");
+  }, [setPaymentMessageWithAnnounce]);
 
   return { paymentMessage, paymentLoading, runTest, runCheckout };
 }

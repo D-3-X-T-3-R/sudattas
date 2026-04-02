@@ -13,6 +13,7 @@ import {
 import { useSession } from "next-auth/react";
 import type { Product, CartLine } from "@/lib/schemas";
 import { useToast } from "@/components/ui/toast";
+import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 import { getGuestSessionId, ensureGuestSession } from "@/lib/session";
 import {
   fetchCartLines,
@@ -84,6 +85,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   const [cartOpen, setCartOpen] = useState(false);
   const [cartLoading, setCartLoading] = useState(true);
   const { showToast } = useToast();
+  const { announce } = useLiveAnnouncer();
   const lastToastRef = useRef<{ key: string; at: number } | null>(null);
   const reloadCartFromBackend = useCallback(async () => {
     setCartLoading(true);
@@ -155,6 +157,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
               title: "Wishlist",
               description: nextWished ? "Added to wishlist." : "Removed from wishlist.",
             });
+            announce(nextWished ? "Added to wishlist." : "Removed from wishlist.");
           } catch {
             setWishlist((prev) => ({ ...prev, [p.id]: currentlyWished }));
             showToast({
@@ -162,6 +165,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
               title: "Wishlist",
               description: "Could not update wishlist. Please retry.",
             });
+            announce("Could not update wishlist. Please retry.", "assertive");
           }
         })();
         return;
@@ -183,6 +187,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
             title: "Wishlist",
             description: next ? "Added to wishlist." : "Removed from wishlist.",
           });
+          announce(next ? "Added to wishlist." : "Removed from wishlist.");
           lastToastRef.current = { key: toastKey, at: now };
         }
       });
@@ -208,6 +213,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
               title: "Bag",
               description: "Added to bag.",
             });
+            announce(`Added ${p.name} to bag.`);
             lastToastRef.current = { key: toastKey, at: now };
           }
           return;
@@ -218,8 +224,9 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
         title: "Bag",
         description: "Could not update bag right now. Please retry.",
       });
+      announce("Could not update bag right now. Please retry.", "assertive");
     },
-    [showToast]
+    [announce, showToast]
   );
 
   const decCart = useCallback(async (id: string) => {

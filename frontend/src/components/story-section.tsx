@@ -58,7 +58,13 @@ export function StorySection() {
               Weekly releases. No spam. Unsubscribe anytime.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <label htmlFor="newsletter-email" className="sr-only">
+                Email address
+              </label>
               <input
+                id="newsletter-email"
+                type="email"
+                autoComplete="email"
                 placeholder="you@example.com"
                 className="flex-1 rounded-full border border-[var(--color-line)] bg-white/70 px-5 py-3.5 text-sm outline-none focus:border-[var(--color-accent-gold)] focus:bg-white focus:ring-1 focus:ring-[var(--color-accent-gold)]"
               />

@@ -5,6 +5,7 @@ import { SessionProvider } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { ensureGuestSession } from "@/lib/session";
 import { ToastProvider } from "@/components/ui/toast";
+import { LiveAnnouncerProvider } from "@/components/ui/live-announcer";
 import { StorefrontLoginProvider } from "@/context/storefront-login-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -26,7 +27,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
         <StorefrontLoginProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <LiveAnnouncerProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </LiveAnnouncerProvider>
         </StorefrontLoginProvider>
       </QueryClientProvider>
     </SessionProvider>
