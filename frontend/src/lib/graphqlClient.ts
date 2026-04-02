@@ -1,14 +1,15 @@
 /**
- * GraphQL client for storefront (and Razorpay test).
- * Auth order: session token (authStore, e.g. from Google OAuth) > NEXT_PUBLIC_GRAPHQL_TOKEN > NEXT_PUBLIC_GRAPHQL_SESSION_ID > guest session from localStorage.
+ * GraphQL client for storefront/customer interactions.
+ * Auth order: logged-in session token > guest session from localStorage.
  */
 
 import { getAccessToken } from "@/lib/authStore";
 import {
   getGuestSessionId,
   ensureGuestSession,
-  clearGuestSession,
+  refreshGuestSession,
 } from "@/lib/session";
+import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
 
 const GRAPHQL_URL =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_URL) ||
@@ -19,19 +20,12 @@ function getAuthHeaders(): Record<string, string> {
     "Content-Type": "application/json",
   };
   const sessionToken = getAccessToken();
-  const envToken =
-    typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_TOKEN;
-  const envSessionId =
-    typeof process !== "undefined" &&
-    process.env?.NEXT_PUBLIC_GRAPHQL_SESSION_ID;
   const guestSessionId = getGuestSessionId();
-  const token = sessionToken || (typeof envToken === "string" ? envToken : null);
+  const token = sessionToken;
   if (token) {
     headers["Authorization"] = token.startsWith("Bearer ")
       ? token
       : `Bearer ${token}`;
-  } else if (typeof envSessionId === "string" && envSessionId) {
-    headers["X-Session-Id"] = envSessionId;
   } else if (guestSessionId) {
     headers["X-Session-Id"] = guestSessionId;
   }
@@ -40,30 +34,16 @@ function getAuthHeaders(): Record<string, string> {
 
 function hasAuth(): boolean {
   const token = getAccessToken();
-  const envToken =
-    typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_TOKEN;
-  const envSessionId =
-    typeof process !== "undefined" &&
-    process.env?.NEXT_PUBLIC_GRAPHQL_SESSION_ID;
   return !!(
     token ||
-    (typeof envToken === "string" && envToken) ||
-    (typeof envSessionId === "string" && envSessionId) ||
     getGuestSessionId()
   );
 }
 
 function usedGuestSession(): boolean {
   const token = getAccessToken();
-  const envToken =
-    typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_TOKEN;
-  const envSessionId =
-    typeof process !== "undefined" &&
-    process.env?.NEXT_PUBLIC_GRAPHQL_SESSION_ID;
   return (
     !token &&
-    !(typeof envToken === "string" && envToken) &&
-    !(typeof envSessionId === "string" && envSessionId) &&
     !!getGuestSessionId()
   );
 }
@@ -83,16 +63,24 @@ export async function gql<T = unknown>(
   }
 
   const payload = { query, variables: variables ?? {} };
-  const res = await fetch(GRAPHQL_URL, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(payload),
-  });
+  let res: Response;
+  try {
+    res = await fetchWithResilience(
+      GRAPHQL_URL,
+      {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      },
+      { max429Retries: 1, maxNetworkRetries: 1, baseBackoffMs: 400 }
+    );
+  } catch (error) {
+    throw new Error(normalizeNetworkError(error));
+  }
   const text = await res.text();
 
   if (res.status === 401 && typeof window !== "undefined" && usedGuestSession() && !retried) {
-    clearGuestSession();
-    await ensureGuestSession();
+    await refreshGuestSession();
     return gql<T>(query, variables, true);
   }
 

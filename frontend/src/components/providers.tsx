@@ -5,6 +5,7 @@ import { SessionProvider } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { ensureGuestSession } from "@/lib/session";
 import { ToastProvider } from "@/components/ui/toast";
+import { StorefrontLoginProvider } from "@/context/storefront-login-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -24,7 +25,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <ToastProvider>{children}</ToastProvider>
+        <StorefrontLoginProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </StorefrontLoginProvider>
       </QueryClientProvider>
     </SessionProvider>
   );

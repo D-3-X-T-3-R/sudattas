@@ -97,11 +97,11 @@ export function MenuDrawer({
 
         <div className="rounded-2xl border border-[var(--color-line)] bg-white p-4">
           <div className="text-[11px] font-semibold tracking-[0.24em] text-[var(--color-muted)]">
-            NOTE
+            CURATED
           </div>
           <div className="mt-2 text-sm text-[var(--color-muted)]">
-            This is a visual mock. For production, replace placeholders with
-            real product media and connect to your Rust + MySQL backend.
+            Explore collections and moods to discover the drape that fits your
+            moment.
           </div>
         </div>
       </div>

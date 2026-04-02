@@ -14,6 +14,9 @@ use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64, to_i64, to_option_i64},
 };
+use crate::validation::{
+    validate_amount_paise, validate_non_negative_amount_paise, validate_sku_slug,
+};
 
 #[instrument]
 pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, GqlError> {
@@ -21,8 +24,15 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
 
     let name = product.name;
     let price_paise = parse_i64(&product.price_paise, "price_paise")?;
+    validate_amount_paise(price_paise, "price_paise")?;
     let description = product.description;
     let category_id = parse_i64(&product.category_id, "category id")?;
+    if let Some(ref sku) = product.sku {
+        validate_sku_slug(sku, "sku")?;
+    }
+    if let Some(ref slug) = product.slug {
+        validate_sku_slug(slug, "slug")?;
+    }
     let product_status_id = product
         .product_status_id
         .as_ref()
@@ -57,19 +67,38 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
 pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
+    let starting_price_paise = match search.starting_price_paise.as_ref() {
+        Some(v) => {
+            let parsed = parse_i64(v, "starting_price_paise")?;
+            validate_non_negative_amount_paise(parsed, "starting_price_paise")?;
+            Some(parsed)
+        }
+        None => None,
+    };
+    let ending_price_paise = match search.ending_price_paise.as_ref() {
+        Some(v) => {
+            let parsed = parse_i64(v, "ending_price_paise")?;
+            validate_non_negative_amount_paise(parsed, "ending_price_paise")?;
+            Some(parsed)
+        }
+        None => None,
+    };
+    if let (Some(min), Some(max)) = (starting_price_paise, ending_price_paise) {
+        if min > max {
+            return Err(GqlError::new(
+                "starting_price_paise must be less than or equal to ending_price_paise",
+                crate::resolvers::error::Code::InvalidArgument,
+            ));
+        }
+    }
+
     let limit = crate::graphql_limits::cap_page_size(to_option_i64(search.limit));
     let response = client
         .search_product(SearchProductRequest {
             name: search.name,
             description: search.description,
-            starting_price_paise: search
-                .starting_price_paise
-                .as_ref()
-                .and_then(|s| s.parse().ok()),
-            ending_price_paise: search
-                .ending_price_paise
-                .as_ref()
-                .and_then(|s| s.parse().ok()),
+            starting_price_paise,
+            ending_price_paise,
             category_id: to_option_i64(search.category_id),
             product_id: to_option_i64(search.product_id),
             limit,
@@ -111,6 +140,14 @@ pub(crate) async fn delete_product(product_id: String) -> Result<Vec<Product>, G
 #[instrument]
 pub(crate) async fn update_product(product: ProductMutation) -> Result<Vec<Product>, GqlError> {
     let mut client = connect_grpc_client().await?;
+    let price_paise = parse_i64(&product.price_paise, "price_paise")?;
+    validate_amount_paise(price_paise, "price_paise")?;
+    if let Some(ref sku) = product.sku {
+        validate_sku_slug(sku, "sku")?;
+    }
+    if let Some(ref slug) = product.slug {
+        validate_sku_slug(slug, "slug")?;
+    }
 
     let product_status_id = product
         .product_status_id
@@ -121,7 +158,7 @@ pub(crate) async fn update_product(product: ProductMutation) -> Result<Vec<Produ
         .update_product(UpdateProductRequest {
             name: product.name,
             description: Some(product.description),
-            price_paise: parse_i64(&product.price_paise, "price_paise")?,
+            price_paise,
             category_id: parse_i64(&product.category_id, "category id")?,
             product_id: to_i64(product.product_id),
             sku: product.sku,
@@ -174,7 +211,8 @@ pub(crate) async fn get_related_products(
 ) -> Result<Vec<Product>, GqlError> {
     let mut client = connect_grpc_client().await?;
     let product_id = parse_i64(&input.product_id, "product_id")?;
-    let limit = to_option_i64(input.limit);
+    // Keep related-products pagination bounded like other list resolvers.
+    let limit = crate::graphql_limits::cap_page_size(to_option_i64(input.limit));
     let resp = client
         .get_related_products(GetRelatedProductsRequest { product_id, limit })
         .await?;

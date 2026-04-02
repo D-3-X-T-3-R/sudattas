@@ -7,22 +7,11 @@
  * to your real site origin (e.g. http://localhost:3000) so Origin can be sent.
  */
 
+import { fetchWithResilience } from "@/lib/network-resilience";
+
 const GRAPHQL_URL =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GRAPHQL_URL) ||
   "http://localhost:8080/v2";
-
-const MAX_RETRIES_429 = 2;
-const RETRY_BASE_MS = 150;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function jitteredBackoffMs(attempt: number): number {
-  const exp = RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1);
-  const jitter = Math.floor(Math.random() * 120);
-  return exp + jitter;
-}
 
 function sessionFetchHeaders(sessionId: string): Record<string, string> {
   const h: Record<string, string> = {
@@ -49,19 +38,21 @@ export async function gqlWithSession<T = unknown>(
   sessionId: string,
   query: string,
   variables: Record<string, unknown> = {},
-  retryCount = 0
+  extraHeaders: Record<string, string> = {}
 ): Promise<T> {
-  const res = await fetch(GRAPHQL_URL, {
-    method: "POST",
-    headers: sessionFetchHeaders(sessionId),
-    body: JSON.stringify({ query, variables }),
-  });
+  const res = await fetchWithResilience(
+    GRAPHQL_URL,
+    {
+      method: "POST",
+      headers: {
+        ...sessionFetchHeaders(sessionId),
+        ...extraHeaders,
+      },
+      body: JSON.stringify({ query, variables }),
+    },
+    { max429Retries: 1, maxNetworkRetries: 1, baseBackoffMs: 400 }
+  );
   const text = await res.text();
-
-  if (res.status === 429 && retryCount < MAX_RETRIES_429) {
-    await sleep(jitteredBackoffMs(retryCount + 1));
-    return gqlWithSession<T>(sessionId, query, variables, retryCount + 1);
-  }
 
   if (res.status === 401) {
     throw new Error("Session invalid or expired");

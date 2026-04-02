@@ -5,7 +5,9 @@
 
 import { gql } from "@/lib/graphqlClient";
 import { getGuestSessionId } from "@/lib/session";
+import { getAccessToken } from "@/lib/authStore";
 import type { Product } from "@/lib/schemas";
+import { parsePaise, paiseToRupeesNumber } from "@/lib/money";
 
 /** Cart line as returned by getCartItems (GraphQL). */
 export interface CartItemGql {
@@ -31,8 +33,8 @@ export interface CartProductDetail {
 
 /** Map GraphQL cart product to storefront Product shape (minimal for cart line). */
 function mapCartProductToProduct(d: CartProductDetail, categoryName?: string): Product {
-  const pricePaise = parseInt(d.amountPaise, 10) || 0;
-  const priceRupees = Math.round((pricePaise / 100) * 100) / 100;
+  const pricePaise = parsePaise(d.amountPaise);
+  const priceRupees = paiseToRupeesNumber(pricePaise);
   const imageList = d.images?.filter((i) => i?.url || i?.thumbnailUrl) ?? [];
   const allUrls = imageList.map((i) => i?.url || i?.thumbnailUrl || "").filter(Boolean);
   return {
@@ -40,6 +42,7 @@ function mapCartProductToProduct(d: CartProductDetail, categoryName?: string): P
     name: d.name,
     collection: categoryName ?? "Collection",
     price: priceRupees,
+    pricePaise,
     priceFormatted: d.formatted?.trim() || undefined,
     rating: 4.5,
     reviews: 0,
@@ -69,8 +72,8 @@ function sizeNameForVariant(
   return row?.sizeName ?? null;
 }
 
-const GET_CART_ITEMS = `query GetCartItems($sessionId: String) {
-  getCartItems(sessionId: $sessionId) {
+const GET_CART_ITEMS = `query GetCartItems($userId: String, $sessionId: String) {
+  getCartItems(userId: $userId, sessionId: $sessionId) {
     cartId
     userId
     variantId
@@ -160,6 +163,32 @@ export type CartLineMapped = {
   sizeName: string | null;
 };
 
+function decodeJwtSubAsNumericUserId(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const raw = token.startsWith("Bearer ") ? token.slice(7) : token;
+    const parts = raw.split(".");
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(atob(parts[1])) as { sub?: string };
+    const sub = String(payload.sub ?? "").trim();
+    return /^\d+$/.test(sub) ? sub : null;
+  } catch {
+    return null;
+  }
+}
+
+function cartScope(preferredSessionId?: string): {
+  userId: string;
+  sessionId?: string;
+} {
+  const userId = decodeJwtSubAsNumericUserId(getAccessToken());
+  if (userId) {
+    return { userId, sessionId: undefined };
+  }
+  const sid = preferredSessionId || getGuestSessionId() || undefined;
+  return { userId: "", sessionId: sid };
+}
+
 /**
  * Fetch cart from backend and return lines in storefront shape.
  * Returns null on API/session failure so caller can keep existing local state.
@@ -168,12 +197,13 @@ export async function fetchCartLines(): Promise<CartLineMapped[] | null> {
   if (typeof window === "undefined") return null;
   const { ensureGuestSession } = await import("@/lib/session");
   await ensureGuestSession();
-  const sessionId = getGuestSessionId();
-  if (!sessionId) return null;
+  const scope = cartScope();
+  if (!scope.userId && !scope.sessionId) return null;
 
   try {
     const data = await gql<{ getCartItems?: CartItemGql[] }>(GET_CART_ITEMS, {
-      sessionId,
+      userId: scope.userId || null,
+      sessionId: scope.sessionId || null,
     });
     const items = data?.getCartItems ?? [];
     return items.map((item) => {
@@ -201,15 +231,16 @@ export async function fetchCartLines(): Promise<CartLineMapped[] | null> {
 export async function addCartItem(
   variantId: string,
   quantity: number,
-  sessionId: string
+  sessionId?: string
 ): Promise<CartLineMapped[] | null> {
   try {
+    const scope = cartScope(sessionId);
     const data = await gql<{ addCartItem?: CartItemGql[] }>(ADD_CART_ITEM, {
       input: {
-        userId: "0",
+        userId: scope.userId,
         variantId,
         quantity: String(quantity),
-        sessionId,
+        sessionId: scope.sessionId || null,
       },
     });
     const items = data?.addCartItem ?? [];
@@ -237,16 +268,17 @@ export async function updateCartItem(
   cartId: string,
   variantId: string,
   quantity: number,
-  sessionId: string
+  sessionId?: string
 ): Promise<CartLineMapped[] | null> {
   try {
+    const scope = cartScope(sessionId);
     const data = await gql<{ updateCartItem?: CartItemGql[] }>(UPDATE_CART_ITEM, {
       input: {
         cartId,
-        userId: "0",
+        userId: scope.userId,
         variantId,
         quantity: String(quantity),
-        sessionId,
+        sessionId: scope.sessionId || null,
       },
     });
     const items = data?.updateCartItem ?? [];
@@ -272,14 +304,15 @@ export async function updateCartItem(
  */
 export async function deleteCartItem(
   cartId: string,
-  sessionId: string
+  sessionId?: string
 ): Promise<CartLineMapped[] | null> {
   try {
+    const scope = cartScope(sessionId);
     const data = await gql<{ deleteCartItem?: CartItemGql[] }>(DELETE_CART_ITEM, {
       input: {
-        userId: "0",
+        userId: scope.userId,
         cartId,
-        sessionId,
+        sessionId: scope.sessionId || null,
       },
     });
     const items = data?.deleteCartItem ?? [];

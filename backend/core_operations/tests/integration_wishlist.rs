@@ -175,3 +175,65 @@ async fn integration_delete_wishlist_item_search_empty() {
 
     txn.rollback().await.ok();
 }
+
+/// W3 - wishlist items remain visible for the same user across repeated reads
+/// (simulating session restore where identity is re-established).
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_wishlist_persists_across_repeated_reads_for_same_user() {
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let (user_id, product_id) = wishlist_test_setup(&txn, now_tag).await;
+
+    let add_res = core_operations::handlers::wishlist::add_wishlist_item(
+        &txn,
+        Request::new(AddWishlistItemRequest {
+            user_id,
+            product_id,
+        }),
+    )
+    .await
+    .expect("add_wishlist_item should succeed");
+    let added = add_res.into_inner().items[0].clone();
+
+    // First read.
+    let first_search = core_operations::handlers::wishlist::search_wishlist_item(
+        &txn,
+        Request::new(SearchWishlistItemRequest {
+            wishlist_id: None,
+            user_id,
+            product_id: None,
+        }),
+    )
+    .await
+    .expect("first search_wishlist_item should succeed")
+    .into_inner()
+    .items;
+
+    // Simulated session restore: new request context, same user identity.
+    let second_search = core_operations::handlers::wishlist::search_wishlist_item(
+        &txn,
+        Request::new(SearchWishlistItemRequest {
+            wishlist_id: None,
+            user_id,
+            product_id: None,
+        }),
+    )
+    .await
+    .expect("second search_wishlist_item should succeed")
+    .into_inner()
+    .items;
+
+    assert_eq!(first_search.len(), 1);
+    assert_eq!(second_search.len(), 1);
+    assert_eq!(first_search[0].wishlist_id, added.wishlist_id);
+    assert_eq!(second_search[0].wishlist_id, added.wishlist_id);
+    assert_eq!(first_search[0].product_id, product_id);
+    assert_eq!(second_search[0].product_id, product_id);
+
+    txn.rollback().await.ok();
+}

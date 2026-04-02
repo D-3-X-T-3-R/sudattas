@@ -1,0 +1,187 @@
+import "server-only";
+
+import { NextResponse } from "next/server";
+import { getAdminSession } from "@/lib/admin-auth-server";
+import { graphQlUrl } from "@/lib/server-session-auth";
+import { forwardedIpHeadersFromRequest } from "@/lib/forwarded-ip";
+import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
+
+type GraphqlBody = {
+  query?: string;
+  variables?: Record<string, unknown>;
+  operationName?: string;
+};
+
+type ForwardOptions = {
+  allowedRoots?: string[];
+};
+
+type ApiEnvelope<T> = {
+  ok: boolean;
+  data: T | null;
+  errorCode: string | null;
+  message: string | null;
+  fieldErrors: Record<string, string> | null;
+  retryable: boolean;
+};
+
+function envelopeOk<T>(data: T): ApiEnvelope<T> {
+  return {
+    ok: true,
+    data,
+    errorCode: null,
+    message: null,
+    fieldErrors: null,
+    retryable: false,
+  };
+}
+
+function envelopeErr(
+  status: number,
+  errorCode: string,
+  message: string,
+  fieldErrors: Record<string, string> | null = null
+): ApiEnvelope<null> {
+  return {
+    ok: false,
+    data: null,
+    errorCode,
+    message,
+    fieldErrors,
+    retryable: status >= 500,
+  };
+}
+
+function errorStatusToCode(status: number): string {
+  if (status === 400) return "BAD_REQUEST";
+  if (status === 401) return "UNAUTHORIZED";
+  if (status === 403) return "FORBIDDEN";
+  if (status === 404) return "NOT_FOUND";
+  if (status === 409) return "CONFLICT";
+  if (status === 429) return "RATE_LIMITED";
+  if (status >= 500) return "UPSTREAM_ERROR";
+  return "REQUEST_FAILED";
+}
+
+function hasAllowedRoot(query: string, allowedRoots: string[]): boolean {
+  const normalized = query.replace(/\s+/g, " ");
+  return allowedRoots.some((root) => {
+    const pattern = new RegExp(`\\b${root}\\b`);
+    return pattern.test(normalized);
+  });
+}
+
+export async function forwardAdminGraphql(
+  request: Request,
+  options: ForwardOptions = {}
+) {
+  const session = await getAdminSession();
+  if (!session) {
+    return NextResponse.json(
+      envelopeErr(401, "UNAUTHORIZED", "Unauthorized admin request"),
+      { status: 401 }
+    );
+  }
+
+  let body: GraphqlBody;
+  try {
+    body = (await request.json()) as GraphqlBody;
+  } catch {
+    return NextResponse.json(
+      envelopeErr(400, "BAD_REQUEST", "Invalid JSON body"),
+      { status: 400 }
+    );
+  }
+
+  const query = body.query?.trim();
+  if (!query) {
+    return NextResponse.json(
+      envelopeErr(400, "BAD_REQUEST", "Missing GraphQL query"),
+      { status: 400 }
+    );
+  }
+
+  if (
+    options.allowedRoots &&
+    options.allowedRoots.length > 0 &&
+    !hasAllowedRoot(query, options.allowedRoots)
+  ) {
+    return NextResponse.json(
+      envelopeErr(400, "BAD_REQUEST", "Query root not allowed on this admin route"),
+      { status: 400 }
+    );
+  }
+
+  const token = session.idToken ?? session.accessToken;
+  if (!token) {
+    return NextResponse.json(
+      envelopeErr(401, "UNAUTHORIZED", "Admin session token unavailable"),
+      { status: 401 }
+    );
+  }
+
+  const baseHeaders = {
+    "Content-Type": "application/json",
+    Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}`,
+    ...forwardedIpHeadersFromRequest(request),
+    ...(request.headers.get("x-request-id")
+      ? { "X-Request-Id": request.headers.get("x-request-id") as string }
+      : {}),
+    ...(request.headers.get("idempotency-key")
+      ? { "Idempotency-Key": request.headers.get("idempotency-key") as string }
+      : {}),
+  };
+  const payload = JSON.stringify({
+    query,
+    variables: body.variables ?? {},
+    operationName: body.operationName,
+  });
+  let response: Response;
+  try {
+    response = await fetchWithResilience(
+      graphQlUrl(),
+      {
+        method: "POST",
+        headers: baseHeaders,
+        body: payload,
+        cache: "no-store",
+      },
+      { max429Retries: 1, maxNetworkRetries: 1, baseBackoffMs: 400 }
+    );
+  } catch (error) {
+    return NextResponse.json(
+      envelopeErr(502, "UPSTREAM_ERROR", normalizeNetworkError(error, "Failed to reach GraphQL")),
+      { status: 502 }
+    );
+  }
+
+  const text = await response.text();
+  let parsed: { data?: unknown; errors?: Array<{ message?: string }> } | null = null;
+  try {
+    parsed = JSON.parse(text) as { data?: unknown; errors?: Array<{ message?: string }> };
+  } catch {
+    parsed = null;
+  }
+
+  // GraphQL layer can return HTTP 200 with `errors`; normalize these to envelope errors.
+  if (parsed?.errors?.length) {
+    const first = parsed.errors[0]?.message?.trim() || "GraphQL operation failed";
+    return NextResponse.json(
+      envelopeErr(response.status === 200 ? 400 : response.status, "GRAPHQL_ERROR", first),
+      { status: response.status === 200 ? 400 : response.status }
+    );
+  }
+
+  if (!response.ok) {
+    return NextResponse.json(
+      envelopeErr(
+        response.status,
+        errorStatusToCode(response.status),
+        text || `HTTP ${response.status}`
+      ),
+      { status: response.status }
+    );
+  }
+
+  return NextResponse.json(envelopeOk(parsed?.data ?? null), { status: 200 });
+}

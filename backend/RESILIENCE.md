@@ -3,8 +3,12 @@
 ## Rate limiting (GraphQL)
 
 - **Per-IP** rate limiting is applied to GraphQL and webhook routes (not to GET `/`, GET `/ready`, or OPTIONS).
-- Configure via env: `RATE_LIMIT_PER_MINUTE` (default `60`). Set to `0` to disable.
+- Configure via env: `RATE_LIMIT_PER_MINUTE` (default `240`). Set to `0` to disable.
+- Webhook route limit: `RATE_LIMIT_WEBHOOK_PER_MINUTE` (default `120`).
+- Optional trusted proxy mode: `RATE_LIMIT_TRUST_PROXY_HEADERS=true` makes rate limiting use `X-Real-Ip` / `X-Forwarded-For` before socket remote IP.
+  Use this only when GraphQL sits behind a trusted proxy/app server; do not enable on internet-facing GraphQL directly.
 - When exceeded: HTTP **429 Too Many Requests**.
+- 429 responses include `Retry-After: 1` to support client backoff.
 
 ## gRPC client (GraphQL → gRPC)
 

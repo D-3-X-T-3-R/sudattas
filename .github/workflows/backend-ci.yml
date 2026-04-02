@@ -333,14 +333,8 @@ jobs:
         ./target/debug/core_operations &
         sleep 5
         ./target/debug/graphql &
-        for i in $(seq 1 60); do
-          if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1; then
-            echo "GraphQL server ready"
-            break
-          fi
-          sleep 3
-        done
-        curl -sf http://127.0.0.1:8080/ > /dev/null || { echo "GraphQL server did not become ready"; exit 1; }
+        chmod +x ./scripts/wait_for_http_ready.sh
+        ./scripts/wait_for_http_ready.sh http://127.0.0.1:8080/ready 60 3
         cargo test -p graphql --test e2e_tests --all-features -- --ignored
         cargo test -p graphql --test e2e_all_graphql_operations --all-features -- --ignored
 

@@ -13,13 +13,17 @@ use graphql::security::session_validator;
 use graphql::seo;
 use graphql::webhooks;
 use metrics_exporter_prometheus::PrometheusBuilder;
-use std::net::IpAddr;
+use serde::Deserialize;
+use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
 use tracing::{debug, info, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 use uuid::Uuid;
-use serde::Deserialize;
 use warp::http::StatusCode;
 use warp::{http::Response, reply, Filter, Rejection, Reply};
 
@@ -47,6 +51,84 @@ impl warp::reject::Reject for RateLimited {}
 #[derive(Debug)]
 struct CsrfRejected {}
 impl warp::reject::Reject for CsrfRejected {}
+
+fn env_bool(var: &str, default: bool) -> bool {
+    match std::env::var(var) {
+        Ok(v) => {
+            let s = v.trim().to_ascii_lowercase();
+            matches!(s.as_str(), "1" | "true" | "yes" | "on")
+        }
+        Err(_) => default,
+    }
+}
+
+fn parse_first_forwarded_ip(raw: &str) -> Option<IpAddr> {
+    for part in raw.split(',') {
+        let candidate = part.trim();
+        if candidate.is_empty() {
+            continue;
+        }
+        if let Ok(ip) = candidate.parse::<IpAddr>() {
+            return Some(ip);
+        }
+    }
+    None
+}
+
+fn resolve_client_ip_for_rate_limit(
+    remote: Option<SocketAddr>,
+    x_forwarded_for: Option<&str>,
+    x_real_ip: Option<&str>,
+    trust_proxy_headers: bool,
+) -> Option<IpAddr> {
+    if trust_proxy_headers {
+        if let Some(raw) = x_real_ip {
+            if let Ok(ip) = raw.trim().parse::<IpAddr>() {
+                return Some(ip);
+            }
+        }
+        if let Some(raw) = x_forwarded_for {
+            if let Some(ip) = parse_first_forwarded_ip(raw) {
+                return Some(ip);
+            }
+        }
+    }
+    remote.map(|addr| addr.ip())
+}
+
+fn hash_rate_limit_key(input: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    input.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
+fn resolve_graphql_rate_limit_key(
+    remote: Option<SocketAddr>,
+    x_forwarded_for: Option<&str>,
+    x_real_ip: Option<&str>,
+    session_id: Option<&str>,
+    authorization: Option<&str>,
+    trust_proxy_headers: bool,
+) -> Option<String> {
+    if let Some(ip) =
+        resolve_client_ip_for_rate_limit(remote, x_forwarded_for, x_real_ip, trust_proxy_headers)
+    {
+        return Some(format!("ip:{ip}"));
+    }
+    if let Some(sid) = session_id {
+        let trimmed = sid.trim();
+        if !trimmed.is_empty() {
+            return Some(format!("sid:{}", hash_rate_limit_key(trimmed)));
+        }
+    }
+    if let Some(auth) = authorization {
+        let trimmed = auth.trim();
+        if !trimmed.is_empty() {
+            return Some(format!("auth:{}", hash_rate_limit_key(trimmed)));
+        }
+    }
+    None
+}
 
 #[tokio::main]
 async fn main() {
@@ -83,8 +165,9 @@ async fn main() {
     let rate_limit_per_minute: u32 = std::env::var("RATE_LIMIT_PER_MINUTE")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(60);
-    let rate_limiter: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>> =
+        .unwrap_or(240);
+    let trust_proxy_headers = env_bool("RATE_LIMIT_TRUST_PROXY_HEADERS", false);
+    let rate_limiter: Option<Arc<governor::DefaultKeyedRateLimiter<String>>> =
         if rate_limit_per_minute == 0 {
             None
         } else {
@@ -94,13 +177,34 @@ async fn main() {
         };
     let rate_limit_filter = {
         let limiter = rate_limiter.clone();
+        let trust_proxy = trust_proxy_headers;
         warp::addr::remote()
+            .and(warp::header::optional::<String>("x-forwarded-for"))
+            .and(warp::header::optional::<String>("x-real-ip"))
+            .and(warp::header::optional::<String>("x-session-id"))
+            .and(warp::header::optional::<String>("authorization"))
             .and(warp::any().map(move || limiter.clone()))
             .and_then(
-                |addr: Option<std::net::SocketAddr>,
-                 lim: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>>| async move {
-                    if let (Some(addr), Some(ref l)) = (addr, lim) {
-                        if l.check_key(&addr.ip()).is_err() {
+                move |addr: Option<SocketAddr>,
+                 x_forwarded_for: Option<String>,
+                 x_real_ip: Option<String>,
+                 session_id: Option<String>,
+                 authorization: Option<String>,
+                 lim: Option<Arc<governor::DefaultKeyedRateLimiter<String>>>| async move {
+                    if let Some(ref l) = lim {
+                        let key = resolve_graphql_rate_limit_key(
+                            addr,
+                            x_forwarded_for.as_deref(),
+                            x_real_ip.as_deref(),
+                            session_id.as_deref(),
+                            authorization.as_deref(),
+                            trust_proxy,
+                        );
+                        if let Some(client_key) = key {
+                            if l.check_key(&client_key).is_err() {
+                                return Err(warp::reject::custom(RateLimited {}));
+                            }
+                        } else {
                             return Err(warp::reject::custom(RateLimited {}));
                         }
                     }
@@ -113,7 +217,7 @@ async fn main() {
     let webhook_limit_per_minute: u32 = std::env::var("RATE_LIMIT_WEBHOOK_PER_MINUTE")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(30);
+        .unwrap_or(120);
     let webhook_rate_limiter: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>> =
         if webhook_limit_per_minute == 0 {
             None
@@ -124,13 +228,28 @@ async fn main() {
         };
     let webhook_rate_limit_filter = {
         let limiter = webhook_rate_limiter.clone();
+        let trust_proxy = trust_proxy_headers;
         warp::addr::remote()
+            .and(warp::header::optional::<String>("x-forwarded-for"))
+            .and(warp::header::optional::<String>("x-real-ip"))
             .and(warp::any().map(move || limiter.clone()))
             .and_then(
-                |addr: Option<std::net::SocketAddr>,
+                move |addr: Option<SocketAddr>,
+                 x_forwarded_for: Option<String>,
+                 x_real_ip: Option<String>,
                  lim: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>>| async move {
-                    if let (Some(addr), Some(ref l)) = (addr, lim) {
-                        if l.check_key(&addr.ip()).is_err() {
+                    if let Some(ref l) = lim {
+                        let ip = resolve_client_ip_for_rate_limit(
+                            addr,
+                            x_forwarded_for.as_deref(),
+                            x_real_ip.as_deref(),
+                            trust_proxy,
+                        );
+                        if let Some(client_ip) = ip {
+                            if l.check_key(&client_ip).is_err() {
+                                return Err(warp::reject::custom(RateLimited {}));
+                            }
+                        } else {
                             return Err(warp::reject::custom(RateLimited {}));
                         }
                     }
@@ -139,6 +258,12 @@ async fn main() {
             )
             .map(|_| ())
     };
+    info!(
+        rate_limit_per_minute,
+        webhook_limit_per_minute,
+        trust_proxy_headers,
+        "Rate limiter configured"
+    );
 
     let cors = warp::cors()
         .allow_any_origin()
@@ -188,6 +313,11 @@ async fn main() {
     //
     // Resolvers inspect `context.jwt_user_id()` to gate operations that require a
     // full login (e.g. checkout / place_order).
+    //
+    // Cross-layer boundary expectation:
+    //   - Public storefront reads must use guest sessions (`X-Session-Id`).
+    //   - Authenticated customer/admin flows must use JWT (`Authorization`).
+    // Route families are documented in docs/CROSS_LAYER_CONTRACT.md.
     let jwks_c = jwks.clone();
     let redis_url_c = redis_url.clone();
     let allowed_origins_c = allowed_origins.clone();
@@ -212,8 +342,9 @@ async fn main() {
                 if let Some(ref t) = token {
                     match validate_token(t, &jwks) {
                         Ok(claims) => {
-                            debug!(auth_method = "jwt", sub = %claims.sub, "Request authenticated");
-                            auth = Some(AuthSource::Jwt(claims.sub));
+                            let auth_user_id = claims.user_id.unwrap_or_else(|| claims.sub.clone());
+                            debug!(auth_method = "jwt", sub = %claims.sub, auth_user_id = %auth_user_id, "Request authenticated");
+                            auth = Some(AuthSource::Jwt(auth_user_id));
                         }
                         Err(e) => {
                             warn!(auth_method = "jwt", error = %e, "JWT validation failed");
@@ -438,30 +569,31 @@ async fn main() {
         .and(warp::path::end())
         .and(warp::body::json::<PhoneOtpRequestBody>())
         .and_then(|body: PhoneOtpRequestBody| async move {
-            let (status, payload) = match phone_otp::request_sms_otp(&body.phone, body.channel.as_deref()).await {
-                Ok(()) => (
-                    StatusCode::OK,
-                    serde_json::json!({ "ok": true }).to_string(),
-                ),
-                Err(code) => match code.as_str() {
-                    "INVALID_PHONE" => (
-                        StatusCode::BAD_REQUEST,
-                        serde_json::json!({ "ok": false, "error": code }).to_string(),
+            let (status, payload) =
+                match phone_otp::request_sms_otp(&body.phone, body.channel.as_deref()).await {
+                    Ok(()) => (
+                        StatusCode::OK,
+                        serde_json::json!({ "ok": true }).to_string(),
                     ),
-                    "INVALID_CHANNEL" => (
-                        StatusCode::BAD_REQUEST,
-                        serde_json::json!({ "ok": false, "error": code }).to_string(),
-                    ),
-                    "OTP_NOT_CONFIGURED" => (
-                        StatusCode::SERVICE_UNAVAILABLE,
-                        serde_json::json!({ "ok": false, "error": code }).to_string(),
-                    ),
-                    _ => (
-                        StatusCode::BAD_GATEWAY,
-                        serde_json::json!({ "ok": false, "error": code }).to_string(),
-                    ),
-                },
-            };
+                    Err(code) => match code.as_str() {
+                        "INVALID_PHONE" => (
+                            StatusCode::BAD_REQUEST,
+                            serde_json::json!({ "ok": false, "error": code }).to_string(),
+                        ),
+                        "INVALID_CHANNEL" => (
+                            StatusCode::BAD_REQUEST,
+                            serde_json::json!({ "ok": false, "error": code }).to_string(),
+                        ),
+                        "OTP_NOT_CONFIGURED" => (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            serde_json::json!({ "ok": false, "error": code }).to_string(),
+                        ),
+                        _ => (
+                            StatusCode::BAD_GATEWAY,
+                            serde_json::json!({ "ok": false, "error": code }).to_string(),
+                        ),
+                    },
+                };
             Ok::<_, Rejection>(
                 warp::reply::with_header(
                     warp::reply::with_status(payload, status),
@@ -537,34 +669,37 @@ async fn main() {
     warp::serve(routes).run(listen_addr).await
 }
 
-async fn handle_auth_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
+async fn handle_auth_rejection(
+    err: Rejection,
+) -> Result<warp::reply::Response, std::convert::Infallible> {
     // Check auth/rate-limit first: when graphql rejects (e.g. 401), we still try options() which
     // adds MethodNotAllowed; we must return 401 not 404 for POST /v2 with bad auth.
     if err.find::<Unauthorized>().is_some() {
-        return Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED));
+        return Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED).into_response());
     }
     if err.find::<CsrfRejected>().is_some() {
-        return Ok(reply::with_status("FORBIDDEN", StatusCode::FORBIDDEN));
+        return Ok(reply::with_status("FORBIDDEN", StatusCode::FORBIDDEN).into_response());
     }
     if err.find::<RateLimited>().is_some() {
-        return Ok(reply::with_status(
-            "TOO_MANY_REQUESTS",
-            StatusCode::TOO_MANY_REQUESTS,
-        ));
+        return Ok(
+            reply::with_header(
+                reply::with_status("TOO_MANY_REQUESTS", StatusCode::TOO_MANY_REQUESTS),
+                "retry-after",
+                "1",
+            )
+            .into_response(),
+        );
     }
     if let Some(_e) = err.find::<warp::filters::body::BodyDeserializeError>() {
-        return Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST));
+        return Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST).into_response());
     }
     if err.is_not_found() {
-        return Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND));
+        return Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND).into_response());
     }
     if err.find::<warp::reject::MethodNotAllowed>().is_some() {
         // No route matched (e.g. GET /unknown-path); last filter tried was options() -> 405.
-        return Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND));
+        return Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND).into_response());
     }
     warn!("Unhandled rejection: {:?}", err);
-    Ok(reply::with_status(
-        "INTERNAL_SERVER_ERROR",
-        StatusCode::INTERNAL_SERVER_ERROR,
-    ))
+    Ok(reply::with_status("INTERNAL_SERVER_ERROR", StatusCode::INTERNAL_SERVER_ERROR).into_response())
 }

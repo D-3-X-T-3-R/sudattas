@@ -46,6 +46,12 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
 import { Pencil, Trash2, Filter, Package, Plus, X } from "lucide-react";
+import {
+  MAX_MONEY_PAISE,
+  optionalRupeesInputToPaise,
+  paiseToRupeesInput,
+  rupeesInputToPaise,
+} from "@/lib/money";
 
 type ProductFormState = {
   name: string;
@@ -125,22 +131,6 @@ function getProductThumbnailWithCacheBuster(p: ProductListRow): string | null {
     return `${u}${sep}v=${id}`;
   }
   return null;
-}
-
-function paiseToRupeesInput(paise?: string): string {
-  const n = Number(paise ?? "0");
-  if (!Number.isFinite(n)) return "";
-  return (n / 100).toFixed(2);
-}
-
-/** Convert rupees string (e.g. "799.99") to paise without float rounding. */
-function rupeesToPaise(rupeesStr: string): number {
-  const s = (rupeesStr || "0").trim();
-  const parts = s.split(".");
-  const major = parseInt(parts[0] || "0", 10) || 0;
-  const minorStr = (parts[1] || "00").slice(0, 2).padEnd(2, "0");
-  const minor = parseInt(minorStr, 10) || 0;
-  return major * 100 + minor;
 }
 
 function getProductStatusLabel(statusId?: string | null): string {
@@ -808,15 +798,25 @@ export default function AdminProductsPage() {
     const parsed = adminProductFormSchema.safeParse(form);
     if (!parsed.success) {
       const first = parsed.error.flatten().fieldErrors;
-      const msg = first.name?.[0] ?? first.categoryId?.[0] ?? parsed.error.message;
+      const msg =
+        first.name?.[0] ??
+        first.priceRupees?.[0] ??
+        first.categoryId?.[0] ??
+        first.sku?.[0] ??
+        first.slug?.[0] ??
+        parsed.error.message;
       setError(msg);
       return;
     }
     const { name, description, priceRupees, categoryId, sku, slug, fabric, weave, occasion, hasBlousePiece, careInstructions, productStatusId } =
       parsed.data;
-    const pricePaise = rupeesToPaise(priceRupees || "0");
-    if (pricePaise < 0) {
-      setError("Enter a valid price (e.g. 499.00).");
+    const pricePaise = rupeesInputToPaise(priceRupees || "0");
+    if (pricePaise <= 0) {
+      setError("Price must be greater than 0.");
+      return;
+    }
+    if (pricePaise > MAX_MONEY_PAISE) {
+      setError("Price exceeds supported maximum.");
       return;
     }
     if (variants.length === 0) {
@@ -948,10 +948,14 @@ export default function AdminProductsPage() {
     if (searchWeave) next.weave = searchWeave;
     if (searchOccasion) next.occasion = searchOccasion;
     if (searchProductStatusId) next.productStatusId = searchProductStatusId;
-    const minRupees = parseFloat(searchPriceMinRupees);
-    const maxRupees = parseFloat(searchPriceMaxRupees);
-    if (Number.isFinite(minRupees) && minRupees >= 0) next.startingPricePaise = String(Math.round(minRupees * 100));
-    if (Number.isFinite(maxRupees) && maxRupees >= 0) next.endingPricePaise = String(Math.round(maxRupees * 100));
+    const minPaise = optionalRupeesInputToPaise(searchPriceMinRupees);
+    const maxPaise = optionalRupeesInputToPaise(searchPriceMaxRupees);
+    if (typeof minPaise === "number" && minPaise >= 0) {
+      next.startingPricePaise = String(Math.min(minPaise, MAX_MONEY_PAISE));
+    }
+    if (typeof maxPaise === "number" && maxPaise >= 0) {
+      next.endingPricePaise = String(Math.min(maxPaise, MAX_MONEY_PAISE));
+    }
     if (trimmedLimit) next.limit = trimmedLimit;
     setAppliedSearch(next);
   };
@@ -1763,7 +1767,7 @@ export default function AdminProductsPage() {
                 <p className="font-medium">Can&apos;t load categories.</p>
                 <p className="mt-1 text-xs text-red-800/80">
                   {categoriesAuthLike
-                    ? "Admin access was denied. Check NEXT_PUBLIC_ADMIN_API_KEY or your admin auth configuration."
+                    ? "Admin access was denied. Check your admin allowlist/session configuration."
                     : categoriesErrorObj?.message ?? "Failed to load categories."}
                 </p>
                 <button

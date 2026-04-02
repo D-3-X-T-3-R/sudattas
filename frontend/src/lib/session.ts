@@ -3,6 +3,8 @@
  * Persists in localStorage; call ensureGuestSession() early (e.g. App mount).
  */
 
+import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
+
 const STORAGE_KEY = "sudattas_guest_session";
 
 function getBaseUrl(): string {
@@ -30,6 +32,11 @@ export function clearGuestSession(): void {
   }
 }
 
+export async function refreshGuestSession(): Promise<string | null> {
+  clearGuestSession();
+  return ensureGuestSession();
+}
+
 /**
  * Ensure we have a guest session ID. If none in localStorage, call backend POST /session/guest and store it.
  * Returns the session ID (existing or new), or null if backend is unavailable or Redis is disabled.
@@ -40,7 +47,11 @@ export async function ensureGuestSession(): Promise<string | null> {
 
   const base = getBaseUrl();
   try {
-    const res = await fetch(`${base}/session/guest`, { method: "POST" });
+    const res = await fetchWithResilience(
+      `${base}/session/guest`,
+      { method: "POST" },
+      { max429Retries: 1, maxNetworkRetries: 1, baseBackoffMs: 400 }
+    );
     const text = await res.text();
     if (!res.ok) {
       try {
@@ -59,7 +70,7 @@ export async function ensureGuestSession(): Promise<string | null> {
     }
     console.warn("[session] POST succeeded but no session_id in response");
   } catch (e) {
-    console.warn("[session] Guest session request failed:", (e as Error)?.message ?? e);
+    console.warn("[session] Guest session request failed:", normalizeNetworkError(e));
   }
   return null;
 }

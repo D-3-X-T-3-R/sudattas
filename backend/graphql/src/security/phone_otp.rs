@@ -16,8 +16,7 @@ fn normalize_phone(raw: &str) -> Option<String> {
 
 fn twilio_config() -> Result<(String, String, String), String> {
     let sid = std::env::var("TWILIO_ACCOUNT_SID").map_err(|_| "OTP_NOT_CONFIGURED".to_string())?;
-    let token =
-        std::env::var("TWILIO_AUTH_TOKEN").map_err(|_| "OTP_NOT_CONFIGURED".to_string())?;
+    let token = std::env::var("TWILIO_AUTH_TOKEN").map_err(|_| "OTP_NOT_CONFIGURED".to_string())?;
     let service_sid =
         std::env::var("TWILIO_VERIFY_SERVICE_SID").map_err(|_| "OTP_NOT_CONFIGURED".to_string())?;
     Ok((sid, token, service_sid))

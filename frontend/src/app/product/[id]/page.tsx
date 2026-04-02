@@ -9,7 +9,7 @@ import { SiteHeader } from "@/components/site-header";
 import { ProductDetailView } from "@/components/product-detail-view";
 import { useStorefront } from "@/context/storefront-context";
 import type { Product } from "@/lib/schemas";
-import { getGuestSessionId } from "@/lib/session";
+import { ensureGuestSession, getGuestSessionId, setGuestSessionId } from "@/lib/session";
 
 export default function ProductPage() {
   const params = useParams();
@@ -31,25 +31,34 @@ export default function ProductPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const sessionId = getGuestSessionId();
-    const headers: Record<string, string> = {};
-    if (sessionId) headers["X-Session-Id"] = sessionId;
-    fetch(`/api/products/${id}`, { headers })
-      .then((res) => res.json())
-      .then((data: { product: Product | null; sizes?: { sizeId: string; sizeName: string }[]; error: string | null }) => {
+    void (async () => {
+      try {
+        await ensureGuestSession();
+        if (cancelled) return;
+        const sessionId = getGuestSessionId();
+        const headers: Record<string, string> = {};
+        if (sessionId) headers["X-Session-Id"] = sessionId;
+        const res = await fetch(`/api/products/${id}`, { headers });
+        const newSid = res.headers.get("X-Set-Guest-Session")?.trim();
+        if (newSid) setGuestSessionId(newSid);
+        const data = (await res.json()) as {
+          product: Product | null;
+          sizes?: { sizeId: string; sizeName: string }[];
+          error: string | null;
+        };
         if (cancelled) return;
         if (data.error) setError(data.error);
         else {
           setProduct(data.product ?? null);
           setSizes(data.sizes ?? []);
         }
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
-      })
-      .finally(() => {
+      } catch (e) {
+        if (!cancelled)
+          setError(e instanceof Error ? e.message : "Failed to load");
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };

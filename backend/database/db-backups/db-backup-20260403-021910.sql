@@ -38,7 +38,7 @@ CREATE TABLE `Cart` (
   KEY `idx_session` (`session_id`),
   CONSTRAINT `Cart_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `Users` (`UserID`) ON DELETE CASCADE,
   CONSTRAINT `Cart_ibfk_2` FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants` (`VariantID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -47,6 +47,7 @@ CREATE TABLE `Cart` (
 
 LOCK TABLES `Cart` WRITE;
 /*!40000 ALTER TABLE `Cart` DISABLE KEYS */;
+INSERT INTO `Cart` VALUES (1,7,NULL,31,1,'2026-04-02 12:08:37','2026-04-02 12:08:37','2026-04-02 12:08:37'),(2,8,NULL,32,1,'2026-04-02 12:08:37','2026-04-01 11:08:38',NULL);
 /*!40000 ALTER TABLE `Cart` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -158,7 +159,7 @@ CREATE TABLE `Coupons` (
   UNIQUE KEY `code` (`code`),
   KEY `idx_code` (`code`,`coupon_status`),
   KEY `idx_coupons_code_ends_at` (`code`,`ends_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -270,7 +271,7 @@ CREATE TABLE `Inventory` (
   PRIMARY KEY (`InventoryID`),
   KEY `idx_inventory_variant_id` (`VariantID`),
   CONSTRAINT `Inventory_ibfk_1` FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants` (`VariantID`)
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=60 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -279,7 +280,7 @@ CREATE TABLE `Inventory` (
 
 LOCK TABLES `Inventory` WRITE;
 /*!40000 ALTER TABLE `Inventory` DISABLE KEYS */;
-INSERT INTO `Inventory` VALUES (1,1,1,0,0,'2026-03-07 11:09:06'),(2,2,5,0,0,'2026-03-07 23:16:25'),(3,3,5,0,0,'2026-03-07 23:16:25'),(4,4,5,0,0,'2026-03-07 23:16:25'),(5,5,5,0,0,'2026-03-07 23:16:25'),(6,6,5,0,0,'2026-03-07 23:16:26'),(7,7,5,0,0,'2026-03-07 23:17:51'),(8,8,5,0,0,'2026-03-07 23:17:51'),(9,9,3,0,0,'2026-03-07 23:17:51'),(10,10,2,0,0,'2026-03-07 23:17:51'),(11,11,2,0,0,'2026-03-07 23:19:08'),(12,12,1,0,0,'2026-03-07 23:19:08'),(13,13,1,0,0,'2026-03-07 23:20:23'),(14,14,10,0,0,'2026-03-07 23:21:42'),(15,15,1,0,0,'2026-03-07 23:21:42'),(16,16,2,0,0,'2026-03-07 23:22:36'),(17,17,1,0,0,'2026-03-07 23:22:36');
+INSERT INTO `Inventory` VALUES (1,1,1,0,0,'2026-03-07 11:09:06'),(2,2,5,0,0,'2026-03-07 23:16:25'),(3,3,5,0,0,'2026-03-07 23:16:25'),(4,4,5,0,0,'2026-03-07 23:16:25'),(5,5,5,0,0,'2026-03-07 23:16:25'),(6,6,5,0,0,'2026-03-07 23:16:26'),(7,7,5,0,0,'2026-03-07 23:17:51'),(8,8,5,0,0,'2026-03-07 23:17:51'),(9,9,3,0,0,'2026-03-07 23:17:51'),(10,10,2,0,0,'2026-03-07 23:17:51'),(11,11,2,0,0,'2026-03-07 23:19:08'),(12,12,1,0,0,'2026-03-07 23:19:08'),(13,13,1,0,0,'2026-03-07 23:20:23'),(14,14,10,0,0,'2026-03-07 23:21:42'),(15,15,1,0,0,'2026-03-07 23:21:42'),(16,16,2,0,0,'2026-03-07 23:22:36'),(17,17,1,0,0,'2026-03-07 23:22:36'),(18,18,0,0,0,'2026-03-19 21:05:27'),(19,19,3,0,0,'2026-03-19 21:32:19'),(20,20,5,0,0,'2026-03-21 11:03:17'),(21,21,5,0,0,'2026-03-21 11:03:17'),(22,22,3,0,0,'2026-03-21 11:03:17'),(23,23,2,0,0,'2026-03-21 11:03:17'),(24,24,2,0,0,'2026-03-21 11:03:35'),(25,25,1,0,0,'2026-03-21 11:03:36'),(26,26,1,0,0,'2026-03-21 11:03:47'),(27,27,10,0,0,'2026-03-21 11:04:01'),(28,28,1,0,0,'2026-03-21 11:04:02'),(29,29,2,0,0,'2026-03-21 11:04:16'),(30,30,1,0,0,'2026-03-21 11:04:17');
 /*!40000 ALTER TABLE `Inventory` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -389,7 +390,7 @@ CREATE TABLE `OrderDetails` (
   KEY `idx_order_details_variant` (`VariantID`),
   CONSTRAINT `OrderDetails_ibfk_1` FOREIGN KEY (`OrderID`) REFERENCES `Orders` (`OrderID`),
   CONSTRAINT `OrderDetails_ibfk_2` FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants` (`VariantID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -420,7 +421,7 @@ CREATE TABLE `OrderEvents` (
   PRIMARY KEY (`event_id`),
   KEY `idx_order` (`order_id`,`created_at`),
   CONSTRAINT `OrderEvents_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `Orders` (`OrderID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -497,7 +498,7 @@ CREATE TABLE `Orders` (
   CONSTRAINT `Orders_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `Users` (`UserID`),
   CONSTRAINT `Orders_ibfk_2` FOREIGN KEY (`ShippingAddressID`) REFERENCES `ShippingAddresses` (`ShippingAddressID`),
   CONSTRAINT `Orders_ibfk_3` FOREIGN KEY (`StatusID`) REFERENCES `OrderStatus` (`StatusID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -528,7 +529,7 @@ CREATE TABLE `OutboxEvents` (
   PRIMARY KEY (`event_id`),
   KEY `idx_outbox_status` (`status`),
   KEY `idx_outbox_created` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -537,6 +538,7 @@ CREATE TABLE `OutboxEvents` (
 
 LOCK TABLES `OutboxEvents` WRITE;
 /*!40000 ALTER TABLE `OutboxEvents` DISABLE KEYS */;
+INSERT INTO `OutboxEvents` VALUES (1,'OrderPlaced','order','999998','{\"user_id\": 1, \"order_id\": 999998}','processed','2026-04-02 12:08:14','2026-04-02 12:08:14'),(2,'AbandonedCart','cart','7','{\"email\": \"itest_ac1+1775131716876@example.com\", \"user_id\": 7}','pending','2026-04-02 12:08:37',NULL);
 /*!40000 ALTER TABLE `OutboxEvents` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -570,7 +572,7 @@ CREATE TABLE `PaymentIntents` (
   KEY `idx_status` (`status`),
   CONSTRAINT `PaymentIntents_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `Orders` (`OrderID`),
   CONSTRAINT `PaymentIntents_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `Users` (`UserID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -594,7 +596,7 @@ CREATE TABLE `ProductCategories` (
   `Name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`CategoryID`),
   UNIQUE KEY `uq_category_name` (`Name`)
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=63 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -603,7 +605,7 @@ CREATE TABLE `ProductCategories` (
 
 LOCK TABLES `ProductCategories` WRITE;
 /*!40000 ALTER TABLE `ProductCategories` DISABLE KEYS */;
-INSERT INTO `ProductCategories` VALUES (13,'Accessories'),(11,'Bags & Clutches'),(5,'Blouses'),(7,'Casual Wear'),(3,'Dresses'),(6,'Ethnic Sets'),(12,'Footwear'),(8,'Formal Wear'),(15,'Gifting'),(14,'Home & Living'),(10,'Jewellery'),(2,'Kurtis & Tunics'),(4,'Lehengas'),(9,'Loungewear'),(1,'Sarees');
+INSERT INTO `ProductCategories` VALUES (13,'Accessories'),(11,'Bags & Clutches'),(5,'Blouses'),(7,'Casual Wear'),(3,'Dresses'),(6,'Ethnic Sets'),(12,'Footwear'),(8,'Formal Wear'),(15,'Gifting'),(14,'Home & Living'),(21,'itest_cat_ac1_1775131716876'),(22,'itest_cat_ac2_1775131717374'),(10,'Jewellery'),(2,'Kurtis & Tunics'),(4,'Lehengas'),(9,'Loungewear'),(1,'Sarees');
 /*!40000 ALTER TABLE `ProductCategories` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -623,7 +625,7 @@ CREATE TABLE `ProductImages` (
   PRIMARY KEY (`ImageID`),
   KEY `idx_product_order` (`ProductID`,`display_order`),
   CONSTRAINT `ProductImages_ibfk_1` FOREIGN KEY (`ProductID`) REFERENCES `Products` (`ProductID`)
-) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -632,7 +634,7 @@ CREATE TABLE `ProductImages` (
 
 LOCK TABLES `ProductImages` WRITE;
 /*!40000 ALTER TABLE `ProductImages` DISABLE KEYS */;
-INSERT INTO `ProductImages` VALUES (1,1,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_1.jpeg','2026-03-07 11:09:06'),(2,1,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_2.jpeg','2026-03-07 11:09:06'),(5,2,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_1.jpeg','2026-03-07 23:16:26'),(6,2,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_2.jpeg','2026-03-07 23:16:26'),(7,2,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_3.jpeg','2026-03-07 23:16:26'),(8,2,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_4.jpeg','2026-03-07 23:16:26'),(9,3,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_1.jpeg','2026-03-07 23:17:52'),(10,3,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_2.jpeg','2026-03-07 23:17:52'),(11,3,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_3.jpeg','2026-03-07 23:17:52'),(12,3,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_4.jpeg','2026-03-07 23:17:52'),(13,4,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_1.jpeg','2026-03-07 23:19:09'),(14,4,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_2.jpeg','2026-03-07 23:19:09'),(15,4,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_3.jpeg','2026-03-07 23:19:09'),(16,5,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_1.jpeg','2026-03-07 23:20:23'),(17,5,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_2.jpeg','2026-03-07 23:20:23'),(18,5,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_3.jpeg','2026-03-07 23:20:23'),(19,6,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_1.jpeg','2026-03-07 23:21:42'),(20,6,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_2.jpeg','2026-03-07 23:21:42'),(21,7,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_1.jpeg','2026-03-07 23:22:36'),(22,7,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_2.jpeg','2026-03-07 23:22:36'),(23,7,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_3.jpeg','2026-03-07 23:22:36'),(24,7,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_4.jpeg','2026-03-07 23:22:36');
+INSERT INTO `ProductImages` VALUES (1,1,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_1.jpeg','2026-03-07 11:09:06'),(2,1,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_2.jpeg','2026-03-07 11:09:06'),(5,2,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_1.jpeg','2026-03-07 23:16:26'),(6,2,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_2.jpeg','2026-03-07 23:16:26'),(7,2,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_3.jpeg','2026-03-07 23:16:26'),(8,2,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/2_0001_4.jpeg','2026-03-07 23:16:26'),(9,3,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_1.jpeg','2026-03-07 23:17:52'),(10,3,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_2.jpeg','2026-03-07 23:17:52'),(11,3,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_3.jpeg','2026-03-07 23:17:52'),(12,3,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/3_002_4.jpeg','2026-03-07 23:17:52'),(13,4,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_1.jpeg','2026-03-07 23:19:09'),(14,4,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_2.jpeg','2026-03-07 23:19:09'),(15,4,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/4_003_3.jpeg','2026-03-07 23:19:09'),(16,5,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_1.jpeg','2026-03-07 23:20:23'),(17,5,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_2.jpeg','2026-03-07 23:20:23'),(18,5,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/5_004_3.jpeg','2026-03-07 23:20:23'),(19,6,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_1.jpeg','2026-03-07 23:21:42'),(20,6,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/6_005_2.jpeg','2026-03-07 23:21:42'),(21,7,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_1.jpeg','2026-03-07 23:22:36'),(22,7,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_2.jpeg','2026-03-07 23:22:36'),(23,7,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_3.jpeg','2026-03-07 23:22:36'),(24,7,3,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Kurtis___Tunics/7_006_4.jpeg','2026-03-07 23:22:36'),(27,1,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/1_001_saree_1_1_47563e66.png','2026-03-16 01:22:16'),(28,8,1,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/8_0009_2_c734d1bd.jpeg','2026-03-19 21:05:28'),(29,8,0,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/8_0009_1_29f285e8.jpeg','2026-03-19 21:05:28'),(30,8,2,'https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev/product/Sarees/8_0009_3_ca64213b.jpeg','2026-03-19 21:05:28');
 /*!40000 ALTER TABLE `ProductImages` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -659,6 +661,7 @@ CREATE TABLE `ProductMoodMapping` (
 
 LOCK TABLES `ProductMoodMapping` WRITE;
 /*!40000 ALTER TABLE `ProductMoodMapping` DISABLE KEYS */;
+INSERT INTO `ProductMoodMapping` VALUES (1,10),(2,5),(3,5),(4,5),(5,7),(6,7),(7,4),(8,3);
 /*!40000 ALTER TABLE `ProductMoodMapping` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -732,7 +735,7 @@ CREATE TABLE `ProductVariants` (
   CONSTRAINT `ProductVariants_ibfk_1` FOREIGN KEY (`ProductID`) REFERENCES `Products` (`ProductID`),
   CONSTRAINT `ProductVariants_ibfk_2` FOREIGN KEY (`SizeID`) REFERENCES `Sizes` (`SizeID`),
   CONSTRAINT `ProductVariants_ibfk_3` FOREIGN KEY (`ColorID`) REFERENCES `Colors` (`ColorID`)
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=67 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -741,7 +744,7 @@ CREATE TABLE `ProductVariants` (
 
 LOCK TABLES `ProductVariants` WRITE;
 /*!40000 ALTER TABLE `ProductVariants` DISABLE KEYS */;
-INSERT INTO `ProductVariants` VALUES (1,1,1,NULL,NULL),(2,2,3,NULL,NULL),(3,2,2,NULL,NULL),(4,2,4,NULL,NULL),(5,2,5,NULL,NULL),(6,2,6,NULL,NULL),(7,3,2,NULL,NULL),(8,3,3,NULL,NULL),(9,3,4,NULL,NULL),(10,3,6,NULL,NULL),(11,4,7,NULL,NULL),(12,4,8,NULL,NULL),(13,5,8,NULL,NULL),(14,6,3,NULL,NULL),(15,6,5,NULL,NULL),(16,7,4,NULL,NULL),(17,7,7,NULL,NULL);
+INSERT INTO `ProductVariants` VALUES (1,1,1,NULL,NULL),(2,2,3,NULL,NULL),(3,2,2,NULL,NULL),(4,2,4,NULL,NULL),(5,2,5,NULL,NULL),(6,2,6,NULL,NULL),(7,3,2,NULL,NULL),(8,3,3,NULL,NULL),(9,3,4,NULL,NULL),(10,3,6,NULL,NULL),(11,4,7,NULL,NULL),(12,4,8,NULL,NULL),(13,5,8,NULL,NULL),(14,6,3,NULL,NULL),(15,6,5,NULL,NULL),(16,7,4,NULL,NULL),(17,7,7,NULL,NULL),(18,8,1,NULL,NULL),(19,8,1,NULL,0),(20,3,2,NULL,0),(21,3,3,NULL,0),(22,3,4,NULL,0),(23,3,6,NULL,0),(24,4,7,NULL,0),(25,4,8,NULL,0),(26,5,8,NULL,0),(27,6,3,NULL,0),(28,6,5,NULL,0),(29,7,4,NULL,0),(30,7,7,NULL,0),(31,14,NULL,NULL,0),(32,15,NULL,NULL,0);
 /*!40000 ALTER TABLE `ProductVariants` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -758,7 +761,7 @@ CREATE TABLE `Products` (
   `Name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `slug` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `Description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
-  `price_paise` int NOT NULL COMMENT 'Price in paise (Γò¼├┤Γö£ΓîÉ╬ô├▓├║499.00 = 49900)',
+  `price_paise` int NOT NULL COMMENT 'Price in paise (╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├╗├┤╬ô├╢┬╝╬ô├▓┬ÑΓò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓòóΓö£ΓûÆ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├│╬ô├╢┬╝Γö£Γòæ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├╣╬ô├╢┬ú╬ô├╢├▒╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├│╬ô├╢┬╝╬ô├▓┬Ñ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├╗├┤╬ô├╢┬╝Γö£├ªΓò¼├┤Γö£ΓûôΓö¼Γò¥╬ô├╢┬ú╬ô├╢├▒Γò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓûôΓö£ΓöéΓò¼├┤Γö£ΓòóΓö¼Γò¥╬ô├╢┬ú╬ô├▓├ªΓò¼├┤Γö£ΓûôΓö¼Γò¥╬ô├╢┬ú╬ô├╢├▒Γò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓûôΓö£ΓöéΓò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓòùΓö£├Ñ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├╗├┤╬ô├╢┬╝╬ô├▓┬ÑΓò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓòóΓö£ΓûÆ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├│╬ô├╢┬╝Γö£Γòæ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├╗├┤╬ô├╢┬ú╬ô├╢├⌐╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├│╬ô├╢┬╝╬ô├▓┬ÑΓò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓûôΓö£┬¬╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├╗├┤╬ô├╢┬╝╬ô├▓┬ÑΓò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓòóΓö£ΓûÆ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├│╬ô├╢┬╝Γö£ΓòæΓò¼├┤Γö£ΓòóΓö¼Γò¥╬ô├╢┬╝╬ô├▓┬ú╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├│╬ô├╢┬╝Γö£ΓòæΓò¼├┤Γö£ΓòóΓö¼├║╬ô├╢┬╝╬ô├▓┬úΓò¼├┤Γö£ΓûôΓö¼Γò¥╬ô├╢┬ú╬ô├╢├▒Γò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓòùΓö£ΓöñΓò¼├┤Γö£ΓòóΓö¼Γò¥Γò¼├┤Γö£ΓûôΓö¼├æ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├│╬ô├╢┬╝Γö£Γòæ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬ú╬ô├▓├│╬ô├╢┬ú╬ô├╗├åΓò¼├┤Γö£ΓûôΓö¼Γò¥╬ô├╢┬ú╬ô├╢├▒Γò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓûôΓö£ΓöéΓò¼├┤Γö£ΓòóΓö¼Γò¥╬ô├╢┬ú╬ô├▓├ªΓò¼├┤Γö£ΓûôΓö¼Γò¥╬ô├╢┬ú╬ô├╢├▒Γò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓûôΓö£ΓòúΓò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓòóΓö£ΓûÆΓò¼├┤Γö£ΓûôΓö¼Γò¥╬ô├╢┬ú╬ô├╢├▒Γò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓûôΓö£ΓöéΓò¼├┤Γö£ΓòóΓö¼Γò¥╬ô├╢┬ú╬ô├▓├ªΓò¼├┤Γö£ΓûôΓö¼Γò¥╬ô├╢┬ú╬ô├╢├▒Γò¼├┤Γö£ΓòóΓö¼├║Γò¼├┤Γö£ΓòùΓö£ΓöñΓò¼├┤Γö£ΓòóΓö¼├║╬ô├╢┬╝Γö¼┬╝499.00 = 49900)',
   `CategoryID` bigint NOT NULL,
   `fabric` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Common values: Cotton, Silk, Linen, Chiffon, Georgette, Crepe, Organza, Net, Rayon, Viscose, Satin, Velvet, Brocade, Khadi, Muslin, Tussar Silk, Banarasi Silk, Art Silk, Polyester, Cotton Silk',
   `weave` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
@@ -778,7 +781,7 @@ CREATE TABLE `Products` (
   KEY `idx_fabric` (`fabric`),
   CONSTRAINT `fk_products_product_status` FOREIGN KEY (`product_status_id`) REFERENCES `ProductStatuses` (`id`),
   CONSTRAINT `Products_ibfk_1` FOREIGN KEY (`CategoryID`) REFERENCES `ProductCategories` (`CategoryID`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=57 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -787,7 +790,7 @@ CREATE TABLE `Products` (
 
 LOCK TABLES `Products` WRITE;
 /*!40000 ALTER TABLE `Products` DISABLE KEYS */;
-INSERT INTO `Products` VALUES (1,'001_saree_1','saree_1',NULL,'saree_1',899999,1,'Satin','Kanjivaram','Puja',1,'saree_1',2,'2026-03-07 11:09:06','2026-03-07 11:09:06'),(2,'0001','kurti_1',NULL,'kurti_1',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:16:25','2026-03-07 23:16:25'),(3,'002','kurti_2',NULL,'kurti_2',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:17:51','2026-03-07 23:17:51'),(4,'003','kurti_3',NULL,'kurti_3',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:19:08','2026-03-07 23:19:08'),(5,'004','kurti_4',NULL,'kurti_4',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:20:23','2026-03-07 23:20:23'),(6,'005','kurti_5',NULL,'kurti_5',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:21:41','2026-03-07 23:21:41'),(7,'006','kurti_6',NULL,'kurti_6',79999,2,'Cotton','Handloom','Daily Wear',0,NULL,2,'2026-03-07 23:22:36','2026-03-07 23:22:36');
+INSERT INTO `Products` VALUES (1,'001_saree_1','saree_1',NULL,'saree_1',899999,1,'Satin','Kanjivaram','Puja',1,'saree_1',2,'2026-03-07 11:09:06','2026-03-07 11:09:06'),(2,'0001','kurti_1',NULL,'kurti_1',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:16:25','2026-03-07 23:16:25'),(3,'002','kurti_2',NULL,'kurti_2',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:17:51','2026-03-07 23:17:51'),(4,'003','kurti_3',NULL,'kurti_3',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:19:08','2026-03-07 23:19:08'),(5,'004','kurti_4',NULL,'kurti_4',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:20:23','2026-03-07 23:20:23'),(6,'005','kurti_5',NULL,'kurti_5',79999,2,'Cotton','Plain','Daily Wear',0,NULL,2,'2026-03-07 23:21:41','2026-03-07 23:21:41'),(7,'006','kurti_6',NULL,'kurti_6',79999,2,'Cotton','Handloom','Daily Wear',0,NULL,2,'2026-03-07 23:22:36','2026-03-07 23:22:36'),(8,'0009','saree_2',NULL,'desc saree_2',799900,1,'Net','Kota','Festive',1,NULL,2,'2026-03-19 21:05:27','2026-03-19 21:05:27'),(14,NULL,'AC Product',NULL,NULL,1000,21,NULL,NULL,NULL,NULL,NULL,NULL,'2026-04-02 12:08:37',NULL),(15,NULL,'AC2 Product',NULL,NULL,1000,22,NULL,NULL,NULL,NULL,NULL,NULL,'2026-04-02 12:08:38',NULL);
 /*!40000 ALTER TABLE `Products` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -812,7 +815,7 @@ CREATE TABLE `Refunds` (
   KEY `idx_refunds_order` (`order_id`),
   KEY `idx_refunds_gateway` (`gateway_refund_id`),
   CONSTRAINT `Refunds_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `Orders` (`OrderID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -847,7 +850,7 @@ CREATE TABLE `Reviews` (
   CONSTRAINT `Reviews_ibfk_1` FOREIGN KEY (`ProductID`) REFERENCES `Products` (`ProductID`),
   CONSTRAINT `Reviews_ibfk_2` FOREIGN KEY (`UserID`) REFERENCES `Users` (`UserID`),
   CONSTRAINT `Reviews_chk_1` CHECK ((`Rating` between 1 and 5))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -873,7 +876,7 @@ CREATE TABLE `SecurityAuditLog` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_security_audit_created` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -882,6 +885,7 @@ CREATE TABLE `SecurityAuditLog` (
 
 LOCK TABLES `SecurityAuditLog` WRITE;
 /*!40000 ALTER TABLE `SecurityAuditLog` DISABLE KEYS */;
+INSERT INTO `SecurityAuditLog` VALUES (1,'secrets_rotation','integration test','2026-04-02 12:08:24');
 /*!40000 ALTER TABLE `SecurityAuditLog` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -937,7 +941,7 @@ CREATE TABLE `Shipments` (
   KEY `idx_order` (`order_id`),
   KEY `idx_awb` (`awb_code`),
   CONSTRAINT `Shipments_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `Orders` (`OrderID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -968,7 +972,7 @@ CREATE TABLE `ShippingAddresses` (
   PRIMARY KEY (`ShippingAddressID`),
   KEY `idx_shipping_user` (`UserID`),
   CONSTRAINT `ShippingAddresses_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `Users` (`UserID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1096,7 +1100,7 @@ CREATE TABLE `UserRoles` (
   `RoleID` bigint NOT NULL AUTO_INCREMENT,
   `RoleName` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`RoleID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1105,6 +1109,7 @@ CREATE TABLE `UserRoles` (
 
 LOCK TABLES `UserRoles` WRITE;
 /*!40000 ALTER TABLE `UserRoles` DISABLE KEYS */;
+INSERT INTO `UserRoles` VALUES (7,'itest_ac1_1775131716876'),(8,'itest_ac2_1775131717374');
 /*!40000 ALTER TABLE `UserRoles` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1170,7 +1175,7 @@ CREATE TABLE `Users` (
   CONSTRAINT `fk_users_role` FOREIGN KEY (`role_id`) REFERENCES `UserRoles` (`RoleID`),
   CONSTRAINT `fk_users_user_status` FOREIGN KEY (`user_status_id`) REFERENCES `UserStatuses` (`id`),
   CONSTRAINT `chk_users_auth_fields` CHECK ((((`auth_provider` = _latin1'email') and (`password_hash` is not null) and (`google_sub` is null)) or ((`auth_provider` = _latin1'google') and (`google_sub` is not null) and (`password_hash` is null))))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=54 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1179,6 +1184,7 @@ CREATE TABLE `Users` (
 
 LOCK TABLES `Users` WRITE;
 /*!40000 ALTER TABLE `Users` DISABLE KEYS */;
+INSERT INTO `Users` VALUES (7,'itest_ac1_1775131716876','email','$argon2id$v=19$m=19456,t=2,p=1$YKtN1+XgDWEyXG/cW6E98A$6CYutQKLIgurx6HNk/chIfhrHo0n6qnjsN6w+96cXB0',NULL,'itest_ac1+1775131716876@example.com',0,NULL,NULL,NULL,NULL,NULL,7,NULL,0,'2026-04-02 12:08:37','2026-04-02 12:08:37'),(8,'itest_ac2_1775131717374','email','$argon2id$v=19$m=19456,t=2,p=1$2d7/8ZNq6kFMYD9EOtoB4w$D6VdH6Aq2KjiUArLY8jVXfgF2n+4YOCvzWVRgz6/GV0',NULL,'itest_ac2+1775131717374@example.com',0,NULL,NULL,NULL,NULL,NULL,8,NULL,1,'2026-04-02 12:08:38','2026-04-02 12:08:37');
 /*!40000 ALTER TABLE `Users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1228,7 +1234,7 @@ CREATE TABLE `WebhookEvents` (
   UNIQUE KEY `provider_event_id` (`provider_event_id`),
   KEY `idx_webhook_id` (`webhook_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1257,7 +1263,7 @@ CREATE TABLE `Wishlist` (
   KEY `ProductID` (`ProductID`),
   CONSTRAINT `Wishlist_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `Users` (`UserID`),
   CONSTRAINT `Wishlist_ibfk_2` FOREIGN KEY (`ProductID`) REFERENCES `Products` (`ProductID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1278,4 +1284,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-03-16  1:11:33
+-- Dump completed on 2026-04-02 20:49:11

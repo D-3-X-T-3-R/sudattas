@@ -1,19 +1,33 @@
 import { NextResponse } from "next/server";
 import type { Product } from "@/lib/schemas";
-import { fetchProductsList, fetchCategories } from "@/lib/admin-queries";
 import type { ProductListRowWithVariantStock } from "@/lib/graphql-types";
+import { parsePaise, paiseToRupeesNumber } from "@/lib/money";
 import {
   fetchProductsListWithSession,
   fetchCategoriesWithSession,
 } from "@/lib/storefront-queries";
+import {
+  mintGuestSessionIdSingleFlight,
+  withRecoveredGuestSession,
+} from "@/lib/server-guest-session";
+import { forwardedIpHeadersFromRequest } from "@/lib/forwarded-ip";
+
+type ProductsApiPayload = { products: Product[]; error: string | null };
+type CacheEntry = { ts: number; payload: ProductsApiPayload };
+
+const CATALOG_CACHE_HEADERS = { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=30" };
+
+const CACHE_TTL_MS = 60_000; // 60 s — products don't change per-request
+const cache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<ProductsApiPayload>>();
 
 /** Map backend product list row + category names to storefront Product shape. */
 function mapToStorefrontProduct(
   row: ProductListRowWithVariantStock,
   categoryNameById: Record<string, string>
 ): Product {
-  const pricePaise = row.amountPaise ? parseInt(row.amountPaise, 10) : 0;
-  const priceRupees = Math.round((pricePaise / 100) * 100) / 100;
+  const pricePaise = parsePaise(row.amountPaise);
+  const priceRupees = paiseToRupeesNumber(pricePaise);
   const priceFormatted = row.formatted?.trim() || undefined;
   const imageList = row.images?.filter(
     (i) => i.url || i.thumbnailUrl
@@ -39,6 +53,7 @@ function mapToStorefrontProduct(
     collection:
       (row.categoryId && categoryNameById[row.categoryId]) || "Collection",
     price: priceRupees,
+    pricePaise,
     priceFormatted,
     rating: 4.5,
     reviews: 0,
@@ -54,28 +69,49 @@ function mapToStorefrontProduct(
 }
 
 export async function GET(request: Request) {
-  const sessionId = request.headers.get("x-session-id")?.trim() || null;
+  const forwardedHeaders = forwardedIpHeadersFromRequest(request);
+  const headerSessionId = request.headers.get("x-session-id")?.trim() || null;
+  let sessionId = headerSessionId;
+  if (!sessionId) {
+    sessionId = await mintGuestSessionIdSingleFlight(forwardedHeaders);
+  }
   const moodId =
     new URL(request.url).searchParams.get("moodId")?.trim() || undefined;
+  // Catalog data is identical for every session — key on request shape only,
+  // not on sessionId. This makes the cache effective across all concurrent users.
+  const cacheKey = `${moodId ?? "all"}::200`;
 
-  try {
+  const now = Date.now();
+  const cached = cache.get(cacheKey);
+  if (cached && now - cached.ts < CACHE_TTL_MS) {
+    return NextResponse.json(cached.payload, { headers: CATALOG_CACHE_HEADERS });
+  }
+
+  const pending = inflight.get(cacheKey);
+  if (pending) {
+    const payload = await pending;
+    return NextResponse.json(payload, { headers: payload.error ? {} : CATALOG_CACHE_HEADERS });
+  }
+
+  const loader = (async (): Promise<ProductsApiPayload> => {
     let productsList: ProductListRowWithVariantStock[];
     let categories: { categoryId: string; name: string }[];
 
     const listParams = { limit: "200" as const, ...(moodId ? { moodId } : {}) };
 
-    if (sessionId) {
-      // Session only; no admin fallback when session fails
-      [productsList, categories] = await Promise.all([
-        fetchProductsListWithSession(sessionId, listParams),
-        fetchCategoriesWithSession(sessionId),
-      ]);
-    } else {
-      [productsList, categories] = await Promise.all([
-        fetchProductsList(listParams),
-        fetchCategories(),
-      ]);
-    }
+    const recovered = await withRecoveredGuestSession(
+      sessionId,
+      forwardedHeaders,
+      async (activeSessionId) => {
+        const [list, cats] = await Promise.all([
+          fetchProductsListWithSession(activeSessionId, listParams, forwardedHeaders),
+          fetchCategoriesWithSession(activeSessionId, forwardedHeaders),
+        ]);
+        return { list, cats };
+      }
+    );
+    productsList = recovered.value.list;
+    categories = recovered.value.cats;
 
     const categoryNameById: Record<string, string> = {};
     for (const c of categories) {
@@ -86,23 +122,31 @@ export async function GET(request: Request) {
       mapToStorefrontProduct(row, categoryNameById)
     );
 
-    return NextResponse.json({ products, error: null });
-  } catch (e) {
-    const message =
-      e instanceof Error ? e.message : "Failed to load products";
-    const isAuthMissing =
-      typeof message === "string" &&
-      (message.includes("Unauthorized") || message.includes("NEXT_PUBLIC_ADMIN_API_KEY"));
-    if (isAuthMissing) {
-      console.warn(
-        "API products: no valid session and no admin key. Set NEXT_PUBLIC_ADMIN_API_KEY in .env.local to match backend ADMIN_API_KEY (or fix session)."
-      );
-    } else {
-      console.error("API products:", e);
-    }
-    return NextResponse.json(
-      { products: [], error: message },
-      { status: 200 }
-    );
+    const payload: ProductsApiPayload = { products, error: null };
+    cache.set(cacheKey, { ts: Date.now(), payload });
+    return payload;
+  })()
+    .catch((e): ProductsApiPayload => {
+      const message =
+        e instanceof Error ? e.message : "Failed to load products";
+      const isAuthMissing =
+        typeof message === "string" &&
+        (message.includes("Unauthorized") || message.includes("Guest session unavailable"));
+      if (isAuthMissing) {
+        console.warn("API products: no valid guest session available.");
+      } else {
+        console.error("API products:", e);
+      }
+      return { products: [], error: message };
+    })
+    .finally(() => {
+      inflight.delete(cacheKey);
+    });
+
+  inflight.set(cacheKey, loader);
+  const payload = await loader;
+  if (payload.error == null) {
+    return NextResponse.json(payload, { headers: CATALOG_CACHE_HEADERS });
   }
+  return NextResponse.json(payload, { status: 200 });
 }

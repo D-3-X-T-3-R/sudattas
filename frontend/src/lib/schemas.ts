@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { rupeesInputSchema } from "@/lib/validation-schemas";
 
 export const productSchema = z.object({
   id: z.string(),
   name: z.string(),
   collection: z.string(),
   price: z.number(),
+  pricePaise: z.number().int().nonnegative().optional(),
   /** Backend display string (e.g. "₹799.99"); use for display when set to avoid rounding. */
   priceFormatted: z.string().optional(),
   rating: z.number(),
@@ -70,10 +72,20 @@ export type VerifyRazorpayPayload = z.infer<typeof verifyRazorpayPayloadSchema>;
 export const adminProductFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string(),
-  priceRupees: z.string(),
+  priceRupees: rupeesInputSchema,
   categoryId: z.string().min(1, "Please select a category"),
-  sku: z.string().optional(),
-  slug: z.string().optional(),
+  sku: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{1,128}$/, "SKU may only contain letters, numbers, hyphen and underscore")
+    .optional()
+    .or(z.literal("")),
+  slug: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{1,128}$/, "Slug may only contain letters, numbers, hyphen and underscore")
+    .optional()
+    .or(z.literal("")),
   fabric: z.string().optional(),
   weave: z.string().optional(),
   occasion: z.string().optional(),

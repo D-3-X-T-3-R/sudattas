@@ -308,3 +308,192 @@ async fn e2e_search_product_page_size_capped() {
         items.len()
     );
 }
+
+// =============================================================================
+// Section 2 Security: auth/session/csrf regression checks
+// =============================================================================
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running; run with --ignored"]
+async fn e2e_customer_mutation_missing_auth_header_rejected() {
+    let client = Client::new();
+    let res = client
+        .post(format!("{}/v2", base_url()))
+        .json(&serde_json::json!({
+            "query": "mutation { createShippingAddress(input: { country: \"India\", stateRegion: \"WB\", city: \"Kolkata\", postalCode: \"700001\", road: \"Main Rd\" }) { shippingAddressId } }"
+        }))
+        .send()
+        .await
+        .expect("POST /v2");
+
+    let status = res.status();
+    let body: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
+    assert!(
+        status.as_u16() == 401
+            || status.as_u16() == 403
+            || body
+                .get("errors")
+                .and_then(|e| e.as_array())
+                .map(|a| !a.is_empty())
+                .unwrap_or(false),
+        "missing auth on customer mutation should be rejected; status={} body={}",
+        status,
+        body
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running; run with --ignored"]
+async fn e2e_invalid_session_header_rejected() {
+    let client = Client::new();
+    let res = client
+        .post(format!("{}/v2", base_url()))
+        .header("X-Session-Id", "invalid-session-id-for-test")
+        .json(&serde_json::json!({ "query": "{ apiVersion }" }))
+        .send()
+        .await
+        .expect("POST /v2");
+
+    let status = res.status();
+    assert!(
+        status.as_u16() == 401 || status.as_u16() == 403,
+        "invalid session should be rejected, got {}",
+        status
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running; run with --ignored"]
+async fn e2e_forged_admin_request_rejected() {
+    let client = Client::new();
+    let res = client
+        .post(format!("{}/v2", base_url()))
+        // Simulate a forged browser attempt using legacy-style admin header.
+        .header("X-Admin-Key", "forged-key")
+        .json(&serde_json::json!({
+            "query": "mutation { createCategory(category: { name: \"forged\" }) { categoryId } }"
+        }))
+        .send()
+        .await
+        .expect("POST /v2");
+
+    let status = res.status();
+    let body: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
+    let has_graphql_error = body
+        .get("errors")
+        .and_then(|e| e.as_array())
+        .map(|a| !a.is_empty())
+        .unwrap_or(false);
+    assert!(
+        status.as_u16() == 401 || status.as_u16() == 403 || has_graphql_error,
+        "forged admin request should be rejected; status={} body={}",
+        status,
+        body
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running with ALLOWED_ORIGINS and GRAPHQL_SESSION_ID; run with --ignored"]
+async fn e2e_csrf_rejection_on_disallowed_origin() {
+    let session_id = match std::env::var("GRAPHQL_SESSION_ID") {
+        Ok(v) => v,
+        Err(_) => return, // no valid session context available in this environment
+    };
+
+    let client = Client::new();
+    let res = client
+        .post(format!("{}/v2", base_url()))
+        .header("X-Session-Id", session_id)
+        .header("Origin", "https://malicious.example")
+        .json(&serde_json::json!({ "query": "{ apiVersion }" }))
+        .send()
+        .await
+        .expect("POST /v2");
+
+    let status = res.status();
+    assert!(
+        status.as_u16() == 401 || status.as_u16() == 403,
+        "disallowed origin with session auth should be rejected, got {}",
+        status
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running with ALLOWED_ORIGINS and GRAPHQL_SESSION_ID; run with --ignored"]
+async fn e2e_session_mutation_paths_reject_disallowed_origin() {
+    let session_id = match std::env::var("GRAPHQL_SESSION_ID") {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+
+    let client = Client::new();
+    let mutations = vec![
+        // Customer cart mutations used by storefront browser paths.
+        "mutation { addCartItem(cartItem: { userId: \"0\", variantId: \"1\", quantity: \"1\", sessionId: \"session\" }) { cartId } }",
+        "mutation { updateCartItem(cartItem: { cartId: \"1\", userId: \"0\", variantId: \"1\", quantity: \"2\", sessionId: \"session\" }) { cartId } }",
+        "mutation { deleteCartItem(delete: { userId: \"0\", cartId: \"1\", sessionId: \"session\" }) { cartId } }",
+        // Payment mutations can be attempted by session paths in the storefront.
+        "mutation { createPaymentIntent(input: { orderId: \"1\", userId: \"1\", amountPaise: \"100\", currency: \"INR\" }) { intentId } }",
+        "mutation { verifyRazorpayPayment(input: { orderId: \"1\", razorpayPaymentId: \"pay_test\", razorpayOrderId: \"order_test\", razorpaySignature: \"sig_test\" }) { verified } }",
+        // Address mutation should also be blocked on disallowed origin when using session auth.
+        "mutation { createShippingAddress(input: { country: \"India\", stateRegion: \"WB\", city: \"Kolkata\", postalCode: \"700001\", road: \"Main Rd\" }) { shippingAddressId } }",
+    ];
+
+    for query in mutations {
+        let res = client
+            .post(format!("{}/v2", base_url()))
+            .header("X-Session-Id", &session_id)
+            .header("Origin", "https://malicious.example")
+            .json(&serde_json::json!({ "query": query }))
+            .send()
+            .await
+            .expect("POST /v2");
+        let status = res.status();
+        assert!(
+            status.as_u16() == 403 || status.as_u16() == 401,
+            "session mutation should reject disallowed origin, got {} for query {}",
+            status,
+            query
+        );
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires GraphQL server running with ALLOWED_ORIGINS and GRAPHQL_SESSION_ID; run with --ignored"]
+async fn e2e_session_mutation_paths_accept_allowed_origin() {
+    let session_id = match std::env::var("GRAPHQL_SESSION_ID") {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let allowed_raw = match std::env::var("ALLOWED_ORIGINS") {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let allowed_origin = match allowed_raw
+        .split(',')
+        .map(|s| s.trim())
+        .find(|s| !s.is_empty())
+    {
+        Some(v) => v,
+        None => return,
+    };
+
+    let client = Client::new();
+    let res = client
+        .post(format!("{}/v2", base_url()))
+        .header("X-Session-Id", session_id)
+        .header("Origin", allowed_origin)
+        .json(&serde_json::json!({
+            "query": "mutation { addCartItem(cartItem: { userId: \"0\", variantId: \"1\", quantity: \"1\", sessionId: \"session\" }) { cartId } }"
+        }))
+        .send()
+        .await
+        .expect("POST /v2");
+
+    let status = res.status();
+    assert!(
+        status.as_u16() != 403,
+        "allowed origin should not be rejected by CSRF, got {}",
+        status
+    );
+}

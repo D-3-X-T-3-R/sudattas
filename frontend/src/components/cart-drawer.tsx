@@ -3,6 +3,7 @@
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { INR } from "@/lib/constants";
+import { formatInrFromPaise } from "@/lib/money";
 import type { CartLine } from "@/lib/schemas";
 
 export interface CartDrawerProps {
@@ -97,7 +98,9 @@ export function CartDrawer({
                   </Button>
                 </div>
                 <div className="font-sans text-sm font-semibold">
-                  {INR.format(qty * product.price)}
+                  {formatInrFromPaise(
+                    qty * (product.pricePaise ?? Math.round(product.price * 100))
+                  )}
                 </div>
               </div>
             </div>

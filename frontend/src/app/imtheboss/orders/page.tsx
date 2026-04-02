@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
@@ -16,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { Filter, ListOrdered } from "lucide-react";
 
 type DatePreset = "7" | "30" | "month" | "all";
+const MAX_ORDER_PAGE_SIZE = 100;
 
 function getDateRange(preset: DatePreset): { orderDateStart?: string; orderDateEnd?: string } {
   const now = new Date();
@@ -74,21 +74,28 @@ function getStatusLabel(statusId: string, statuses: { statusId: string; statusNa
 }
 
 export default function AdminOrdersPage() {
-  const searchParams = useSearchParams();
-  const userIdFromUrl = searchParams.get("userId") ?? undefined;
+  const userIdFromUrl =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("userId") ?? undefined
+      : undefined;
 
   const [datePreset, setDatePreset] = useState<DatePreset>("30");
   const [statusId, setStatusId] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const filters = useMemo(() => {
     const dateRange = getDateRange(datePreset);
+    const safePageSize = Math.min(Math.max(pageSize, 10), MAX_ORDER_PAGE_SIZE);
+    const offset = String((page - 1) * safePageSize);
     return {
       ...dateRange,
       statusId: statusId.trim() || undefined,
       userId: userIdFromUrl,
-      limit: "100",
+      limit: String(safePageSize),
+      offset,
     };
-  }, [datePreset, statusId, userIdFromUrl]);
+  }, [datePreset, statusId, userIdFromUrl, page, pageSize]);
 
   const { data: statuses = [] } = useQuery({
     queryKey: ["admin", "order-statuses"],
@@ -138,7 +145,10 @@ export default function AdminOrdersPage() {
                 type="button"
                 variant={datePreset === key ? "default" : "outline"}
                 size="sm"
-                onClick={() => setDatePreset(key)}
+                onClick={() => {
+                  setPage(1);
+                  setDatePreset(key);
+                }}
               >
                 {label}
               </Button>
@@ -167,7 +177,10 @@ export default function AdminOrdersPage() {
                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
               )}
               value={statusId}
-              onChange={(e) => setStatusId(e.target.value)}
+              onChange={(e) => {
+                setPage(1);
+                setStatusId(e.target.value);
+              }}
             >
               <option value="">All statuses</option>
               {statuses.map((s) => (
@@ -175,6 +188,27 @@ export default function AdminOrdersPage() {
                   {s.statusName}
                 </option>
               ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="orders-page-size" className="text-sm text-[var(--color-muted)]">
+              Per page
+            </label>
+            <select
+              id="orders-page-size"
+              className={cn(
+                "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+              )}
+              value={String(pageSize)}
+              onChange={(e) => {
+                setPage(1);
+                setPageSize(Number(e.target.value));
+              }}
+            >
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
             </select>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
@@ -202,34 +236,61 @@ export default function AdminOrdersPage() {
             <p className="py-8 text-center text-sm text-[var(--color-muted)]">No orders in this range.</p>
           )}
           {!isLoading && !isError && orders.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[600px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
-                    <th className="pb-2 pr-4 font-medium">Order ID</th>
-                    <th className="pb-2 pr-4 font-medium">Date</th>
-                    <th className="pb-2 pr-4 font-medium">Customer (user ID)</th>
-                    <th className="pb-2 pr-4 font-medium">Amount</th>
-                    <th className="pb-2 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((order) => (
-                    <tr
-                      key={order.orderId}
-                      className="border-b border-[var(--color-line)] last:border-0 hover:bg-[var(--color-surface)]"
-                    >
-                      <td className="py-3 pr-4 font-mono text-[var(--color-ink)]">{order.orderId}</td>
-                      <td className="py-3 pr-4 text-[var(--color-ink)]">{formatOrderDate(order.orderDate)}</td>
-                      <td className="py-3 pr-4 text-[var(--color-ink)]">{order.userId}</td>
-                      <td className="py-3 pr-4 text-[var(--color-ink)]">{order.totalAmountFormatted}</td>
-                      <td className="py-3 text-[var(--color-muted)]">
-                        {getStatusLabel(order.statusId, statuses)}
-                      </td>
+            <div className="space-y-4">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[600px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
+                      <th className="pb-2 pr-4 font-medium">Order ID</th>
+                      <th className="pb-2 pr-4 font-medium">Date</th>
+                      <th className="pb-2 pr-4 font-medium">Customer (user ID)</th>
+                      <th className="pb-2 pr-4 font-medium">Amount</th>
+                      <th className="pb-2 font-medium">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {orders.map((order) => (
+                      <tr
+                        key={order.orderId}
+                        className="border-b border-[var(--color-line)] last:border-0 hover:bg-[var(--color-surface)]"
+                      >
+                        <td className="py-3 pr-4 font-mono text-[var(--color-ink)]">{order.orderId}</td>
+                        <td className="py-3 pr-4 text-[var(--color-ink)]">{formatOrderDate(order.orderDate)}</td>
+                        <td className="py-3 pr-4 text-[var(--color-ink)]">{order.userId}</td>
+                        <td className="py-3 pr-4 text-[var(--color-ink)]">{order.totalAmountFormatted}</td>
+                        <td className="py-3 text-[var(--color-muted)]">
+                          {getStatusLabel(order.statusId, statuses)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-[var(--color-muted)]">
+                  Page {page} · showing up to {pageSize} rows
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1 || isLoading}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={orders.length < pageSize || isLoading}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

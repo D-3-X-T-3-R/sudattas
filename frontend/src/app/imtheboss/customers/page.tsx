@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/typography";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
-  fetchCustomersList,
-  fetchOrdersList,
+  fetchAllCustomersList,
+  fetchAllOrdersList,
   type CustomerListRow,
   type OrderListRow,
 } from "@/lib/admin-queries";
+import { formatInrFromPaise, paiseToRupeesInput } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { ArrowUpDown, ArrowDown, ArrowUp, Download, ExternalLink, User, Filter, Users } from "lucide-react";
 
@@ -32,15 +33,12 @@ function formatCreateDate(createDate: string): string {
 }
 
 function formatCurrency(paise: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(paise / 100);
+  return formatInrFromPaise(paise);
 }
 
 type SortKey = "name" | "email" | "created" | "orders" | "spent";
 type SortDir = "asc" | "desc";
+const MAX_CUSTOMER_PAGE_SIZE = 100;
 
 function aggregateOrderStats(orders: OrderListRow[]): Map<string, { count: number; totalPaise: number }> {
   const map = new Map<string, { count: number; totalPaise: number }>();
@@ -83,7 +81,7 @@ function downloadCsv(
         escaped(c.phone),
         formatCreateDate(c.createDate),
         s?.count ?? 0,
-        s ? (s.totalPaise / 100).toFixed(0) : "0",
+        s ? paiseToRupeesInput(s.totalPaise) : "0.00",
       ].join(",");
     }),
   ];
@@ -101,6 +99,8 @@ export default function AdminCustomersPage() {
   const [filterAuth, setFilterAuth] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("created");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerListRow | null>(null);
 
   const {
@@ -111,12 +111,12 @@ export default function AdminCustomersPage() {
     refetch,
   } = useQuery<CustomerListRow[], Error>({
     queryKey: ["admin", "customers"],
-    queryFn: fetchCustomersList,
+    queryFn: fetchAllCustomersList,
   });
 
   const { data: allOrders = [] } = useQuery<OrderListRow[], Error>({
     queryKey: ["admin", "orders", "all-for-stats"],
-    queryFn: () => fetchOrdersList({ limit: "5000" }),
+    queryFn: () => fetchAllOrdersList(),
     enabled: !isError && customers.length > 0,
   });
 
@@ -161,6 +161,12 @@ export default function AdminCustomersPage() {
     return list;
   }, [customers, searchQuery, filterAuth, sortKey, sortDir, orderStats]);
 
+  const pagedCustomers = useMemo(() => {
+    const safeSize = Math.min(Math.max(pageSize, 10), MAX_CUSTOMER_PAGE_SIZE);
+    const start = (page - 1) * safeSize;
+    return filteredAndSorted.slice(start, start + safeSize);
+  }, [filteredAndSorted, page, pageSize]);
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
@@ -169,7 +175,7 @@ export default function AdminCustomersPage() {
     }
   };
 
-  const SortIcon = ({ column }: { column: SortKey }) =>
+  const sortIconFor = (column: SortKey) =>
     sortKey !== column ? (
       <ArrowUpDown className="ml-1 inline h-3.5 w-3 opacity-50" />
     ) : sortDir === "asc" ? (
@@ -212,7 +218,10 @@ export default function AdminCustomersPage() {
               type="text"
               placeholder="Email, name, or user ID"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setPage(1);
+                setSearchQuery(e.target.value);
+              }}
               className="h-9 w-56 rounded-md"
             />
           </div>
@@ -227,11 +236,35 @@ export default function AdminCustomersPage() {
                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
               )}
               value={filterAuth}
-              onChange={(e) => setFilterAuth(e.target.value)}
+              onChange={(e) => {
+                setPage(1);
+                setFilterAuth(e.target.value);
+              }}
             >
               <option value="">All</option>
               <option value="email">Email</option>
               <option value="google">Google</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="customers-page-size" className="mb-1 block text-xs text-[var(--color-muted)]">
+              Per page
+            </label>
+            <select
+              id="customers-page-size"
+              className={cn(
+                "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+              )}
+              value={String(pageSize)}
+              onChange={(e) => {
+                setPage(1);
+                setPageSize(Number(e.target.value));
+              }}
+            >
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
             </select>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
@@ -279,8 +312,9 @@ export default function AdminCustomersPage() {
             </p>
           )}
           {!isLoading && !isError && filteredAndSorted.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px] border-collapse text-sm">
+            <div className="space-y-4">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
                     <th className="pb-2 pr-4 font-medium">
@@ -290,7 +324,7 @@ export default function AdminCustomersPage() {
                         onClick={() => handleSort("name")}
                       >
                         Name
-                        <SortIcon column="name" />
+                        {sortIconFor("name")}
                       </button>
                     </th>
                     <th className="pb-2 pr-4 font-medium">
@@ -300,7 +334,7 @@ export default function AdminCustomersPage() {
                         onClick={() => handleSort("email")}
                       >
                         Email
-                        <SortIcon column="email" />
+                        {sortIconFor("email")}
                       </button>
                     </th>
                     <th className="pb-2 pr-4 font-medium">User ID</th>
@@ -312,7 +346,7 @@ export default function AdminCustomersPage() {
                         onClick={() => handleSort("orders")}
                       >
                         Orders
-                        <SortIcon column="orders" />
+                        {sortIconFor("orders")}
                       </button>
                     </th>
                     <th className="pb-2 pr-4 font-medium">
@@ -322,7 +356,7 @@ export default function AdminCustomersPage() {
                         onClick={() => handleSort("spent")}
                       >
                         Spent
-                        <SortIcon column="spent" />
+                        {sortIconFor("spent")}
                       </button>
                     </th>
                     <th className="pb-2 pr-4 font-medium">
@@ -332,14 +366,14 @@ export default function AdminCustomersPage() {
                         onClick={() => handleSort("created")}
                       >
                         Created
-                        <SortIcon column="created" />
+                        {sortIconFor("created")}
                       </button>
                     </th>
                     <th className="pb-2 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAndSorted.map((c) => {
+                  {pagedCustomers.map((c) => {
                     const stats = orderStats.get(c.userId);
                     return (
                       <tr
@@ -388,6 +422,32 @@ export default function AdminCustomersPage() {
                   })}
                 </tbody>
               </table>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-[var(--color-muted)]">
+                Page {page} · showing up to {pageSize} rows
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1 || isLoading}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pagedCustomers.length < pageSize || isLoading}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
             </div>
           )}
         </CardContent>
@@ -475,3 +535,5 @@ export default function AdminCustomersPage() {
     </div>
   );
 }
+
+
