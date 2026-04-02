@@ -104,6 +104,7 @@ export function QuickViewModal({
                     key={i}
                     type="button"
                     onClick={() => setSelectedImageIndex(i)}
+                    aria-label={`View image ${i + 1} of ${images.length}`}
                     className={cn(
                       "relative h-14 w-14 shrink-0 overflow-hidden rounded border-2 transition-colors md:h-16 md:w-16",
                       selectedImageIndex === i
@@ -201,6 +202,7 @@ export function QuickViewModal({
                   <button
                     type="button"
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    aria-label="Decrease quantity"
                     className="flex h-10 w-10 items-center justify-center rounded border border-[var(--color-line)] text-lg font-medium hover:bg-[var(--color-line)]/20"
                   >
                     −
@@ -211,6 +213,7 @@ export function QuickViewModal({
                   <button
                     type="button"
                     onClick={() => setQuantity((q) => q + 1)}
+                    aria-label="Increase quantity"
                     className="flex h-10 w-10 items-center justify-center rounded border border-[var(--color-line)] text-lg font-medium hover:bg-[var(--color-line)]/20"
                   >
                     +

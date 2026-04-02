@@ -9,6 +9,7 @@ import { fetchApiEnvelope } from "@/lib/api-envelope";
 import { addressInputSchema } from "@/lib/validation-schemas";
 import { formatInrFromPaise } from "@/lib/money";
 import { toRouteFailureUi } from "@/lib/route-state";
+import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 
 type ShippingAddressRow = {
   shippingAddressId: string;
@@ -113,6 +114,7 @@ function formatOrderDate(raw: string): string {
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const { openLogin } = useStorefrontLogin();
+  const { announce } = useLiveAnnouncer();
 
   const [addresses, setAddresses] = useState<ShippingAddressRow[]>([]);
   const [orders, setOrders] = useState<AccountOrderRow[]>([]);
@@ -222,9 +224,11 @@ export default function ProfilePage() {
         apartmentNoOrName: "",
       });
       await loadAccountData();
+      announce("Address saved successfully.");
     } catch (e) {
       const ui = toRouteFailureUi("account", e);
       setError(ui.message);
+      announce(ui.message, "assertive");
     } finally {
       setAdding(false);
     }
@@ -239,9 +243,11 @@ export default function ProfilePage() {
         body: JSON.stringify({ shippingAddressId }),
       });
       await loadAccountData();
+      announce("Address removed.");
     } catch (e) {
       const ui = toRouteFailureUi("account", e);
       setError(ui.message);
+      announce(ui.message, "assertive");
     }
   }
 
@@ -318,7 +324,11 @@ export default function ProfilePage() {
             </div>
 
             {error && (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p
+                id="profile-form-error"
+                role="alert"
+                className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+              >
                 {error}
               </p>
             )}
@@ -350,47 +360,88 @@ export default function ProfilePage() {
               )}
 
               <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                <input
-                  value={form.road}
-                  onChange={(e) => setForm((p) => ({ ...p, road: e.target.value }))}
-                  placeholder="Road / street"
-                  className="h-10 rounded-md border border-[var(--color-line)] px-3 text-sm"
-                />
-                <input
-                  value={form.apartmentNoOrName}
-                  onChange={(e) => setForm((p) => ({ ...p, apartmentNoOrName: e.target.value }))}
-                  placeholder="Apartment / house (optional)"
-                  className="h-10 rounded-md border border-[var(--color-line)] px-3 text-sm"
-                />
-                <input
-                  value={form.city}
-                  onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))}
-                  placeholder="City"
-                  className="h-10 rounded-md border border-[var(--color-line)] px-3 text-sm"
-                />
-                <input
-                  value={form.stateRegion}
-                  onChange={(e) => setForm((p) => ({ ...p, stateRegion: e.target.value }))}
-                  placeholder="State / region"
-                  className="h-10 rounded-md border border-[var(--color-line)] px-3 text-sm"
-                />
-                <input
-                  value={form.country}
-                  onChange={(e) => setForm((p) => ({ ...p, country: e.target.value }))}
-                  placeholder="Country"
-                  className="h-10 rounded-md border border-[var(--color-line)] px-3 text-sm"
-                />
-                <input
-                  value={form.postalCode}
-                  onChange={(e) =>
-                    setForm((p) => ({
-                      ...p,
-                      postalCode: e.target.value.replace(/\D/g, "").slice(0, 6),
-                    }))
-                  }
-                  placeholder="Pincode"
-                  className="h-10 rounded-md border border-[var(--color-line)] px-3 text-sm"
-                />
+                <div>
+                  <label htmlFor="profile-road" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Road / street
+                  </label>
+                  <input
+                    id="profile-road"
+                    value={form.road}
+                    onChange={(e) => setForm((p) => ({ ...p, road: e.target.value }))}
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "profile-form-error" : undefined}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profile-apartment" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Apartment / house (optional)
+                  </label>
+                  <input
+                    id="profile-apartment"
+                    value={form.apartmentNoOrName}
+                    onChange={(e) => setForm((p) => ({ ...p, apartmentNoOrName: e.target.value }))}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profile-city" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    City
+                  </label>
+                  <input
+                    id="profile-city"
+                    value={form.city}
+                    onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))}
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "profile-form-error" : undefined}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profile-state" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    State / region
+                  </label>
+                  <input
+                    id="profile-state"
+                    value={form.stateRegion}
+                    onChange={(e) => setForm((p) => ({ ...p, stateRegion: e.target.value }))}
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "profile-form-error" : undefined}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profile-country" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Country
+                  </label>
+                  <input
+                    id="profile-country"
+                    value={form.country}
+                    onChange={(e) => setForm((p) => ({ ...p, country: e.target.value }))}
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "profile-form-error" : undefined}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profile-pincode" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Pincode
+                  </label>
+                  <input
+                    id="profile-pincode"
+                    value={form.postalCode}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        postalCode: e.target.value.replace(/\D/g, "").slice(0, 6),
+                      }))
+                    }
+                    inputMode="numeric"
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "profile-form-error" : undefined}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] px-3 text-sm"
+                  />
+                </div>
               </div>
 
               <button

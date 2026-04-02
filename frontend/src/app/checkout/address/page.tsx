@@ -28,6 +28,7 @@ import { fetchApiEnvelope } from "@/lib/api-envelope";
 import { toRouteFailureUi } from "@/lib/route-state";
 import { addressInputSchema } from "@/lib/validation-schemas";
 import { cn } from "@/lib/utils";
+import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 
 type ShippingAddressRow = {
   shippingAddressId: string;
@@ -90,6 +91,7 @@ export default function CheckoutAddressPage() {
   const { openLogin } = useStorefrontLogin();
   const { cartLines } = useStorefront();
   const { paymentLoading, paymentMessage, runCheckout } = useRazorpayTest();
+  const { announce } = useLiveAnnouncer();
 
   const [addresses, setAddresses] = useState<ShippingAddressRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -227,8 +229,11 @@ export default function CheckoutAddressPage() {
       setShowAddForm(false);
       await loadAddresses();
       setSelectedId(created.shippingAddressId);
+      announce("Address saved successfully.");
     } catch (e) {
-      setSaveAddressError(toRouteFailureUi("account", e).message);
+      const message = toRouteFailureUi("account", e).message;
+      setSaveAddressError(message);
+      announce(message, "assertive");
     } finally {
       setSavingAddress(false);
     }
@@ -425,28 +430,52 @@ export default function CheckoutAddressPage() {
               contentClassName="max-h-[min(85vh,640px)] overflow-y-auto p-4 sm:p-5"
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <input
-                  value={newAddr.apartmentNoOrName}
-                  onChange={(e) =>
-                    setNewAddr((p) => ({
-                      ...p,
-                      apartmentNoOrName: e.target.value,
-                    }))
-                  }
-                  autoComplete="address-line2"
-                  placeholder="Apartment, building, or house name (optional)"
-                  className="h-11 rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)] sm:col-span-2"
-                />
-                <input
-                  value={newAddr.road}
-                  onChange={(e) =>
-                    setNewAddr((p) => ({ ...p, road: e.target.value }))
-                  }
-                  autoComplete="address-line1"
-                  placeholder="Street / road"
-                  className="h-11 rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)] sm:col-span-2"
-                />
                 <div className="sm:col-span-2">
+                  <label
+                    htmlFor="checkout-address-line2"
+                    className="mb-1 block text-xs font-medium text-[#615A50]"
+                  >
+                    Apartment, building, or house name (optional)
+                  </label>
+                  <input
+                    id="checkout-address-line2"
+                    value={newAddr.apartmentNoOrName}
+                    onChange={(e) =>
+                      setNewAddr((p) => ({
+                        ...p,
+                        apartmentNoOrName: e.target.value,
+                      }))
+                    }
+                    autoComplete="address-line2"
+                    className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="checkout-address-line1"
+                    className="mb-1 block text-xs font-medium text-[#615A50]"
+                  >
+                    Street / road
+                  </label>
+                  <input
+                    id="checkout-address-line1"
+                    value={newAddr.road}
+                    onChange={(e) =>
+                      setNewAddr((p) => ({ ...p, road: e.target.value }))
+                    }
+                    autoComplete="address-line1"
+                    aria-invalid={!!saveAddressError}
+                    aria-describedby={saveAddressError ? "checkout-address-error" : undefined}
+                    className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="checkout-address-country"
+                    className="mb-1 block text-xs font-medium text-[#615A50]"
+                  >
+                    Country
+                  </label>
                   <Select
                     value={newAddr.countryIso}
                     onValueChange={(countryIso) =>
@@ -458,7 +487,7 @@ export default function CheckoutAddressPage() {
                       }))
                     }
                   >
-                    <SelectTrigger aria-label="Country">
+                    <SelectTrigger id="checkout-address-country" aria-label="Country">
                       <SelectValue placeholder="Country" />
                     </SelectTrigger>
                     <SelectContent>
@@ -471,6 +500,12 @@ export default function CheckoutAddressPage() {
                   </Select>
                 </div>
                 <div>
+                  <label
+                    htmlFor="checkout-address-state"
+                    className="mb-1 block text-xs font-medium text-[#615A50]"
+                  >
+                    State / region
+                  </label>
                   <Select
                     value={newAddr.stateIso || undefined}
                     onValueChange={(stateIso) =>
@@ -478,7 +513,7 @@ export default function CheckoutAddressPage() {
                     }
                     disabled={!newAddr.countryIso || stateOptions.length === 0}
                   >
-                    <SelectTrigger aria-label="State or region">
+                    <SelectTrigger id="checkout-address-state" aria-label="State or region">
                       <SelectValue placeholder="State / region" />
                     </SelectTrigger>
                     <SelectContent>
@@ -491,6 +526,12 @@ export default function CheckoutAddressPage() {
                   </Select>
                 </div>
                 <div>
+                  <label
+                    htmlFor="checkout-address-city"
+                    className="mb-1 block text-xs font-medium text-[#615A50]"
+                  >
+                    City
+                  </label>
                   {cityOptions.length > 0 ? (
                     <Select
                       value={newAddr.city || undefined}
@@ -499,7 +540,7 @@ export default function CheckoutAddressPage() {
                       }
                       disabled={!newAddr.stateIso}
                     >
-                      <SelectTrigger aria-label="City">
+                      <SelectTrigger id="checkout-address-city" aria-label="City">
                         <SelectValue placeholder="City" />
                       </SelectTrigger>
                       <SelectContent>
@@ -512,31 +553,49 @@ export default function CheckoutAddressPage() {
                     </Select>
                   ) : (
                     <input
+                      id="checkout-address-city"
                       value={newAddr.city}
                       onChange={(e) =>
                         setNewAddr((p) => ({ ...p, city: e.target.value }))
                       }
                       disabled={!newAddr.stateIso}
-                      placeholder="City"
+                      aria-invalid={!!saveAddressError}
+                      aria-describedby={saveAddressError ? "checkout-address-error" : undefined}
                       className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)] disabled:opacity-50"
                     />
                   )}
                 </div>
-                <input
-                  value={newAddr.postalCode}
-                  onChange={(e) =>
-                    setNewAddr((p) => ({
-                      ...p,
-                      postalCode: e.target.value.replace(/\D/g, "").slice(0, 6),
-                    }))
-                  }
-                  inputMode="numeric"
-                  placeholder="Pincode (6 digits)"
-                  className="h-11 rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]"
-                />
+                <div>
+                  <label
+                    htmlFor="checkout-address-postal"
+                    className="mb-1 block text-xs font-medium text-[#615A50]"
+                  >
+                    Pincode (6 digits)
+                  </label>
+                  <input
+                    id="checkout-address-postal"
+                    value={newAddr.postalCode}
+                    onChange={(e) =>
+                      setNewAddr((p) => ({
+                        ...p,
+                        postalCode: e.target.value.replace(/\D/g, "").slice(0, 6),
+                      }))
+                    }
+                    inputMode="numeric"
+                    aria-invalid={!!saveAddressError}
+                    aria-describedby={saveAddressError ? "checkout-address-error" : undefined}
+                    className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]"
+                  />
+                </div>
               </div>
               {saveAddressError && (
-                <p className="mt-3 text-sm text-red-700">{saveAddressError}</p>
+                <p
+                  id="checkout-address-error"
+                  role="alert"
+                  className="mt-3 text-sm text-red-700"
+                >
+                  {saveAddressError}
+                </p>
               )}
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <button
@@ -572,7 +631,7 @@ export default function CheckoutAddressPage() {
             {paymentLoading ? "Opening payment…" : "Continue to payment"}
           </button>
           {paymentMessage && (
-            <p className="mt-4 text-center text-xs text-[#615A50]">
+            <p className="mt-4 text-center text-xs text-[#615A50]" role="status" aria-live="polite">
               {paymentMessage}
             </p>
           )}
