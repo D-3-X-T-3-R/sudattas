@@ -23,13 +23,35 @@ export const metadata: Metadata = {
   description: "Minimal luxury storefront for Sudatta's sarees.",
 };
 
+function siteUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!raw) return "https://www.sudattas.com";
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const base = siteUrl();
+  const organizationJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Sudatta's",
+    url: base,
+    logo: `${base}/logo.svg`,
+    sameAs: [base],
+  };
+
   return (
     <html lang="en">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+      </head>
       <body
         className={`${playfair.variable} ${sans.variable} font-sans antialiased bg-[var(--background)] text-[var(--foreground)]`}
       >

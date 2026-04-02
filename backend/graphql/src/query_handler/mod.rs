@@ -27,6 +27,10 @@ pub struct Context {
     pub request_id: Option<String>,
     /// Optional idempotency key from `Idempotency-Key` header; used for place_order and capture_payment.
     pub idempotency_key: Option<String>,
+    /// Optional client action name from `X-Client-Action` header.
+    pub client_action: Option<String>,
+    /// Optional guest session identifier from `X-Guest-Session-Id` header (frontend correlation).
+    pub guest_session_id: Option<String>,
 }
 
 impl Context {
@@ -70,6 +74,24 @@ impl Context {
     /// Idempotency key from header, when present; used to dedupe place_order and capture_payment.
     pub fn idempotency_key(&self) -> Option<&str> {
         self.idempotency_key.as_deref()
+    }
+
+    /// Frontend-provided action route/method for correlation.
+    pub fn client_action(&self) -> Option<&str> {
+        self.client_action.as_deref()
+    }
+
+    /// Guest session identifier forwarded by frontend for correlation.
+    pub fn guest_session_id(&self) -> Option<&str> {
+        self.guest_session_id.as_deref()
+    }
+
+    pub fn auth_mode(&self) -> &'static str {
+        match &self.auth {
+            Some(AuthSource::Jwt(_)) => "jwt",
+            Some(AuthSource::Session(_)) => "session",
+            None => "none",
+        }
     }
 
     /// Admin is resolved from JWT user id against `ADMIN_ALLOWED_USER_IDS` (comma-separated).
