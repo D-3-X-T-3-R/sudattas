@@ -56,8 +56,11 @@ export function ExploreSection({
 
             <div className="flex flex-wrap gap-3 sm:items-center">
               <div className="flex items-center gap-2">
-                <Kicker className="text-[var(--color-muted)]">Collection</Kicker>
+                <label htmlFor="explore-collection" className="text-[var(--color-muted)]">
+                  <Kicker className="text-[var(--color-muted)]">Collection</Kicker>
+                </label>
                 <select
+                  id="explore-collection"
                   value={collection}
                   onChange={(e) => setCollection(e.target.value)}
                   className="rounded-full border border-[var(--color-line)] bg-white/70 px-4 py-2 text-sm outline-none focus:bg-white"
@@ -69,8 +72,11 @@ export function ExploreSection({
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <Kicker className="text-[var(--color-muted)]">Occasion</Kicker>
+                <label htmlFor="explore-occasion" className="text-[var(--color-muted)]">
+                  <Kicker className="text-[var(--color-muted)]">Occasion</Kicker>
+                </label>
                 <select
+                  id="explore-occasion"
                   value={occasion}
                   onChange={(e) => setOccasion(e.target.value)}
                   className="rounded-full border border-[var(--color-line)] bg-white/70 px-4 py-2 text-sm outline-none focus:bg-white"
@@ -82,8 +88,11 @@ export function ExploreSection({
               </div>
               {moods.length > 0 && onMoodChange && (
                 <div className="flex items-center gap-2">
-                  <Kicker className="text-[var(--color-muted)]">Mood</Kicker>
+                  <label htmlFor="explore-mood" className="text-[var(--color-muted)]">
+                    <Kicker className="text-[var(--color-muted)]">Mood</Kicker>
+                  </label>
                   <select
+                    id="explore-mood"
                     value={shopMoodId ?? ""}
                     onChange={(e) => onMoodChange(e.target.value === "" ? null : e.target.value)}
                     className="max-w-[10rem] rounded-full border border-[var(--color-line)] bg-white/70 px-4 py-2 text-sm outline-none focus:bg-white sm:max-w-none"
@@ -96,8 +105,11 @@ export function ExploreSection({
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <Kicker className="text-[var(--color-muted)]">Sort</Kicker>
+                <label htmlFor="explore-sort" className="text-[var(--color-muted)]">
+                  <Kicker className="text-[var(--color-muted)]">Sort</Kicker>
+                </label>
                 <select
+                  id="explore-sort"
                   value={sort}
                   onChange={(e) => setSort(e.target.value)}
                   className="rounded-full border border-[var(--color-line)] bg-white/70 px-4 py-2 text-sm outline-none focus:bg-white"

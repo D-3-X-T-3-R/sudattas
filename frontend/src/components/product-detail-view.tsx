@@ -209,6 +209,7 @@ export function ProductDetailView({
               type="button"
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
               disabled={quantity <= 1}
+              aria-label="Decrease quantity"
               className="flex h-10 w-10 items-center justify-center rounded border border-[var(--color-line)] text-lg font-medium hover:bg-[var(--color-line)]/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               −
@@ -220,6 +221,7 @@ export function ProductDetailView({
               type="button"
               onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
               disabled={quantity >= maxQuantity}
+              aria-label="Increase quantity"
               className="flex h-10 w-10 items-center justify-center rounded border border-[var(--color-line)] text-lg font-medium hover:bg-[var(--color-line)]/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               +
