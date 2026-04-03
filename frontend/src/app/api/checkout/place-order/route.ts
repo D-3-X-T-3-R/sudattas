@@ -1,8 +1,7 @@
 import {
   apiError,
-  callGraphql,
+  callGraphqlAsCustomer,
   requireAuthenticatedCustomerUserId,
-  requireSessionToken,
 } from "@/lib/server-session-auth";
 
 type PlaceOrderRow = {
@@ -44,9 +43,6 @@ const CREATE_PAYMENT_INTENT_MUTATION = `mutation CreatePaymentIntent($input: New
 }`;
 
 export async function POST(request: Request) {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
-
   const body = (await request.json().catch(() => ({}))) as {
     shippingAddressId?: string;
     couponCode?: string;
@@ -66,8 +62,8 @@ export async function POST(request: Request) {
     body.idempotencyKey?.trim() || `checkout-place-${crypto.randomUUID()}`;
   const verifyKey = `checkout-verify-${crypto.randomUUID()}`;
 
-  const placeOrderResult = await callGraphql<{ placeOrder?: PlaceOrderRow[] }>(
-    token,
+  const placeOrderResult = await callGraphqlAsCustomer<{ placeOrder?: PlaceOrderRow[] }>(
+    userId,
     PLACE_ORDER_MUTATION,
     {
       order: {
@@ -94,8 +90,8 @@ export async function POST(request: Request) {
     return apiError("Invalid order amount for payment", 400, "VALIDATION_ERROR");
   }
 
-  const paymentResult = await callGraphql<{ createPaymentIntent?: PaymentIntentRow[] }>(
-    token,
+  const paymentResult = await callGraphqlAsCustomer<{ createPaymentIntent?: PaymentIntentRow[] }>(
+    userId,
     CREATE_PAYMENT_INTENT_MUTATION,
     {
       input: {

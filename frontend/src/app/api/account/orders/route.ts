@@ -1,8 +1,7 @@
 import {
   apiError,
-  callGraphql,
+  callGraphqlAsCustomer,
   requireAuthenticatedCustomerUserId,
-  requireSessionToken,
 } from "@/lib/server-session-auth";
 
 type OrderRow = {
@@ -33,21 +32,18 @@ const ORDER_STATUS_QUERY = `query AccountOrderStatuses {
 }`;
 
 export async function GET() {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
-
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
   }
 
   const [ordersResult, statusesResult] = await Promise.all([
-    callGraphql<{ searchOrder?: OrderRow[] }>(token, ORDERS_QUERY, {
+    callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(userId, ORDERS_QUERY, {
       search: { userId, limit: "100" },
     }),
-    callGraphql<{
+    callGraphqlAsCustomer<{
       searchOrderStatus?: Array<{ statusId: string; statusName: string }>;
-    }>(token, ORDER_STATUS_QUERY),
+    }>(userId, ORDER_STATUS_QUERY),
   ]);
 
   if (ordersResult.errors?.length) {

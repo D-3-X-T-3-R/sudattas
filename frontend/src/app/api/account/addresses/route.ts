@@ -1,4 +1,8 @@
-import { apiError, callGraphql, requireSessionToken } from "@/lib/server-session-auth";
+import {
+  apiError,
+  callGraphqlAsCustomer,
+  requireAuthenticatedCustomerUserId,
+} from "@/lib/server-session-auth";
 import { addressInputSchema } from "@/lib/validation-schemas";
 
 type ShippingAddressRow = {
@@ -58,11 +62,11 @@ const DELETE_MUTATION = `mutation DeleteAccountAddress($shippingAddressId: Strin
 }`;
 
 export async function GET() {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
+  const customerUserId = await requireAuthenticatedCustomerUserId();
+  if (!customerUserId) return apiError("Unauthorized", 401, "UNAUTHORIZED");
 
-  const result = await callGraphql<{ getShippingAddresses?: ShippingAddressRow[] }>(
-    token,
+  const result = await callGraphqlAsCustomer<{ getShippingAddresses?: ShippingAddressRow[] }>(
+    customerUserId,
     LIST_QUERY
   );
   if (result.errors?.length) {
@@ -79,8 +83,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
+  const customerUserId = await requireAuthenticatedCustomerUserId();
+  if (!customerUserId) return apiError("Unauthorized", 401, "UNAUTHORIZED");
 
   const body = (await request.json().catch(() => ({}))) as {
     input?: Record<string, unknown>;
@@ -92,8 +96,8 @@ export async function POST(request: Request) {
   }
 
   const idempotencyKey = request.headers.get("idempotency-key")?.trim();
-  const result = await callGraphql<{ createShippingAddress?: ShippingAddressRow[] }>(
-    token,
+  const result = await callGraphqlAsCustomer<{ createShippingAddress?: ShippingAddressRow[] }>(
+    customerUserId,
     CREATE_MUTATION,
     { input: parsed.data },
     idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}
@@ -112,8 +116,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
+  const customerUserId = await requireAuthenticatedCustomerUserId();
+  if (!customerUserId) return apiError("Unauthorized", 401, "UNAUTHORIZED");
 
   const body = (await request.json().catch(() => ({}))) as {
     input?: Record<string, unknown>;
@@ -135,8 +139,8 @@ export async function PATCH(request: Request) {
   }
   const mutationInput = { shippingAddressId, ...parsed.data };
 
-  const result = await callGraphql<{ updateShippingAddress?: ShippingAddressRow[] }>(
-    token,
+  const result = await callGraphqlAsCustomer<{ updateShippingAddress?: ShippingAddressRow[] }>(
+    customerUserId,
     UPDATE_MUTATION,
     { input: mutationInput }
   );
@@ -154,8 +158,8 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
+  const customerUserId = await requireAuthenticatedCustomerUserId();
+  if (!customerUserId) return apiError("Unauthorized", 401, "UNAUTHORIZED");
 
   const body = (await request.json().catch(() => ({}))) as {
     shippingAddressId?: string;
@@ -165,8 +169,8 @@ export async function DELETE(request: Request) {
     return apiError("Missing shippingAddressId", 400, "BAD_REQUEST");
   }
 
-  const result = await callGraphql<{ deleteShippingAddress?: Array<{ shippingAddressId: string }> }>(
-    token,
+  const result = await callGraphqlAsCustomer<{ deleteShippingAddress?: Array<{ shippingAddressId: string }> }>(
+    customerUserId,
     DELETE_MUTATION,
     { shippingAddressId }
   );

@@ -5,7 +5,7 @@ import { headers as nextHeaders } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
 import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
-import { serverGraphqlUrl } from "@/lib/env/server";
+import { serverEnv, serverGraphqlUrl } from "@/lib/env/server";
 
 export function graphQlUrl(): string {
   return serverGraphqlUrl();
@@ -46,41 +46,47 @@ export async function requireAuthenticatedCustomerUserId(): Promise<string | nul
   return parseNumericId(decodeJwtSub(token));
 }
 
-export async function callGraphql<T = unknown>(
-  token: string,
+async function inboundForwardingHeaders(): Promise<Record<string, string>> {
+  const forwardedHeaders = await forwardedIpHeadersFromCurrentRequest();
+  const inboundHeaders = await (async () => {
+    try {
+      const h = await nextHeaders();
+      return {
+        requestId: h.get("x-request-id")?.trim() || null,
+        clientAction: h.get("x-client-action")?.trim() || null,
+        guestSessionId: h.get("x-guest-session-id")?.trim() || null,
+      };
+    } catch {
+      return { requestId: null, clientAction: null, guestSessionId: null };
+    }
+  })();
+
+  return {
+    ...forwardedHeaders,
+    ...(inboundHeaders.requestId ? { "X-Request-Id": inboundHeaders.requestId } : {}),
+    ...(inboundHeaders.clientAction ? { "X-Client-Action": inboundHeaders.clientAction } : {}),
+    ...(inboundHeaders.guestSessionId
+      ? { "X-Guest-Session-Id": inboundHeaders.guestSessionId }
+      : {}),
+  };
+}
+
+async function callGraphqlRaw<T = unknown>(
+  authHeaders: Record<string, string>,
   query: string,
   variables: Record<string, unknown> = {},
   extraHeaders: Record<string, string> = {}
 ): Promise<{ data?: T; errors?: Array<{ message?: string }> }> {
   try {
-    const forwardedHeaders = await forwardedIpHeadersFromCurrentRequest();
-    const inboundHeaders = await (async () => {
-      try {
-        const h = await nextHeaders();
-        return {
-          requestId: h.get("x-request-id")?.trim() || null,
-          clientAction: h.get("x-client-action")?.trim() || null,
-          guestSessionId: h.get("x-guest-session-id")?.trim() || null,
-        };
-      } catch {
-        return { requestId: null, clientAction: null, guestSessionId: null };
-      }
-    })();
+    const forwardingHeaders = await inboundForwardingHeaders();
     const res = await fetchWithResilience(
       graphQlUrl(),
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}`,
-          ...forwardedHeaders,
-          ...(inboundHeaders.requestId ? { "X-Request-Id": inboundHeaders.requestId } : {}),
-          ...(inboundHeaders.clientAction
-            ? { "X-Client-Action": inboundHeaders.clientAction }
-            : {}),
-          ...(inboundHeaders.guestSessionId
-            ? { "X-Guest-Session-Id": inboundHeaders.guestSessionId }
-            : {}),
+          ...authHeaders,
+          ...forwardingHeaders,
           ...extraHeaders,
         },
         body: JSON.stringify({ query, variables }),
@@ -104,6 +110,46 @@ export async function callGraphql<T = unknown>(
   }
 }
 
+export async function callGraphql<T = unknown>(
+  token: string,
+  query: string,
+  variables: Record<string, unknown> = {},
+  extraHeaders: Record<string, string> = {}
+): Promise<{ data?: T; errors?: Array<{ message?: string }> }> {
+  return callGraphqlRaw<T>(
+    {
+      Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}`,
+    },
+    query,
+    variables,
+    extraHeaders
+  );
+}
+
+export async function callGraphqlAsCustomer<T = unknown>(
+  customerUserId: string,
+  query: string,
+  variables: Record<string, unknown> = {},
+  extraHeaders: Record<string, string> = {}
+): Promise<{ data?: T; errors?: Array<{ message?: string }> }> {
+  const internalSecret = serverEnv.INTERNAL_API_SECRET?.trim();
+  if (!internalSecret) {
+    return {
+      errors: [{ message: "INTERNAL_API_SECRET is not configured" }],
+    };
+  }
+
+  return callGraphqlRaw<T>(
+    {
+      "X-Internal-Auth": internalSecret,
+      "X-Customer-User-Id": customerUserId,
+    },
+    query,
+    variables,
+    extraHeaders
+  );
+}
+
 export function apiError(message: string, status: number, errorCode: string) {
   return Response.json(
     {
@@ -117,4 +163,3 @@ export function apiError(message: string, status: number, errorCode: string) {
     { status }
   );
 }
-

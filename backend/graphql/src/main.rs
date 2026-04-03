@@ -249,6 +249,8 @@ async fn main() {
             "idempotency-key",
             "x-client-action",
             "x-guest-session-id",
+            "x-internal-auth",
+            "x-customer-user-id",
         ])
         .allow_methods(vec!["GET", "POST", "OPTIONS"]);
 
@@ -298,6 +300,8 @@ async fn main() {
     let allowed_origins_c = allowed_origins.clone();
     let context_filter = warp::header::optional::<String>("authorization")
         .and(warp::header::optional::<String>("x-session-id"))
+        .and(warp::header::optional::<String>("x-internal-auth"))
+        .and(warp::header::optional::<String>("x-customer-user-id"))
         .and(warp::header::optional::<String>("origin"))
         .and(warp::header::optional::<String>("referer"))
         .and(warp::header::optional::<String>("x-request-id"))
@@ -308,6 +312,8 @@ async fn main() {
         .and_then(
             |token: Option<String>,
              session_id: Option<String>,
+             x_internal_auth: Option<String>,
+             x_customer_user_id: Option<String>,
              origin: Option<String>,
              referer: Option<String>,
              x_request_id: Option<String>,
@@ -350,11 +356,54 @@ async fn main() {
                     }
                 }
 
+                // --- Trusted internal auth (server-side frontend proxy) ---
+                if auth.is_none() {
+                    let configured_secret = std::env::var("INTERNAL_API_SECRET")
+                        .ok()
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty());
+                    let provided_secret = x_internal_auth
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty());
+
+                    if let (Some(expected), Some(got)) = (configured_secret.as_deref(), provided_secret)
+                    {
+                        if expected == got {
+                            if let Some(uid) = x_customer_user_id
+                                .as_deref()
+                                .map(str::trim)
+                                .filter(|s| !s.is_empty())
+                            {
+                                if uid.chars().all(|c| c.is_ascii_digit()) {
+                                    debug!(
+                                        auth_method = "internal_customer",
+                                        user_id = %uid,
+                                        "Request authenticated via internal customer auth"
+                                    );
+                                    auth = Some(AuthSource::InternalCustomer(uid.to_string()));
+                                } else {
+                                    warn!("Internal auth rejected: non-numeric x-customer-user-id");
+                                }
+                            } else {
+                                debug!(
+                                    auth_method = "internal_service",
+                                    "Request authenticated via internal service auth"
+                                );
+                                auth = Some(AuthSource::InternalService);
+                            }
+                        } else {
+                            warn!("Internal auth rejected: secret mismatch");
+                        }
+                    }
+                }
+
                 // --- No valid credentials ---
                 if auth.is_none() {
                     warn!(
                         has_jwt = token.is_some(),
                         has_session = session_id.is_some(),
+                        has_internal = x_internal_auth.is_some(),
                         "Request rejected: no valid authentication credentials"
                     );
                     return Err(warp::reject::custom(Unauthorized {}));

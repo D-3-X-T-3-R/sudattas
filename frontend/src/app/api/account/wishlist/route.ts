@@ -1,8 +1,7 @@
 import {
   apiError,
-  callGraphql,
+  callGraphqlAsCustomer,
   requireAuthenticatedCustomerUserId,
-  requireSessionToken,
 } from "@/lib/server-session-auth";
 
 type WishlistRow = {
@@ -41,16 +40,13 @@ function normalizeProductId(raw: unknown): string {
 }
 
 export async function GET() {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
-
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
   }
 
-  const result = await callGraphql<{ searchWishlistItem?: WishlistRow[] }>(
-    token,
+  const result = await callGraphqlAsCustomer<{ searchWishlistItem?: WishlistRow[] }>(
+    userId,
     LIST_QUERY,
     { search: { userId, productId: null, wishlistId: null } }
   );
@@ -73,8 +69,6 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
@@ -86,8 +80,8 @@ export async function POST(request: Request) {
     return apiError("productId is required", 400, "VALIDATION_ERROR");
   }
 
-  const add = await callGraphql<{ addWishlistItem?: WishlistRow[] }>(
-    token,
+  const add = await callGraphqlAsCustomer<{ addWishlistItem?: WishlistRow[] }>(
+    userId,
     ADD_MUTATION,
     { wishlist: { userId, productId } }
   );
@@ -109,8 +103,6 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
@@ -122,8 +114,8 @@ export async function DELETE(request: Request) {
     return apiError("productId is required", 400, "VALIDATION_ERROR");
   }
 
-  const list = await callGraphql<{ searchWishlistItem?: WishlistRow[] }>(
-    token,
+  const list = await callGraphqlAsCustomer<{ searchWishlistItem?: WishlistRow[] }>(
+    userId,
     LIST_QUERY,
     { search: { userId, productId, wishlistId: null } }
   );
@@ -146,8 +138,8 @@ export async function DELETE(request: Request) {
     });
   }
 
-  const del = await callGraphql<{ deleteWishlistItem?: Array<{ wishlistId: string }> }>(
-    token,
+  const del = await callGraphqlAsCustomer<{ deleteWishlistItem?: Array<{ wishlistId: string }> }>(
+    userId,
     DELETE_MUTATION,
     { delete: { userId, wishlistId: hit.wishlistId } }
   );

@@ -7,10 +7,15 @@ pub mod query_root;
 /// Describes how the current request was authenticated.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AuthSource {
-    /// Full login — authenticated via a valid JWT.  Value is the JWT `sub` claim (user identifier).
+    /// Full login authenticated via a valid JWT. Value is the JWT subject/user identifier.
     Jwt(String),
-    /// Guest session — validated via Redis `X-Session-Id` header.  Value is the stored `user_id`.
+    /// Guest session validated via Redis `X-Session-Id`. Value is the stored `user_id`.
     Session(String),
+    /// Internal server-to-server customer auth from trusted frontend proxy.
+    /// Value is canonical numeric customer user_id.
+    InternalCustomer(String),
+    /// Internal server-to-server auth for service operations that do not act as a customer.
+    InternalService,
 }
 
 #[derive(Clone, Debug)]
@@ -48,21 +53,22 @@ impl Context {
         &self.jwks
     }
 
-    /// Returns the authenticated user ID **only when the request carried a valid JWT**.
-    /// Returns `None` for guest (session-only) requests.
-    /// Use this to guard operations that require a full login (e.g. checkout).
+    /// Returns the authenticated customer user ID for JWT/internal-customer requests.
+    /// Returns `None` for guest sessions and internal service calls.
     pub fn jwt_user_id(&self) -> Option<&str> {
         match &self.auth {
-            Some(AuthSource::Jwt(id)) => Some(id.as_str()),
+            Some(AuthSource::Jwt(id)) | Some(AuthSource::InternalCustomer(id)) => Some(id.as_str()),
             _ => None,
         }
     }
 
-    /// Returns the user ID from either a JWT or a session, or `None` if unauthenticated.
+    /// Returns the resolved user ID when available across auth modes.
     pub fn user_id(&self) -> Option<&str> {
         match &self.auth {
-            Some(AuthSource::Jwt(id)) | Some(AuthSource::Session(id)) => Some(id.as_str()),
-            None => None,
+            Some(AuthSource::Jwt(id))
+            | Some(AuthSource::Session(id))
+            | Some(AuthSource::InternalCustomer(id)) => Some(id.as_str()),
+            Some(AuthSource::InternalService) | None => None,
         }
     }
 
@@ -90,6 +96,8 @@ impl Context {
         match &self.auth {
             Some(AuthSource::Jwt(_)) => "jwt",
             Some(AuthSource::Session(_)) => "session",
+            Some(AuthSource::InternalCustomer(_)) => "internal_customer",
+            Some(AuthSource::InternalService) => "internal_service",
             None => "none",
         }
     }
