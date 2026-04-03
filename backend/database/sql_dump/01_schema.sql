@@ -255,7 +255,6 @@ CREATE TABLE `OrderStatus` (
 CREATE TABLE `ShippingAddresses` (
     `ShippingAddressID` BIGINT NOT NULL AUTO_INCREMENT,
     `UserID` BIGINT NULL,
-    `IsDefault` TINYINT(1) NOT NULL DEFAULT 0,
     `Country` VARCHAR(100) NOT NULL,
     `StateRegion` VARCHAR(100) NOT NULL,
     `City` VARCHAR(100) NOT NULL,
@@ -264,8 +263,7 @@ CREATE TABLE `ShippingAddresses` (
     `ApartmentNoOrName` VARCHAR(255),
     PRIMARY KEY (`ShippingAddressID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
-    INDEX `idx_shipping_user` (`UserID`),
-    INDEX `idx_shipping_user_default` (`UserID`, `IsDefault`)
+    INDEX `idx_shipping_user` (`UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Orders` (Enhanced with payment tracking and order/coupon snapshot)
