@@ -329,9 +329,6 @@ jobs:
         chmod +x ./backend/scripts/apply_sql_migrations.sh
         ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
 
-    - name: Seed Redis session for e2e auth
-      run: redis-cli -h 127.0.0.1 SET session:ci-e2e-session 1
-
     - name: Build E2E binaries
       working-directory: ./backend
       run: cargo build -p core_operations -p graphql --all-features
@@ -347,12 +344,11 @@ jobs:
         OAUTH_AUDIENCE: https://www.googleapis.com/oauth2/v3/tokeninfo
         ALLOWED_ORIGINS: https://app.sudattas.local
         GRAPHQL_URL: http://127.0.0.1:8080
-        GRAPHQL_SESSION_ID: ci-e2e-session
-        RATE_LIMIT_PER_MINUTE: "200"
+        RATE_LIMIT_PER_MINUTE: "2000"
         INTERNAL_API_SECRET: ci-e2e-internal-secret
-        GRAPHQL_E2E_CUSTOMER_USER_ID: "2"
-        GRAPHQL_E2E_ADMIN_USER_ID: "1"
-        ADMIN_ALLOWED_USER_IDS: "1"
+        GRAPHQL_E2E_CUSTOMER_USER_ID: "9002"
+        GRAPHQL_E2E_ADMIN_USER_ID: "9001"
+        ADMIN_ALLOWED_USER_IDS: "9001"
       timeout-minutes: 8
       run: |
         ./target/debug/core_operations &
@@ -360,6 +356,15 @@ jobs:
         ./target/debug/graphql &
         chmod +x ./scripts/wait_for_http_ready.sh
         ./scripts/wait_for_http_ready.sh http://127.0.0.1:8080/ready 60 3
+        SESSION_JSON="$(curl -fsS -X POST http://127.0.0.1:8080/session/guest)"
+        GRAPHQL_SESSION_ID="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("session_id",""))' <<< "$SESSION_JSON")"
+        if [[ -z "$GRAPHQL_SESSION_ID" ]]; then
+          echo "Failed to create guest session from /session/guest"
+          echo "Response: $SESSION_JSON"
+          exit 1
+        fi
+        export GRAPHQL_SESSION_ID
+        echo "Created guest session for E2E GraphQL tests"
         set +e
         cargo test -p graphql --test e2e_tests --all-features -- --ignored
         E2E_TESTS_STATUS=$?
