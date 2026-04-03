@@ -4,7 +4,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -19,18 +21,38 @@ const LiveAnnouncerContext = createContext<LiveAnnouncerContextValue | null>(nul
 export function LiveAnnouncerProvider({ children }: { children: React.ReactNode }) {
   const [politeMessage, setPoliteMessage] = useState("");
   const [assertiveMessage, setAssertiveMessage] = useState("");
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pendingTimerRef.current) {
+        clearTimeout(pendingTimerRef.current);
+        pendingTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const schedule = useCallback((fn: () => void) => {
+    if (pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current);
+    }
+    pendingTimerRef.current = setTimeout(() => {
+      pendingTimerRef.current = null;
+      fn();
+    }, 20);
+  }, []);
 
   const announce = useCallback((message: string, politeness: Politeness = "polite") => {
     const text = message.trim();
     if (!text) return;
     if (politeness === "assertive") {
       setAssertiveMessage("");
-      window.setTimeout(() => setAssertiveMessage(text), 20);
+      schedule(() => setAssertiveMessage(text));
       return;
     }
     setPoliteMessage("");
-    window.setTimeout(() => setPoliteMessage(text), 20);
-  }, []);
+    schedule(() => setPoliteMessage(text));
+  }, [schedule]);
 
   const value = useMemo(() => ({ announce }), [announce]);
 
@@ -54,4 +76,3 @@ export function useLiveAnnouncer(): LiveAnnouncerContextValue {
   }
   return ctx;
 }
-

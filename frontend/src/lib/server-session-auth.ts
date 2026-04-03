@@ -17,6 +17,12 @@ export async function requireSessionToken(): Promise<string | null> {
   return token ?? null;
 }
 
+function parseNumericId(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  return /^\d+$/.test(trimmed) ? trimmed : null;
+}
+
 export function decodeJwtSub(token: string): string | null {
   try {
     const parts = token.split(".");
@@ -28,6 +34,16 @@ export function decodeJwtSub(token: string): string | null {
   } catch {
     return null;
   }
+}
+
+export async function requireAuthenticatedCustomerUserId(): Promise<string | null> {
+  const session = (await getServerSession(authOptions)) as { customerUserId?: string } | null;
+  const fromSession = parseNumericId(session?.customerUserId);
+  if (fromSession) return fromSession;
+
+  const token = await requireSessionToken();
+  if (!token) return null;
+  return parseNumericId(decodeJwtSub(token));
 }
 
 export async function callGraphql<T = unknown>(

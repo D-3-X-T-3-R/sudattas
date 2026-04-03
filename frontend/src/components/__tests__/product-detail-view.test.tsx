@@ -6,7 +6,9 @@ import type { Product } from "@/lib/schemas";
 
 vi.mock("next/image", () => ({
   default: (props: Record<string, unknown>) => {
-    const { src = "", alt = "", fill: _fill, unoptimized: _unoptimized, ...rest } = props;
+    const { src = "", alt = "", ...rest } = props;
+    delete rest.fill;
+    delete rest.unoptimized;
     return React.createElement("img", { src: String(src), alt: String(alt), ...rest });
   },
 }));
