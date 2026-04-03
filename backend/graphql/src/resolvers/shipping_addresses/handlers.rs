@@ -12,6 +12,15 @@ use crate::resolvers::{
 };
 use crate::validation::{validate_address_road, validate_postal_code};
 
+fn parse_optional_user_id(input: Option<&str>) -> Result<Option<i64>, GqlError> {
+    match input {
+        Some(raw) if !raw.trim().is_empty() => {
+            Ok(Some(parse_i64(raw.trim(), "shipping address user_id")?))
+        }
+        _ => Ok(None),
+    }
+}
+
 fn address_response_to_gql(a: ShippingAddressResponse) -> ShippingAddress {
     ShippingAddress {
         shipping_address_id: a.shipping_address_id.to_string(),
@@ -51,9 +60,10 @@ pub(crate) async fn create_shipping_address(
     validate_postal_code(&input.postal_code)?;
 
     let mut client = connect_grpc_client().await?;
+    let user_id = parse_optional_user_id(input.user_id.as_deref())?;
     let response = client
         .create_shipping_address(CreateShippingAddressRequest {
-            user_id: input.user_id.as_deref().and_then(|s| s.parse().ok()),
+            user_id,
             country: input.country,
             state_region: input.state_region,
             city: input.city,
@@ -82,10 +92,11 @@ pub(crate) async fn update_shipping_address(
     validate_postal_code(&input.postal_code)?;
 
     let mut client = connect_grpc_client().await?;
+    let user_id = parse_optional_user_id(input.user_id.as_deref())?;
     let response = client
         .update_shipping_address(UpdateShippingAddressRequest {
             shipping_address_id: parse_i64(&input.shipping_address_id, "shipping address id")?,
-            user_id: input.user_id.as_deref().and_then(|s| s.parse().ok()),
+            user_id,
             country: input.country,
             state_region: input.state_region,
             city: input.city,

@@ -18,6 +18,10 @@ if (-not $env:OAUTH_DOMAIN) { $env:OAUTH_DOMAIN = "https://accounts.google.com/"
 if (-not $env:OAUTH_AUDIENCE) { $env:OAUTH_AUDIENCE = "https://www.googleapis.com/oauth2/v3/tokeninfo" }
 # High limit so e2e_all_graphql_operations (many requests) don't hit 429
 if (-not $env:RATE_LIMIT_PER_MINUTE) { $env:RATE_LIMIT_PER_MINUTE = "1000" }
+if (-not $env:INTERNAL_API_SECRET) { $env:INTERNAL_API_SECRET = "e2e-internal-secret" }
+if (-not $env:GRAPHQL_E2E_CUSTOMER_USER_ID) { $env:GRAPHQL_E2E_CUSTOMER_USER_ID = "1" }
+if (-not $env:GRAPHQL_E2E_ADMIN_USER_ID) { $env:GRAPHQL_E2E_ADMIN_USER_ID = "1" }
+if (-not $env:ADMIN_ALLOWED_USER_IDS) { $env:ADMIN_ALLOWED_USER_IDS = $env:GRAPHQL_E2E_ADMIN_USER_ID }
 
 # Seed Redis session for E2E auth (if redis-cli available)
 $redisCli = Get-Command redis-cli -ErrorAction SilentlyContinue
@@ -61,7 +65,8 @@ try {
     Write-Host "Running E2E tests (using pre-built test binaries to avoid locking graphql.exe)..."
     $e2eTestsExe = Get-ChildItem "$backend\target\debug\deps\e2e_tests*.exe" | Where-Object { $_.Name -notmatch '\.d$' } | Select-Object -First 1
     $e2eAllExe = Get-ChildItem "$backend\target\debug\deps\e2e_all_graphql_operations*.exe" | Where-Object { $_.Name -notmatch '\.d$' } | Select-Object -First 1
-    if (-not $e2eTestsExe -or -not $e2eAllExe) {
+    $e2eFlowsExe = Get-ChildItem "$backend\target\debug\deps\e2e_business_flows*.exe" | Where-Object { $_.Name -notmatch '\.d$' } | Select-Object -First 1
+    if (-not $e2eTestsExe -or -not $e2eAllExe -or -not $e2eFlowsExe) {
         Write-Host "Test executables not found. Run: cargo build -p graphql --all-features --tests"
         exit 1
     }
@@ -69,7 +74,9 @@ try {
     $e2e1 = $LASTEXITCODE
     & $e2eAllExe.FullName --ignored
     $e2e2 = $LASTEXITCODE
-    if ($e2e1 -ne 0 -or $e2e2 -ne 0) { exit 1 }
+    & $e2eFlowsExe.FullName --ignored
+    $e2e3 = $LASTEXITCODE
+    if ($e2e1 -ne 0 -or $e2e2 -ne 0 -or $e2e3 -ne 0) { exit 1 }
 } finally {
     Stop-Process -Id $grpc.Id -Force -ErrorAction SilentlyContinue
     Stop-Process -Id $gql.Id -Force -ErrorAction SilentlyContinue

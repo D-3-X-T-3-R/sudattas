@@ -175,6 +175,31 @@ fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
     }
 }
 
+async fn ensure_customer_owns_shipping_address(
+    context: &Context,
+    shipping_address_id: &str,
+) -> Result<(), juniper::FieldError> {
+    if context.is_admin() {
+        return Ok(());
+    }
+    let uid = require_jwt(context)?.to_string();
+    let rows = shipping_addresses::handlers::get_shipping_addresses()
+        .await
+        .map_err(|e| e.into_field_error())?;
+
+    let belongs_to_user = rows.into_iter().any(|row| {
+        row.shipping_address_id == shipping_address_id && row.user_id.as_deref() == Some(uid.as_str())
+    });
+    if belongs_to_user {
+        Ok(())
+    } else {
+        Err(juniper::FieldError::new(
+            "Shipping address not found for current user",
+            juniper::Value::null(),
+        ))
+    }
+}
+
 #[juniper::graphql_object(Context = Context)]
 impl MutationRoot {
     // Cart
@@ -1343,6 +1368,7 @@ impl MutationRoot {
         mut input: ShippingAddressMutation,
     ) -> FieldResult<Vec<ShippingAddress>> {
         let jwt_uid = require_jwt(context)?.to_string();
+        ensure_customer_owns_shipping_address(context, &input.shipping_address_id).await?;
         if !context.is_admin() {
             input.user_id = Some(jwt_uid);
         }
@@ -1357,6 +1383,7 @@ impl MutationRoot {
         shipping_address_id: String,
     ) -> FieldResult<Vec<ShippingAddress>> {
         let _ = require_jwt(context)?;
+        ensure_customer_owns_shipping_address(context, &shipping_address_id).await?;
         shipping_addresses::handlers::delete_shipping_address(shipping_address_id)
             .await
             .map_err(|e| e.into_field_error())
