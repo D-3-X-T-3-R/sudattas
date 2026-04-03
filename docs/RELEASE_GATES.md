@@ -26,6 +26,7 @@ This project uses explicit scripts to enforce core release gates before producti
 - `.github/workflows/backend-ci.yml` also includes a `public-env-safety` job for backend CI runs.
 - `.github/workflows/frontend-ci.yml` enforces frontend lint + build on frontend changes.
 - `.github/workflows/fullstack-smoke.yml` boots backend + frontend and runs `scripts/fullstack-smoke.sh` to fail CI on broken critical user paths.
+  - `scripts/fullstack-smoke.sh` now includes `scripts/route-contract-checks.sh` for Next `/api/admin/*` and `/api/account/*` contract assertions.
 
 ## Usage
 

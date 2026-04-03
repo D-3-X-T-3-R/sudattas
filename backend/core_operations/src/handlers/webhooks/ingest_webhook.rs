@@ -12,6 +12,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend,
     EntityTrait, IntoActiveModel, QueryFilter, Statement,
 };
+use std::time::Instant;
 use tonic::{Request, Response, Status as TonicStatus};
 use tracing::{info, warn};
 
@@ -19,6 +20,7 @@ pub async fn ingest_webhook(
     txn: &DatabaseTransaction,
     request: Request<IngestWebhookRequest>,
 ) -> Result<Response<WebhookEventsResponse>, TonicStatus> {
+    let started = Instant::now();
     let req = request.into_inner();
 
     info!(
@@ -109,11 +111,20 @@ pub async fn ingest_webhook(
     active.status = ActiveValue::Set(Some(new_status));
     let updated = active.update(txn).await.map_err(map_db_error_to_status)?;
 
+    let duration_sec = started.elapsed().as_secs_f64();
+    let outcome = match updated.status {
+        Some(Status::Processed) => "processed",
+        Some(Status::Failed) => "failed",
+        _ => "pending",
+    };
+    crate::observability::record_webhook_processing_duration_seconds(duration_sec, outcome);
+
     info!(
         webhook_id = %updated.webhook_id,
         provider = %updated.provider,
         event_type = %updated.event_type,
         status = ?updated.status,
+        processing_duration_ms = (duration_sec * 1000.0).round() as i64,
         "ingest_webhook completed"
     );
 

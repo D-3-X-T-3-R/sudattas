@@ -1,3 +1,5 @@
+import { classifyStatusError, trackClientTelemetry } from "@/lib/client-telemetry";
+
 export type ApiEnvelope<T> = {
   ok: boolean;
   data: T | null;
@@ -47,6 +49,25 @@ function inferClientAction(input: RequestInfo | URL, init?: RequestInit): string
   const url = toAbsoluteUrl(input);
   const path = url?.pathname ?? "unknown";
   return `${method} ${path}`;
+}
+
+function pathFromInput(input: RequestInfo | URL): string {
+  const url = toAbsoluteUrl(input);
+  return url?.pathname ?? "unknown";
+}
+
+function requestIdFromInit(init: RequestInit): string | null {
+  const headers = new Headers(init.headers ?? undefined);
+  return headers.get("X-Request-Id");
+}
+
+function shouldTrackSuccess(route: string): boolean {
+  return (
+    route.startsWith("/api/checkout/") ||
+    route.startsWith("/api/admin/") ||
+    route === "/api/products" ||
+    route === "/api/storefront-filters"
+  );
 }
 
 function guestSessionIdForHeader(): string | null {
@@ -122,6 +143,11 @@ export async function fetchApiEnvelope<T>(
   attemptedRefresh = false
 ): Promise<T> {
   const requestInit = mergeHeadersWithClientMetadata(input, init);
+  const action = inferClientAction(input, requestInit);
+  const route = pathFromInput(input);
+  const requestId = requestIdFromInit(requestInit);
+  const mode =
+    route.startsWith("/api/admin") ? "admin" : route.startsWith("/api/account") || route.startsWith("/api/checkout") ? "account" : "public";
   const response = await fetch(input, requestInit);
   if (response.status === 401 && !attemptedRefresh) {
     await tryRefreshBrowserSession();
@@ -133,6 +159,16 @@ export async function fetchApiEnvelope<T>(
   try {
     parsed = JSON.parse(text) as ApiEnvelope<T>;
   } catch {
+    trackClientTelemetry({
+      route,
+      userMode: mode,
+      action,
+      errorClass: classifyStatusError(response.status, response.status >= 500, null),
+      errorCode: null,
+      message: text || `HTTP ${response.status}`,
+      status: response.status,
+      requestId,
+    });
     throw new ApiEnvelopeError({
       message: text || `HTTP ${response.status}`,
       status: response.status,
@@ -143,6 +179,16 @@ export async function fetchApiEnvelope<T>(
   }
 
   if (!parsed || typeof parsed.ok !== "boolean") {
+    trackClientTelemetry({
+      route,
+      userMode: mode,
+      action,
+      errorClass: "fatal",
+      errorCode: null,
+      message: `Invalid API response (HTTP ${response.status})`,
+      status: response.status,
+      requestId,
+    });
     throw new ApiEnvelopeError({
       message: `Invalid API response (HTTP ${response.status})`,
       status: response.status,
@@ -153,12 +199,36 @@ export async function fetchApiEnvelope<T>(
   }
 
   if (!response.ok || !parsed.ok) {
+    trackClientTelemetry({
+      route,
+      userMode: mode,
+      action,
+      errorClass: classifyStatusError(response.status, parsed.retryable, parsed.errorCode),
+      errorCode: parsed.errorCode,
+      message: parsed.message || `HTTP ${response.status}`,
+      status: response.status,
+      requestId,
+    });
     throw new ApiEnvelopeError({
       message: parsed.message || `HTTP ${response.status}`,
       status: response.status,
       errorCode: parsed.errorCode,
       fieldErrors: parsed.fieldErrors,
       retryable: parsed.retryable,
+    });
+  }
+
+  if (shouldTrackSuccess(route)) {
+    trackClientTelemetry({
+      route,
+      userMode: mode,
+      action,
+      outcome: "success",
+      errorClass: "none",
+      errorCode: null,
+      message: null,
+      status: response.status,
+      requestId,
     });
   }
 

@@ -1,15 +1,31 @@
 "use client";
 
 import { Suspense } from "react";
+import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Kicker, SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
+import { trackClientTelemetry } from "@/lib/client-telemetry";
 
 function AdminLoginForm() {
   const searchParams = useSearchParams();
   const accessDenied = searchParams.get("error") === "AccessDenied";
+
+  useEffect(() => {
+    if (!accessDenied) return;
+    trackClientTelemetry({
+      route: "/imtheboss/login",
+      userMode: "admin",
+      action: "AUTH_SIGN_IN_GOOGLE",
+      outcome: "failure",
+      errorClass: "unauthorized",
+      errorCode: "ACCESS_DENIED",
+      message: "Admin access denied by allowlist.",
+      status: 403,
+    });
+  }, [accessDenied]);
 
   return (
     <div
@@ -37,9 +53,19 @@ function AdminLoginForm() {
         <Button
           size="lg"
           className="w-full rounded-full font-semibold"
-          onClick={() =>
-            signIn("google", { callbackUrl: "/imtheboss" })
-          }
+          onClick={() => {
+            trackClientTelemetry({
+              route: "/imtheboss/login",
+              userMode: "admin",
+              action: "AUTH_SIGN_IN_GOOGLE_ATTEMPT",
+              outcome: "success",
+              errorClass: "none",
+              errorCode: null,
+              message: "Admin sign-in attempt initiated.",
+              status: 200,
+            });
+            signIn("google", { callbackUrl: "/imtheboss" });
+          }}
         >
           <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24" aria-hidden>
             <path

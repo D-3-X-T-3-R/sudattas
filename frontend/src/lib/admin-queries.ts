@@ -850,3 +850,38 @@ export async function fetchDashboardExtras(): Promise<DashboardExtras> {
     customersCount: stats.customersCount ?? 0,
   };
 }
+
+export interface TelemetryRatio {
+  numerator: number;
+  denominator: number;
+  percent: number;
+}
+
+export interface TelemetrySummary {
+  windowHours: number;
+  loginFailureRate: TelemetryRatio;
+  cartConversionDropoff: TelemetryRatio;
+  checkoutFailureRate: TelemetryRatio;
+  paymentMismatchRate: TelemetryRatio;
+  adminActionFailureRate: TelemetryRatio;
+  releaseConfidence: { score: number; scale: string };
+  webhookProcessingLatency: { available: boolean; averageMs?: number | null; message?: string | null };
+  backendSignals?: { available: boolean; authUnauthorizedCount?: number };
+}
+
+export async function fetchTelemetrySummary(): Promise<TelemetrySummary> {
+  const res = await fetch("/api/telemetry/summary", { cache: "no-store" });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const parsed = JSON.parse(text) as {
+    ok?: boolean;
+    data?: TelemetrySummary;
+    message?: string | null;
+  };
+  if (!parsed.ok || !parsed.data) {
+    throw new Error(parsed.message || "Failed to load telemetry summary");
+  }
+  return parsed.data;
+}

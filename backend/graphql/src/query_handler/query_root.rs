@@ -76,6 +76,7 @@ fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
     if context.is_admin() {
         Ok(())
     } else {
+        crate::metrics::record_admin_authz_denied_total();
         Err(juniper::FieldError::new(
             "Admin authorization required",
             juniper::Value::null(),
