@@ -9,7 +9,7 @@ import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { useStorefront } from "@/context/storefront-context";
 import { useRazorpayTest } from "@/hooks/use-razorpay-test";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
-import { toRouteFailureUi } from "@/lib/route-state";
+import { toRouteFailureUi, type RouteFailureUi } from "@/lib/route-state";
 import { addressInputSchema } from "@/lib/validation-schemas";
 import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 import {
@@ -52,7 +52,7 @@ export default function CheckoutAddressPage() {
   const { announce } = useLiveAnnouncer();
 
   const [addresses, setAddresses] = useState<ShippingAddressRow[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadFailure, setLoadFailure] = useState<RouteFailureUi | null>(null);
   const [loadingList, setLoadingList] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -75,13 +75,13 @@ export default function CheckoutAddressPage() {
   const loadAddresses = useCallback(async () => {
     if (status !== "authenticated") return;
     setLoadingList(true);
-    setLoadError(null);
+    setLoadFailure(null);
     try {
       const list = await fetchApiEnvelope<ShippingAddressRow[]>("/api/account/addresses", { cache: "no-store" });
       setAddresses(list);
       setSelectedId((prev) => (prev && list.some((a) => a.shippingAddressId === prev) ? prev : list[0]?.shippingAddressId ?? null));
     } catch (e) {
-      setLoadError(toRouteFailureUi("account", e).message);
+      setLoadFailure(toRouteFailureUi("account", e));
       setAddresses([]);
     } finally {
       setLoadingList(false);
@@ -173,10 +173,12 @@ export default function CheckoutAddressPage() {
         ) : status === "unauthenticated" ? (
           <CheckoutUnauthenticatedView onSignIn={() => openLogin("/checkout/address")} />
         ) : (
-          <CheckoutAuthenticatedView
-            loadingList={loadingList}
-            loadError={loadError}
-            addresses={addresses}
+            <CheckoutAuthenticatedView
+              loadingList={loadingList}
+              loadFailure={loadFailure}
+              onRetryLoadAddresses={() => void loadAddresses()}
+              onSignInAgain={() => openLogin("/checkout/address")}
+              addresses={addresses}
             selectedId={selectedId}
             setSelectedId={setSelectedId}
             showAddForm={showAddForm}

@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { SiteHeader } from "@/components/site-header";
+import { RouteFailureBanner } from "@/components/route-failure-banner";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
 import { addressInputSchema } from "@/lib/validation-schemas";
-import { toRouteFailureUi } from "@/lib/route-state";
+import { toRouteFailureUi, type RouteFailureUi } from "@/lib/route-state";
 import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 import { ProfileAuthenticatedContent } from "@/domains/profile/components/profile-authenticated-content";
 import type {
@@ -30,6 +31,7 @@ export default function ProfilePage() {
   const [orderDetailsById, setOrderDetailsById] = useState<Record<string, AccountOrderDetailPayload>>({});
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [routeFailure, setRouteFailure] = useState<RouteFailureUi | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<AddressFormState>({
     country: "India",
@@ -60,7 +62,7 @@ export default function ProfilePage() {
   const loadAccountData = useCallback(async () => {
     if (!authenticated) return;
     setLoadingData(true);
-    setError(null);
+    setRouteFailure(null);
     try {
       const [profileData, addrData, orderData] = await Promise.all([
         fetchApiEnvelope<AccountProfileRow>("/api/account/profile", { cache: "no-store" }),
@@ -73,7 +75,7 @@ export default function ProfilePage() {
       setExpandedOrderId(null);
       setOrderDetailsById({});
     } catch (e) {
-      setError(toRouteFailureUi("account", e).message);
+      setRouteFailure(toRouteFailureUi("account", e));
     } finally {
       setLoadingData(false);
     }
@@ -87,6 +89,7 @@ export default function ProfilePage() {
     if (!canSaveAddress || adding) return;
     setAdding(true);
     setError(null);
+    setRouteFailure(null);
     try {
       const parsed = addressInputSchema.safeParse({
         country: form.country.trim(),
@@ -110,7 +113,7 @@ export default function ProfilePage() {
       announce("Address saved successfully.");
     } catch (e) {
       const ui = toRouteFailureUi("account", e);
-      setError(ui.message);
+      setRouteFailure(ui);
       announce(ui.message, "assertive");
     } finally {
       setAdding(false);
@@ -118,7 +121,7 @@ export default function ProfilePage() {
   };
 
   const deleteAddress = async (shippingAddressId: string) => {
-    setError(null);
+    setRouteFailure(null);
     try {
       await fetchApiEnvelope<boolean>("/api/account/addresses", {
         method: "DELETE",
@@ -129,7 +132,7 @@ export default function ProfilePage() {
       announce("Address removed.");
     } catch (e) {
       const ui = toRouteFailureUi("account", e);
-      setError(ui.message);
+      setRouteFailure(ui);
       announce(ui.message, "assertive");
     }
   };
@@ -142,12 +145,12 @@ export default function ProfilePage() {
     setExpandedOrderId(orderId);
     if (orderDetailsById[orderId]) return;
     setLoadingOrderDetailId(orderId);
-    setError(null);
+    setRouteFailure(null);
     try {
       const detail = await fetchApiEnvelope<AccountOrderDetailPayload>(`/api/account/orders/${encodeURIComponent(orderId)}`, { cache: "no-store" });
       if (detail) setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
     } catch (e) {
-      setError(toRouteFailureUi("account", e).message);
+      setRouteFailure(toRouteFailureUi("account", e));
     } finally {
       setLoadingOrderDetailId((prev) => (prev === orderId ? null : prev));
     }
@@ -166,26 +169,36 @@ export default function ProfilePage() {
             <button type="button" onClick={() => openLogin("/profile")} className="mt-4 rounded-full bg-[var(--color-accent-gold)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white">Sign in</button>
           </section>
         ) : (
-          <ProfileAuthenticatedContent
-            displayName={displayName}
-            displayEmail={displayEmail}
-            accountProfile={accountProfile}
-            error={error}
-            loadingData={loadingData}
-            addresses={addresses}
-            orders={orders}
-            expandedOrderId={expandedOrderId}
-            loadingOrderDetailId={loadingOrderDetailId}
-            orderDetailsById={orderDetailsById}
-            form={form}
-            setForm={setForm}
-            canSaveAddress={canSaveAddress}
-            adding={adding}
-            addAddress={addAddress}
-            deleteAddress={deleteAddress}
-            toggleOrderDetails={toggleOrderDetails}
-            onSignOut={() => void signOut({ callbackUrl: "/" })}
-          />
+          <>
+            {routeFailure && (
+              <RouteFailureBanner
+                failure={routeFailure}
+                onRetry={routeFailure.kind === "retryable" ? () => void loadAccountData() : undefined}
+                onSignIn={routeFailure.kind === "unauthorized" || routeFailure.kind === "stale" ? () => openLogin("/profile") : undefined}
+                className="mb-4"
+              />
+            )}
+            <ProfileAuthenticatedContent
+              displayName={displayName}
+              displayEmail={displayEmail}
+              accountProfile={accountProfile}
+              error={error}
+              loadingData={loadingData}
+              addresses={addresses}
+              orders={orders}
+              expandedOrderId={expandedOrderId}
+              loadingOrderDetailId={loadingOrderDetailId}
+              orderDetailsById={orderDetailsById}
+              form={form}
+              setForm={setForm}
+              canSaveAddress={canSaveAddress}
+              adding={adding}
+              addAddress={addAddress}
+              deleteAddress={deleteAddress}
+              toggleOrderDetails={toggleOrderDetails}
+              onSignOut={() => void signOut({ callbackUrl: "/" })}
+            />
+          </>
         )}
       </main>
     </div>

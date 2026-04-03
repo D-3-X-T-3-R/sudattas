@@ -13,6 +13,12 @@ echo "Gate: no exposed privileged NEXT_PUBLIC env vars"
 echo "Gate: frontend/backend validation limits stay aligned"
 "$ROOT_DIR/scripts/check-validation-parity.sh"
 
+echo "Gate: frontend performance budgets stay within limits"
+"$ROOT_DIR/scripts/check-frontend-performance-budgets.sh"
+
+echo "Gate: contract/documentation discipline is enforced"
+"$ROOT_DIR/scripts/check-contract-discipline.sh"
+
 echo "Gate: backend health check green ($READY_URL)"
 if ! curl -fsS "$READY_URL" >/dev/null; then
   echo "FAIL backend readiness endpoint not healthy: $READY_URL" >&2

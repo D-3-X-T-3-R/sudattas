@@ -39,3 +39,9 @@ jobs:
     - name: Build
       working-directory: ./frontend
       run: npm run build
+
+    - name: Frontend performance budgets
+      run: node ./scripts/check-frontend-performance-budgets.mjs
+
+    - name: Contract discipline
+      run: node ./scripts/check-contract-discipline.mjs
