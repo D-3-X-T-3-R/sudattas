@@ -179,10 +179,15 @@ fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
 impl MutationRoot {
     // Cart
     #[instrument(err, ret)]
-    async fn add_cart_item(cart_item: NewCart) -> FieldResult<Vec<Cart>> {
-        cart::handlers::add_cart_item(cart_item)
-            .await
-            .map_err(|e| e.into_field_error())
+    async fn add_cart_item(context: &Context, cart_item: NewCart) -> FieldResult<Vec<Cart>> {
+        crate::idempotency::with_idempotency(
+            context.redis_url.as_deref(),
+            "add_cart_item",
+            context.idempotency_key(),
+            || async move { cart::handlers::add_cart_item(cart_item).await },
+        )
+        .await
+        .map_err(|e| e.into_field_error())
     }
 
     /// P2 Abandoned cart: enqueue abandoned-cart events (typically from a cron/scheduler).
@@ -228,17 +233,27 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn delete_cart_item(delete: DeleteCartItem) -> FieldResult<Vec<Cart>> {
-        cart::handlers::delete_cart_item(delete)
-            .await
-            .map_err(|e| e.into_field_error())
+    async fn delete_cart_item(context: &Context, delete: DeleteCartItem) -> FieldResult<Vec<Cart>> {
+        crate::idempotency::with_idempotency(
+            context.redis_url.as_deref(),
+            "delete_cart_item",
+            context.idempotency_key(),
+            || async move { cart::handlers::delete_cart_item(delete).await },
+        )
+        .await
+        .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn update_cart_item(cart_item: CartMutation) -> FieldResult<Vec<Cart>> {
-        cart::handlers::update_cart_item(cart_item)
-            .await
-            .map_err(|e| e.into_field_error())
+    async fn update_cart_item(context: &Context, cart_item: CartMutation) -> FieldResult<Vec<Cart>> {
+        crate::idempotency::with_idempotency(
+            context.redis_url.as_deref(),
+            "update_cart_item",
+            context.idempotency_key(),
+            || async move { cart::handlers::update_cart_item(cart_item).await },
+        )
+        .await
+        .map_err(|e| e.into_field_error())
     }
 
     // Product
@@ -614,10 +629,15 @@ impl MutationRoot {
 
     // Coupons
     #[instrument(err, ret)]
-    async fn apply_coupon(input: ApplyCoupon) -> FieldResult<Vec<Coupon>> {
-        coupons::handlers::apply_coupon(input)
-            .await
-            .map_err(|e| e.into_field_error())
+    async fn apply_coupon(context: &Context, input: ApplyCoupon) -> FieldResult<Vec<Coupon>> {
+        crate::idempotency::with_idempotency(
+            context.redis_url.as_deref(),
+            "apply_coupon",
+            context.idempotency_key(),
+            || async move { coupons::handlers::apply_coupon(input).await },
+        )
+        .await
+        .map_err(|e| e.into_field_error())
     }
 
     /// Admin: create a coupon.

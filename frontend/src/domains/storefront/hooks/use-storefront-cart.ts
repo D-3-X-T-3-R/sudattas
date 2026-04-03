@@ -52,6 +52,7 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
   const [cart, setCart] = useState<CartState>({});
   const [cartLoading, setCartLoading] = useState(true);
   const lastToastRef = useRef<{ key: string; at: number } | null>(null);
+  const inFlightRef = useRef<Set<string>>(new Set());
 
   const reloadCartFromBackend = useCallback(async () => {
     setCartLoading(true);
@@ -99,8 +100,30 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
     [announce, showToast]
   );
 
+  const finalizeOp = (opKey: string) => {
+    inFlightRef.current.delete(opKey);
+  };
+
+  const addToCartWrapped = useCallback(
+    async (product: Product, qty = 1, sizeName?: string | null) => {
+      const opKey = `add:${product.id}:${sizeName ?? "free"}`;
+      if (inFlightRef.current.has(opKey)) return;
+      inFlightRef.current.add(opKey);
+      try {
+        await addToCart(product, qty, sizeName);
+      } finally {
+        finalizeOp(opKey);
+      }
+    },
+    [addToCart]
+  );
+
   const decCart = useCallback(
     async (id: string) => {
+      const opKey = `dec:${id}`;
+      if (inFlightRef.current.has(opKey)) return;
+      inFlightRef.current.add(opKey);
+      try {
       const line = cart[id];
       if (!line) return;
       const sessionId = getGuestSessionId();
@@ -134,12 +157,19 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
         }
         return { ...prev, [id]: { ...current, qty: current.qty - 1 } };
       });
+      } finally {
+        finalizeOp(opKey);
+      }
     },
     [cart, showToast]
   );
 
   const incCart = useCallback(
     async (id: string) => {
+      const opKey = `inc:${id}`;
+      if (inFlightRef.current.has(opKey)) return;
+      inFlightRef.current.add(opKey);
+      try {
       const line = cart[id];
       if (!line) return;
       const sessionId = getGuestSessionId();
@@ -158,12 +188,19 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
         if (!current) return prev;
         return { ...prev, [id]: { ...current, qty: current.qty + 1 } };
       });
+      } finally {
+        finalizeOp(opKey);
+      }
     },
     [cart, showToast]
   );
 
   const removeCart = useCallback(
     async (id: string) => {
+      const opKey = `rm:${id}`;
+      if (inFlightRef.current.has(opKey)) return;
+      inFlightRef.current.add(opKey);
+      try {
       const sessionId = getGuestSessionId();
       if (isBackendCartId(id) && sessionId) {
         const lines = await deleteCartItem(id, sessionId);
@@ -177,6 +214,9 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
         delete rest[id];
         return rest;
       });
+      } finally {
+        finalizeOp(opKey);
+      }
     },
     [showToast]
   );
@@ -187,7 +227,7 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
     cart,
     cartLoading,
     cartLines,
-    addToCart,
+    addToCart: addToCartWrapped,
     decCart,
     incCart,
     removeCart,
