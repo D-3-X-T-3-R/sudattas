@@ -21,7 +21,12 @@ export function isAdminEmail(email: string | null | undefined): boolean {
 }
 
 export async function getAdminSession(): Promise<Session | null> {
-  const session = await getServerSession(authOptions);
+  let session: Session | null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    return null;
+  }
   if (!session?.user?.email) return null;
   if (!isAdminEmail(session.user.email)) return null;
   return session;
