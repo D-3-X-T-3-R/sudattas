@@ -364,10 +364,11 @@ jobs:
           exit 1
         fi
         export GRAPHQL_SESSION_ID
-        echo "Created guest session for E2E GraphQL tests"
+        echo "Created guest session for session-path E2E tests"
         set +e
         cargo test -p graphql --test e2e_tests --all-features -- --ignored
         E2E_TESTS_STATUS=$?
+        unset GRAPHQL_SESSION_ID
         cargo test -p graphql --test e2e_all_graphql_operations --all-features -- --ignored
         E2E_ALL_STATUS=$?
         cargo test -p graphql --test e2e_business_flows --all-features -- --ignored
