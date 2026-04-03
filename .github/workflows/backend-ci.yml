@@ -136,6 +136,8 @@ jobs:
         # 01_schema.sql is the single source of truth; creates and uses database SUDATTAS
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded successfully"
+        chmod +x ./backend/scripts/apply_sql_migrations.sh
+        ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations --verify-idempotent
 
     - name: Regenerate entities and verify
       run: |
@@ -242,6 +244,8 @@ jobs:
         sleep 10
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded successfully"
+        chmod +x ./backend/scripts/apply_sql_migrations.sh
+        ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
 
     - name: Run integration tests
       working-directory: ./backend
@@ -322,6 +326,8 @@ jobs:
         sleep 10
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded"
+        chmod +x ./backend/scripts/apply_sql_migrations.sh
+        ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
 
     - name: Seed Redis session for e2e auth
       run: redis-cli -h 127.0.0.1 SET session:ci-e2e-session 1
@@ -428,6 +434,8 @@ jobs:
       run: |
         sleep 10
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
+        chmod +x ./backend/scripts/apply_sql_migrations.sh
+        ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
 
     - name: Install tarpaulin
       run: cargo install cargo-tarpaulin
