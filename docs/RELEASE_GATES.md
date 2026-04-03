@@ -25,6 +25,7 @@ This project uses explicit scripts to enforce core release gates before producti
 - `.github/workflows/env-safety.yml` enforces privileged `NEXT_PUBLIC_*` leak checks on frontend/backend/script changes.
 - `.github/workflows/backend-ci.yml` also includes a `public-env-safety` job for backend CI runs.
 - `.github/workflows/frontend-ci.yml` enforces frontend lint + build on frontend changes.
+- `.github/workflows/fullstack-smoke.yml` boots backend + frontend and runs `scripts/fullstack-smoke.sh` to fail CI on broken critical user paths.
 
 ## Usage
 
