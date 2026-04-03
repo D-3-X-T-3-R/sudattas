@@ -23,6 +23,25 @@ fn add_session_header(req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
     }
 }
 
+/// If ALLOWED_ORIGINS is configured, attach the first allowed origin so session-auth
+/// tests can validate behavior beyond CSRF gatekeeping.
+fn add_allowed_origin_header(req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    if let Ok(allowed_raw) = std::env::var("ALLOWED_ORIGINS") {
+        if let Some(origin) = allowed_raw
+            .split(',')
+            .map(|s| s.trim())
+            .find(|s| !s.is_empty())
+        {
+            return req.header("Origin", origin);
+        }
+    }
+    req
+}
+
+fn add_session_and_allowed_origin(req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    add_allowed_origin_header(add_session_header(req))
+}
+
 // =============================================================================
 // Health and version
 // =============================================================================
@@ -45,13 +64,11 @@ async fn e2e_health_then_api_version() {
     let body = health.text().await.expect("health body");
     assert!(body.contains("OK") || !body.is_empty(), "health body");
 
-    let gql = add_session_header(
-        client
-            .post(format!("{}/v2", base))
-            .json(&serde_json::json!({
-                "query": "{ apiVersion }"
-            })),
-    )
+    let gql = add_session_and_allowed_origin(client.post(format!("{}/v2", base)).json(
+        &serde_json::json!({
+            "query": "{ apiVersion }"
+        }),
+    ))
     .send()
     .await
     .expect("POST /v2 GraphQL");
@@ -88,7 +105,7 @@ async fn e2e_readiness_endpoint_returns_200_or_503() {
 #[ignore = "requires GraphQL server running; run with --ignored"]
 async fn e2e_graphql_response_structure() {
     let client = Client::new();
-    let res = add_session_header(client.post(format!("{}/v2", base_url())).json(
+    let res = add_session_and_allowed_origin(client.post(format!("{}/v2", base_url())).json(
         &serde_json::json!({ "query": "{ apiVersion authInfo { sessionEnabled currentUserId } }" }),
     ))
     .send()
@@ -141,7 +158,7 @@ async fn e2e_post_invalid_json_returns_4xx() {
 #[ignore = "requires GraphQL server running; run with --ignored"]
 async fn e2e_graphql_syntax_error_returns_200_with_errors() {
     let client = Client::new();
-    let res = add_session_header(client.post(format!("{}/v2", base_url())).json(
+    let res = add_session_and_allowed_origin(client.post(format!("{}/v2", base_url())).json(
         &serde_json::json!({
             "query": "{ apiVersion "
         }),
@@ -209,7 +226,7 @@ async fn e2e_post_without_auth_returns_401() {
 async fn e2e_depth_limit_returns_400() {
     let client = Client::new();
     let deep_query = "{ a { b { c { d { e { f { g { h { i { j { x } } } } } } } } } } } }";
-    let res = add_session_header(
+    let res = add_session_and_allowed_origin(
         client
             .post(format!("{}/v2", base_url()))
             .json(&serde_json::json!({ "query": deep_query })),
@@ -244,7 +261,7 @@ async fn e2e_depth_limit_returns_400() {
 #[ignore = "requires GraphQL server running and auth; run with --ignored"]
 async fn e2e_validation_cart_quantity_rejected() {
     let client = Client::new();
-    let res = add_session_header(
+    let res = add_session_and_allowed_origin(
         client
             .post(format!("{}/v2", base_url()))
             .json(&serde_json::json!({
@@ -277,7 +294,7 @@ async fn e2e_validation_cart_quantity_rejected() {
 #[ignore = "requires GraphQL server running and auth; run with --ignored"]
 async fn e2e_search_product_page_size_capped() {
     let client = Client::new();
-    let res = add_session_header(client.post(format!("{}/v2", base_url())).json(
+    let res = add_session_and_allowed_origin(client.post(format!("{}/v2", base_url())).json(
         &serde_json::json!({
             "query": "query { searchProduct(search: { limit: \"100\" }) { productId name } }"
         }),
