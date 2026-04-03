@@ -12,9 +12,13 @@ export function graphQlUrl(): string {
 }
 
 export async function requireSessionToken(): Promise<string | null> {
-  const session = await getServerSession(authOptions);
-  const token = session?.idToken ?? session?.accessToken;
-  return token ?? null;
+  try {
+    const session = await getServerSession(authOptions);
+    const token = session?.idToken ?? session?.accessToken;
+    return token ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function parseNumericId(raw: string | null | undefined): string | null {
@@ -37,9 +41,13 @@ export function decodeJwtSub(token: string): string | null {
 }
 
 export async function requireAuthenticatedCustomerUserId(): Promise<string | null> {
-  const session = (await getServerSession(authOptions)) as { customerUserId?: string } | null;
-  const fromSession = parseNumericId(session?.customerUserId);
-  if (fromSession) return fromSession;
+  try {
+    const session = (await getServerSession(authOptions)) as { customerUserId?: string } | null;
+    const fromSession = parseNumericId(session?.customerUserId);
+    if (fromSession) return fromSession;
+  } catch {
+    return null;
+  }
 
   const token = await requireSessionToken();
   if (!token) return null;
