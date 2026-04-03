@@ -142,15 +142,15 @@ fi
 echo "Building and starting app services (Core Operations, GraphQL)..."
 (cd "$BACKEND_ROOT" && $COMPOSE_CMD up -d --build core_operations graphql) || { echo "Docker Compose (core services) failed." >&2; exit 1; }
 
-# Keep only the latest 5 DB dumps under database/db-backups
-echo "Pruning old DB backups (keeping latest 5)..."
+# Keep only the latest 20 DB dumps under database/db-backups
+echo "Pruning old DB backups (keeping latest 20)..."
 BACKUP_PRUNE_DIR="$BACKEND_ROOT/database/db-backups"
 if [[ -d "$BACKUP_PRUNE_DIR" ]]; then
   _i=0
   while IFS= read -r f; do
     [[ -f "$f" ]] || continue
     _i=$((_i + 1))
-    if ((_i > 5)); then
+    if ((_i > 20)); then
       rm -f "$f"
       echo "  Removed: $(basename "$f")"
     fi

@@ -28,10 +28,16 @@ async fn create_shipping_address_inserts_and_returns_created_model() {
 
     let model = make_address(1);
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_exec_results(vec![MockExecResult {
-            last_insert_id: 1,
-            rows_affected: 1,
-        }])
+        .append_exec_results(vec![
+            MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            },
+            MockExecResult {
+                last_insert_id: 1,
+                rows_affected: 1,
+            },
+        ])
         .append_query_results(vec![vec![model]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
@@ -59,10 +65,16 @@ async fn update_shipping_address_updates_all_fields() {
 
     let updated = make_address(2);
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_exec_results(vec![MockExecResult {
-            last_insert_id: 0,
-            rows_affected: 1,
-        }])
+        .append_exec_results(vec![
+            MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            },
+            MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            },
+        ])
         .append_query_results(vec![vec![updated]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
