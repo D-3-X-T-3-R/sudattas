@@ -26,11 +26,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <StorefrontLoginProvider>
-          <LiveAnnouncerProvider>
+        <LiveAnnouncerProvider>
+          <StorefrontLoginProvider>
             <ToastProvider>{children}</ToastProvider>
-          </LiveAnnouncerProvider>
-        </StorefrontLoginProvider>
+          </StorefrontLoginProvider>
+        </LiveAnnouncerProvider>
       </QueryClientProvider>
     </SessionProvider>
   );
