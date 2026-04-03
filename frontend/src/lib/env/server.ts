@@ -13,6 +13,7 @@ const serverEnvSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
   ADMIN_ALLOWED_EMAILS: z.string().optional(),
+  INTERNAL_API_SECRET: z.string().min(1).optional(),
 });
 
 const parsed = serverEnvSchema.safeParse({
@@ -25,6 +26,7 @@ const parsed = serverEnvSchema.safeParse({
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
   ADMIN_ALLOWED_EMAILS: process.env.ADMIN_ALLOWED_EMAILS,
+  INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET,
 });
 
 if (!parsed.success) {

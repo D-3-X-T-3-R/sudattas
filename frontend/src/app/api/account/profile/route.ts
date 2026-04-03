@@ -1,7 +1,7 @@
 import {
   apiError,
-  callGraphql,
-  requireSessionToken,
+  callGraphqlAsCustomer,
+  requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 
 type UserPiiExport = {
@@ -25,11 +25,11 @@ const PROFILE_QUERY = `query AccountProfile {
 }`;
 
 export async function GET() {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
+  const customerUserId = await requireAuthenticatedCustomerUserId();
+  if (!customerUserId) return apiError("Unauthorized", 401, "UNAUTHORIZED");
 
-  const result = await callGraphql<{ exportMyPii?: UserPiiExport }>(
-    token,
+  const result = await callGraphqlAsCustomer<{ exportMyPii?: UserPiiExport }>(
+    customerUserId,
     PROFILE_QUERY
   );
   if (result.errors?.length) {

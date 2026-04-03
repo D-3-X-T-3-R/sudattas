@@ -27,8 +27,9 @@ There are exactly three request families.
 `/api/account/orders/[orderId]`
 `/api/account/wishlist`
 `/api/account/profile`
-plus tightly controlled direct GraphQL calls using `Authorization: Bearer <id_token|access_token>` from NextAuth session sync where proxy routes are not yet implemented.
-- Backend auth mode: JWT (`AuthSource::Jwt`)
+- `/api/checkout/place-order`
+- `/api/checkout/verify-payment`
+- Backend auth mode: internal trusted server proxy (`AuthSource::InternalCustomer`) using canonical `customerUserId`
 - Allowed operations: customer-scoped cart/checkout/profile/wishlist/order actions
 - Not allowed: admin-only actions
 
@@ -38,6 +39,12 @@ plus tightly controlled direct GraphQL calls using `Authorization: Bearer <id_to
 - Admin authorization: NextAuth session + `ADMIN_ALLOWED_EMAILS` allowlist
 - Backend resolver enforcement: JWT user id must be in `ADMIN_ALLOWED_USER_IDS`
 - Not allowed: direct browser requests to backend privileged GraphQL using admin credentials
+
+### Canonical customer identity (OTP + Google)
+
+1. After successful login (Google or phone OTP), frontend auth provisioning must resolve one canonical numeric `customerUserId`.
+2. That `customerUserId` is stored in NextAuth JWT/session and used for all customer account/checkout proxy routes.
+3. Frontend customer APIs must not derive authority from provider-specific token shape (`sub`, provider name, or browser headers).
 
 ### Account order detail contract
 
@@ -53,10 +60,10 @@ plus tightly controlled direct GraphQL calls using `Authorization: Bearer <id_to
 
 1. Browser-owned
 - `X-Session-Id` for guest storefront reads
-- `Authorization: Bearer ...` for authenticated customer actions
 
 2. Server-owned
 - Admin GraphQL forwarding credentials on `/api/admin/graphql`
+- `X-Internal-Auth` + `X-Customer-User-Id` for authenticated customer proxy routes
 - `Idempotency-Key` forwarding for money-moving mutations
 - `X-Request-Id` forwarding for trace correlation
 - `X-Client-Action` forwarding for route/action attribution
@@ -82,7 +89,7 @@ plus tightly controlled direct GraphQL calls using `Authorization: Bearer <id_to
 
 2. Authenticated customer actions (`/api/account/...`)
 - Frontend -> Next route uses same-origin browser request.
-- Next -> backend uses `Authorization: Bearer <jwt>`; CSRF origin check is not the auth boundary for this path (JWT is).
+- Next -> backend uses trusted internal headers (`X-Internal-Auth`, `X-Customer-User-Id`); CSRF origin check is not the auth boundary for this path.
 
 3. Admin actions (`/api/admin/...`)
 - Frontend -> Next route uses same-origin browser request.
@@ -177,10 +184,10 @@ Drift is blocked by release-gate scripts:
 
 | Mutation flow | Required auth | Idempotency | Validation owner | Expected error codes |
 |---|---|---|---|---|
-| `placeOrder` | Customer JWT | Required | Backend + frontend schema mirror | `UNAUTHORIZED`, `VALIDATION_ERROR`, `CONFLICT`, `PAYMENT_REQUIRED` |
-| `createPaymentIntent` | Customer JWT | Required | Backend | `UNAUTHORIZED`, `VALIDATION_ERROR`, `CONFLICT` |
-| `verify/capture payment` | Customer JWT or trusted server flow | Required | Backend signature checks | `UNAUTHORIZED`, `INVALID_SIGNATURE`, `CONFLICT`, `NEEDS_REVIEW` |
-| `createShippingAddress` | Customer JWT | Recommended (required from checkout retries) | Backend + frontend | `UNAUTHORIZED`, `VALIDATION_ERROR` |
+| `placeOrder` | Internal customer proxy (`X-Internal-Auth` + `X-Customer-User-Id`) | Required | Backend + frontend schema mirror | `UNAUTHORIZED`, `VALIDATION_ERROR`, `CONFLICT`, `PAYMENT_REQUIRED` |
+| `createPaymentIntent` | Internal customer proxy (`X-Internal-Auth` + `X-Customer-User-Id`) | Required | Backend | `UNAUTHORIZED`, `VALIDATION_ERROR`, `CONFLICT` |
+| `verify/capture payment` | Internal customer proxy (`X-Internal-Auth` + `X-Customer-User-Id`) | Required | Backend signature checks | `UNAUTHORIZED`, `INVALID_SIGNATURE`, `CONFLICT`, `NEEDS_REVIEW` |
+| `createShippingAddress` | Internal customer proxy (`X-Internal-Auth` + `X-Customer-User-Id`) | Recommended (required from checkout retries) | Backend + frontend | `UNAUTHORIZED`, `VALIDATION_ERROR` |
 | `admin create/update/delete product` | Admin allowlisted session via `/api/admin/graphql` | Recommended | Backend + frontend admin form validation | `UNAUTHORIZED`, `FORBIDDEN`, `VALIDATION_ERROR`, `CONFLICT` |
 | `admin order status updates` | Admin allowlisted session via `/api/admin/graphql` | Recommended | Backend state machine | `UNAUTHORIZED`, `FORBIDDEN`, `INVALID_STATE`, `CONFLICT` |
 

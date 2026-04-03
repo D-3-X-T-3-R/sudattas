@@ -1,7 +1,7 @@
 import {
   apiError,
-  callGraphql,
-  requireSessionToken,
+  callGraphqlAsCustomer,
+  requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 
 type VerifyRow = {
@@ -58,8 +58,8 @@ function deriveOrderUiState(statusId?: string): string {
 }
 
 export async function POST(request: Request) {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
+  const customerUserId = await requireAuthenticatedCustomerUserId();
+  if (!customerUserId) return apiError("Unauthorized", 401, "UNAUTHORIZED");
 
   const body = (await request.json().catch(() => ({}))) as {
     orderId?: string;
@@ -80,8 +80,8 @@ export async function POST(request: Request) {
   const verifyKey =
     body.idempotencyKey?.trim() || `checkout-verify-${crypto.randomUUID()}`;
 
-  const verifyResult = await callGraphql<{ verifyRazorpayPayment?: VerifyRow[] }>(
-    token,
+  const verifyResult = await callGraphqlAsCustomer<{ verifyRazorpayPayment?: VerifyRow[] }>(
+    customerUserId,
     VERIFY_MUTATION,
     {
       input: {
@@ -106,8 +106,8 @@ export async function POST(request: Request) {
     return apiError("Payment verification result missing", 400, "GRAPHQL_ERROR");
   }
 
-  const orderResult = await callGraphql<{ searchOrder?: OrderRow[] }>(
-    token,
+  const orderResult = await callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(
+    customerUserId,
     ORDER_STATUS_QUERY,
     { search: { orderId, limit: "1", offset: "0", userId: "" } }
   );

@@ -1,8 +1,7 @@
 import {
   apiError,
-  callGraphql,
+  callGraphqlAsCustomer,
   requireAuthenticatedCustomerUserId,
-  requireSessionToken,
 } from "@/lib/server-session-auth";
 
 type OrderDetailRow = {
@@ -154,9 +153,6 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ orderId: string }> }
 ) {
-  const token = await requireSessionToken();
-  if (!token) return apiError("Unauthorized", 401, "UNAUTHORIZED");
-
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
@@ -170,19 +166,19 @@ export async function GET(
 
   const [orderResult, statusesResult, paymentResult, shipmentResult, eventsResult] =
     await Promise.all([
-      callGraphql<{ searchOrder?: OrderRow[] }>(token, ORDER_DETAIL_QUERY, {
+      callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(userId, ORDER_DETAIL_QUERY, {
         search: { userId, orderId: trimmedOrderId, limit: "1", offset: "0" },
       }),
-      callGraphql<{
+      callGraphqlAsCustomer<{
         searchOrderStatus?: Array<{ statusId: string; statusName: string }>;
-      }>(token, ORDER_STATUS_QUERY),
-      callGraphql<{ getPaymentIntent?: PaymentIntentRow[] }>(token, PAYMENT_QUERY, {
+      }>(userId, ORDER_STATUS_QUERY),
+      callGraphqlAsCustomer<{ getPaymentIntent?: PaymentIntentRow[] }>(userId, PAYMENT_QUERY, {
         input: { orderId: trimmedOrderId },
       }),
-      callGraphql<{ getShipment?: ShipmentRow[] }>(token, SHIPMENT_QUERY, {
+      callGraphqlAsCustomer<{ getShipment?: ShipmentRow[] }>(userId, SHIPMENT_QUERY, {
         input: { orderId: trimmedOrderId },
       }),
-      callGraphql<{ getOrderEvents?: OrderEventRow[] }>(token, EVENTS_QUERY, {
+      callGraphqlAsCustomer<{ getOrderEvents?: OrderEventRow[] }>(userId, EVENTS_QUERY, {
         orderId: trimmedOrderId,
       }),
     ]);

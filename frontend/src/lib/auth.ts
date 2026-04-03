@@ -57,6 +57,10 @@ async function verifyTwilioOtp(phoneE164: string, otp: string): Promise<boolean>
   return data.approved === true;
 }
 
+function digitsOnly(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 function getGraphqlBaseUrl(): string {
   return graphqlBaseUrl();
 }
@@ -83,14 +87,15 @@ function isDuplicateUserError(message: string): boolean {
   );
 }
 
-async function syncGoogleUserToBackend(input: {
-  idToken: string;
-  email: string;
+async function createStorefrontUserInternal(input: {
   username: string;
+  email: string;
   fullName?: string | null;
+  authProvider: "google";
+  googleSub: string;
 }): Promise<string | null> {
-  const googleSub = extractGoogleSubFromJwt(input.idToken);
-  if (!googleSub) return null;
+  const internalSecret = serverEnv.INTERNAL_API_SECRET?.trim();
+  if (!internalSecret) return null;
 
   const mutation = `
     mutation CreateStorefrontUser($input: NewUser!) {
@@ -104,9 +109,7 @@ async function syncGoogleUserToBackend(input: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: input.idToken.startsWith("Bearer ")
-        ? input.idToken
-        : `Bearer ${input.idToken}`,
+      "X-Internal-Auth": internalSecret,
     },
     body: JSON.stringify({
       query: mutation,
@@ -114,8 +117,8 @@ async function syncGoogleUserToBackend(input: {
         input: {
           username: input.username,
           email: input.email,
-          authProvider: "google",
-          googleSub,
+          authProvider: input.authProvider,
+          googleSub: input.googleSub,
           fullName: input.fullName ?? null,
         },
       },
@@ -125,22 +128,43 @@ async function syncGoogleUserToBackend(input: {
 
   if (!res.ok) return null;
   const json = (await res.json().catch(() => ({}))) as {
-    data?: {
-      createUser?: Array<{ userId?: string | number | null }>;
-    };
+    data?: { createUser?: Array<{ userId?: string | number | null }> };
     errors?: Array<{ message?: string }>;
   };
   const err = json.errors?.[0]?.message;
-  if (!err) {
-    const first = json.data?.createUser?.[0]?.userId;
-    return first === null || first === undefined ? null : String(first);
-  }
-  if (!isDuplicateUserError(err)) return null;
-
-  // Backend now resolves duplicate provisioning to canonical user, but keep
-  // the fallback branch for resilience when older deployments are still live.
+  if (err && !isDuplicateUserError(err)) return null;
   const first = json.data?.createUser?.[0]?.userId;
   return first === null || first === undefined ? null : String(first);
+}
+
+async function syncGoogleUserToBackend(input: {
+  idToken: string;
+  email: string;
+  username: string;
+  fullName?: string | null;
+}): Promise<string | null> {
+  const googleSub = extractGoogleSubFromJwt(input.idToken);
+  if (!googleSub) return null;
+
+  return createStorefrontUserInternal({
+    username: input.username,
+    email: input.email,
+    fullName: input.fullName ?? null,
+    authProvider: "google",
+    googleSub,
+  });
+}
+
+async function syncPhoneOtpUserToBackend(phoneE164: string): Promise<string | null> {
+  const digits = digitsOnly(phoneE164);
+  if (!digits) return null;
+  return createStorefrontUserInternal({
+    username: `otp_${digits}`,
+    email: `otp_${digits}@phone.local`,
+    fullName: phoneE164,
+    authProvider: "google",
+    googleSub: `otp:${digits}`,
+  });
 }
 
 export const authOptions: NextAuthOptions = {
@@ -174,10 +198,13 @@ export const authOptions: NextAuthOptions = {
         if (!phoneE164 || !/^\d{4,8}$/.test(otp)) return null;
         const approved = await verifyTwilioOtp(phoneE164, otp);
         if (!approved) return null;
+        const customerUserId = await syncPhoneOtpUserToBackend(phoneE164);
+        if (!customerUserId) return null;
         return {
           id: phoneE164,
           name: phoneE164,
           email: null,
+          customerUserId,
         };
       },
     }),
@@ -191,6 +218,18 @@ export const authOptions: NextAuthOptions = {
       const userMode: "public" | "admin" = isAdminFlow ? "admin" : "public";
 
       if (account?.provider === "phone-otp") {
+        const customerUserId = (user as { customerUserId?: string } | null)?.customerUserId;
+        if (!customerUserId) {
+          await trackAuthEvent({
+            action: "AUTH_SIGN_IN_PHONE_OTP",
+            outcome: "failure",
+            userMode,
+            errorClass: "fatal",
+            errorCode: "BACKEND_SYNC_FAILED",
+            message: "OTP sign-in did not resolve canonical customer identity.",
+          });
+          return false;
+        }
         await trackAuthEvent({
           action: "AUTH_SIGN_IN_PHONE_OTP",
           outcome: "success",
