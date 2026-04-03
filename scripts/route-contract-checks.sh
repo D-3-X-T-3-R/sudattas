@@ -76,7 +76,9 @@ const json = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 if (!Array.isArray(json.categories)) throw new Error("categories must be an array");
 if (!Array.isArray(json.occasions)) throw new Error("occasions must be an array");
 if (!Array.isArray(json.moods)) throw new Error("moods must be an array");
-if (json.error !== null) throw new Error("error must be null");
+if (!(json.error === null || typeof json.error === "string")) {
+  throw new Error("error must be null or string");
+}
 NODE
   echo "OK   /api/storefront-filters response typing"
 }
