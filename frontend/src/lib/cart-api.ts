@@ -5,7 +5,7 @@
 
 import { gql } from "@/lib/graphqlClient";
 import { getGuestSessionId } from "@/lib/session";
-import { getAccessToken } from "@/lib/authStore";
+import { getAccessToken, getCustomerUserId } from "@/lib/authStore";
 import type { Product } from "@/lib/schemas";
 import { parsePaise, paiseToRupeesNumber } from "@/lib/money";
 
@@ -163,6 +163,11 @@ export type CartLineMapped = {
   sizeName: string | null;
 };
 
+type CartEnvelope = {
+  ok?: boolean;
+  data?: CartItemGql[];
+};
+
 function decodeJwtSubAsNumericUserId(token: string | null): string | null {
   if (!token) return null;
   try {
@@ -181,6 +186,10 @@ function cartScope(preferredSessionId?: string): {
   userId: string;
   sessionId?: string;
 } {
+  const canonicalCustomerId = getCustomerUserId();
+  if (canonicalCustomerId && /^\d+$/.test(canonicalCustomerId)) {
+    return { userId: canonicalCustomerId, sessionId: undefined };
+  }
   const userId = decodeJwtSubAsNumericUserId(getAccessToken());
   if (userId) {
     return { userId, sessionId: undefined };
@@ -189,12 +198,45 @@ function cartScope(preferredSessionId?: string): {
   return { userId: "", sessionId: sid };
 }
 
+function mapCartItems(items: CartItemGql[]): CartLineMapped[] {
+  return items
+    .map((item) => {
+      const productDetail = item.productDetails?.[0];
+      if (!productDetail) return null;
+      const product = mapCartProductToProduct(productDetail);
+      const sizeName = sizeNameForVariant(item.variantId, productDetail.variantStock);
+      return {
+        id: item.cartId,
+        product,
+        qty: parseInt(item.quantity, 10) || 1,
+        sizeName,
+      };
+    })
+    .filter((line): line is CartLineMapped => line != null);
+}
+
+async function fetchAccountCart(): Promise<CartLineMapped[] | null> {
+  try {
+    const res = await fetch("/api/account/cart", { cache: "no-store" });
+    if (!res.ok) return null;
+    const json = (await res.json().catch(() => ({}))) as CartEnvelope;
+    const items = Array.isArray(json.data) ? json.data : [];
+    return mapCartItems(items);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetch cart from backend and return lines in storefront shape.
  * Returns null on API/session failure so caller can keep existing local state.
  */
 export async function fetchCartLines(): Promise<CartLineMapped[] | null> {
   if (typeof window === "undefined") return null;
+  const customerUserId = getCustomerUserId();
+  if (customerUserId && /^\d+$/.test(customerUserId)) {
+    return fetchAccountCart();
+  }
   const { ensureGuestSession } = await import("@/lib/session");
   await ensureGuestSession();
   const scope = cartScope();
@@ -206,20 +248,7 @@ export async function fetchCartLines(): Promise<CartLineMapped[] | null> {
       sessionId: scope.sessionId || null,
     });
     const items = data?.getCartItems ?? [];
-    return items.map((item) => {
-      const productDetail = item.productDetails?.[0];
-      if (!productDetail) {
-        return null;
-      }
-      const product = mapCartProductToProduct(productDetail);
-      const sizeName = sizeNameForVariant(item.variantId, productDetail.variantStock);
-      return {
-        id: item.cartId,
-        product,
-        qty: parseInt(item.quantity, 10) || 1,
-        sizeName,
-      };
-    }).filter((line): line is CartLineMapped => line != null);
+    return mapCartItems(items);
   } catch {
     return null;
   }
@@ -233,6 +262,27 @@ export async function addCartItem(
   quantity: number,
   sessionId?: string
 ): Promise<CartLineMapped[] | null> {
+  const customerUserId = getCustomerUserId();
+  if (customerUserId && /^\d+$/.test(customerUserId)) {
+    try {
+      const idempotencyKey = `cart-add-${variantId}-${quantity}-${Date.now()}`;
+      const res = await fetch("/api/account/cart", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({ variantId, quantity }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json().catch(() => ({}))) as CartEnvelope;
+      const items = Array.isArray(json.data) ? json.data : [];
+      return mapCartItems(items);
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const scope = cartScope(sessionId);
     const data = await gql<{ addCartItem?: CartItemGql[] }>(ADD_CART_ITEM, {
@@ -244,18 +294,7 @@ export async function addCartItem(
       },
     });
     const items = data?.addCartItem ?? [];
-    return items.map((item) => {
-      const productDetail = item.productDetails?.[0];
-      if (!productDetail) return null;
-      const product = mapCartProductToProduct(productDetail);
-      const sizeName = sizeNameForVariant(item.variantId, productDetail.variantStock);
-      return {
-        id: item.cartId,
-        product,
-        qty: parseInt(item.quantity, 10) || 1,
-        sizeName,
-      };
-    }).filter((line): line is CartLineMapped => line != null);
+    return mapCartItems(items);
   } catch {
     return null;
   }
@@ -270,6 +309,27 @@ export async function updateCartItem(
   quantity: number,
   sessionId?: string
 ): Promise<CartLineMapped[] | null> {
+  const customerUserId = getCustomerUserId();
+  if (customerUserId && /^\d+$/.test(customerUserId)) {
+    try {
+      const idempotencyKey = `cart-up-${cartId}-${quantity}-${Date.now()}`;
+      const res = await fetch("/api/account/cart", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({ cartId, variantId, quantity }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json().catch(() => ({}))) as CartEnvelope;
+      const items = Array.isArray(json.data) ? json.data : [];
+      return mapCartItems(items);
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const scope = cartScope(sessionId);
     const data = await gql<{ updateCartItem?: CartItemGql[] }>(UPDATE_CART_ITEM, {
@@ -282,18 +342,7 @@ export async function updateCartItem(
       },
     });
     const items = data?.updateCartItem ?? [];
-    return items.map((item) => {
-      const productDetail = item.productDetails?.[0];
-      if (!productDetail) return null;
-      const product = mapCartProductToProduct(productDetail);
-      const sizeName = sizeNameForVariant(item.variantId, productDetail.variantStock);
-      return {
-        id: item.cartId,
-        product,
-        qty: parseInt(item.quantity, 10) || 1,
-        sizeName,
-      };
-    }).filter((line): line is CartLineMapped => line != null);
+    return mapCartItems(items);
   } catch {
     return null;
   }
@@ -306,6 +355,27 @@ export async function deleteCartItem(
   cartId: string,
   sessionId?: string
 ): Promise<CartLineMapped[] | null> {
+  const customerUserId = getCustomerUserId();
+  if (customerUserId && /^\d+$/.test(customerUserId)) {
+    try {
+      const idempotencyKey = `cart-del-${cartId}-${Date.now()}`;
+      const res = await fetch("/api/account/cart", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({ cartId }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json().catch(() => ({}))) as CartEnvelope;
+      const items = Array.isArray(json.data) ? json.data : [];
+      return mapCartItems(items);
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const scope = cartScope(sessionId);
     const data = await gql<{ deleteCartItem?: CartItemGql[] }>(DELETE_CART_ITEM, {
@@ -316,18 +386,7 @@ export async function deleteCartItem(
       },
     });
     const items = data?.deleteCartItem ?? [];
-    return items.map((item) => {
-      const productDetail = item.productDetails?.[0];
-      if (!productDetail) return null;
-      const product = mapCartProductToProduct(productDetail);
-      const sizeName = sizeNameForVariant(item.variantId, productDetail.variantStock);
-      return {
-        id: item.cartId,
-        product,
-        qty: parseInt(item.quantity, 10) || 1,
-        sizeName,
-      };
-    }).filter((line): line is CartLineMapped => line != null);
+    return mapCartItems(items);
   } catch {
     return null;
   }

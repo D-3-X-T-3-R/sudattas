@@ -4,6 +4,7 @@
  */
 
 let accessToken: string | null = null;
+let customerUserId: string | null = null;
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
@@ -13,6 +14,15 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+export function setCustomerUserId(userId: string | null): void {
+  customerUserId = userId;
+}
+
+export function getCustomerUserId(): string | null {
+  return customerUserId;
+}
+
 export function clearAccessToken(): void {
   accessToken = null;
+  customerUserId = null;
 }

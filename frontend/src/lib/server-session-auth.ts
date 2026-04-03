@@ -150,6 +150,28 @@ export async function callGraphqlAsCustomer<T = unknown>(
   );
 }
 
+export async function callGraphqlAsInternalService<T = unknown>(
+  query: string,
+  variables: Record<string, unknown> = {},
+  extraHeaders: Record<string, string> = {}
+): Promise<{ data?: T; errors?: Array<{ message?: string }> }> {
+  const internalSecret = serverEnv.INTERNAL_API_SECRET?.trim();
+  if (!internalSecret) {
+    return {
+      errors: [{ message: "INTERNAL_API_SECRET is not configured" }],
+    };
+  }
+
+  return callGraphqlRaw<T>(
+    {
+      "X-Internal-Auth": internalSecret,
+    },
+    query,
+    variables,
+    extraHeaders
+  );
+}
+
 export function apiError(message: string, status: number, errorCode: string) {
   return Response.json(
     {

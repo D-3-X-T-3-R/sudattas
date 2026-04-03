@@ -23,6 +23,8 @@ There are exactly three request families.
 2. Authenticated customer actions
 - Frontend entrypoints:
 `/api/account/addresses`
+`/api/account/cart`
+`/api/account/cart/merge`
 `/api/account/orders`
 `/api/account/orders/[orderId]`
 `/api/account/wishlist`
@@ -136,7 +138,9 @@ Current admin GraphQL passthrough returns GraphQL `data/errors`; this envelope i
 
 1. `placeOrder`
 2. payment verification/capture flows
-3. webhook replay-sensitive side effects
+3. cart merge operations that move guest cart lines to customer cart
+4. coupon-application mutations when they mutate counters/usage
+5. webhook replay-sensitive side effects
 
 Retries without a stable key are non-compliant.
 

@@ -1,6 +1,6 @@
 use juniper::{graphql_object, GraphQLInputObject};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Coupon {
     pub coupon_id: String,
     pub code: String,
