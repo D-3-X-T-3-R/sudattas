@@ -47,6 +47,7 @@ export function ProductVariantsSection({
                   return next;
                 })
               }
+              aria-label={`Variant ${idx + 1} size`}
             >
               <option value="">Select size</option>
               {sizes.map((s) => (
@@ -68,6 +69,7 @@ export function ProductVariantsSection({
                   return next;
                 })
               }
+              aria-label={`Variant ${idx + 1} color`}
             >
               <option value="">Select color</option>
               {colors.map((c) => (
@@ -88,6 +90,7 @@ export function ProductVariantsSection({
                 })
               }
               className="h-9 w-28 rounded-md"
+              aria-label={`Variant ${idx + 1} extra price in paise`}
             />
             <Input
               type="text"
@@ -101,6 +104,7 @@ export function ProductVariantsSection({
                 })
               }
               className="h-9 w-20 rounded-md"
+              aria-label={`Variant ${idx + 1} quantity`}
             />
             <Input
               type="text"
@@ -114,6 +118,7 @@ export function ProductVariantsSection({
                 })
               }
               className="h-9 w-20 rounded-md"
+              aria-label={`Variant ${idx + 1} reorder level`}
             />
             <Button
               type="button"

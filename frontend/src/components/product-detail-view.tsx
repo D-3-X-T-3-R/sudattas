@@ -51,6 +51,7 @@ function ProductGallery({
             key={i}
             type="button"
             onClick={() => setSelectedImageIndex(i)}
+            aria-label={`View image ${i + 1} of ${images.length} for ${productName}`}
             className={cn(
               "relative h-14 w-14 shrink-0 overflow-hidden rounded border-2 transition-colors md:h-16 md:w-16",
               selectedImageIndex === i ? "border-[var(--color-ink)]" : "border-transparent hover:border-[var(--color-line)]"

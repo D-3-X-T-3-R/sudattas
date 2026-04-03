@@ -1326,6 +1326,7 @@ export default function AdminProductsPage() {
             )}
             {error && (
               <div
+                id="admin-product-form-error"
                 className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
                 role="alert"
               >
@@ -1342,10 +1343,11 @@ export default function AdminProductsPage() {
             )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                <label htmlFor="admin-product-name" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
                   Name *
                 </label>
                 <Input
+                  id="admin-product-name"
                   type="text"
                   name="name"
                   value={form.name}
@@ -1353,13 +1355,16 @@ export default function AdminProductsPage() {
                   placeholder="e.g. Ivory Silk Saree"
                   className="rounded-lg"
                   autoFocus
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "admin-product-form-error" : undefined}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                <label htmlFor="admin-product-description" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
                   Description
                 </label>
                 <textarea
+                  id="admin-product-description"
                   name="description"
                   value={form.description}
                   onChange={handleChange}
@@ -1368,28 +1373,34 @@ export default function AdminProductsPage() {
                   className={cn(
                     "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                   )}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "admin-product-form-error" : undefined}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                  <label htmlFor="admin-product-price" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
                     Price (₹) *
                   </label>
                   <Input
+                    id="admin-product-price"
                     type="text"
                     name="priceRupees"
                     value={form.priceRupees}
                     onChange={handleChange}
                     placeholder="e.g. 499.00"
                     className="rounded-lg"
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? "admin-product-form-error" : undefined}
                   />
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                <label htmlFor="admin-product-category" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
                   Category *
                 </label>
                 <select
+                  id="admin-product-category"
                   name="categoryId"
                   value={form.categoryId}
                   onChange={handleChange}
@@ -1398,6 +1409,8 @@ export default function AdminProductsPage() {
                   )}
                   disabled={categoriesLoading || categoriesError}
                   required
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "admin-product-form-error" : undefined}
                 >
                   <option value="">
                     {categoriesLoading ? "Loading categories…" : "Select category"}
@@ -1424,8 +1437,9 @@ export default function AdminProductsPage() {
                 {showNewCategory && (
                   <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-[var(--color-line)] p-3">
                     <div className="min-w-0 flex-1">
-                      <label className="sr-only">New category name</label>
+                      <label htmlFor="admin-product-new-category" className="sr-only">New category name</label>
                       <Input
+                        id="admin-product-new-category"
                         type="text"
                         value={newCategoryName}
                         onChange={(e) => {
@@ -1461,8 +1475,9 @@ export default function AdminProductsPage() {
               </div>
               <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">SKU</label>
+                  <label htmlFor="admin-product-sku" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">SKU</label>
                   <Input
+                    id="admin-product-sku"
                     type="text"
                     name="sku"
                     value={form.sku}
@@ -1472,8 +1487,9 @@ export default function AdminProductsPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Slug</label>
+                  <label htmlFor="admin-product-slug" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Slug</label>
                   <Input
+                    id="admin-product-slug"
                     type="text"
                     name="slug"
                     value={form.slug}
@@ -1485,8 +1501,9 @@ export default function AdminProductsPage() {
               </div>
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Fabric</label>
+                  <label htmlFor="admin-product-fabric" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Fabric</label>
                   <select
+                    id="admin-product-fabric"
                     name="fabric"
                     value={form.fabric}
                     onChange={handleChange}
@@ -1503,8 +1520,9 @@ export default function AdminProductsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Weave</label>
+                  <label htmlFor="admin-product-weave" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Weave</label>
                   <select
+                    id="admin-product-weave"
                     name="weave"
                     value={form.weave}
                     onChange={handleChange}
@@ -1521,8 +1539,9 @@ export default function AdminProductsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Occasion</label>
+                  <label htmlFor="admin-product-occasion" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Occasion</label>
                   <select
+                    id="admin-product-occasion"
                     name="occasion"
                     value={form.occasion}
                     onChange={handleChange}
@@ -1553,8 +1572,9 @@ export default function AdminProductsPage() {
                 </label>
               </div>
               <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Care instructions</label>
+                <label htmlFor="admin-product-care-instructions" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Care instructions</label>
                 <textarea
+                  id="admin-product-care-instructions"
                   name="careInstructions"
                   value={form.careInstructions}
                   onChange={handleChange}
@@ -1566,8 +1586,9 @@ export default function AdminProductsPage() {
                 />
               </div>
               <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Product status</label>
+                <label htmlFor="admin-product-status" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Product status</label>
                 <select
+                  id="admin-product-status"
                   name="productStatusId"
                   value={form.productStatusId}
                   onChange={handleChange}

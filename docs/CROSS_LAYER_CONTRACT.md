@@ -151,6 +151,20 @@ Retries without a stable key are non-compliant.
 - positive money amount (`pricePaise > 0`)
 - `sku`/`slug` character set and length consistency.
 
+### Validation parity constants
+
+The following limits are contractually shared between backend and frontend:
+
+1. `MAX_SKU_SLUG_LEN = 128`
+2. `MAX_QUANTITY_PER_ITEM = 999`
+3. `MAX_ADDRESS_LINE_LEN = 500`
+4. postal code length = `6`
+
+Drift is blocked by release-gate scripts:
+
+1. `scripts/check-validation-parity.sh`
+2. `scripts/check-validation-parity.ps1`
+
 ## Money contract (paise/rupees)
 
 1. Network contract for money is always integer paise (`amountPaise` / `pricePaise`) in API and GraphQL payloads.

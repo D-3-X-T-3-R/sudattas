@@ -30,6 +30,8 @@ export function ProductMoodsSection({
   setMoodCreateError,
   createMoodMutation,
 }: ProductMoodsSectionProps) {
+  const moodNameInputId = "product-new-mood-name";
+  const moodNameErrorId = moodCreateError ? "product-new-mood-error" : undefined;
   return (
     <div className="mt-6 border-t border-[var(--color-line)] pt-4">
       <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
@@ -62,7 +64,11 @@ export function ProductMoodsSection({
         ))}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label htmlFor={moodNameInputId} className="sr-only">
+          New mood name
+        </label>
         <Input
+          id={moodNameInputId}
           placeholder="New mood name"
           value={newMoodName}
           onChange={(e) => {
@@ -77,6 +83,8 @@ export function ProductMoodsSection({
             }
           }}
           className="max-w-[14rem] rounded-md border border-[var(--color-line)] bg-white px-3 py-1.5 text-sm"
+          aria-invalid={Boolean(moodCreateError)}
+          aria-describedby={moodNameErrorId}
         />
         <Button
           type="button"
@@ -92,7 +100,7 @@ export function ProductMoodsSection({
         </Button>
       </div>
       {moodCreateError && (
-        <p className="mt-2 text-xs text-red-600" role="alert">
+        <p id="product-new-mood-error" className="mt-2 text-xs text-red-600" role="alert">
           {moodCreateError}
         </p>
       )}

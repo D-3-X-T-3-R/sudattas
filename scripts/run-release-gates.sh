@@ -10,6 +10,9 @@ echo "== Release Gates =="
 echo "Gate: no exposed privileged NEXT_PUBLIC env vars"
 "$ROOT_DIR/scripts/check-no-privileged-public-env.sh"
 
+echo "Gate: frontend/backend validation limits stay aligned"
+"$ROOT_DIR/scripts/check-validation-parity.sh"
+
 echo "Gate: backend health check green ($READY_URL)"
 if ! curl -fsS "$READY_URL" >/dev/null; then
   echo "FAIL backend readiness endpoint not healthy: $READY_URL" >&2
@@ -32,4 +35,3 @@ echo "Gate: payment negative-path tests green"
 )
 
 echo "All configured release gates passed."
-
