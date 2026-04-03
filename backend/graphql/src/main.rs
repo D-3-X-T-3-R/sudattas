@@ -653,12 +653,15 @@ async fn handle_auth_rejection(
     // Check auth/rate-limit first: when graphql rejects (e.g. 401), we still try options() which
     // adds MethodNotAllowed; we must return 401 not 404 for POST /v2 with bad auth.
     if err.find::<Unauthorized>().is_some() {
+        graphql::metrics::record_auth_rejection_total("unauthorized");
         return Ok(reply::with_status("UNAUTHORIZED", StatusCode::UNAUTHORIZED).into_response());
     }
     if err.find::<CsrfRejected>().is_some() {
+        graphql::metrics::record_auth_rejection_total("csrf");
         return Ok(reply::with_status("FORBIDDEN", StatusCode::FORBIDDEN).into_response());
     }
     if err.find::<RateLimited>().is_some() {
+        graphql::metrics::record_auth_rejection_total("rate_limited");
         return Ok(
             reply::with_header(
                 reply::with_status("TOO_MANY_REQUESTS", StatusCode::TOO_MANY_REQUESTS),

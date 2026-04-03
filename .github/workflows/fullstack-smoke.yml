@@ -7,6 +7,7 @@ on:
       - "frontend/**"
       - "backend/**"
       - "scripts/fullstack-smoke.sh"
+      - "scripts/route-contract-checks.sh"
       - ".github/workflows/fullstack-smoke.yml"
   pull_request:
     branches: [ main, master, develop ]
@@ -14,6 +15,7 @@ on:
       - "frontend/**"
       - "backend/**"
       - "scripts/fullstack-smoke.sh"
+      - "scripts/route-contract-checks.sh"
       - ".github/workflows/fullstack-smoke.yml"
 
 jobs:
@@ -97,6 +99,7 @@ jobs:
           set -euo pipefail
           chmod +x ./backend/scripts/wait_for_http_ready.sh
           chmod +x ./scripts/fullstack-smoke.sh
+          chmod +x ./scripts/route-contract-checks.sh
 
           ./backend/target/debug/core_operations > /tmp/core_operations.log 2>&1 &
           CORE_PID=$!

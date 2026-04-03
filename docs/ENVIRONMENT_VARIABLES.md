@@ -16,6 +16,8 @@ This document defines public-safe vs server-only variables and startup validatio
 ### Server-only
 
 - `GRAPHQL_URL` (optional server override for Next API/auth)
+- `GRAPHQL_METRICS_URL` (optional override for GraphQL metrics scrape URL; default `${GRAPHQL_URL base}/metrics`)
+- `CORE_OPS_METRICS_URL` (optional override for core operations metrics URL; default `http://127.0.0.1:9090/metrics`)
 - `STOREFRONT_ORIGIN` (optional origin for session-auth GraphQL calls)
 - `AUTH_SECRET` (required in production)
 - `NEXTAUTH_URL` (required in production)

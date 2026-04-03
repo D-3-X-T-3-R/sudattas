@@ -1,6 +1,7 @@
 import { SectionHeading } from "@/components/ui/typography";
 import { DashboardStats } from "@/components/dashboard-stats";
 import { DashboardCharts } from "@/components/dashboard-charts";
+import { DashboardObservability } from "@/components/dashboard-observability";
 
 export default function AdminDashboardPage() {
   return (
@@ -18,6 +19,8 @@ export default function AdminDashboardPage() {
       <DashboardStats />
 
       <DashboardCharts />
+
+      <DashboardObservability />
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { publicEnv, storefrontSiteOrigin } from "@/lib/env/public";
 
 const serverEnvSchema = z.object({
   GRAPHQL_URL: z.string().url().optional(),
+  GRAPHQL_METRICS_URL: z.string().url().optional(),
+  CORE_OPS_METRICS_URL: z.string().url().optional(),
   STOREFRONT_ORIGIN: z.string().url().optional(),
   AUTH_SECRET: z.string().min(1).optional(),
   NEXTAUTH_URL: z.string().url().optional(),
@@ -15,6 +17,8 @@ const serverEnvSchema = z.object({
 
 const parsed = serverEnvSchema.safeParse({
   GRAPHQL_URL: process.env.GRAPHQL_URL,
+  GRAPHQL_METRICS_URL: process.env.GRAPHQL_METRICS_URL,
+  CORE_OPS_METRICS_URL: process.env.CORE_OPS_METRICS_URL,
   STOREFRONT_ORIGIN: process.env.STOREFRONT_ORIGIN,
   AUTH_SECRET: process.env.AUTH_SECRET,
   NEXTAUTH_URL: process.env.NEXTAUTH_URL,
@@ -38,6 +42,14 @@ export function serverGraphqlUrl(): string {
 
 export function graphqlBaseUrl(): string {
   return serverGraphqlUrl().replace(/\/v2\/?$/, "");
+}
+
+export function graphqlMetricsUrl(): string {
+  return serverEnv.GRAPHQL_METRICS_URL ?? `${graphqlBaseUrl()}/metrics`;
+}
+
+export function coreOpsMetricsUrl(): string {
+  return serverEnv.CORE_OPS_METRICS_URL ?? "http://127.0.0.1:9090/metrics";
 }
 
 export function serverStorefrontOrigin(): string | null {

@@ -1,6 +1,7 @@
 "use client";
 
 import { Component, ErrorInfo, ReactNode } from "react";
+import { trackClientTelemetry } from "@/lib/client-telemetry";
 
 type AppErrorBoundaryProps = { children: ReactNode };
 type AppErrorBoundaryState = { hasError: boolean };
@@ -16,6 +17,21 @@ export class AppErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    trackClientTelemetry({
+      route: window.location.pathname || "unknown",
+      userMode: window.location.pathname.startsWith("/imtheboss")
+        ? "admin"
+        : window.location.pathname.startsWith("/profile") ||
+            window.location.pathname.startsWith("/checkout")
+          ? "account"
+          : "public",
+      action: "RENDER_ERROR_BOUNDARY",
+      errorClass: "boundary",
+      errorCode: null,
+      message: `${error.message}\n${info.componentStack ?? ""}`.slice(0, 1000),
+      status: null,
+      requestId: null,
+    });
     if (process.env.NODE_ENV !== "production") {
       console.error("AppErrorBoundary caught error", error, info);
     }

@@ -2,6 +2,39 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { graphqlBaseUrl, serverEnv } from "@/lib/env/server";
+import { appendTelemetryEvent } from "@/lib/telemetry-store";
+
+async function trackAuthEvent(input: {
+  action: string;
+  outcome: "success" | "failure";
+  userMode: "public" | "admin";
+  errorClass?: "none" | "unauthorized" | "validation" | "retryable" | "network" | "fatal" | "boundary";
+  errorCode?: string | null;
+  message?: string | null;
+}) {
+  try {
+    await appendTelemetryEvent({
+      occurredAt: new Date().toISOString(),
+      route: "/api/auth/[...nextauth]",
+      pageRoute: null,
+      userMode: input.userMode,
+      action: input.action,
+      outcome: input.outcome,
+      errorClass: input.errorClass ?? (input.outcome === "success" ? "none" : "fatal"),
+      errorCode: input.errorCode ?? null,
+      message: input.message ?? null,
+      status: null,
+      requestId: null,
+      online: null,
+      userAgent: null,
+      effectiveType: null,
+      downlink: null,
+      rtt: null,
+    });
+  } catch {
+    // Telemetry must never block auth.
+  }
+}
 
 function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, "");
@@ -141,34 +174,82 @@ export const authOptions: NextAuthOptions = {
   secret: serverEnv.AUTH_SECRET,
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider === "phone-otp") return true;
-      const email = user?.email?.toLowerCase();
-      if (!email) return false;
-
-      // Enforce allowlist only for admin sign-in page flow.
-      // Storefront login should remain open to regular customers.
       const isAdminFlow =
         typeof account?.callbackUrl === "string" &&
         account.callbackUrl.includes("/imtheboss");
+      const userMode: "public" | "admin" = isAdminFlow ? "admin" : "public";
+
+      if (account?.provider === "phone-otp") {
+        await trackAuthEvent({
+          action: "AUTH_SIGN_IN_PHONE_OTP",
+          outcome: "success",
+          userMode,
+        });
+        return true;
+      }
+      const email = user?.email?.toLowerCase();
+      if (!email) {
+        await trackAuthEvent({
+          action: "AUTH_SIGN_IN_GOOGLE",
+          outcome: "failure",
+          userMode,
+          errorClass: "validation",
+          errorCode: "MISSING_EMAIL",
+          message: "Google sign-in missing email.",
+        });
+        return false;
+      }
+
+      // Enforce allowlist only for admin sign-in page flow.
+      // Storefront login should remain open to regular customers.
       const allowedRaw = serverEnv.ADMIN_ALLOWED_EMAILS;
       if (isAdminFlow && allowedRaw?.trim()) {
         const allowed = allowedRaw
           .split(",")
           .map((e) => e.trim().toLowerCase())
           .filter(Boolean);
-        if (allowed.length > 0 && !allowed.includes(email)) return false;
+        if (allowed.length > 0 && !allowed.includes(email)) {
+          await trackAuthEvent({
+            action: "AUTH_SIGN_IN_GOOGLE",
+            outcome: "failure",
+            userMode,
+            errorClass: "unauthorized",
+            errorCode: "ACCESS_DENIED",
+            message: "Admin allowlist denied email.",
+          });
+          return false;
+        }
       }
 
       // Backend-authoritative provisioning: persist storefront user on successful Google auth.
       const idToken = account?.id_token;
       const username = user?.name?.trim();
-      if (!idToken || !username) return false;
-      return syncGoogleUserToBackend({
+      if (!idToken || !username) {
+        await trackAuthEvent({
+          action: "AUTH_SIGN_IN_GOOGLE",
+          outcome: "failure",
+          userMode,
+          errorClass: "validation",
+          errorCode: "MISSING_TOKEN_OR_USERNAME",
+          message: "Google sign-in missing id token or username.",
+        });
+        return false;
+      }
+      const synced = await syncGoogleUserToBackend({
         idToken,
         email,
         username,
         fullName: user?.name ?? null,
       });
+      await trackAuthEvent({
+        action: "AUTH_SIGN_IN_GOOGLE",
+        outcome: synced ? "success" : "failure",
+        userMode,
+        errorClass: synced ? "none" : "fatal",
+        errorCode: synced ? null : "BACKEND_SYNC_FAILED",
+        message: synced ? "Google sign-in synced." : "Failed to sync user with backend.",
+      });
+      return synced;
     },
     async jwt({ token, account }) {
       if (account?.access_token) {
