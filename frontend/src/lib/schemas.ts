@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { rupeesInputSchema } from "@/lib/validation-schemas";
+import {
+  BACKEND_MAX_QUANTITY_PER_ITEM,
+  BACKEND_MAX_SKU_SLUG_LEN,
+  rupeesInputSchema,
+} from "@/lib/validation-schemas";
 
 export const productSchema = z.object({
   id: z.string(),
@@ -40,7 +44,7 @@ export const collectionSchema = z.object({
 export const cartLineSchema = z.object({
   id: z.string(),
   product: productSchema,
-  qty: z.number().int().min(1),
+  qty: z.number().int().min(1).max(BACKEND_MAX_QUANTITY_PER_ITEM),
   sizeName: z.string().optional().nullable(),
 });
 
@@ -77,13 +81,19 @@ export const adminProductFormSchema = z.object({
   sku: z
     .string()
     .trim()
-    .regex(/^[A-Za-z0-9_-]{1,128}$/, "SKU may only contain letters, numbers, hyphen and underscore")
+    .regex(
+      new RegExp(`^[A-Za-z0-9_-]{1,${BACKEND_MAX_SKU_SLUG_LEN}}$`),
+      "SKU may only contain letters, numbers, hyphen and underscore"
+    )
     .optional()
     .or(z.literal("")),
   slug: z
     .string()
     .trim()
-    .regex(/^[A-Za-z0-9_-]{1,128}$/, "Slug may only contain letters, numbers, hyphen and underscore")
+    .regex(
+      new RegExp(`^[A-Za-z0-9_-]{1,${BACKEND_MAX_SKU_SLUG_LEN}}$`),
+      "Slug may only contain letters, numbers, hyphen and underscore"
+    )
     .optional()
     .or(z.literal("")),
   fabric: z.string().optional(),

@@ -11,6 +11,9 @@ Write-Host "== Release Gates ==" -ForegroundColor Cyan
 Write-Host "Gate: no exposed privileged NEXT_PUBLIC env vars" -ForegroundColor Yellow
 & (Join-Path $Root "scripts/check-no-privileged-public-env.ps1")
 
+Write-Host "Gate: frontend/backend validation limits stay aligned" -ForegroundColor Yellow
+& (Join-Path $Root "scripts/check-validation-parity.ps1")
+
 Write-Host "Gate: backend health check green ($ReadyUrl)" -ForegroundColor Yellow
 try {
     $null = Invoke-WebRequest -Uri $ReadyUrl -Method GET -UseBasicParsing -TimeoutSec 10
@@ -34,4 +37,3 @@ try {
 }
 
 Write-Host "All configured release gates passed." -ForegroundColor Green
-

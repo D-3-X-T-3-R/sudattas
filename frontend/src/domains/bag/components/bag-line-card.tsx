@@ -127,16 +127,18 @@ export function BagLineCard({
               )}
               <div className="inline-flex h-9 items-center rounded-full border border-[#0F3D2E]/10 bg-[#FFFDF8] px-1.5 shadow-[0_8px_16px_rgba(15,61,46,0.05)]">
                 <button
+                  type="button"
                   onClick={() => onDec(id)}
-                  aria-label="Decrease"
+                  aria-label={`Decrease quantity for ${product.name}`}
                   className="flex h-7 w-7 items-center justify-center rounded-full text-[#0F3D2E] transition duration-300 hover:scale-105 hover:bg-[#0F3D2E]/6"
                 >
                   -
                 </button>
                 <span className="min-w-[2rem] text-center text-sm font-semibold text-[#162019]">{qty}</span>
                 <button
+                  type="button"
                   onClick={() => onInc(id)}
-                  aria-label="Increase"
+                  aria-label={`Increase quantity for ${product.name}`}
                   className="flex h-7 w-7 items-center justify-center rounded-full text-[#0F3D2E] transition duration-300 hover:scale-105 hover:bg-[#0F3D2E]/6"
                 >
                   +
@@ -147,7 +149,9 @@ export function BagLineCard({
 
           <div className="mt-4 flex flex-wrap items-center gap-5 border-t border-[#0F3D2E]/8 pt-4">
             <button
+              type="button"
               onClick={() => onRemove(id)}
+              aria-label={`Remove ${product.name} from bag`}
               className="group inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9B6A62] transition duration-300 hover:text-[#7B3F38]"
             >
               <TrashIcon className="h-4 w-4 transition duration-300 group-hover:-translate-y-0.5" />
@@ -156,6 +160,7 @@ export function BagLineCard({
             <button
               type="button"
               onClick={() => onMoveToWishlist(line)}
+              aria-label={`Move ${product.name} to wishlist`}
               className="group inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7C7367] transition duration-300 hover:text-[#0F3D2E]"
             >
               <HeartIcon className="h-4 w-4 transition duration-300 group-hover:-translate-y-0.5" />

@@ -5,7 +5,16 @@ import {
   rupeesInputToPaise,
 } from "@/lib/money";
 
-export const PINCODE_REGEX = /^\d{6}$/;
+/**
+ * Mirror of backend/graphql/src/validation.rs constants.
+ * Keep these in sync with scripts/check-validation-parity.sh.
+ */
+export const BACKEND_MAX_SKU_SLUG_LEN = 128;
+export const BACKEND_MAX_QUANTITY_PER_ITEM = 999;
+export const BACKEND_MAX_ADDRESS_LINE_LEN = 500;
+export const BACKEND_POSTAL_CODE_LEN = 6;
+
+export const PINCODE_REGEX = new RegExp(`^\\d{${BACKEND_POSTAL_CODE_LEN}}$`);
 export const PHONE_ALLOWED_REGEX = /^[0-9+\-()\s]+$/;
 
 export const phoneSchema = z
@@ -23,12 +32,15 @@ export const addressInputSchema = z.object({
   postalCode: z
     .string()
     .trim()
-    .regex(PINCODE_REGEX, "Pincode must be exactly 6 digits"),
+    .regex(PINCODE_REGEX, `Pincode must be exactly ${BACKEND_POSTAL_CODE_LEN} digits`),
   road: z
     .string()
     .trim()
-    .min(3, "Road/street is required")
-    .max(500, "Road/street must be at most 500 characters"),
+    .min(1, "Road/street is required")
+    .max(
+      BACKEND_MAX_ADDRESS_LINE_LEN,
+      `Road/street must be at most ${BACKEND_MAX_ADDRESS_LINE_LEN} characters`
+    ),
   apartmentNoOrName: z.string().trim().nullable().optional(),
 });
 
