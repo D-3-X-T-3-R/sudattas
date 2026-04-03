@@ -12,6 +12,7 @@ fn make_address(id: i64) -> shipping_addresses::Model {
     shipping_addresses::Model {
         shipping_address_id: id,
         user_id: Some(1),
+        is_default: 0,
         country: "IN".into(),
         state_region: "KA".into(),
         city: "BLR".into(),
@@ -37,6 +38,7 @@ async fn create_shipping_address_inserts_and_returns_created_model() {
 
     let req = Request::new(CreateShippingAddressRequest {
         user_id: Some(1),
+        is_default: true,
         country: "IN".into(),
         state_region: "KA".into(),
         city: "BLR".into(),
@@ -68,6 +70,7 @@ async fn update_shipping_address_updates_all_fields() {
     let req = Request::new(UpdateShippingAddressRequest {
         shipping_address_id: 2,
         user_id: Some(1),
+        is_default: true,
         country: "IN".into(),
         state_region: "KA".into(),
         city: "BLR".into(),

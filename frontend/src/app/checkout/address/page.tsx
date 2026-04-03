@@ -79,7 +79,11 @@ export default function CheckoutAddressPage() {
     try {
       const list = await fetchApiEnvelope<ShippingAddressRow[]>("/api/account/addresses", { cache: "no-store" });
       setAddresses(list);
-      setSelectedId((prev) => (prev && list.some((a) => a.shippingAddressId === prev) ? prev : list[0]?.shippingAddressId ?? null));
+      const defaultId = list.find((a) => a.isDefault)?.shippingAddressId ?? null;
+      setSelectedId((prev) => {
+        if (prev && list.some((a) => a.shippingAddressId === prev)) return prev;
+        return defaultId ?? list[0]?.shippingAddressId ?? null;
+      });
     } catch (e) {
       setLoadFailure(toRouteFailureUi("account", e));
       setAddresses([]);
@@ -142,7 +146,7 @@ export default function CheckoutAddressPage() {
       const created = await fetchApiEnvelope<ShippingAddressRow>("/api/account/addresses", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": key },
-        body: JSON.stringify({ input: parsed.data }),
+        body: JSON.stringify({ input: { ...parsed.data, isDefault: addresses.length === 0 } }),
       });
       if (!created?.shippingAddressId) throw new Error("Address was not saved.");
       setNewAddr({ countryIso: "IN", stateIso: "", city: "", postalCode: "", road: "", apartmentNoOrName: "" });
@@ -161,7 +165,29 @@ export default function CheckoutAddressPage() {
 
   const onPay = () => {
     if (!selectedId) return;
-    void runCheckout({ shippingAddressId: selectedId });
+    const selected = addresses.find((a) => a.shippingAddressId === selectedId);
+    const persistAndCheckout = async () => {
+      if (selected && !selected.isDefault) {
+        await fetchApiEnvelope<ShippingAddressRow>("/api/account/addresses", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            input: {
+              shippingAddressId: selected.shippingAddressId,
+              country: selected.country,
+              stateRegion: selected.stateRegion,
+              city: selected.city,
+              postalCode: selected.postalCode,
+              road: selected.road ?? "",
+              apartmentNoOrName: selected.apartmentNoOrName ?? null,
+              isDefault: true,
+            },
+          }),
+        });
+      }
+      await runCheckout({ shippingAddressId: selectedId });
+    };
+    void persistAndCheckout();
   };
 
   return (

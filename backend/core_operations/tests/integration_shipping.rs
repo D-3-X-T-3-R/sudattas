@@ -69,6 +69,7 @@ async fn integration_shipping_address_crud_end_to_end() {
         &txn,
         Request::new(CreateShippingAddressRequest {
             user_id: Some(user_id),
+            is_default: false,
             country: "IN".to_string(),
             state_region: "MH".to_string(),
             city: "Mumbai".to_string(),
@@ -111,6 +112,7 @@ async fn integration_shipping_address_crud_end_to_end() {
         Request::new(UpdateShippingAddressRequest {
             shipping_address_id: addr_id,
             user_id: Some(user_id),
+            is_default: false,
             country: "IN".to_string(),
             state_region: "KA".to_string(),
             city: "Bengaluru".to_string(),
@@ -222,6 +224,7 @@ async fn integration_place_order_uses_expected_shipping_address() {
         &txn,
         Request::new(CreateShippingAddressRequest {
             user_id: Some(user_id),
+            is_default: true,
             country: "IN".to_string(),
             state_region: "TN".to_string(),
             city: "Chennai".to_string(),
@@ -331,6 +334,106 @@ async fn integration_place_order_uses_expected_shipping_address() {
         .expect("address exists");
     assert_eq!(addr.city, "Chennai");
     assert_eq!(addr.postal_code, "600001");
+
+    txn.rollback().await.ok();
+}
+
+/// SA3 - default-address uniqueness: exactly one default per user is preserved.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_default_shipping_address_uniqueness() {
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let role = user_roles::ActiveModel {
+        role_id: ActiveValue::NotSet,
+        role_name: ActiveValue::Set(format!("itest_role_sa3_{}", now_tag)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert UserRoles");
+
+    let user_res = core_operations::handlers::users::create_user(
+        &txn,
+        Request::new(CreateUserRequest {
+            username: format!("itest_sa3_{}", now_tag),
+            email: format!("itest_sa3+{}@example.com", now_tag),
+            full_name: None,
+            address: None,
+            phone: None,
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
+            role_id: Some(role.role_id),
+        }),
+    )
+    .await
+    .expect("create_user should succeed");
+    let user_id = user_res.into_inner().items[0].user_id;
+
+    let first = core_operations::handlers::shipping_address::create_shipping_address(
+        &txn,
+        Request::new(CreateShippingAddressRequest {
+            user_id: Some(user_id),
+            is_default: true,
+            country: "IN".to_string(),
+            state_region: "WB".to_string(),
+            city: "Kolkata".to_string(),
+            postal_code: "700001".to_string(),
+            road: Some("Default One".to_string()),
+            apartment_no_or_name: None,
+        }),
+    )
+    .await
+    .expect("create first address")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("first address");
+
+    let second = core_operations::handlers::shipping_address::create_shipping_address(
+        &txn,
+        Request::new(CreateShippingAddressRequest {
+            user_id: Some(user_id),
+            is_default: true,
+            country: "IN".to_string(),
+            state_region: "WB".to_string(),
+            city: "Kolkata".to_string(),
+            postal_code: "700002".to_string(),
+            road: Some("Default Two".to_string()),
+            apartment_no_or_name: None,
+        }),
+    )
+    .await
+    .expect("create second address")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("second address");
+
+    let rows = shipping_addresses::Entity::find()
+        .filter(shipping_addresses::Column::UserId.eq(user_id))
+        .all(&txn)
+        .await
+        .expect("query addresses");
+
+    let defaults: Vec<_> = rows.iter().filter(|r| r.is_default == 1).collect();
+    assert_eq!(defaults.len(), 1, "exactly one default address should remain");
+    assert_eq!(
+        defaults[0].shipping_address_id,
+        second.shipping_address_id,
+        "newly marked default should replace previous default"
+    );
+    assert!(
+        rows.iter()
+            .any(|r| r.shipping_address_id == first.shipping_address_id && r.is_default == 0),
+        "previous default should be demoted"
+    );
 
     txn.rollback().await.ok();
 }

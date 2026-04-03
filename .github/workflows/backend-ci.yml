@@ -342,6 +342,10 @@ jobs:
         GRAPHQL_URL: http://127.0.0.1:8080
         GRAPHQL_SESSION_ID: ci-e2e-session
         RATE_LIMIT_PER_MINUTE: "200"
+        INTERNAL_API_SECRET: ci-e2e-internal-secret
+        GRAPHQL_E2E_CUSTOMER_USER_ID: "2"
+        GRAPHQL_E2E_ADMIN_USER_ID: "1"
+        ADMIN_ALLOWED_USER_IDS: "1"
       timeout-minutes: 8
       run: |
         ./target/debug/core_operations &
@@ -351,6 +355,7 @@ jobs:
         ./scripts/wait_for_http_ready.sh http://127.0.0.1:8080/ready 60 3
         cargo test -p graphql --test e2e_tests --all-features -- --ignored
         cargo test -p graphql --test e2e_all_graphql_operations --all-features -- --ignored
+        cargo test -p graphql --test e2e_business_flows --all-features -- --ignored
 
   # Aggregate test status so downstream jobs can keep `needs: test`
   test:

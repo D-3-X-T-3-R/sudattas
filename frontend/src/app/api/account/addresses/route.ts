@@ -8,6 +8,7 @@ import { addressInputSchema } from "@/lib/validation-schemas";
 type ShippingAddressRow = {
   shippingAddressId: string;
   userId?: string | null;
+  isDefault?: boolean;
   country: string;
   stateRegion: string;
   city: string;
@@ -20,6 +21,7 @@ const LIST_QUERY = `query AccountAddressList {
   getShippingAddresses {
     shippingAddressId
     userId
+    isDefault
     country
     stateRegion
     city
@@ -33,6 +35,7 @@ const CREATE_MUTATION = `mutation CreateAccountAddress($input: NewShippingAddres
   createShippingAddress(input: $input) {
     shippingAddressId
     userId
+    isDefault
     country
     stateRegion
     city
@@ -46,6 +49,7 @@ const UPDATE_MUTATION = `mutation UpdateAccountAddress($input: ShippingAddressMu
   updateShippingAddress(input: $input) {
     shippingAddressId
     userId
+    isDefault
     country
     stateRegion
     city
@@ -94,12 +98,13 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return apiError(parsed.error.issues[0]?.message ?? "Invalid address input", 400, "VALIDATION_ERROR");
   }
+  const isDefault = Boolean((body.input as { isDefault?: unknown }).isDefault ?? false);
 
   const idempotencyKey = request.headers.get("idempotency-key")?.trim();
   const result = await callGraphqlAsCustomer<{ createShippingAddress?: ShippingAddressRow[] }>(
     customerUserId,
     CREATE_MUTATION,
-    { input: parsed.data },
+    { input: { ...parsed.data, isDefault } },
     idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}
   );
   if (result.errors?.length) {
@@ -137,7 +142,8 @@ export async function PATCH(request: Request) {
   if (!parsed.success) {
     return apiError(parsed.error.issues[0]?.message ?? "Invalid address input", 400, "VALIDATION_ERROR");
   }
-  const mutationInput = { shippingAddressId, ...parsed.data };
+  const isDefault = Boolean(candidate.isDefault ?? false);
+  const mutationInput = { shippingAddressId, ...parsed.data, isDefault };
 
   const result = await callGraphqlAsCustomer<{ updateShippingAddress?: ShippingAddressRow[] }>(
     customerUserId,

@@ -8,6 +8,7 @@ import { formatInrFromPaise } from "@/lib/money";
 export type ShippingAddressRow = {
   shippingAddressId: string;
   userId?: string | null;
+  isDefault?: boolean;
   country: string;
   stateRegion: string;
   city: string;
@@ -122,6 +123,7 @@ type ProfileAuthenticatedContentProps = {
   adding: boolean;
   addAddress: () => Promise<void>;
   deleteAddress: (shippingAddressId: string) => Promise<void>;
+  setDefaultAddress: (shippingAddressId: string) => Promise<void>;
   toggleOrderDetails: (orderId: string) => Promise<void>;
   onSignOut: () => void;
 };
@@ -143,6 +145,7 @@ export function ProfileAuthenticatedContent({
   adding,
   addAddress,
   deleteAddress,
+  setDefaultAddress,
   toggleOrderDetails,
   onSignOut,
 }: ProfileAuthenticatedContentProps) {
@@ -177,10 +180,18 @@ export function ProfileAuthenticatedContent({
           <ul className="mt-3 space-y-2">
             {addresses.map((a) => (
               <li key={a.shippingAddressId} className="flex items-center justify-between rounded-lg border border-[var(--color-line)] px-3 py-2">
-                <span className="text-sm text-[var(--color-ink)]">{formatAddress(a)}</span>
+                <span className="text-sm text-[var(--color-ink)]">
+                  {formatAddress(a)}
+                  {a.isDefault ? <span className="ml-2 rounded-full bg-[var(--color-line)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]">Default</span> : null}
+                </span>
                 <button type="button" onClick={() => void deleteAddress(a.shippingAddressId)} className="text-xs font-semibold uppercase tracking-[0.12em] text-red-600">
                   Remove
                 </button>
+                {!a.isDefault ? (
+                  <button type="button" onClick={() => void setDefaultAddress(a.shippingAddressId)} className="ml-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-accent-brown)]">
+                    Make default
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>

@@ -106,7 +106,7 @@ export default function ProfilePage() {
       await fetchApiEnvelope<ShippingAddressRow>("/api/account/addresses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: parsed.data }),
+        body: JSON.stringify({ input: { ...parsed.data, isDefault: addresses.length === 0 } }),
       });
       setForm({ country: "India", stateRegion: "", city: "", postalCode: "", road: "", apartmentNoOrName: "" });
       await loadAccountData();
@@ -130,6 +130,36 @@ export default function ProfilePage() {
       });
       await loadAccountData();
       announce("Address removed.");
+    } catch (e) {
+      const ui = toRouteFailureUi("account", e);
+      setRouteFailure(ui);
+      announce(ui.message, "assertive");
+    }
+  };
+
+  const setDefaultAddress = async (shippingAddressId: string) => {
+    const row = addresses.find((a) => a.shippingAddressId === shippingAddressId);
+    if (!row || row.isDefault) return;
+    setRouteFailure(null);
+    try {
+      await fetchApiEnvelope<ShippingAddressRow>("/api/account/addresses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: {
+            shippingAddressId: row.shippingAddressId,
+            country: row.country,
+            stateRegion: row.stateRegion,
+            city: row.city,
+            postalCode: row.postalCode,
+            road: row.road ?? "",
+            apartmentNoOrName: row.apartmentNoOrName ?? null,
+            isDefault: true,
+          },
+        }),
+      });
+      await loadAccountData();
+      announce("Default address updated.");
     } catch (e) {
       const ui = toRouteFailureUi("account", e);
       setRouteFailure(ui);
@@ -195,6 +225,7 @@ export default function ProfilePage() {
               adding={adding}
               addAddress={addAddress}
               deleteAddress={deleteAddress}
+              setDefaultAddress={setDefaultAddress}
               toggleOrderDetails={toggleOrderDetails}
               onSignOut={() => void signOut({ callbackUrl: "/" })}
             />
