@@ -4,7 +4,9 @@ use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
 use core_db_entities::entity::users;
 use proto::proto::core::{CreateUserRequest, UserResponse, UsersResponse};
-use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter,
+};
 use tonic::{Request, Response, Status};
 
 fn user_to_response(user: users::Model) -> UserResponse {

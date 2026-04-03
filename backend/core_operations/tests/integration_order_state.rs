@@ -627,4 +627,3 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
 
     txn.rollback().await.ok();
 }
-

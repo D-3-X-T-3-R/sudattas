@@ -162,11 +162,11 @@ async fn main() {
             .and(warp::any().map(move || limiter.clone()))
             .and_then(
                 move |addr: Option<SocketAddr>,
-                 x_forwarded_for: Option<String>,
-                 x_real_ip: Option<String>,
-                 session_id: Option<String>,
-                 authorization: Option<String>,
-                 lim: Option<Arc<governor::DefaultKeyedRateLimiter<String>>>| async move {
+                      x_forwarded_for: Option<String>,
+                      x_real_ip: Option<String>,
+                      session_id: Option<String>,
+                      authorization: Option<String>,
+                      lim: Option<Arc<governor::DefaultKeyedRateLimiter<String>>>| async move {
                     if let Some(ref l) = lim {
                         let key = resolve_graphql_rate_limit_key(
                             addr,
@@ -208,9 +208,9 @@ async fn main() {
             .and(warp::any().map(move || limiter.clone()))
             .and_then(
                 move |addr: Option<SocketAddr>,
-                 x_forwarded_for: Option<String>,
-                 x_real_ip: Option<String>,
-                 lim: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>>| async move {
+                      x_forwarded_for: Option<String>,
+                      x_real_ip: Option<String>,
+                      lim: Option<Arc<governor::DefaultKeyedRateLimiter<IpAddr>>>| async move {
                     if let Some(ref l) = lim {
                         let ip = resolve_client_ip_for_rate_limit(
                             addr,
@@ -233,9 +233,7 @@ async fn main() {
     };
     info!(
         rate_limit_per_minute,
-        webhook_limit_per_minute,
-        trust_proxy_headers,
-        "Rate limiter configured"
+        webhook_limit_per_minute, trust_proxy_headers, "Rate limiter configured"
     );
 
     let cors = warp::cors()
@@ -711,14 +709,12 @@ async fn handle_auth_rejection(
     }
     if err.find::<RateLimited>().is_some() {
         graphql::metrics::record_auth_rejection_total("rate_limited");
-        return Ok(
-            reply::with_header(
-                reply::with_status("TOO_MANY_REQUESTS", StatusCode::TOO_MANY_REQUESTS),
-                "retry-after",
-                "1",
-            )
-            .into_response(),
-        );
+        return Ok(reply::with_header(
+            reply::with_status("TOO_MANY_REQUESTS", StatusCode::TOO_MANY_REQUESTS),
+            "retry-after",
+            "1",
+        )
+        .into_response());
     }
     if let Some(_e) = err.find::<warp::filters::body::BodyDeserializeError>() {
         return Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST).into_response());
@@ -731,5 +727,8 @@ async fn handle_auth_rejection(
         return Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND).into_response());
     }
     warn!("Unhandled rejection: {:?}", err);
-    Ok(reply::with_status("INTERNAL_SERVER_ERROR", StatusCode::INTERNAL_SERVER_ERROR).into_response())
+    Ok(
+        reply::with_status("INTERNAL_SERVER_ERROR", StatusCode::INTERNAL_SERVER_ERROR)
+            .into_response(),
+    )
 }
