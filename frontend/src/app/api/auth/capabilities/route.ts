@@ -3,7 +3,12 @@ import { authOptions } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin-auth-server";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    session = null;
+  }
   const email = session?.user?.email ?? null;
   const authenticated = Boolean(session);
   const admin = isAdminEmail(email);
@@ -26,4 +31,3 @@ export async function GET() {
     retryable: false,
   });
 }
-
