@@ -233,20 +233,31 @@ export function ProfileAuthenticatedContent({
                   <th className="pb-2 pr-3 font-medium">Date</th>
                   <th className="pb-2 pr-3 font-medium">Amount</th>
                   <th className="pb-2 font-medium">Status</th>
+                  <th className="pb-2 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.map((o) => (
                   <Fragment key={o.orderId}>
-                    <tr className="cursor-pointer border-b border-[var(--color-line)] hover:bg-[var(--color-line)]/10" onClick={() => void toggleOrderDetails(o.orderId)}>
+                    <tr className="border-b border-[var(--color-line)] hover:bg-[var(--color-line)]/10">
                       <td className="py-2 pr-3 font-mono text-[var(--color-ink)]">{o.orderId}</td>
                       <td className="py-2 pr-3 text-[var(--color-ink)]">{formatOrderDate(o.orderDate)}</td>
                       <td className="py-2 pr-3 text-[var(--color-ink)]">{o.totalAmountFormatted || formatInrFromPaise(o.totalAmountPaise)}</td>
                       <td className="py-2 text-[var(--color-ink)]">{o.statusName}</td>
+                      <td className="py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => void toggleOrderDetails(o.orderId)}
+                          className="rounded-full border border-[var(--color-line)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-gold)] hover:text-[var(--color-accent-brown)]"
+                          aria-label={`View details for order ${o.orderId}`}
+                        >
+                          {expandedOrderId === o.orderId ? "Hide" : "View"}
+                        </button>
+                      </td>
                     </tr>
                     {expandedOrderId === o.orderId && (
                       <tr className="border-b border-[var(--color-line)] last:border-0">
-                        <td colSpan={4} className="px-2 py-3">
+                        <td colSpan={5} className="px-2 py-3">
                           {loadingOrderDetailId === o.orderId ? (
                             <p className="text-xs text-[var(--color-muted)]">Loading order details...</p>
                           ) : orderDetailsById[o.orderId] ? (

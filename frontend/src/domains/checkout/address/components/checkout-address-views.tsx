@@ -105,6 +105,12 @@ function AddAddressDialog({
   savingAddress: boolean;
   onSave: () => void;
 }) {
+  const errorId = saveAddressError ? "checkout-address-form-error" : undefined;
+  const pincodeHintId = "checkout-address-pincode-hint";
+  const pincodeDescribedBy = errorId
+    ? `${pincodeHintId} ${errorId}`
+    : pincodeHintId;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title="New address" titleClassName="text-[11px] uppercase tracking-[0.22em] text-[#8B816D]" className="max-w-lg rounded-[22px] border border-[#0F3D2E]/10" contentClassName="max-h-[min(85vh,640px)] overflow-y-auto p-4 sm:p-5">
@@ -115,19 +121,19 @@ function AddAddressDialog({
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="checkout-address-line1" className="mb-1 block text-xs font-medium text-[#615A50]">Street / road</label>
-            <input id="checkout-address-line1" value={newAddr.road} onChange={(e) => setNewAddr((p) => ({ ...p, road: e.target.value }))} className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]" />
+            <input id="checkout-address-line1" value={newAddr.road} onChange={(e) => setNewAddr((p) => ({ ...p, road: e.target.value }))} className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]" aria-invalid={Boolean(saveAddressError)} aria-describedby={errorId} />
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="checkout-address-country" className="mb-1 block text-xs font-medium text-[#615A50]">Country</label>
             <Select value={newAddr.countryIso} onValueChange={(countryIso) => setNewAddr((p) => ({ ...p, countryIso, stateIso: "", city: "" }))}>
-              <SelectTrigger id="checkout-address-country" aria-label="Country"><SelectValue placeholder="Country" /></SelectTrigger>
+              <SelectTrigger id="checkout-address-country" aria-label="Country" aria-describedby={errorId} aria-invalid={Boolean(saveAddressError)}><SelectValue placeholder="Country" /></SelectTrigger>
               <SelectContent>{countryOptions.map((c) => <SelectItem key={c.isoCode} value={c.isoCode}>{c.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
             <label htmlFor="checkout-address-state" className="mb-1 block text-xs font-medium text-[#615A50]">State / region</label>
             <Select value={newAddr.stateIso || undefined} onValueChange={(stateIso) => setNewAddr((p) => ({ ...p, stateIso, city: "" }))} disabled={!newAddr.countryIso || stateOptions.length === 0}>
-              <SelectTrigger id="checkout-address-state" aria-label="State or region"><SelectValue placeholder="State / region" /></SelectTrigger>
+              <SelectTrigger id="checkout-address-state" aria-label="State or region" aria-describedby={errorId} aria-invalid={Boolean(saveAddressError)}><SelectValue placeholder="State / region" /></SelectTrigger>
               <SelectContent>{stateOptions.map((s) => <SelectItem key={s.isoCode} value={s.isoCode}>{s.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
@@ -135,19 +141,20 @@ function AddAddressDialog({
             <label htmlFor="checkout-address-city" className="mb-1 block text-xs font-medium text-[#615A50]">City</label>
             {cityOptions.length > 0 ? (
               <Select value={newAddr.city || undefined} onValueChange={(city) => setNewAddr((p) => ({ ...p, city }))} disabled={!newAddr.stateIso}>
-                <SelectTrigger id="checkout-address-city" aria-label="City"><SelectValue placeholder="City" /></SelectTrigger>
+                <SelectTrigger id="checkout-address-city" aria-label="City" aria-describedby={errorId} aria-invalid={Boolean(saveAddressError)}><SelectValue placeholder="City" /></SelectTrigger>
                 <SelectContent>{cityOptions.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
             ) : (
-              <input id="checkout-address-city" value={newAddr.city} onChange={(e) => setNewAddr((p) => ({ ...p, city: e.target.value }))} disabled={!newAddr.stateIso} className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)] disabled:opacity-50" />
+              <input id="checkout-address-city" value={newAddr.city} onChange={(e) => setNewAddr((p) => ({ ...p, city: e.target.value }))} disabled={!newAddr.stateIso} className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)] disabled:opacity-50" aria-invalid={Boolean(saveAddressError)} aria-describedby={errorId} />
             )}
           </div>
           <div>
             <label htmlFor="checkout-address-postal" className="mb-1 block text-xs font-medium text-[#615A50]">Pincode (6 digits)</label>
-            <input id="checkout-address-postal" value={newAddr.postalCode} onChange={(e) => setNewAddr((p) => ({ ...p, postalCode: e.target.value.replace(/\D/g, "").slice(0, 6) }))} inputMode="numeric" className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]" />
+            <p id={pincodeHintId} className="sr-only">Enter a 6-digit postal code.</p>
+            <input id="checkout-address-postal" value={newAddr.postalCode} onChange={(e) => setNewAddr((p) => ({ ...p, postalCode: e.target.value.replace(/\D/g, "").slice(0, 6) }))} inputMode="numeric" className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]" aria-invalid={Boolean(saveAddressError)} aria-describedby={pincodeDescribedBy} />
           </div>
         </div>
-        {saveAddressError && <p role="alert" className="mt-3 text-sm text-red-700">{saveAddressError}</p>}
+        {saveAddressError && <p id="checkout-address-form-error" role="alert" className="mt-3 text-sm text-red-700">{saveAddressError}</p>}
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <button type="button" disabled={!newAddrValid || savingAddress} onClick={onSave} className="rounded-full bg-[#0F3D2E] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] text-[#F6F3EA] transition-opacity hover:opacity-90 disabled:opacity-50">
             {savingAddress ? "Saving..." : "Save address"}

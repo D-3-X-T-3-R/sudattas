@@ -69,10 +69,19 @@ function StorefrontLoginDialog({
             autoComplete="tel"
             inputMode="tel"
             className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]"
-            aria-describedby="login-dialog-desc login-error"
+            aria-describedby={error ? "login-dialog-desc login-error" : "login-dialog-desc"}
+            aria-invalid={Boolean(error)}
           />
         </div>
 
+        <div>
+          <label
+            htmlFor="login-otp"
+            className="mb-1 block text-xs font-medium text-[var(--color-ink)]"
+          >
+            One-time password
+          </label>
+        </div>
         <div className="flex gap-2">
           <Button
             type="button"
@@ -90,8 +99,8 @@ function StorefrontLoginDialog({
             inputMode="numeric"
             placeholder="OTP"
             className="h-11 w-28 rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]"
-            aria-label="One time password"
-            aria-describedby="login-error"
+            aria-describedby={error ? "login-error" : undefined}
+            aria-invalid={Boolean(error)}
           />
         </div>
 
