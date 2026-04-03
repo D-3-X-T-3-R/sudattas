@@ -88,9 +88,9 @@ async function syncGoogleUserToBackend(input: {
   email: string;
   username: string;
   fullName?: string | null;
-}): Promise<boolean> {
+}): Promise<string | null> {
   const googleSub = extractGoogleSubFromJwt(input.idToken);
-  if (!googleSub) return false;
+  if (!googleSub) return null;
 
   const mutation = `
     mutation CreateStorefrontUser($input: NewUser!) {
@@ -123,13 +123,24 @@ async function syncGoogleUserToBackend(input: {
     cache: "no-store",
   });
 
-  if (!res.ok) return false;
+  if (!res.ok) return null;
   const json = (await res.json().catch(() => ({}))) as {
+    data?: {
+      createUser?: Array<{ userId?: string | number | null }>;
+    };
     errors?: Array<{ message?: string }>;
   };
   const err = json.errors?.[0]?.message;
-  if (!err) return true;
-  return isDuplicateUserError(err);
+  if (!err) {
+    const first = json.data?.createUser?.[0]?.userId;
+    return first === null || first === undefined ? null : String(first);
+  }
+  if (!isDuplicateUserError(err)) return null;
+
+  // Backend now resolves duplicate provisioning to canonical user, but keep
+  // the fallback branch for resilience when older deployments are still live.
+  const first = json.data?.createUser?.[0]?.userId;
+  return first === null || first === undefined ? null : String(first);
 }
 
 export const authOptions: NextAuthOptions = {
@@ -235,12 +246,16 @@ export const authOptions: NextAuthOptions = {
         });
         return false;
       }
-      const synced = await syncGoogleUserToBackend({
+      const customerUserId = await syncGoogleUserToBackend({
         idToken,
         email,
         username,
         fullName: user?.name ?? null,
       });
+      const synced = Boolean(customerUserId);
+      if (synced) {
+        (user as { customerUserId?: string }).customerUserId = customerUserId ?? undefined;
+      }
       await trackAuthEvent({
         action: "AUTH_SIGN_IN_GOOGLE",
         outcome: synced ? "success" : "failure",
@@ -251,21 +266,29 @@ export const authOptions: NextAuthOptions = {
       });
       return synced;
     },
-    async jwt({ token, account }) {
+    async jwt({ token, account, user }) {
       if (account?.access_token) {
         token.accessToken = account.access_token;
       }
       if (account?.id_token) {
         token.idToken = account.id_token;
       }
+      const maybeCustomerUserId = (token as { customerUserId?: string }).customerUserId;
+      if (!maybeCustomerUserId) {
+        const userCustomerId = (user as { customerUserId?: string } | undefined)?.customerUserId;
+        if (userCustomerId) {
+          (token as { customerUserId?: string }).customerUserId = userCustomerId;
+        }
+      }
       // Persist so we have it on session refresh
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        const s = session as { accessToken?: string; idToken?: string };
+        const s = session as { accessToken?: string; idToken?: string; customerUserId?: string };
         s.accessToken = token.accessToken as string | undefined;
         s.idToken = token.idToken as string | undefined;
+        s.customerUserId = (token as { customerUserId?: string }).customerUserId;
       }
       return session;
     },

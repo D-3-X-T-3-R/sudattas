@@ -1,7 +1,7 @@
 import {
   apiError,
   callGraphql,
-  decodeJwtSub,
+  requireAuthenticatedCustomerUserId,
   requireSessionToken,
 } from "@/lib/server-session-auth";
 
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   if (!shippingAddressId) {
     return apiError("shippingAddressId is required", 400, "VALIDATION_ERROR");
   }
-  const userId = decodeJwtSub(token);
+  const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
   }
