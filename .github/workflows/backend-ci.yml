@@ -360,9 +360,19 @@ jobs:
         ./target/debug/graphql &
         chmod +x ./scripts/wait_for_http_ready.sh
         ./scripts/wait_for_http_ready.sh http://127.0.0.1:8080/ready 60 3
+        set +e
         cargo test -p graphql --test e2e_tests --all-features -- --ignored
+        E2E_TESTS_STATUS=$?
         cargo test -p graphql --test e2e_all_graphql_operations --all-features -- --ignored
+        E2E_ALL_STATUS=$?
         cargo test -p graphql --test e2e_business_flows --all-features -- --ignored
+        E2E_FLOWS_STATUS=$?
+        set -e
+        if [[ $E2E_TESTS_STATUS -ne 0 || $E2E_ALL_STATUS -ne 0 || $E2E_FLOWS_STATUS -ne 0 ]]; then
+          echo "One or more GraphQL E2E suites failed."
+          echo "e2e_tests=$E2E_TESTS_STATUS e2e_all_graphql_operations=$E2E_ALL_STATUS e2e_business_flows=$E2E_FLOWS_STATUS"
+          exit 1
+        fi
 
   # Aggregate test status so downstream jobs can keep `needs: test`
   test:
