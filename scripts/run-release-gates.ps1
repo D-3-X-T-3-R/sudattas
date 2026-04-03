@@ -14,6 +14,12 @@ Write-Host "Gate: no exposed privileged NEXT_PUBLIC env vars" -ForegroundColor Y
 Write-Host "Gate: frontend/backend validation limits stay aligned" -ForegroundColor Yellow
 & (Join-Path $Root "scripts/check-validation-parity.ps1")
 
+Write-Host "Gate: frontend performance budgets stay within limits" -ForegroundColor Yellow
+& (Join-Path $Root "scripts/check-frontend-performance-budgets.ps1")
+
+Write-Host "Gate: contract/documentation discipline is enforced" -ForegroundColor Yellow
+& (Join-Path $Root "scripts/check-contract-discipline.ps1")
+
 Write-Host "Gate: backend health check green ($ReadyUrl)" -ForegroundColor Yellow
 try {
     $null = Invoke-WebRequest -Uri $ReadyUrl -Method GET -UseBasicParsing -TimeoutSec 10

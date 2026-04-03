@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ArrowLeft, MapPin, Plus } from "lucide-react";
 import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RouteFailureBanner } from "@/components/route-failure-banner";
+import type { RouteFailureUi } from "@/lib/route-state";
 import { cn } from "@/lib/utils";
 import { Country, State, City } from "country-state-city";
 import type { ReactNode } from "react";
@@ -175,7 +177,9 @@ function formatAddressLine(a: ShippingAddressRow): string {
 
 export function CheckoutAuthenticatedView({
   loadingList,
-  loadError,
+  loadFailure,
+  onRetryLoadAddresses,
+  onSignInAgain,
   addresses,
   selectedId,
   setSelectedId,
@@ -196,7 +200,9 @@ export function CheckoutAuthenticatedView({
   onPay,
 }: {
   loadingList: boolean;
-  loadError: string | null;
+  loadFailure: RouteFailureUi | null;
+  onRetryLoadAddresses: () => void;
+  onSignInAgain: () => void;
   addresses: ShippingAddressRow[];
   selectedId: string | null;
   setSelectedId: (id: string) => void;
@@ -229,8 +235,19 @@ export function CheckoutAuthenticatedView({
       <h1 className="font-display text-3xl leading-tight text-[#0F3D2E] sm:text-4xl">Delivery address</h1>
       <p className="mt-2 text-sm text-[#615A50]">Choose where we should ship this order. Manage addresses anytime from your profile.</p>
       {loadingList && <p className="mt-10 text-sm text-[#615A50]">Loading your addresses...</p>}
-      {loadError && <p className="mt-6 rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-900">{loadError}</p>}
-      {!loadingList && !loadError && (
+      {loadFailure && (
+        <RouteFailureBanner
+          failure={loadFailure}
+          onRetry={loadFailure.kind === "retryable" ? onRetryLoadAddresses : undefined}
+          onSignIn={
+            loadFailure.kind === "unauthorized" || loadFailure.kind === "stale"
+              ? onSignInAgain
+              : undefined
+          }
+          className="mt-6"
+        />
+      )}
+      {!loadingList && !loadFailure && (
         <section className="mt-10">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8B816D]">Saved addresses</h2>
           {addresses.length === 0 ? <p className="mt-4 rounded-[22px] border border-dashed border-[#0F3D2E]/15 bg-[#FFFDF8]/80 px-4 py-8 text-center text-sm text-[#615A50]">You don&apos;t have any saved addresses yet.</p> : (

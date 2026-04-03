@@ -82,6 +82,8 @@ jobs:
         run: |
           npm ci
           npm run build
+          node ../scripts/check-frontend-performance-budgets.mjs
+          node ../scripts/check-contract-discipline.mjs
 
       - name: Start services and run smoke checks
         env:

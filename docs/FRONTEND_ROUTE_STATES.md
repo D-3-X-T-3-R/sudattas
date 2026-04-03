@@ -34,3 +34,9 @@ This document defines the canonical UI states for critical route families.
 - Components render state UI only.
 - Service-layer helpers own retry, rate-limit backoff, stale-session recovery, and error normalization.
 - Do not render raw backend/internal error strings directly to users on critical pages.
+
+## Degraded-state UX actions
+
+- `retryable_error`: show a retry action (`Retry`) on affected route cards/banners.
+- `unauthorized` or `stale`: show a re-auth action (`Sign in again`) that routes through the existing login flow.
+- `fatal_error`: show a stable fallback message without exposing internal backend details.
