@@ -75,27 +75,8 @@ pub struct CartItemsResponse {
 pub struct CreateShippingAddressRequest {
     #[prost(int64, optional, tag = "1")]
     pub user_id: ::core::option::Option<i64>,
-    #[prost(string, tag = "2")]
-    pub country: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub state_region: ::prost::alloc::string::String,
-    #[prost(string, tag = "4")]
-    pub city: ::prost::alloc::string::String,
-    #[prost(string, tag = "5")]
-    pub postal_code: ::prost::alloc::string::String,
-    #[prost(string, optional, tag = "6")]
-    pub road: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "7")]
-    pub apartment_no_or_name: ::core::option::Option<::prost::alloc::string::String>,
-}
-#[derive(serde::Serialize, serde::Deserialize)]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpdateShippingAddressRequest {
-    #[prost(int64, tag = "1")]
-    pub shipping_address_id: i64,
-    #[prost(int64, optional, tag = "2")]
-    pub user_id: ::core::option::Option<i64>,
+    #[prost(bool, tag = "2")]
+    pub is_default: bool,
     #[prost(string, tag = "3")]
     pub country: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
@@ -107,6 +88,29 @@ pub struct UpdateShippingAddressRequest {
     #[prost(string, optional, tag = "7")]
     pub road: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "8")]
+    pub apartment_no_or_name: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateShippingAddressRequest {
+    #[prost(int64, tag = "1")]
+    pub shipping_address_id: i64,
+    #[prost(int64, optional, tag = "2")]
+    pub user_id: ::core::option::Option<i64>,
+    #[prost(bool, tag = "3")]
+    pub is_default: bool,
+    #[prost(string, tag = "4")]
+    pub country: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub state_region: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub city: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub postal_code: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "8")]
+    pub road: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "9")]
     pub apartment_no_or_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -128,17 +132,19 @@ pub struct ShippingAddressResponse {
     pub shipping_address_id: i64,
     #[prost(int64, optional, tag = "2")]
     pub user_id: ::core::option::Option<i64>,
-    #[prost(string, tag = "3")]
-    pub country: ::prost::alloc::string::String,
+    #[prost(bool, tag = "3")]
+    pub is_default: bool,
     #[prost(string, tag = "4")]
-    pub state_region: ::prost::alloc::string::String,
+    pub country: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
-    pub city: ::prost::alloc::string::String,
+    pub state_region: ::prost::alloc::string::String,
     #[prost(string, tag = "6")]
+    pub city: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
     pub postal_code: ::prost::alloc::string::String,
-    #[prost(string, optional, tag = "7")]
-    pub road: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "8")]
+    pub road: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "9")]
     pub apartment_no_or_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]

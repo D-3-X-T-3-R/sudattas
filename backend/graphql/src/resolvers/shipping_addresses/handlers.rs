@@ -25,6 +25,7 @@ fn address_response_to_gql(a: ShippingAddressResponse) -> ShippingAddress {
     ShippingAddress {
         shipping_address_id: a.shipping_address_id.to_string(),
         user_id: a.user_id.map(|u| u.to_string()),
+        is_default: a.is_default,
         country: a.country,
         state_region: a.state_region,
         city: a.city,
@@ -64,6 +65,7 @@ pub(crate) async fn create_shipping_address(
     let response = client
         .create_shipping_address(CreateShippingAddressRequest {
             user_id,
+            is_default: input.is_default.unwrap_or(false),
             country: input.country,
             state_region: input.state_region,
             city: input.city,
@@ -97,6 +99,7 @@ pub(crate) async fn update_shipping_address(
         .update_shipping_address(UpdateShippingAddressRequest {
             shipping_address_id: parse_i64(&input.shipping_address_id, "shipping address id")?,
             user_id,
+            is_default: input.is_default.unwrap_or(false),
             country: input.country,
             state_region: input.state_region,
             city: input.city,

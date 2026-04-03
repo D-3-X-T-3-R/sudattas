@@ -1,7 +1,10 @@
-# Start all backend services: MySQL, Redis, Core Operations (gRPC), GraphQL (all in Docker)
+# Start backend services with DB-first bootstrap:
 # 1) Backup current DB (if container is running)
-# 2) Stop existing sudattas* containers, then start fresh via docker-compose
-# 3) Restore DB from latest backup (if any)
+# 2) Stop existing sudattas* containers
+# 3) Start MySQL + Redis only
+# 4) Restore DB from latest backup (if any)
+# 5) Regenerate SeaORM entities
+# 6) Build and start Core Operations + GraphQL
 # Run from backend/: .\start-services.ps1
 
 $ErrorActionPreference = "Stop"
@@ -23,11 +26,11 @@ if ($containers) {
     Write-Host "No existing sudattas containers found." -ForegroundColor Gray
 }
 
-Write-Host "Building and starting all services (MySQL, Redis, Core Operations, GraphQL)..." -ForegroundColor Cyan
+Write-Host "Starting database dependencies (MySQL, Redis)..." -ForegroundColor Cyan
 Push-Location $BackendRoot
 try {
-    docker-compose up -d --build
-    if ($LASTEXITCODE -ne 0) { throw "docker-compose failed" }
+    docker-compose up -d mysql redis
+    if ($LASTEXITCODE -ne 0) { throw "docker-compose mysql/redis failed" }
 } finally {
     Pop-Location
 }
@@ -38,6 +41,38 @@ Start-Sleep -Seconds 3  # allow MySQL to accept connections
 & "$BackendRoot\restore-db.ps1"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Restore skipped or failed (no backup file or DB not ready)." -ForegroundColor Gray
+}
+
+# 5) Regenerate SeaORM entities from current DB schema
+Write-Host "Regenerating SeaORM entities..." -ForegroundColor Yellow
+$entityGenerateScript = Join-Path $BackendRoot "core_db_entities\src\entity\generate.ps1"
+if (-not (Test-Path -Path $entityGenerateScript -PathType Leaf)) {
+    Write-Host "Entity generation script not found: $entityGenerateScript" -ForegroundColor Gray
+} else {
+    $seaOrmCli = Get-Command sea-orm-cli -ErrorAction SilentlyContinue
+    if (-not $seaOrmCli) {
+        Write-Host "sea-orm-cli is not installed; skipping entity regeneration." -ForegroundColor Gray
+        Write-Host "Install with: cargo install sea-orm-cli" -ForegroundColor Gray
+    } else {
+        $entityDir = Split-Path -Parent $entityGenerateScript
+        Push-Location $entityDir
+        try {
+            & $entityGenerateScript
+            if ($LASTEXITCODE -ne 0) { throw "generate.ps1 exited with $LASTEXITCODE" }
+        } finally {
+            Pop-Location
+        }
+    }
+}
+
+# 6) Build and start app services after DB + entities are ready
+Write-Host "Building and starting app services (Core Operations, GraphQL)..." -ForegroundColor Cyan
+Push-Location $BackendRoot
+try {
+    docker-compose up -d --build core_operations graphql
+    if ($LASTEXITCODE -ne 0) { throw "docker-compose core_operations/graphql failed" }
+} finally {
+    Pop-Location
 }
 
 # Keep only the latest 5 DB dumps under database/db-backups
@@ -56,4 +91,5 @@ if (Test-Path -Path $BackupDirForPrune -PathType Container) {
 Write-Host ""
 Write-Host "Done. All services running in Docker:" -ForegroundColor Green
 Write-Host "  MySQL (3306), Redis (6379), Core Operations (50051), GraphQL (8080)" -ForegroundColor Gray
+Write-Host "  SeaORM entities refreshed from current DB schema (when sea-orm-cli is available)" -ForegroundColor Gray
 Write-Host "  Stop with: docker-compose down" -ForegroundColor Gray

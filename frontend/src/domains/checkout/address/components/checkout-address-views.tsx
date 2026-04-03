@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 export type ShippingAddressRow = {
   shippingAddressId: string;
   userId?: string | null;
+  isDefault?: boolean;
   road?: string | null;
   apartmentNoOrName?: string | null;
   city: string;

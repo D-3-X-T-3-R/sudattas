@@ -17,6 +17,7 @@ pub async fn get_shipping_address(
                 .map(|m| ShippingAddressResponse {
                     shipping_address_id: m.shipping_address_id,
                     user_id: m.user_id,
+                    is_default: m.is_default == 1,
                     country: m.country,
                     state_region: m.state_region,
                     city: m.city,

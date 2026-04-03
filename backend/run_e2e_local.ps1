@@ -19,7 +19,7 @@ if (-not $env:OAUTH_AUDIENCE) { $env:OAUTH_AUDIENCE = "https://www.googleapis.co
 # High limit so e2e_all_graphql_operations (many requests) don't hit 429
 if (-not $env:RATE_LIMIT_PER_MINUTE) { $env:RATE_LIMIT_PER_MINUTE = "1000" }
 if (-not $env:INTERNAL_API_SECRET) { $env:INTERNAL_API_SECRET = "e2e-internal-secret" }
-if (-not $env:GRAPHQL_E2E_CUSTOMER_USER_ID) { $env:GRAPHQL_E2E_CUSTOMER_USER_ID = "1" }
+if (-not $env:GRAPHQL_E2E_CUSTOMER_USER_ID) { $env:GRAPHQL_E2E_CUSTOMER_USER_ID = "2" }
 if (-not $env:GRAPHQL_E2E_ADMIN_USER_ID) { $env:GRAPHQL_E2E_ADMIN_USER_ID = "1" }
 if (-not $env:ADMIN_ALLOWED_USER_IDS) { $env:ADMIN_ALLOWED_USER_IDS = $env:GRAPHQL_E2E_ADMIN_USER_ID }
 

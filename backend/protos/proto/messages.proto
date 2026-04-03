@@ -46,23 +46,25 @@ message CartItemsResponse {
 
 message CreateShippingAddressRequest {
     optional int64 user_id = 1;
-    string country = 2;
-    string state_region = 3;
-    string city = 4;
-    string postal_code = 5;
-    optional string road = 6;
-    optional string apartment_no_or_name = 7;
-}
-
-message UpdateShippingAddressRequest {
-    int64 shipping_address_id = 1;
-    optional int64 user_id = 2;
+    bool is_default = 2;
     string country = 3;
     string state_region = 4;
     string city = 5;
     string postal_code = 6;
     optional string road = 7;
     optional string apartment_no_or_name = 8;
+}
+
+message UpdateShippingAddressRequest {
+    int64 shipping_address_id = 1;
+    optional int64 user_id = 2;
+    bool is_default = 3;
+    string country = 4;
+    string state_region = 5;
+    string city = 6;
+    string postal_code = 7;
+    optional string road = 8;
+    optional string apartment_no_or_name = 9;
 }
 
 message DeleteShippingAddressRequest {
@@ -74,12 +76,13 @@ message GetShippingAddressRequest { }
 message ShippingAddressResponse {
     int64 shipping_address_id = 1;
     optional int64 user_id = 2;
-    string country = 3;
-    string state_region = 4;
-    string city = 5;
-    string postal_code = 6;
-    optional string road = 7;
-    optional string apartment_no_or_name = 8;
+    bool is_default = 3;
+    string country = 4;
+    string state_region = 5;
+    string city = 6;
+    string postal_code = 7;
+    optional string road = 8;
+    optional string apartment_no_or_name = 9;
 }
 
 message ShippingAddressesResponse {

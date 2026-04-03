@@ -22,6 +22,8 @@ pub struct Model {
     pub road: Option<String>,
     #[sea_orm(column_name = "ApartmentNoOrName")]
     pub apartment_no_or_name: Option<String>,
+    #[sea_orm(column_name = "IsDefault")]
+    pub is_default: i8,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

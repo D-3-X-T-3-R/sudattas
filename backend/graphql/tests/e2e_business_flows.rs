@@ -12,7 +12,7 @@ fn base_url() -> String {
 }
 
 fn customer_user_id() -> String {
-    std::env::var("GRAPHQL_E2E_CUSTOMER_USER_ID").unwrap_or_else(|_| "1".to_string())
+    std::env::var("GRAPHQL_E2E_CUSTOMER_USER_ID").unwrap_or_else(|_| "2".to_string())
 }
 
 fn admin_user_id() -> String {
