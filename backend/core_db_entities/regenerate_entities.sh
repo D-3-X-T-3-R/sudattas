@@ -71,10 +71,8 @@ echo "[OK] Old entity files removed"
 
 echo
 echo "[6/6] Generating new entity files..."
-if ! command -v sea-orm-cli >/dev/null 2>&1; then
-  echo "[FAIL] sea-orm-cli not found. Install with: cargo install sea-orm-cli" >&2
-  exit 1
-fi
+echo "Updating sea-orm-cli to latest..."
+cargo install sea-orm-cli --locked --force
 
 (
   cd "${script_dir}"
@@ -106,4 +104,3 @@ echo
 echo "=================================================="
 echo "[SUCCESS] Entity regeneration complete!"
 echo "=================================================="
-
