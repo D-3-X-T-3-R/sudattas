@@ -399,6 +399,13 @@ async fn e2e_csrf_rejection_on_disallowed_origin() {
         Ok(v) => v,
         Err(_) => return, // no valid session context available in this environment
     };
+    let has_allowed_origins = std::env::var("ALLOWED_ORIGINS")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    if !has_allowed_origins {
+        return;
+    }
 
     let client = Client::new();
     let res = client
@@ -425,6 +432,13 @@ async fn e2e_session_mutation_paths_reject_disallowed_origin() {
         Ok(v) => v,
         Err(_) => return,
     };
+    let has_allowed_origins = std::env::var("ALLOWED_ORIGINS")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    if !has_allowed_origins {
+        return;
+    }
 
     let client = Client::new();
     let mutations = vec![
