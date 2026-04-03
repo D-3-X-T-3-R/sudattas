@@ -10,6 +10,8 @@ pub struct Model {
     pub shipping_address_id: i64,
     #[sea_orm(column_name = "UserID")]
     pub user_id: Option<i64>,
+    #[sea_orm(column_name = "IsDefault")]
+    pub is_default: i8,
     #[sea_orm(column_name = "Country")]
     pub country: String,
     #[sea_orm(column_name = "StateRegion")]
@@ -22,8 +24,6 @@ pub struct Model {
     pub road: Option<String>,
     #[sea_orm(column_name = "ApartmentNoOrName")]
     pub apartment_no_or_name: Option<String>,
-    #[sea_orm(column_name = "IsDefault")]
-    pub is_default: i8,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
