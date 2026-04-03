@@ -40,7 +40,8 @@ pub async fn delete_shipping_address(
                                     .exec(txn)
                                     .await
                                     .map_err(map_db_error_to_status)?;
-                                let mut active: shipping_addresses::ActiveModel = next_default.into();
+                                let mut active: shipping_addresses::ActiveModel =
+                                    next_default.into();
                                 active.is_default = ActiveValue::Set(1);
                                 active.update(txn).await.map_err(map_db_error_to_status)?;
                             }

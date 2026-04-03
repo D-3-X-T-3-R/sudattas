@@ -37,7 +37,11 @@ fn with_auth_headers(req: reqwest::RequestBuilder, as_admin: bool) -> reqwest::R
     req
 }
 
-async fn post_gql(client: &Client, query: &str, as_admin: bool) -> (reqwest::StatusCode, serde_json::Value) {
+async fn post_gql(
+    client: &Client,
+    query: &str,
+    as_admin: bool,
+) -> (reqwest::StatusCode, serde_json::Value) {
     let req = client
         .post(format!("{}/v2", base_url()))
         .json(&serde_json::json!({ "query": query }));
@@ -51,7 +55,12 @@ async fn post_gql(client: &Client, query: &str, as_admin: bool) -> (reqwest::Sta
 }
 
 fn assert_success_gql(status: reqwest::StatusCode, body: &serde_json::Value) {
-    assert!(status.is_success(), "expected 2xx, got {} body={}", status, body);
+    assert!(
+        status.is_success(),
+        "expected 2xx, got {} body={}",
+        status,
+        body
+    );
     assert!(
         body.get("data").is_some() || body.get("errors").is_some(),
         "response must include data or errors"
@@ -61,7 +70,12 @@ fn assert_success_gql(status: reqwest::StatusCode, body: &serde_json::Value) {
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_browse_product() {
-    let (status, body) = post_gql(&Client::new(), "query { searchProduct(search: { limit: \"5\", offset: \"0\" }) { productId name } }", false).await;
+    let (status, body) = post_gql(
+        &Client::new(),
+        "query { searchProduct(search: { limit: \"5\", offset: \"0\" }) { productId name } }",
+        false,
+    )
+    .await;
     assert_success_gql(status, &body);
 }
 

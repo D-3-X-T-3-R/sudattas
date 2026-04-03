@@ -439,4 +439,3 @@ async fn integration_coupon_min_order_not_met_not_applied() {
 
     txn.rollback().await.ok();
 }
-

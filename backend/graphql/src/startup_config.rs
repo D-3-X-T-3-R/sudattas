@@ -28,17 +28,12 @@ impl StartupConfig {
             }
         };
 
-        let rate_limit_per_minute =
-            parse_u32_or_default("RATE_LIMIT_PER_MINUTE", 240)?;
+        let rate_limit_per_minute = parse_u32_or_default("RATE_LIMIT_PER_MINUTE", 240)?;
         let webhook_rate_limit_per_minute =
             parse_u32_or_default("RATE_LIMIT_WEBHOOK_PER_MINUTE", 120)?;
-        let trust_proxy_headers =
-            parse_bool_or_default("RATE_LIMIT_TRUST_PROXY_HEADERS", false)?;
+        let trust_proxy_headers = parse_bool_or_default("RATE_LIMIT_TRUST_PROXY_HEADERS", false)?;
 
-        let listen_addr = parse_socket_addr_or_default(
-            "GRAPHQL_LISTEN_ADDR",
-            "0.0.0.0:8080",
-        )?;
+        let listen_addr = parse_socket_addr_or_default("GRAPHQL_LISTEN_ADDR", "0.0.0.0:8080")?;
 
         Ok(Self {
             redis_url,
@@ -53,9 +48,10 @@ impl StartupConfig {
 
 fn parse_u32_or_default(key: &str, default: u32) -> Result<u32, String> {
     match std::env::var(key) {
-        Ok(raw) => raw.trim().parse::<u32>().map_err(|_| {
-            format!("{key} must be a non-negative integer, got '{raw}'")
-        }),
+        Ok(raw) => raw
+            .trim()
+            .parse::<u32>()
+            .map_err(|_| format!("{key} must be a non-negative integer, got '{raw}'")),
         Err(_) => Ok(default),
     }
 }
@@ -81,4 +77,3 @@ fn parse_bool_or_default(key: &str, default: bool) -> Result<bool, String> {
         Err(_) => Ok(default),
     }
 }
-

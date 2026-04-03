@@ -423,10 +423,13 @@ async fn integration_default_shipping_address_uniqueness() {
         .expect("query addresses");
 
     let defaults: Vec<_> = rows.iter().filter(|r| r.is_default == 1).collect();
-    assert_eq!(defaults.len(), 1, "exactly one default address should remain");
     assert_eq!(
-        defaults[0].shipping_address_id,
-        second.shipping_address_id,
+        defaults.len(),
+        1,
+        "exactly one default address should remain"
+    );
+    assert_eq!(
+        defaults[0].shipping_address_id, second.shipping_address_id,
         "newly marked default should replace previous default"
     );
     assert!(

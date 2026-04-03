@@ -188,7 +188,8 @@ async fn ensure_customer_owns_shipping_address(
         .map_err(|e| e.into_field_error())?;
 
     let belongs_to_user = rows.into_iter().any(|row| {
-        row.shipping_address_id == shipping_address_id && row.user_id.as_deref() == Some(uid.as_str())
+        row.shipping_address_id == shipping_address_id
+            && row.user_id.as_deref() == Some(uid.as_str())
     });
     if belongs_to_user {
         Ok(())
@@ -270,7 +271,10 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn update_cart_item(context: &Context, cart_item: CartMutation) -> FieldResult<Vec<Cart>> {
+    async fn update_cart_item(
+        context: &Context,
+        cart_item: CartMutation,
+    ) -> FieldResult<Vec<Cart>> {
         crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "update_cart_item",
@@ -527,7 +531,8 @@ impl MutationRoot {
             "checkout.create_payment_intent.start"
         );
         let request_id = context.request_id().map(|s| s.to_string());
-        let result = payment_intents::handlers::create_payment_intent(input, request_id.as_deref()).await;
+        let result =
+            payment_intents::handlers::create_payment_intent(input, request_id.as_deref()).await;
         if let Err(ref e) = result {
             warn!(
                 request_id = ?context.request_id(),
@@ -585,7 +590,8 @@ impl MutationRoot {
             "verify_razorpay_payment",
             context.idempotency_key(),
             || async move {
-                payment_intents::handlers::verify_razorpay_payment(input, request_id.as_deref()).await
+                payment_intents::handlers::verify_razorpay_payment(input, request_id.as_deref())
+                    .await
             },
         )
         .await;
@@ -1358,8 +1364,8 @@ impl MutationRoot {
             context.idempotency_key(),
             || async move { shipping_addresses::handlers::create_shipping_address(input).await },
         )
-            .await
-            .map_err(|e| e.into_field_error())
+        .await
+        .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]

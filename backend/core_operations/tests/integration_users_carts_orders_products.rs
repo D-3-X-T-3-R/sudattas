@@ -1125,4 +1125,3 @@ async fn integration_place_order_then_search_order() {
 
     txn.rollback().await.ok();
 }
-

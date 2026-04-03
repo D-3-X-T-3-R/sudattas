@@ -8,10 +8,8 @@ pub struct StartupConfig {
 
 impl StartupConfig {
     pub fn from_env() -> Result<Self, String> {
-        let grpc_server_addr =
-            parse_socket_addr_or_default("GRPC_SERVER", "0.0.0.0:50051")?;
-        let grpc_metrics_addr =
-            parse_socket_addr_or_default("GRPC_METRICS_ADDR", "0.0.0.0:9090")?;
+        let grpc_server_addr = parse_socket_addr_or_default("GRPC_SERVER", "0.0.0.0:50051")?;
+        let grpc_metrics_addr = parse_socket_addr_or_default("GRPC_METRICS_ADDR", "0.0.0.0:9090")?;
 
         Ok(Self {
             grpc_server_addr,
@@ -25,4 +23,3 @@ fn parse_socket_addr_or_default(key: &str, default: &str) -> Result<SocketAddr, 
     raw.parse::<SocketAddr>()
         .map_err(|_| format!("{key} must be a valid socket address, got '{raw}'"))
 }
-
