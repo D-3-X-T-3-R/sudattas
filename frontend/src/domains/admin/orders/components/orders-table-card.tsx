@@ -50,6 +50,7 @@ export function OrdersTableCard({
           <div className="space-y-4">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[600px] border-collapse text-sm">
+                <caption className="sr-only">Orders list with pagination controls</caption>
                 <thead>
                   <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
                     <th className="pb-2 pr-4 font-medium">Order ID</th>

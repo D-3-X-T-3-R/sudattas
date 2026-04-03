@@ -52,6 +52,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+      <a
+        href="#admin-main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:text-[var(--color-ink)] focus:shadow"
+      >
+        Skip to main content
+      </a>
       {sidebarOpen && (
         <button
           type="button"
@@ -62,6 +68,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       )}
 
       <aside
+        aria-label="Admin sidebar"
         className={cn(
           "fixed inset-y-0 left-0 z-40 w-64 flex flex-col",
           "border-r border-[var(--admin-border-subtle)] bg-[var(--admin-sidebar-bg)] transition-transform duration-200 ease-out",
@@ -82,7 +89,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <X className="h-5 w-5" />
           </Button>
         </div>
-        <nav className="flex-1 space-y-0.5 p-4">
+        <nav className="flex-1 space-y-0.5 p-4" aria-label="Admin navigation">
           {NAV.map(({ href, icon: Icon, label }) => {
             const isActive =
               href === ADMIN_BASE
@@ -125,7 +132,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex flex-1 flex-col min-w-0 md:ml-64">
+      <main id="admin-main-content" className="flex flex-1 flex-col min-w-0 md:ml-64">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[var(--admin-border-subtle)] bg-[var(--admin-surface)]/95 px-4 md:px-6 backdrop-blur">
           <Button
             variant="outline"

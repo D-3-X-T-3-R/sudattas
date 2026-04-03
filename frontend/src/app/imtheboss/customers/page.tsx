@@ -155,6 +155,8 @@ export default function AdminCustomersPage() {
         setSelectedCustomer={setSelectedCustomer}
         handleSort={handleSort}
         sortIconFor={sortIconFor}
+        sortKey={sortKey}
+        sortDir={sortDir}
         page={page}
         pageSize={pageSize}
         setPage={setPageRaw}
