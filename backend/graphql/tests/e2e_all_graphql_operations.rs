@@ -26,6 +26,14 @@ async fn post_gql(
     if let Ok(session_id) = std::env::var("GRAPHQL_SESSION_ID") {
         req = req.header("X-Session-Id", session_id);
     }
+    if let Ok(secret) = std::env::var("INTERNAL_API_SECRET") {
+        if !secret.trim().is_empty() {
+            req = req.header("X-Internal-Auth", secret);
+            let admin_uid =
+                std::env::var("GRAPHQL_E2E_ADMIN_USER_ID").unwrap_or_else(|_| "9001".to_string());
+            req = req.header("X-Customer-User-Id", admin_uid);
+        }
+    }
     let res = req.send().await.expect("POST /v2");
     let status = res.status();
     let body: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
