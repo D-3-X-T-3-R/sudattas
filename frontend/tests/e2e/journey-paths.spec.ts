@@ -93,15 +93,6 @@ function extractPaths(cell: string): string[] {
   return [...paths];
 }
 
-async function assertApiPath(
-  pathValue: string,
-  request: APIRequestContext,
-  label: string
-) {
-  const res = await request.get(pathValue, { failOnStatusCode: false });
-  expect(API_STATUS_OK.has(res.status()), `${label} ${pathValue} -> ${res.status()}`).toBeTruthy();
-}
-
 async function assertRoutePath(
   pathValue: string,
   page: Page,
@@ -139,6 +130,44 @@ async function tryOpenProductFromHome(page: Page): Promise<boolean> {
   await expect(page).toHaveURL(/\/product\//);
   await expect(page.getByRole("button", { name: "ADD TO BAG" })).toBeVisible();
   return true;
+}
+
+async function runSection11Scenario(journey: string, request: APIRequestContext) {
+  if (journey.includes("rate limit")) {
+    const res = await request.get("/api/products", { failOnStatusCode: false });
+    expect([200, 429, 503].includes(res.status())).toBeTruthy();
+    return;
+  }
+  if (journey.includes("idempotency")) {
+    const first = await request.post("/api/account/cart/merge", {
+      data: {},
+      headers: { "Idempotency-Key": "journey-e2e-idempotency" },
+      failOnStatusCode: false,
+    });
+    const second = await request.post("/api/account/cart/merge", {
+      data: {},
+      headers: { "Idempotency-Key": "journey-e2e-idempotency" },
+      failOnStatusCode: false,
+    });
+    expect(API_STATUS_OK.has(first.status())).toBeTruthy();
+    expect(API_STATUS_OK.has(second.status())).toBeTruthy();
+  }
+}
+
+async function runSection15Scenario(journey: string, request: APIRequestContext) {
+  if (journey.includes("robots") || journey.includes("sitemap")) {
+    const robots = await request.get("/robots.txt", { failOnStatusCode: false });
+    const sitemap = await request.get("/sitemap.xml", { failOnStatusCode: false });
+    expect([200, 404].includes(robots.status())).toBeTruthy();
+    expect([200, 404].includes(sitemap.status())).toBeTruthy();
+  }
+}
+
+async function runSection16Scenario(page: Page) {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await goHome(page);
+  await expect(page.locator("body")).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 720 });
 }
 
 async function runScenario(
@@ -289,23 +318,7 @@ async function runScenario(
   }
 
   if (row.section === 11) {
-    if (journey.includes("rate limit")) {
-      const res = await request.get("/api/products", { failOnStatusCode: false });
-      expect([200, 429, 503].includes(res.status())).toBeTruthy();
-    } else if (journey.includes("idempotency")) {
-      const first = await request.post("/api/account/cart/merge", {
-        data: {},
-        headers: { "Idempotency-Key": "journey-e2e-idempotency" },
-        failOnStatusCode: false,
-      });
-      const second = await request.post("/api/account/cart/merge", {
-        data: {},
-        headers: { "Idempotency-Key": "journey-e2e-idempotency" },
-        failOnStatusCode: false,
-      });
-      expect(API_STATUS_OK.has(first.status())).toBeTruthy();
-      expect(API_STATUS_OK.has(second.status())).toBeTruthy();
-    }
+    await runSection11Scenario(journey, request);
     return;
   }
 
@@ -331,20 +344,12 @@ async function runScenario(
   }
 
   if (row.section === 15) {
-    if (journey.includes("robots") || journey.includes("sitemap")) {
-      const robots = await request.get("/robots.txt", { failOnStatusCode: false });
-      const sitemap = await request.get("/sitemap.xml", { failOnStatusCode: false });
-      expect([200, 404].includes(robots.status())).toBeTruthy();
-      expect([200, 404].includes(sitemap.status())).toBeTruthy();
-    }
+    await runSection15Scenario(journey, request);
     return;
   }
 
   if (row.section === 16) {
-    await page.setViewportSize({ width: 320, height: 800 });
-    await goHome(page);
-    await expect(page.locator("body")).toBeVisible();
-    await page.setViewportSize({ width: 1280, height: 720 });
+    await runSection16Scenario(page);
     return;
   }
 }
