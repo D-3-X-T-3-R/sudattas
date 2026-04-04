@@ -80,7 +80,7 @@ export async function POST(request: Request) {
   const verifyKey =
     body.idempotencyKey?.trim() || `checkout-verify-${crypto.randomUUID()}`;
 
-  const verifyResult = await callGraphqlAsCustomer<{ verifyRazorpayPayment?: VerifyRow[] }>(
+  const verifyResult = await callGraphqlAsCustomer<{ verifyRazorpayPayment?: VerifyRow }>(
     customerUserId,
     VERIFY_MUTATION,
     {
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const verified = verifyResult.data?.verifyRazorpayPayment?.[0];
+  const verified = verifyResult.data?.verifyRazorpayPayment;
   if (!verified) {
     return apiError("Payment verification result missing", 400, "GRAPHQL_ERROR");
   }
