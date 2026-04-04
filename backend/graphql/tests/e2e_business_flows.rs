@@ -175,3 +175,17 @@ async fn e2e_unauthorized_admin_access_blocked() {
         msg
     );
 }
+
+#[tokio::test]
+#[ignore = "requires GraphQL server; run with --ignored"]
+async fn e2e_storefront_reference_data_not_admin_gated() {
+    let query = "mutation { searchSize(input: { sizeId: \"0\" }) { sizeId sizeName } searchOccasion(input: { occasionId: \"0\" }) { occasionId occasionName } }";
+    let (status, body) = post_gql(&Client::new(), query, false).await;
+    assert_success_gql(status, &body);
+    let msg = body.to_string();
+    assert!(
+        !msg.contains("Admin authorization required"),
+        "storefront reference-data reads should not require admin auth: {}",
+        msg
+    );
+}
