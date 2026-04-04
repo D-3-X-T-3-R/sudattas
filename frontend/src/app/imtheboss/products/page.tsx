@@ -1,14 +1,69 @@
 "use client";
+/* eslint-disable max-lines */
+/* eslint-disable max-lines-per-function */
 
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { gqlAdmin } from "@/lib/graphqlAdmin";
 import { adminProductFormSchema } from "@/lib/schemas";
+import {
+  fetchCategories,
+  fetchProductsList,
+  fetchProductById,
+  fetchSizes,
+  fetchColors,
+  fetchFabrics,
+  fetchWeaves,
+  fetchOccasions,
+  searchProductMoods,
+  searchProductMoodMappingsByProduct,
+  createProductMood,
+  createProductVariant,
+  updateProductVariant,
+  deleteProductVariant,
+  createProductMoodMapping,
+  deleteProductMoodMapping,
+  createInventoryItem,
+  searchInventoryByVariantId,
+  updateInventoryItem,
+  type ProductListRow,
+  type ProductListRowWithVariantStock,
+  type ProductImageListItem,
+  type CategoryRow,
+  type SizeRow,
+  type ColorRow,
+  type ProductMoodRow,
+  type FabricRow,
+  type WeaveRow,
+  type OccasionRow,
+} from "@/lib/admin-queries";
+import type { AdminProductVariantRow } from "@/lib/schemas";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ProductsFiltersCard } from "@/domains/admin/products/components/products-filters-card";
+import { ProductsGridCard } from "@/domains/admin/products/components/products-grid-card";
+import { ProductPreviewDialog } from "@/domains/admin/products/components/product-preview-dialog";
+import { ArchiveProductDialog } from "@/domains/admin/products/components/archive-product-dialog";
+import {
+  ProductImagesDialogs,
+  type AdminReorderableImage,
+} from "@/domains/admin/products/components/product-images-dialogs";
+import { ProductVariantsSection } from "@/domains/admin/products/components/product-variants-section";
+import { ProductMoodsSection } from "@/domains/admin/products/components/product-moods-section";
+import { ProductImagesSection } from "@/domains/admin/products/components/product-images-section";
+import { SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/loading";
+import { Pencil, Package, Plus } from "lucide-react";
+import {
+  MAX_MONEY_PAISE,
+  optionalRupeesInputToPaise,
+  paiseToRupeesInput,
+  rupeesInputToPaise,
+} from "@/lib/money";
+import { toRouteFailureUi } from "@/lib/route-state";
 
 type ProductFormState = {
   name: string;
@@ -16,70 +71,109 @@ type ProductFormState = {
   priceRupees: string;
   stockQuantity: string;
   categoryId: string;
+  sku: string;
+  slug: string;
+  fabric: string;
+  weave: string;
+  occasion: string;
+  hasBlousePiece: boolean;
+  careInstructions: string;
+  productStatusId: string;
 };
 
 const DRAFT_KEY = "sudattas_admin_product_draft";
 
-type AdminProductRow = {
-  productId: string;
-  name: string;
-  formatted: string;
-  stockQuantity?: string | null;
-  categoryId?: string | null;
-};
-
-async function fetchCategories(): Promise<
-  Array<{ categoryId: string; name: string }>
-> {
-  const data = await gqlAdmin<{
-    searchCategory?: Array<{ categoryId: string; name: string }>;
-  }>(`query { searchCategory(search: {}) { categoryId name } }`);
-  return data?.searchCategory ?? [];
+/** Get first non-empty URL from an image (supports camelCase and snake_case from API). */
+function getImageUrl(img: ProductImageListItem | undefined): string {
+  if (!img) return "";
+  const raw = img as Record<string, unknown>;
+  const u =
+    (img.url as string | undefined) ??
+    (img.thumbnailUrl as string | undefined) ??
+    (raw.thumbnail_url as string | undefined) ??
+    (raw.url as string | undefined) ??
+    "";
+  return typeof u === "string" && u.trim() !== "" ? u : "";
 }
 
-async function fetchProducts(search: {
-  name?: string;
-  limit?: string;
-}): Promise<AdminProductRow[]> {
-  const input: Record<string, string> = {};
-  if (search.name) input.name = search.name;
-  if (search.limit) input.limit = search.limit;
+/** URL with cache-buster so the browser doesn't show stale cached image content. Pass loadKey (e.g. from beginEdit) to force refetch when opening edit. */
+function getImageUrlWithCacheBuster(
+  img: ProductImageListItem | undefined,
+  loadKey?: string
+): string {
+  const u = getImageUrl(img);
+  if (!u) return "";
+  const raw = img as Record<string, unknown>;
+  const id =
+    (img as ProductImageListItem & { image_id?: string }).imageId ??
+    (raw.image_id as string) ??
+    "";
+  const v = loadKey ? `${id}-${loadKey}` : id;
+  const sep = u.includes("?") ? "&" : "?";
+  return `${u}${sep}v=${v}`;
+}
 
-  const data = await gqlAdmin<{
-    searchProduct?: AdminProductRow[];
-  }>(
-    `query SearchProducts($search: SearchProduct!) {
-      searchProduct(search: $search) {
-        productId
-        name
-        formatted
-        stockQuantity
-        categoryId
-      }
-    }`,
-    { search: input }
-  );
-  return data?.searchProduct ?? [];
+/** Thumbnail URL with cache-buster so list card shows updated image after sync. */
+function getProductThumbnailWithCacheBuster(p: ProductListRow): string | null {
+  const images = p.images ?? [];
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
+    const u = getImageUrl(img);
+    if (!u) continue;
+    const sep = u.includes("?") ? "&" : "?";
+    const id =
+      (img as ProductImageListItem & { image_id?: string }).imageId ??
+      (img as ProductImageListItem & { image_id?: string }).image_id ??
+      "";
+    return `${u}${sep}v=${id}`;
+  }
+  return null;
+}
+
+function getProductStatusLabel(statusId?: string | null): string {
+  if (!statusId) return "—";
+  if (statusId === "1") return "Draft";
+  if (statusId === "2") return "Active";
+  if (statusId === "3") return "Archived";
+  return statusId;
 }
 
 export default function AdminProductsPage() {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const {
     data: categories = [],
     isLoading: categoriesLoading,
     isError: categoriesError,
     error: categoriesErrorObj,
     refetch: refetchCategories,
-  } = useQuery<Array<{ categoryId: string; name: string }>, Error>({
+  } = useQuery<CategoryRow[], Error>({
     queryKey: ["admin", "categories"],
     queryFn: fetchCategories,
   });
 
   const [searchName, setSearchName] = useState("");
+  const [searchCategoryId, setSearchCategoryId] = useState("");
+  const [searchMoodId, setSearchMoodId] = useState("");
+  const [searchFabric, setSearchFabric] = useState("");
+  const [searchWeave, setSearchWeave] = useState("");
+  const [searchOccasion, setSearchOccasion] = useState("");
+  const [searchProductStatusId, setSearchProductStatusId] = useState("");
+  const [searchPriceMinRupees, setSearchPriceMinRupees] = useState("");
+  const [searchPriceMaxRupees, setSearchPriceMaxRupees] = useState("");
   const [searchLimit, setSearchLimit] = useState("20");
+  const [activeTab, setActiveTab] = useState<"view" | "add">("view");
   const [appliedSearch, setAppliedSearch] = useState<{
     name?: string;
+    categoryId?: string;
+    moodId?: string;
+    fabric?: string;
+    weave?: string;
+    occasion?: string;
     limit?: string;
+    productStatusId?: string;
+    startingPricePaise?: string;
+    endingPricePaise?: string;
   }>({ limit: "20" });
 
   const {
@@ -88,11 +182,56 @@ export default function AdminProductsPage() {
     isError: productsError,
     error: productsErrorObj,
     refetch: refetchProducts,
-  } = useQuery<AdminProductRow[], Error>({
+  } = useQuery<ProductListRow[], Error>({
     queryKey: ["admin", "products", appliedSearch],
-    queryFn: () => fetchProducts(appliedSearch || {}),
-    enabled: !!appliedSearch,
+    queryFn: () => fetchProductsList(appliedSearch),
+    enabled: true,
   });
+
+  const { data: sizes = [] } = useQuery<SizeRow[], Error>({
+    queryKey: ["admin", "sizes"],
+    queryFn: fetchSizes,
+    enabled: activeTab === "add",
+  });
+  const { data: colors = [] } = useQuery<ColorRow[], Error>({
+    queryKey: ["admin", "colors"],
+    queryFn: fetchColors,
+    enabled: activeTab === "add",
+  });
+  const { data: weaves = [] } = useQuery<WeaveRow[], Error>({
+    queryKey: ["admin", "weaves"],
+    queryFn: fetchWeaves,
+  });
+  const { data: occasions = [] } = useQuery<OccasionRow[], Error>({
+    queryKey: ["admin", "occasions"],
+    queryFn: fetchOccasions,
+  });
+  const { data: existingMoods = [] } = useQuery<ProductMoodRow[], Error>({
+    queryKey: ["admin", "productMoods"],
+    queryFn: () => searchProductMoods({}),
+  });
+  const createMoodMutation = useMutation({
+    mutationFn: (name: string) => createProductMood(name),
+    onSuccess: (created) => {
+      if (created) {
+        queryClient.invalidateQueries({ queryKey: ["admin", "productMoods"] });
+        setSelectedMoodIds((prev) => (prev.includes(created.moodId) ? prev : [...prev, created.moodId]));
+        setNewMoodName("");
+        setMoodCreateError("");
+      }
+    },
+    onError: (err: Error) => setMoodCreateError(err.message || "Failed to create mood"),
+  });
+
+  const { data: fabrics = [] } = useQuery<FabricRow[], Error>({
+    queryKey: ["admin", "fabrics"],
+    queryFn: fetchFabrics,
+  });
+
+  const [archiveConfirm, setArchiveConfirm] = useState<ProductListRow | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductListRow | null>(null);
+
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   const [form, setForm] = useState<ProductFormState>({
     name: "",
@@ -100,26 +239,54 @@ export default function AdminProductsPage() {
     priceRupees: "",
     stockQuantity: "0",
     categoryId: categories[0]?.categoryId ?? "",
+    sku: "",
+    slug: "",
+    fabric: "",
+    weave: "",
+    occasion: "",
+    hasBlousePiece: true,
+    careInstructions: "",
+    productStatusId: "",
   });
+  const [variants, setVariants] = useState<AdminProductVariantRow[]>([]);
+  const [selectedMoodIds, setSelectedMoodIds] = useState<string[]>([]);
+  const [newMoodName, setNewMoodName] = useState("");
+  const [moodCreateError, setMoodCreateError] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryError, setCategoryError] = useState("");
 
-  const [lastCreatedProduct, setLastCreatedProduct] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  /** When editing, images already linked to the product (from list row). */
+  const [existingProductImages, setExistingProductImages] = useState<ProductImageListItem[]>([]);
   const [imageError, setImageError] = useState("");
   const [imageMessage, setImageMessage] = useState("");
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  /** When editing, image IDs that were present when we opened edit (so we can delete removed ones on Update). */
+  const [initialExistingImageIdsWhenEdit, setInitialExistingImageIdsWhenEdit] = useState<string[]>([]);
+  const [initialVariantIdsWhenEdit, setInitialVariantIdsWhenEdit] = useState<string[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  /** True while uploads/refetch run after Update product (loading overlay shown). */
+  const [isUpdateReflecting, setIsUpdateReflecting] = useState(false);
+  /** Reorder images dialog: combined list (existing + new) for drag reorder while editing. */
+  const [reorderImagesOpen, setReorderImagesOpen] = useState(false);
+  const [reorderableImages, setReorderableImages] = useState<AdminReorderableImage[]>([]);
+  const [reorderDragIndex, setReorderDragIndex] = useState<number | null>(null);
+  /** When editing, Review images dialog shows all images (existing + new); this is the combined list for that dialog. */
+  const [reviewImagesList, setReviewImagesList] = useState<AdminReorderableImage[]>([]);
+  const [reviewDragIndex, setReviewDragIndex] = useState<number | null>(null);
+  /** When set, this is the confirmed order (existing + new interleaved). Used for display and sync so order matches Review. */
+  const [orderedProductImages, setOrderedProductImages] = useState<AdminReorderableImage[] | null>(
+    null
+  );
+  /** Key set when loading product for edit so image URLs get a fresh cache-buster and browser refetches. */
+  const [productImagesLoadKey, setProductImagesLoadKey] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Load draft from sessionStorage on first mount
+  // Load draft from sessionStorage on first mount (product fields only; variants/moods not persisted)
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -129,6 +296,7 @@ export default function AdminProductsPage() {
       setForm((prev) => ({
         ...prev,
         ...parsed,
+        hasBlousePiece: parsed.hasBlousePiece ?? prev.hasBlousePiece,
       }));
     } catch {
       // ignore malformed drafts
@@ -139,7 +307,7 @@ export default function AdminProductsPage() {
     if (categories.length > 0 && !form.categoryId) {
       setForm((prev) => ({ ...prev, categoryId: categories[0].categoryId }));
     }
-  }, [categories]);
+  }, [categories, form.categoryId]);
 
   const createCategoryMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -170,33 +338,49 @@ export default function AdminProductsPage() {
       pricePaise: number;
       stockQuantity: string;
       categoryId: string;
+      sku?: string;
+      slug?: string;
+      fabric?: string;
+      weave?: string;
+      occasion?: string;
+      hasBlousePiece?: boolean;
+      careInstructions?: string;
+      productStatusId?: string;
     }) => {
+      const product: Record<string, unknown> = {
+        name: payload.name,
+        description: payload.description,
+        pricePaise: String(payload.pricePaise),
+        stockQuantity: payload.stockQuantity,
+        categoryId: payload.categoryId,
+      };
+      if (payload.sku?.trim()) product.sku = payload.sku.trim();
+      if (payload.slug?.trim()) product.slug = payload.slug.trim();
+      if (payload.fabric?.trim()) product.fabric = payload.fabric.trim();
+      if (payload.weave?.trim()) product.weave = payload.weave.trim();
+      if (payload.occasion?.trim()) product.occasion = payload.occasion.trim();
+      if (payload.hasBlousePiece !== undefined) product.hasBlousePiece = payload.hasBlousePiece;
+      if (payload.careInstructions?.trim()) product.careInstructions = payload.careInstructions.trim();
+      if (payload.productStatusId?.trim()) product.productStatusId = payload.productStatusId.trim();
       const data = await gqlAdmin<{ createProduct?: Array<{ productId: string; name: string; formatted?: string }> }>(
         `mutation CreateProduct($product: NewProduct!) {
           createProduct(product: $product) { productId name formatted }
         }`,
-        {
-          product: {
-            name: payload.name,
-            description: payload.description,
-            pricePaise: String(payload.pricePaise),
-            stockQuantity: payload.stockQuantity,
-            categoryId: payload.categoryId,
-          },
-        }
+        { product }
       );
       return data?.createProduct?.[0];
     },
-    onSuccess: (created) => {
-      setMessage(
-        created
-          ? `Created: ${created.name}${
-              created.formatted ? ` (${created.formatted})` : ""
-            }`
-          : "Product created."
-      );
+    onSuccess: async (created) => {
+      const text =
+        created && created.name
+          ? `Created: ${created.name}${created.formatted ? ` (${created.formatted})` : ""}`
+          : "Product created.";
+      setMessage(text);
+      showToast({
+        title: "Product",
+        description: "Product created.",
+      });
       if (created?.productId) {
-        setLastCreatedProduct({ id: created.productId, name: created.name });
         if (imageFiles.length > 0) {
           imageFiles.forEach((file, index) => {
             uploadImageMutation.mutate({
@@ -206,20 +390,360 @@ export default function AdminProductsPage() {
             });
           });
         }
+        // Create variants and inventory
+        for (const v of variants) {
+          try {
+            const sizeId = v.sizeId?.trim() || undefined;
+            const colorId = v.colorId?.trim() || undefined;
+            const additionalPricePaise = v.additionalPricePaise?.trim() || undefined;
+            const variant = await createProductVariant({
+              productId: created.productId,
+              sizeId: sizeId || undefined,
+              colorId: colorId || undefined,
+              additionalPricePaise,
+            });
+            if (variant?.variantId) {
+              await createInventoryItem({
+                variantId: variant.variantId,
+                quantityAvailable: (v.quantityAvailable?.trim() || "0").replace(/^$/, "0"),
+                reorderLevel: v.reorderLevel?.trim() || undefined,
+              });
+            }
+          } catch (err) {
+            console.error("Failed to create variant/inventory:", err);
+          }
+        }
+        // Link moods
+        for (const moodId of selectedMoodIds) {
+          if (!moodId?.trim()) continue;
+          try {
+            await createProductMoodMapping(created.productId, moodId.trim());
+          } catch (err) {
+            console.error("Failed to link mood:", err);
+          }
+        }
+        setVariants([]);
+        setSelectedMoodIds([]);
       }
       setForm((prev) => ({
+        ...prev,
         name: "",
         description: "",
         priceRupees: "",
         stockQuantity: "0",
         categoryId: prev.categoryId,
+        sku: "",
+        slug: "",
+        fabric: "",
+        weave: "",
+        occasion: "",
+        hasBlousePiece: true,
+        careInstructions: "",
+        productStatusId: "",
       }));
       setError("");
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem(DRAFT_KEY);
       }
     },
-    onError: (err: Error) => setError(err.message || "Failed to create product."),
+    onError: (err: Error) => {
+      setError(err.message || "Failed to create product.");
+      showToast({
+        title: "Product",
+        description: "Failed to create product.",
+      });
+    },
+  });
+
+  const updateProductMutation = useMutation({
+    mutationFn: async (payload: {
+      productId: string;
+      name: string;
+      description: string;
+      pricePaise: number;
+      categoryId: string;
+      sku?: string;
+      slug?: string;
+      fabric?: string;
+      weave?: string;
+      occasion?: string;
+      hasBlousePiece?: boolean;
+      careInstructions?: string;
+      productStatusId?: string;
+      selectedMoodIds?: string[];
+      variants?: AdminProductVariantRow[];
+      initialVariantIdsWhenEdit?: string[];
+      /** Current existing images (after user may have removed some); used to compute which to delete. */
+      currentExistingImages?: ProductImageListItem[];
+      /** Image IDs when edit was opened; images not in currentExistingImages will be deleted. */
+      initialExistingImageIdsWhenEdit?: string[];
+    }) => {
+      const product: Record<string, unknown> = {
+        productId: payload.productId,
+        name: payload.name,
+        description: payload.description,
+        pricePaise: String(payload.pricePaise),
+        categoryId: payload.categoryId,
+      };
+      if (payload.sku?.trim()) product.sku = payload.sku.trim();
+      if (payload.slug?.trim()) product.slug = payload.slug.trim();
+      if (payload.fabric?.trim()) product.fabric = payload.fabric.trim();
+      if (payload.weave?.trim()) product.weave = payload.weave.trim();
+      if (payload.occasion?.trim()) product.occasion = payload.occasion.trim();
+      if (payload.hasBlousePiece !== undefined) product.hasBlousePiece = payload.hasBlousePiece;
+      if (payload.careInstructions?.trim()) product.careInstructions = payload.careInstructions.trim();
+      if (payload.productStatusId?.trim()) product.productStatusId = payload.productStatusId.trim();
+
+      const data = await gqlAdmin<{ updateProduct?: Array<{ productId: string; name: string; formatted?: string }> }>(
+        `mutation UpdateProduct($product: ProductMutation!) {
+          updateProduct(product: $product) { productId name formatted }
+        }`,
+        { product }
+      );
+      const updated = data?.updateProduct?.[0];
+      if (!updated?.productId) return updated ?? null;
+
+      // Sync mood mappings to match selectedMoodIds
+      const selected = new Set((payload.selectedMoodIds ?? []).map((id) => id?.trim()).filter(Boolean));
+      const current = await searchProductMoodMappingsByProduct(updated.productId);
+      const currentMoodIds = new Set(current.map((m) => m.moodId));
+
+      for (const moodId of selected) {
+        if (!currentMoodIds.has(moodId)) {
+          try {
+            await createProductMoodMapping(updated.productId, moodId);
+          } catch (err) {
+            console.error("Failed to add mood mapping:", err);
+          }
+        }
+      }
+      for (const m of current) {
+        if (!selected.has(m.moodId)) {
+          try {
+            await deleteProductMoodMapping(updated.productId, m.moodId);
+          } catch (err) {
+            console.error("Failed to remove mood mapping:", err);
+          }
+        }
+      }
+
+      // Sync variants + inventory (persist stock edits and new variants on update)
+      const incomingVariants = payload.variants ?? [];
+      const keptVariantIds = new Set<string>();
+      for (const v of incomingVariants) {
+        try {
+          const sizeId = v.sizeId?.trim() || undefined;
+          const colorId = v.colorId?.trim() || undefined;
+          const additionalPricePaise = v.additionalPricePaise?.trim() || undefined;
+          const quantityAvailable = (v.quantityAvailable?.trim() || "0").replace(/^$/, "0");
+          const reorderLevel = v.reorderLevel?.trim() || undefined;
+
+          let variantId = v.variantId?.trim() || "";
+          if (!variantId) {
+            const createdVariant = await createProductVariant({
+              productId: updated.productId,
+              sizeId,
+              colorId,
+              additionalPricePaise,
+            });
+            variantId = createdVariant?.variantId ?? "";
+          } else {
+            await updateProductVariant({
+              variantId,
+              productId: updated.productId,
+              sizeId,
+              colorId,
+              additionalPricePaise,
+            });
+          }
+          if (!variantId) continue;
+          keptVariantIds.add(variantId);
+
+          const inventoryRows = await searchInventoryByVariantId(variantId);
+          if (inventoryRows.length > 0) {
+            await updateInventoryItem({
+              inventoryId: inventoryRows[0].inventoryId,
+              quantityAvailable,
+              reorderLevel,
+            });
+          } else {
+            await createInventoryItem({
+              variantId,
+              quantityAvailable,
+              reorderLevel,
+            });
+          }
+        } catch (err) {
+          console.error("Failed to sync variant/inventory:", err);
+        }
+      }
+      // Delete variants removed from the edit form
+      for (const oldVariantId of payload.initialVariantIdsWhenEdit ?? []) {
+        if (!keptVariantIds.has(oldVariantId)) {
+          try {
+            await deleteProductVariant(oldVariantId);
+          } catch (err) {
+            console.error("Failed to delete removed variant:", err);
+          }
+        }
+      }
+
+      return updated;
+    },
+    onSuccess: async (updated) => {
+      try {
+        const successText = updated
+          ? `Updated: ${updated.name}${updated.formatted ? ` (${updated.formatted})` : ""}`
+          : "Product updated.";
+        setMessage(successText);
+        showToast({ title: "Product updated", description: successText });
+        // Sync product images: update order for kept, bulk insert new, delete removed (1 row per image)
+        setIsUpdateReflecting(true);
+        const productId = updated?.productId;
+        const hasExisting = existingProductImages.length > 0;
+        const hasNew = imageFiles.length > 0;
+        const hasOrdered = orderedProductImages != null && orderedProductImages.length > 0;
+        if (productId && (hasOrdered || hasExisting || hasNew)) {
+          try {
+            let items: Array<{ imageId?: string; key?: string; url?: string }>;
+            if (hasOrdered && orderedProductImages) {
+              // Preserve confirmed order: upload new in order, then build items in same order
+              const newKeys: string[] = [];
+              for (let i = 0; i < orderedProductImages.length; i++) {
+                const item = orderedProductImages[i];
+                if (item.type !== "new") continue;
+                const file = item.file;
+                const presigned = await gqlAdmin<{
+                  getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
+                }>(
+                  `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
+                    getPresignedUploadUrl(input: $input) { uploadUrl key }
+                  }`,
+                  {
+                    input: {
+                      productId,
+                      filename: file.name,
+                      contentType: file.type || "application/octet-stream",
+                      displayOrder: i,
+                    },
+                  }
+                );
+                const info = presigned.getPresignedUploadUrl?.[0];
+                if (!info) throw new Error("Did not receive upload URL.");
+                await fetch(info.uploadUrl, {
+                  method: "PUT",
+                  headers: { "Content-Type": file.type || "application/octet-stream" },
+                  body: file,
+                });
+                newKeys.push(info.key);
+              }
+              let newIndex = 0;
+              items = orderedProductImages.map((item) =>
+                item.type === "existing"
+                  ? { imageId: item.image.imageId ?? undefined, key: undefined, url: undefined }
+                  : { imageId: undefined, key: newKeys[newIndex++], url: undefined }
+              );
+            } else {
+              // No confirmed order: existing first, then new
+              const newKeys: string[] = [];
+              for (let i = 0; i < imageFiles.length; i++) {
+                const file = imageFiles[i];
+                const presigned = await gqlAdmin<{
+                  getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
+                }>(
+                  `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
+                    getPresignedUploadUrl(input: $input) { uploadUrl key }
+                  }`,
+                  {
+                    input: {
+                      productId,
+                      filename: file.name,
+                      contentType: file.type || "application/octet-stream",
+                      displayOrder: i,
+                    },
+                  }
+                );
+                const info = presigned.getPresignedUploadUrl?.[0];
+                if (!info) throw new Error("Did not receive upload URL.");
+                await fetch(info.uploadUrl, {
+                  method: "PUT",
+                  headers: { "Content-Type": file.type || "application/octet-stream" },
+                  body: file,
+                });
+                newKeys.push(info.key);
+              }
+              const existingItems = existingProductImages.map((im) => ({
+                imageId: im.imageId ?? undefined,
+                key: undefined,
+                url: undefined,
+              }));
+              const newItems = newKeys.map((key) => ({
+                imageId: undefined,
+                key,
+                url: undefined,
+              }));
+              items = [...existingItems, ...newItems];
+            }
+            const syncResult = await gqlAdmin<{
+              syncProductImages?: Array<{ imageId: string; productId: string; url?: string | null }>;
+            }>(
+              `mutation SyncProductImages($input: SyncProductImagesInput!) {
+                syncProductImages(input: $input) { imageId productId url }
+              }`,
+              {
+                input: {
+                  productId,
+                  items,
+                },
+              }
+            );
+            const updatedImages = syncResult.syncProductImages ?? [];
+            const mappedImages: ProductImageListItem[] = updatedImages.map((im) => ({
+              imageId: im.imageId,
+              thumbnailUrl: im.url ?? null,
+              url: im.url ?? null,
+            }));
+            if (productId) {
+              setSelectedProduct((prev) =>
+                prev?.productId === productId
+                  ? { ...prev, images: mappedImages }
+                  : prev
+              );
+              queryClient.setQueryData<ProductListRow[]>(
+                ["admin", "products", appliedSearch],
+                (old) => {
+                  if (!old) return old;
+                  return old.map((prod) =>
+                    prod.productId === productId ? { ...prod, images: mappedImages } : prod
+                  );
+                }
+              );
+            }
+          } catch (err) {
+            setImageError(err instanceof Error ? err.message : "Image update failed.");
+          }
+        }
+        await queryClient.refetchQueries({ queryKey: ["admin", "products"] });
+        if (productId) {
+          const list = queryClient.getQueryData<ProductListRow[]>([
+            "admin",
+            "products",
+            appliedSearch,
+          ]);
+          const fresh = list?.find((p) => p.productId === productId);
+          if (fresh) setSelectedProduct(fresh);
+        }
+        setEditingProductId(null);
+        setImageFiles([]);
+        setExistingProductImages([]);
+        setOrderedProductImages(null);
+        setInitialExistingImageIdsWhenEdit([]);
+        setInitialVariantIdsWhenEdit([]);
+      } finally {
+        setIsUpdateReflecting(false);
+      }
+    },
+    onError: (err: Error) => setError(err.message || "Failed to update product."),
   });
 
   const handleChange = (
@@ -227,9 +751,10 @@ export default function AdminProductsPage() {
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >
   ) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
     setForm((prev) => {
-      const next = { ...prev, [name]: value };
+      const next = { ...prev, [name]: type === "checkbox" ? checked : value };
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next));
       }
@@ -257,31 +782,87 @@ export default function AdminProductsPage() {
     setImageError("");
     setImageMessage("");
 
-    if (imageFiles.length === 0) {
+    if (!editingProductId && imageFiles.length === 0) {
       setImageError("At least one product image is required.");
       return;
     }
     const parsed = adminProductFormSchema.safeParse(form);
     if (!parsed.success) {
       const first = parsed.error.flatten().fieldErrors;
-      const msg = first.name?.[0] ?? first.categoryId?.[0] ?? parsed.error.message;
+      const msg =
+        first.name?.[0] ??
+        first.priceRupees?.[0] ??
+        first.categoryId?.[0] ??
+        first.sku?.[0] ??
+        first.slug?.[0] ??
+        parsed.error.message;
       setError(msg);
       return;
     }
-    const { name, description, priceRupees, stockQuantity, categoryId } =
+    const { name, description, priceRupees, categoryId, sku, slug, fabric, weave, occasion, hasBlousePiece, careInstructions, productStatusId } =
       parsed.data;
-    const pricePaise = Math.round(parseFloat(priceRupees || "0") * 100);
-    if (isNaN(pricePaise) || pricePaise < 0) {
-      setError("Enter a valid price (e.g. 499.00).");
+    const pricePaise = rupeesInputToPaise(priceRupees || "0");
+    if (pricePaise <= 0) {
+      setError("Price must be greater than 0.");
       return;
     }
-    createProductMutation.mutate({
-      name,
-      description: description || "",
-      pricePaise,
-      stockQuantity: stockQuantity || "0",
-      categoryId,
-    });
+    if (pricePaise > MAX_MONEY_PAISE) {
+      setError("Price exceeds supported maximum.");
+      return;
+    }
+    if (variants.length === 0) {
+      setError("Add at least one variant (size) with stock.");
+      return;
+    }
+    const invalidVariant = variants.find(
+      (v) =>
+        !v.sizeId ||
+        v.quantityAvailable.trim() === "" ||
+        Number.isNaN(Number(v.quantityAvailable)) ||
+        Number(v.quantityAvailable) < 0
+    );
+    if (invalidVariant && variants.length > 0) {
+      setError("Each variant must have a size and non-negative stock quantity.");
+      return;
+    }
+    if (editingProductId) {
+      updateProductMutation.mutate({
+        productId: editingProductId,
+        name,
+        description: description || "",
+        pricePaise,
+        categoryId,
+        sku: sku || undefined,
+        slug: slug || undefined,
+        fabric: fabric || undefined,
+        weave: weave || undefined,
+        occasion: occasion || undefined,
+        hasBlousePiece,
+        careInstructions: careInstructions || undefined,
+        productStatusId: productStatusId || undefined,
+        selectedMoodIds,
+        variants,
+        initialVariantIdsWhenEdit,
+        currentExistingImages: existingProductImages,
+        initialExistingImageIdsWhenEdit,
+      });
+    } else {
+      createProductMutation.mutate({
+        name,
+        description: description || "",
+        pricePaise,
+        stockQuantity: form.stockQuantity ?? "0",
+        categoryId,
+        sku: sku || undefined,
+        slug: slug || undefined,
+        fabric: fabric || undefined,
+        weave: weave || undefined,
+        occasion: occasion || undefined,
+        hasBlousePiece,
+        careInstructions: careInstructions || undefined,
+        productStatusId: productStatusId || undefined,
+      });
+    }
   };
 
   // Auto-clear success message after a short delay
@@ -310,25 +891,185 @@ export default function AdminProductsPage() {
     };
   }, [imageFiles]);
 
-  const categoriesAuthLike =
-    categoriesError &&
-    categoriesErrorObj &&
-    /unauthorized|forbidden|admin/i.test(categoriesErrorObj.message);
+  // When Review images dialog is open and editing, show all images (preserve confirmed order when set)
+  useEffect(() => {
+    if (!imageDialogOpen || !editingProductId) return;
+    if (orderedProductImages != null && orderedProductImages.length > 0) {
+      setReviewImagesList(orderedProductImages);
+    } else {
+      const existing = existingProductImages.map((image) => ({ type: "existing" as const, image }));
+      const newItems = imagePreviews.map((url, i) => ({
+        type: "new" as const,
+        file: imageFiles[i],
+        previewUrl: url,
+      }));
+      setReviewImagesList([...existing, ...newItems]);
+    }
+  }, [imageDialogOpen, editingProductId, existingProductImages, imagePreviews, imageFiles, orderedProductImages]);
+
+  const categoriesErrorUi =
+    categoriesError && categoriesErrorObj
+      ? toRouteFailureUi("admin", categoriesErrorObj)
+      : null;
+  const productsErrorUi =
+    productsError && productsErrorObj
+      ? toRouteFailureUi("admin", productsErrorObj)
+      : null;
+  const categoryNameById = Object.fromEntries(categories.map((c) => [c.categoryId, c.name]));
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const next: { name?: string; limit?: string } = {};
+    const next: {
+      name?: string;
+      categoryId?: string;
+      moodId?: string;
+      fabric?: string;
+      weave?: string;
+      occasion?: string;
+      limit?: string;
+      productStatusId?: string;
+      startingPricePaise?: string;
+      endingPricePaise?: string;
+    } = {};
     const trimmedName = searchName.trim();
     const trimmedLimit = searchLimit.trim();
     if (trimmedName) next.name = trimmedName;
+    if (searchCategoryId) next.categoryId = searchCategoryId;
+    if (searchMoodId) next.moodId = searchMoodId;
+    if (searchFabric) next.fabric = searchFabric;
+    if (searchWeave) next.weave = searchWeave;
+    if (searchOccasion) next.occasion = searchOccasion;
+    if (searchProductStatusId) next.productStatusId = searchProductStatusId;
+    const minPaise = optionalRupeesInputToPaise(searchPriceMinRupees);
+    const maxPaise = optionalRupeesInputToPaise(searchPriceMaxRupees);
+    if (typeof minPaise === "number" && minPaise >= 0) {
+      next.startingPricePaise = String(Math.min(minPaise, MAX_MONEY_PAISE));
+    }
+    if (typeof maxPaise === "number" && maxPaise >= 0) {
+      next.endingPricePaise = String(Math.min(maxPaise, MAX_MONEY_PAISE));
+    }
     if (trimmedLimit) next.limit = trimmedLimit;
     setAppliedSearch(next);
   };
 
   const handleSearchClear = () => {
     setSearchName("");
+    setSearchCategoryId("");
+    setSearchMoodId("");
+    setSearchFabric("");
+    setSearchWeave("");
+    setSearchOccasion("");
+    setSearchProductStatusId("");
+    setSearchPriceMinRupees("");
+    setSearchPriceMaxRupees("");
     setSearchLimit("20");
     setAppliedSearch({ limit: "20" });
+  };
+
+  const handleArchiveConfirm = () => {
+    if (!archiveConfirm) return;
+    const pricePaise = parseInt(archiveConfirm.amountPaise ?? "0", 10) || 0;
+    updateProductMutation.mutate(
+      {
+        productId: archiveConfirm.productId,
+        name: archiveConfirm.name,
+        description: archiveConfirm.description ?? "",
+        pricePaise,
+        categoryId: archiveConfirm.categoryId ?? "",
+        sku: archiveConfirm.sku ?? undefined,
+        slug: archiveConfirm.slug ?? undefined,
+        fabric: archiveConfirm.fabric ?? undefined,
+        weave: archiveConfirm.weave ?? undefined,
+        occasion: archiveConfirm.occasion ?? undefined,
+        hasBlousePiece: archiveConfirm.hasBlousePiece ?? undefined,
+        careInstructions: archiveConfirm.careInstructions ?? undefined,
+        productStatusId: "3",
+      },
+      {
+        onSettled: () => setArchiveConfirm(null),
+        onSuccess: () => setMessage(`${archiveConfirm.name} archived.`),
+      }
+    );
+  };
+
+  const loadProductEditData = async (productId: string): Promise<string[]> => {
+    try {
+      const mappings = await searchProductMoodMappingsByProduct(productId);
+      return mappings.map((m) => m.moodId);
+    } catch (err) {
+      console.error("Failed to load product moods for edit:", err);
+      return [];
+    }
+  };
+
+  const beginEditProduct = async (p: ProductListRow) => {
+    setActiveTab("add");
+    setEditingProductId(p.productId);
+    setError("");
+    setMessage(`Loading product…`);
+    let product: ProductListRow = p;
+    let moodIds: string[] = [];
+    try {
+      const [fresh, loadedMoodIds] = await Promise.all([
+        fetchProductById(p.productId),
+        loadProductEditData(p.productId),
+      ]);
+      if (fresh) product = fresh;
+      moodIds = loadedMoodIds;
+    } catch (err) {
+      console.error("Failed to load product for edit:", err);
+      setError("Failed to load product. Using list data.");
+    }
+    setForm((prev) => ({
+      ...prev,
+      name: product.name ?? "",
+      description: product.description ?? "",
+      priceRupees: paiseToRupeesInput(product.amountPaise),
+      stockQuantity: product.stockQuantity ?? "",
+      categoryId: product.categoryId ?? prev.categoryId ?? "",
+      sku: product.sku ?? "",
+      slug: product.slug ?? "",
+      fabric: product.fabric ?? "",
+      weave: product.weave ?? "",
+      occasion: product.occasion ?? "",
+      hasBlousePiece: product.hasBlousePiece ?? true,
+      careInstructions: product.careInstructions ?? "",
+      productStatusId: product.productStatusId ?? "",
+    }));
+    const variantRows = (product as ProductListRowWithVariantStock).variantStock ?? [];
+    setVariants(
+      variantRows.map((v) => ({
+        variantId: v.variantId,
+        sizeId: v.sizeId ?? "",
+        colorId: undefined,
+        additionalPricePaise: "0",
+        quantityAvailable: String(v.quantity ?? 0),
+        reorderLevel: undefined,
+      }))
+    );
+    setInitialVariantIdsWhenEdit(
+      variantRows
+        .map((v) => v.variantId)
+        .filter((id): id is string => !!id)
+    );
+    setSelectedMoodIds(moodIds);
+    setImageFiles([]);
+    setImageError("");
+    setImageMessage("");
+    const images = product.images ?? [];
+    setExistingProductImages(images);
+    setOrderedProductImages(null);
+    setProductImagesLoadKey(String(Date.now()));
+    setInitialExistingImageIdsWhenEdit(
+      images
+        .map(
+          (im) =>
+            (im as ProductImageListItem & { image_id?: string }).imageId ??
+            (im as ProductImageListItem & { image_id?: string }).image_id
+        )
+        .filter((id): id is string => !!id)
+    );
+    setMessage(`Editing product: ${product.name}`);
   };
 
   const uploadImageMutation = useMutation({
@@ -360,6 +1101,7 @@ export default function AdminProductsPage() {
             productId,
             filename: file.name,
             contentType: file.type || "application/octet-stream",
+            displayOrder: order,
           },
         }
       );
@@ -418,11 +1160,28 @@ export default function AdminProductsPage() {
     },
   });
 
-  const [activeTab, setActiveTab] = useState<"view" | "add">("view");
-
   return (
-    <div className="max-w-xl">
-      <div className="mb-4 inline-flex rounded-full border border-[var(--color-line)] bg-white/70 p-1 text-xs">
+    <div className="mx-auto max-w-6xl w-full">
+      <div className="mb-8">
+        <p className="text-sm text-[var(--color-muted)]">Products</p>
+        <SectionHeading size="default" className="mt-1">
+          Product catalog
+        </SectionHeading>
+        <p className="mt-1 text-sm leading-relaxed text-[var(--color-muted)]">
+          View, search, and add products. Filter by category, status, and price.
+        </p>
+      </div>
+
+      <div className="mb-6 flex flex-wrap gap-3">
+        {activeTab === "view" && (
+          <span className="inline-flex items-center gap-2 rounded-full bg-violet-500/12 px-4 py-2 text-sm font-medium text-violet-700">
+            <Package className="h-4 w-4" />
+            {products.length} product{products.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-6 inline-flex rounded-full border border-[var(--color-line)] bg-white shadow-sm p-1 text-xs">
         <button
           type="button"
           onClick={() => setActiveTab("view")}
@@ -437,7 +1196,14 @@ export default function AdminProductsPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("add")}
+          onClick={() => {
+            setActiveTab("add");
+            setEditingProductId(null);
+            setExistingProductImages([]);
+            setOrderedProductImages(null);
+            setInitialExistingImageIdsWhenEdit([]);
+        setInitialVariantIdsWhenEdit([]);
+          }}
           className={cn(
             "rounded-full px-4 py-1.5 font-medium transition-colors",
             activeTab === "add"
@@ -450,143 +1216,104 @@ export default function AdminProductsPage() {
       </div>
 
       {activeTab === "view" && (
-        <Card>
-          <CardTitle>View products</CardTitle>
-          <CardContent className="mt-4 space-y-4 text-sm text-[var(--color-muted)]">
-            <form
-              onSubmit={handleSearchSubmit}
-              className="flex flex-col gap-3 rounded-lg border border-[var(--color-line)] bg-white/70 p-3 sm:flex-row sm:items-end"
-            >
-              <div className="flex-1">
-                <label className="mb-1 block text-xs font-semibold tracking-[0.18em] text-[var(--color-muted)]">
-                  NAME CONTAINS
-                </label>
-                <Input
-                  type="text"
-                  value={searchName}
-                  onChange={(e) => setSearchName(e.target.value)}
-                  placeholder="e.g. silk, ivory"
-                  className="h-9 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold tracking-[0.18em] text-[var(--color-muted)]">
-                  LIMIT
-                </label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={searchLimit}
-                  onChange={(e) => setSearchLimit(e.target.value)}
-                  className="h-9 w-24 rounded-lg"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="submit"
-                  className="h-9 rounded-full bg-[var(--color-ink)] px-4 text-xs hover:bg-[var(--color-ink)]/90"
-                >
-                  Search
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleSearchClear}
-                  className="h-9 rounded-full border-[var(--color-line)] px-4 text-xs"
-                >
-                  Clear
-                </Button>
-              </div>
-            </form>
+        <>
+          <ProductsFiltersCard
+            filters={{
+              searchName,
+              searchCategoryId,
+              searchProductStatusId,
+              searchMoodId,
+              searchPriceMinRupees,
+              searchPriceMaxRupees,
+              searchLimit,
+              searchFabric,
+              searchWeave,
+              searchOccasion,
+            }}
+            categories={categories.map((c) => ({ id: c.categoryId, name: c.name }))}
+            moods={existingMoods.map((m) => ({ id: m.moodId, name: m.moodName }))}
+            fabrics={fabrics.map((f) => ({ id: f.fabricId, name: f.fabricName }))}
+            weaves={weaves.map((w) => ({ id: w.weaveId, name: w.weaveName }))}
+            occasions={occasions.map((o) => ({ id: o.occasionId, name: o.occasionName }))}
+            onFiltersChange={(next) => {
+              setSearchName(next.searchName);
+              setSearchCategoryId(next.searchCategoryId);
+              setSearchProductStatusId(next.searchProductStatusId);
+              setSearchMoodId(next.searchMoodId);
+              setSearchPriceMinRupees(next.searchPriceMinRupees);
+              setSearchPriceMaxRupees(next.searchPriceMaxRupees);
+              setSearchLimit(next.searchLimit);
+              setSearchFabric(next.searchFabric);
+              setSearchWeave(next.searchWeave);
+              setSearchOccasion(next.searchOccasion);
+            }}
+            onApply={handleSearchSubmit}
+            onClear={handleSearchClear}
+            onRefresh={() => {
+              void refetchProducts();
+            }}
+          />
+          <ProductsGridCard
+            products={products}
+            productsLoading={productsLoading}
+            productsError={productsError}
+            productsErrorUi={productsErrorUi}
+            categoryNameById={categoryNameById}
+            getThumbnail={getProductThumbnailWithCacheBuster}
+            onRetry={() => {
+              void refetchProducts();
+            }}
+            onOpenProduct={setSelectedProduct}
+            onEditProduct={beginEditProduct}
+            onArchiveProduct={setArchiveConfirm}
+          />
 
-            {productsError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                <p className="font-medium">Can&apos;t load products.</p>
-                <p className="mt-1 text-xs text-red-800/80">
-                  {productsErrorObj?.message ?? "Failed to load products."}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => refetchProducts()}
-                  className="mt-2 inline-flex items-center rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-50"
-                >
-                  Try again
-                </button>
-              </div>
-            )}
+          <ArchiveProductDialog
+            product={archiveConfirm}
+            isPending={updateProductMutation.isPending}
+            onClose={() => setArchiveConfirm(null)}
+            onConfirm={handleArchiveConfirm}
+          />
 
-            {productsLoading && !productsError && (
-              <p className="text-xs text-[var(--color-muted)]">
-                Loading products…
-              </p>
-            )}
-
-            {!productsLoading && !productsError && products.length === 0 && (
-              <p className="text-xs text-[var(--color-muted)]">
-                No products match your search yet. Once you create products in
-                the <strong>Add product</strong> tab, they will appear here.
-              </p>
-            )}
-
-            {!productsLoading && !productsError && products.length > 0 && (
-              <div className="overflow-hidden rounded-lg border border-[var(--color-line)] bg-white">
-                <div className="grid grid-cols-[2fr,1fr,1fr] gap-3 border-b border-[var(--color-line)] bg-[var(--color-ivory)] px-3 py-2 text-[10px] font-semibold tracking-[0.16em] text-[var(--color-muted)]">
-                  <span>NAME</span>
-                  <span className="text-right">PRICE</span>
-                  <span className="text-right">STOCK</span>
-                </div>
-                <ul className="divide-y divide-[var(--color-line)]">
-                  {products.map((p) => (
-                    <li key={p.productId} className="px-3 py-2.5">
-                      <div className="grid grid-cols-[2fr,1fr,1fr] items-baseline gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-[var(--color-ink)]">
-                            {p.name}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-[var(--color-muted)]">
-                            ID:{" "}
-                            <span className="font-mono text-[10px]">
-                              {p.productId}
-                            </span>
-                            {p.categoryId && (
-                              <>
-                                {" "}
-                                • Category:{" "}
-                                <span className="font-mono text-[10px]">
-                                  {p.categoryId}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right text-sm font-semibold text-[var(--color-ink)]">
-                          {p.formatted}
-                        </div>
-                        <div className="text-right text-xs text-[var(--color-muted)]">
-                          {p.stockQuantity ?? "—"}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          <ProductPreviewDialog
+            key={selectedProduct?.productId ?? "preview-none"}
+            product={selectedProduct}
+            open={!!selectedProduct}
+            onClose={() => setSelectedProduct(null)}
+            categoryNameById={categoryNameById}
+            getProductStatusLabel={getProductStatusLabel}
+          />
+        </>
       )}
 
       {activeTab === "add" && (
-        <Card className="mt-4">
-          <CardTitle>Add new product</CardTitle>
-          <CardContent className="mt-6">
+        <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-emerald-500 bg-white shadow-[var(--admin-card-shadow)]">
+          <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+            {editingProductId ? (
+              <Pencil className="h-4 w-4 text-emerald-500" />
+            ) : (
+              <Plus className="h-4 w-4 text-emerald-500" />
+            )}
+            {editingProductId ? "Edit product" : "Add new product"}
+          </CardTitle>
+          <CardContent className="mt-6 relative">
+            {isUpdateReflecting && (
+              <div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl bg-[var(--color-ivory)]/95"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <Spinner />
+                <p className="text-sm font-medium text-[var(--color-ink)]">
+                  Updating images &amp; refreshing…
+                </p>
+              </div>
+            )}
             {categoriesError && (
               <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                 <p className="font-medium">Can&apos;t load categories.</p>
                 <p className="mt-1 text-xs text-red-800/80">
-                  {categoriesAuthLike
-                    ? "Admin access was denied. Check NEXT_PUBLIC_ADMIN_API_KEY or your admin auth configuration."
-                    : categoriesErrorObj?.message ?? "Failed to load categories."}
+                  {categoriesErrorUi?.message ?? "Please try again."}
                 </p>
                 <button
                   type="button"
@@ -599,6 +1326,7 @@ export default function AdminProductsPage() {
             )}
             {error && (
               <div
+                id="admin-product-form-error"
                 className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
                 role="alert"
               >
@@ -615,10 +1343,11 @@ export default function AdminProductsPage() {
             )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                <label htmlFor="admin-product-name" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
                   Name *
                 </label>
                 <Input
+                  id="admin-product-name"
                   type="text"
                   name="name"
                   value={form.name}
@@ -626,13 +1355,16 @@ export default function AdminProductsPage() {
                   placeholder="e.g. Ivory Silk Saree"
                   className="rounded-lg"
                   autoFocus
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "admin-product-form-error" : undefined}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                <label htmlFor="admin-product-description" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
                   Description
                 </label>
                 <textarea
+                  id="admin-product-description"
                   name="description"
                   value={form.description}
                   onChange={handleChange}
@@ -641,41 +1373,34 @@ export default function AdminProductsPage() {
                   className={cn(
                     "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                   )}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "admin-product-form-error" : undefined}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                  <label htmlFor="admin-product-price" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
                     Price (₹) *
                   </label>
                   <Input
+                    id="admin-product-price"
                     type="text"
                     name="priceRupees"
                     value={form.priceRupees}
                     onChange={handleChange}
                     placeholder="e.g. 499.00"
                     className="rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
-                    Stock quantity
-                  </label>
-                  <Input
-                    type="number"
-                    name="stockQuantity"
-                    value={form.stockQuantity}
-                    onChange={handleChange}
-                    min={0}
-                    className="rounded-lg"
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? "admin-product-form-error" : undefined}
                   />
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                <label htmlFor="admin-product-category" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
                   Category *
                 </label>
                 <select
+                  id="admin-product-category"
                   name="categoryId"
                   value={form.categoryId}
                   onChange={handleChange}
@@ -684,6 +1409,8 @@ export default function AdminProductsPage() {
                   )}
                   disabled={categoriesLoading || categoriesError}
                   required
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "admin-product-form-error" : undefined}
                 >
                   <option value="">
                     {categoriesLoading ? "Loading categories…" : "Select category"}
@@ -710,8 +1437,9 @@ export default function AdminProductsPage() {
                 {showNewCategory && (
                   <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-[var(--color-line)] p-3">
                     <div className="min-w-0 flex-1">
-                      <label className="sr-only">New category name</label>
+                      <label htmlFor="admin-product-new-category" className="sr-only">New category name</label>
                       <Input
+                        id="admin-product-new-category"
                         type="text"
                         value={newCategoryName}
                         onChange={(e) => {
@@ -745,164 +1473,252 @@ export default function AdminProductsPage() {
                   </p>
                 )}
               </div>
-              <div className="mt-8 border-t border-[var(--color-line)] pt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                  Images *
-                </h3>
-                <p className="mt-2 text-xs text-[var(--color-muted)]">
-                  Select at least one image. All selected images will be uploaded
-                  and linked after the product is created.
-                </p>
-                {imageError && (
-                  <div
-                    className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
-                    role="alert"
-                  >
-                    {imageError}
-                  </div>
-                )}
-                {imageMessage && (
-                  <div
-                    className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
-                    role="status"
-                  >
-                    {imageMessage}
-                  </div>
-                )}
-                <div className="mt-3 space-y-3 text-xs text-[var(--color-muted)]">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        setImageFiles(files);
-                        setImageError("");
-                        setImageMessage("");
-                        if (files.length > 0) {
-                          setImageDialogOpen(true);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 rounded-full border-[var(--color-line)] px-4 text-xs"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Choose images…
-                    </Button>
-                  </div>
-                  <p className="text-[11px] text-[var(--color-muted)]">
-                    All selected images will be uploaded when you click{" "}
-                    <span className="font-semibold">Add product</span>.
-                  </p>
-                  {imageFiles.length > 0 && (
-                    <p className="text-[10px] text-[var(--color-muted)]">
-                      {imageFiles.length} image
-                      {imageFiles.length === 1 ? "" : "s"} selected.
-                    </p>
-                  )}
+              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="admin-product-sku" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">SKU</label>
+                  <Input
+                    id="admin-product-sku"
+                    type="text"
+                    name="sku"
+                    value={form.sku}
+                    onChange={handleChange}
+                    placeholder="Optional unique code"
+                    className="rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="admin-product-slug" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Slug</label>
+                  <Input
+                    id="admin-product-slug"
+                    type="text"
+                    name="slug"
+                    value={form.slug}
+                    onChange={handleChange}
+                    placeholder="Optional URL slug"
+                    className="rounded-lg"
+                  />
                 </div>
               </div>
-              <Button
-                type="submit"
-                disabled={createProductMutation.isPending}
-                className="mt-4 rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
-              >
-                {createProductMutation.isPending ? "Creating…" : "Add product"}
-              </Button>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label htmlFor="admin-product-fabric" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Fabric</label>
+                  <select
+                    id="admin-product-fabric"
+                    name="fabric"
+                    value={form.fabric}
+                    onChange={handleChange}
+                    className={cn(
+                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    )}
+                  >
+                    <option value="">Select fabric</option>
+                    {fabrics.map((f) => (
+                      <option key={f.fabricId} value={f.fabricName}>
+                        {f.fabricName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="admin-product-weave" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Weave</label>
+                  <select
+                    id="admin-product-weave"
+                    name="weave"
+                    value={form.weave}
+                    onChange={handleChange}
+                    className={cn(
+                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    )}
+                  >
+                    <option value="">Select weave</option>
+                    {weaves.map((w) => (
+                      <option key={w.weaveId} value={w.weaveName}>
+                        {w.weaveName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="admin-product-occasion" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Occasion</label>
+                  <select
+                    id="admin-product-occasion"
+                    name="occasion"
+                    value={form.occasion}
+                    onChange={handleChange}
+                    className={cn(
+                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    )}
+                  >
+                    <option value="">Select occasion</option>
+                    {occasions.map((o) => (
+                      <option key={o.occasionId} value={o.occasionName}>
+                        {o.occasionName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="hasBlousePiece"
+                  name="hasBlousePiece"
+                  checked={form.hasBlousePiece}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-[var(--color-line)]"
+                />
+                <label htmlFor="hasBlousePiece" className="text-sm font-medium text-[var(--color-ink)]">
+                  Has blouse piece
+                </label>
+              </div>
+              <div className="mt-4">
+                <label htmlFor="admin-product-care-instructions" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Care instructions</label>
+                <textarea
+                  id="admin-product-care-instructions"
+                  name="careInstructions"
+                  value={form.careInstructions}
+                  onChange={handleChange}
+                  placeholder="Optional care instructions"
+                  rows={2}
+                  className={cn(
+                    "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                  )}
+                />
+              </div>
+              <div className="mt-4">
+                <label htmlFor="admin-product-status" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Product status</label>
+                <select
+                  id="admin-product-status"
+                  name="productStatusId"
+                  value={form.productStatusId}
+                  onChange={handleChange}
+                  className={cn(
+                    "w-full max-w-xs rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                  )}
+                >
+                  <option value="">— Not set —</option>
+                  <option value="1">Draft</option>
+                  <option value="2">Active</option>
+                  <option value="3">Archived</option>
+                </select>
+              </div>
+              <ProductVariantsSection
+                variants={variants}
+                setVariants={setVariants}
+                sizes={sizes}
+                colors={colors}
+              />
+              <ProductMoodsSection
+                existingMoods={existingMoods}
+                selectedMoodIds={selectedMoodIds}
+                setSelectedMoodIds={setSelectedMoodIds}
+                newMoodName={newMoodName}
+                setNewMoodName={setNewMoodName}
+                moodCreateError={moodCreateError}
+                setMoodCreateError={setMoodCreateError}
+                createMoodMutation={createMoodMutation}
+              />
+                            <ProductImagesSection
+                imageError={imageError}
+                imageMessage={imageMessage}
+                fileInputRef={fileInputRef}
+                setOrderedProductImages={setOrderedProductImages}
+                setImageFiles={setImageFiles}
+                setImageError={setImageError}
+                setImageMessage={setImageMessage}
+                setImageDialogOpen={setImageDialogOpen}
+                editingProductId={editingProductId}
+                orderedProductImages={orderedProductImages}
+                existingProductImages={existingProductImages}
+                imagePreviews={imagePreviews}
+                imageFiles={imageFiles}
+                setReorderableImages={setReorderableImages}
+                setReorderImagesOpen={setReorderImagesOpen}
+                productImagesLoadKey={productImagesLoadKey}
+                getImageUrlWithCacheBuster={getImageUrlWithCacheBuster}
+                setExistingProductImages={setExistingProductImages}
+              /><div className="mt-4 flex items-center gap-2">
+                <Button
+                  type="submit"
+                  disabled={createProductMutation.isPending || updateProductMutation.isPending || isUpdateReflecting}
+                  className="rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
+                >
+                  {editingProductId
+                    ? updateProductMutation.isPending || isUpdateReflecting
+                      ? "Updating…"
+                      : "Update product"
+                    : createProductMutation.isPending
+                      ? "Creating…"
+                      : "Add product"}
+                </Button>
+                {editingProductId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingProductId(null);
+                      setForm((prev) => ({
+                        ...prev,
+                        name: "",
+                        description: "",
+                        priceRupees: "",
+                        sku: "",
+                        slug: "",
+                        fabric: "",
+                        weave: "",
+                        occasion: "",
+                        hasBlousePiece: true,
+                        careInstructions: "",
+                        productStatusId: "",
+                      }));
+                      setVariants([]);
+                      setSelectedMoodIds([]);
+                      setImageFiles([]);
+                      setExistingProductImages([]);
+                      setOrderedProductImages(null);
+                      setInitialExistingImageIdsWhenEdit([]);
+                      setInitialVariantIdsWhenEdit([]);
+                      setImageError("");
+                      setImageMessage("");
+                    }}
+                  >
+                    Cancel edit
+                  </Button>
+                )}
+              </div>
             </form>
           </CardContent>
         </Card>
       )}
-      <Dialog open={imageDialogOpen} onOpenChange={setImageDialogOpen}>
-        <DialogContent
-          title="Review images"
-          showClose
-          onEscapeKeyDown={() => setImageDialogOpen(false)}
-          onPointerDownOutside={() => setImageDialogOpen(false)}
-        >
-          <div className="space-y-4 text-sm text-[var(--color-muted)]">
-            <p className="font-medium text-[var(--color-ink)]">
-              Add your product images
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {imagePreviews.length > 0
-                ? imagePreviews.map((url, idx) => (
-                    <div
-                      key={imageFiles[idx]?.name ?? idx}
-                      className={cn(
-                        "relative aspect-square overflow-hidden rounded border border-dashed border-[var(--color-line)] bg-white cursor-move transition-transform duration-150",
-                        dragIndex === idx && "scale-[1.03] border-[var(--color-ink)]"
-                      )}
-                      draggable
-                      onDragStart={() => setDragIndex(idx)}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        if (dragIndex === null || dragIndex === idx) return;
-                        setImageFiles((prev) => {
-                          const next = [...prev];
-                          const [moved] = next.splice(dragIndex, 1);
-                          next.splice(idx, 0, moved);
-                          return next;
-                        });
-                        setDragIndex(idx);
-                      }}
-                      onDrop={() => {
-                        setDragIndex(null);
-                      }}
-                    >
-                      <img
-                        src={url}
-                        alt={imageFiles[idx]?.name ?? "Preview"}
-                        className="h-full w-full object-cover"
-                      />
-                      {idx === 0 && (
-                        <div className="absolute left-1 top-1 rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-medium text-white">
-                          Thumbnail
-                        </div>
-                      )}
-                    </div>
-                  ))
-                : Array.from({ length: 6 }).map((_, idx) => (
-                    <div
-                      key={idx}
-                      className="aspect-square rounded border border-dashed border-[var(--color-line)] bg-white"
-                    />
-                  ))}
-            </div>
-            {imagePreviews.length > 0 && (
-              <p className="text-[11px] text-[var(--color-muted)]">
-                {imageFiles.length} image
-                {imageFiles.length === 1 ? "" : "s"} selected.
-              </p>
-            )}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-full border-[var(--color-line)] px-4"
-                onClick={() => {
-                  setImageDialogOpen(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                className="rounded-full bg-[var(--color-ink)] px-4 text-white hover:bg-[var(--color-ink)]/90"
-                onClick={() => setImageDialogOpen(false)}
-              >
-                Confirm
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ProductImagesDialogs
+        imageDialogOpen={imageDialogOpen}
+        setImageDialogOpen={setImageDialogOpen}
+        reorderImagesOpen={reorderImagesOpen}
+        setReorderImagesOpen={setReorderImagesOpen}
+        editingProductId={editingProductId}
+        existingProductImages={existingProductImages}
+        imagePreviews={imagePreviews}
+        imageFiles={imageFiles}
+        reviewImagesList={reviewImagesList}
+        setReviewImagesList={setReviewImagesList}
+        reviewDragIndex={reviewDragIndex}
+        setReviewDragIndex={setReviewDragIndex}
+        dragIndex={dragIndex}
+        setDragIndex={setDragIndex}
+        setImageFiles={setImageFiles}
+        setOrderedProductImages={setOrderedProductImages}
+        setExistingProductImages={setExistingProductImages}
+        reorderableImages={reorderableImages}
+        setReorderableImages={setReorderableImages}
+        reorderDragIndex={reorderDragIndex}
+        setReorderDragIndex={setReorderDragIndex}
+        productImagesLoadKey={productImagesLoadKey}
+        getImageUrlWithCacheBuster={getImageUrlWithCacheBuster}
+      />
     </div>
   );
 }
+
+
+
+

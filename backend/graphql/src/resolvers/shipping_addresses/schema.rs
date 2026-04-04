@@ -1,9 +1,10 @@
 use juniper::{graphql_object, GraphQLInputObject};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ShippingAddress {
     pub shipping_address_id: String,
     pub user_id: Option<String>,
+    pub is_default: bool,
     pub country: String,
     pub state_region: String,
     pub city: String,
@@ -20,6 +21,9 @@ impl ShippingAddress {
     }
     async fn user_id(&self) -> &Option<String> {
         &self.user_id
+    }
+    async fn is_default(&self) -> bool {
+        self.is_default
     }
     async fn country(&self) -> &String {
         &self.country
@@ -45,6 +49,7 @@ impl ShippingAddress {
 #[graphql(description = "Create a shipping address")]
 pub struct NewShippingAddress {
     pub user_id: Option<String>,
+    pub is_default: Option<bool>,
     pub country: String,
     pub state_region: String,
     pub city: String,
@@ -58,6 +63,7 @@ pub struct NewShippingAddress {
 pub struct ShippingAddressMutation {
     pub shipping_address_id: String,
     pub user_id: Option<String>,
+    pub is_default: Option<bool>,
     pub country: String,
     pub state_region: String,
     pub city: String,

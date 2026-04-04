@@ -1,5 +1,4 @@
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::money::paise_to_decimal;
 use core_db_entities::entity::products;
 use proto::proto::core::{CreateProductRequest, ProductResponse, ProductsResponse};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
@@ -14,18 +13,40 @@ pub async fn create_product(
         product_id: ActiveValue::NotSet,
         name: ActiveValue::Set(req.name),
         description: ActiveValue::Set(req.description),
-        price: ActiveValue::Set(Some(paise_to_decimal(req.price_paise))),
         category_id: ActiveValue::Set(req.category_id),
-        sku: ActiveValue::NotSet,
-        slug: ActiveValue::NotSet,
+        sku: req
+            .sku
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        slug: req
+            .slug
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
         price_paise: ActiveValue::Set(req.price_paise as i32),
-        fabric: ActiveValue::NotSet,
-        weave: ActiveValue::NotSet,
-        occasion: ActiveValue::NotSet,
-        length_meters: ActiveValue::NotSet,
-        has_blouse_piece: ActiveValue::NotSet,
-        care_instructions: ActiveValue::NotSet,
-        product_status_id: ActiveValue::NotSet,
+        fabric: req
+            .fabric
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        weave: req
+            .weave
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        occasion: req
+            .occasion
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        has_blouse_piece: req
+            .has_blouse_piece
+            .map(|b| ActiveValue::Set(Some(if b { 1 } else { 0 })))
+            .unwrap_or(ActiveValue::NotSet),
+        care_instructions: req
+            .care_instructions
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        product_status_id: req
+            .product_status_id
+            .map(|id| ActiveValue::Set(Some(id)))
+            .unwrap_or(ActiveValue::NotSet),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };
@@ -39,6 +60,14 @@ pub async fn create_product(
                     description: model.description,
                     price_paise,
                     category_id: model.category_id,
+                    sku: model.sku,
+                    slug: model.slug,
+                    fabric: model.fabric,
+                    weave: model.weave,
+                    occasion: model.occasion,
+                    has_blouse_piece: model.has_blouse_piece.map(|v| v != 0),
+                    care_instructions: model.care_instructions,
+                    product_status_id: model.product_status_id,
                 }],
             };
             Ok(Response::new(response))

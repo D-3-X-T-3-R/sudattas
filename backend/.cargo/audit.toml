@@ -1,5 +1,13 @@
-# cargo-audit configuration (backend crate)
+# cargo-audit (https://github.com/rustsec/rustsec/tree/main/cargo-audit)
+#
+# RUSTSEC-2026-0049: rustls-webpki <0.103.10 — fixed in webpki 0.103.10+ used by rustls 0.23.
+# aws-smithy-http-client 1.1 still depends on rustls 0.21 + rustls-webpki 0.101 for the
+# hyper 0.14 / legacy TLS connector path (alongside rustls 0.23). No patched 0.101 release;
+# tracked upstream in smithy-rs / aws-sdk-rust. Re-run `cargo tree -i rustls-webpki@0.101.7`
+# after aws-sdk upgrades and remove this entry when the legacy stack is gone.
+#
+# RUSTSEC-2023-0071: rsa crate — Marvin/timing side-channel (CVE-2023-49092). Often pulled in
+# transitively (e.g. JWT/JWKS stacks). No fixed rsa release yet; revisit when dependencies upgrade.
 
 [advisories]
-# rsa 0.9.10 via sqlx-mysql / sea-orm; no fixed version available yet.
-ignore = ["RUSTSEC-2023-0071"]
+ignore = ["RUSTSEC-2026-0049", "RUSTSEC-2023-0071"]

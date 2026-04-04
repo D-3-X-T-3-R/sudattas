@@ -6,6 +6,12 @@ $ErrorActionPreference = "Stop"
 # Remove old entities
 Remove-Item *.rs -ErrorAction SilentlyContinue
 
+# Always use latest SeaORM CLI before generation.
+cargo install sea-orm-cli --locked --force
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to install/update sea-orm-cli"
+}
+
 # Generate entities from local Docker MySQL (SUDATTAS schema).
 sea-orm-cli generate entity `
   -u "mysql://root:12345678@127.0.0.1:3306/SUDATTAS" `

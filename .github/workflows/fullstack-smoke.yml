@@ -1,0 +1,128 @@
+name: Fullstack Smoke
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - "scripts/fullstack-smoke.sh"
+      - "scripts/route-contract-checks.sh"
+      - ".github/workflows/fullstack-smoke.yml"
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - "scripts/fullstack-smoke.sh"
+      - "scripts/route-contract-checks.sh"
+      - ".github/workflows/fullstack-smoke.yml"
+
+jobs:
+  smoke:
+    name: Fullstack Smoke
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: sudattas_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install protobuf compiler and redis-tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libprotobuf-dev redis-tools
+          protoc --version
+
+      - name: Setup test database schema
+        run: |
+          sleep 10
+          mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
+
+      - name: Build backend binaries
+        working-directory: ./backend
+        run: cargo build -p core_operations -p graphql --all-features
+
+      - name: Build frontend
+        working-directory: ./frontend
+        env:
+          NEXT_PUBLIC_GRAPHQL_URL: http://127.0.0.1:8080/v2
+        run: |
+          npm ci
+          npm run build
+          node ../scripts/check-frontend-performance-budgets.mjs
+          node ../scripts/check-contract-discipline.mjs
+
+      - name: Start services and run smoke checks
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/SUDATTAS
+          REDIS_URL: redis://127.0.0.1:6379
+          GRPC_SERVER: 0.0.0.0:50051
+          GRPC_URL: http://127.0.0.1:50051
+          GRAPHQL_URL: http://127.0.0.1:8080/v2
+          GRAPHQL_SESSION_ID: ci-smoke-session
+          RATE_LIMIT_PER_MINUTE: "300"
+          OAUTH_DOMAIN: https://accounts.google.com/
+          OAUTH_AUDIENCE: https://www.googleapis.com/oauth2/v3/tokeninfo
+          NEXT_PUBLIC_GRAPHQL_URL: http://127.0.0.1:8080/v2
+        run: |
+          set -euo pipefail
+          chmod +x ./backend/scripts/wait_for_http_ready.sh
+          chmod +x ./scripts/fullstack-smoke.sh
+          chmod +x ./scripts/route-contract-checks.sh
+
+          ./backend/target/debug/core_operations > /tmp/core_operations.log 2>&1 &
+          CORE_PID=$!
+          ./backend/target/debug/graphql > /tmp/graphql.log 2>&1 &
+          GRAPHQL_PID=$!
+          FRONTEND_PID=""
+
+          cleanup() {
+            [[ -n "$FRONTEND_PID" ]] && kill "$FRONTEND_PID" 2>/dev/null || true
+            kill "$CORE_PID" "$GRAPHQL_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          ./backend/scripts/wait_for_http_ready.sh http://127.0.0.1:8080/ready 90 3
+
+          (
+            cd frontend
+            npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/frontend.log 2>&1 &
+            echo $! > /tmp/frontend.pid
+          )
+          FRONTEND_PID="$(cat /tmp/frontend.pid)"
+
+          ./backend/scripts/wait_for_http_ready.sh http://127.0.0.1:3000/ 90 3
+          ./scripts/fullstack-smoke.sh

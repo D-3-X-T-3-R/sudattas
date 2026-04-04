@@ -17,7 +17,7 @@ Or manually:
 ```bash
 # 1. Start MySQL (cd backend && docker-compose up -d)
 # 2. Wait for MySQL to be ready
-cargo install sea-orm-cli --locked
+cargo install sea-orm-cli --locked --force
 sea-orm-cli generate entity -u "mysql://root:12345678@localhost:3306/SUDATTAS" \
   -o backend/core_db_entities/src/entity --with-serde both --date-time-crate chrono
 ```
@@ -274,7 +274,7 @@ Stores CDN references (R2). Base64 path removed.
 | thumbnail_url | VARCHAR | Optional thumbnail URL |
 | AltText | VARCHAR | |
 
-### Reviews / ProductRatings / ProductAttributes / ProductVariants
+### Reviews / ProductRatings / ProductMoods / ProductVariants
 Standard product enrichment tables.
 
 ### Inventory
@@ -306,8 +306,12 @@ The database schema is maintained only in SQL files (no Rust migrations):
 ### Migrations safety
 
 - **Forward-only:** Schema changes are additive (new constraints, new indexes, new tables). No destructive ALTERs without backfill.
+- **SQL migration files:** Put incremental forward migrations in `backend/database/migrations/*.sql`. They are applied once and tracked in DB table `schema_migrations`.
 - **CI:** Backend CI loads `01_schema.sql` on an empty MySQL and runs entity generation + tests; this validates that the schema loads and matches committed entities.
 - After changing 01_schema, regenerate entities and commit: `cd backend/core_db_entities && ./regenerate_entities.ps1` (or the shell equivalent).
+- Local bootstrap modes:
+  - Preserve data (default): `./start-services.sh --preserve-data` or `.\start-services.ps1 -PreserveData`
+  - Fresh DB reset: `./start-services.sh --fresh` or `.\start-services.ps1 -Fresh`
 
 ### Loading the schema
 

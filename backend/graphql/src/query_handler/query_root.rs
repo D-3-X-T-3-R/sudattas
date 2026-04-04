@@ -20,7 +20,7 @@ use crate::resolvers::{
     order_events::{self, schema::OrderEvent},
     orders::{
         self,
-        schema::{Order, SearchOrder},
+        schema::{Order, OrderStatus, SearchOrder},
     },
     payment_intents::{
         self,
@@ -33,6 +33,10 @@ use crate::resolvers::{
     product_images::{
         self,
         schema::{GetPresignedUploadUrl, PresignedUploadUrl, ProductImage, SearchProductImage},
+    },
+    product_moods::{
+        self,
+        schema::{ProductMood, SearchProductMoodInput},
     },
     reviews::{
         self,
@@ -61,6 +65,53 @@ use juniper::FieldResult;
 use juniper::IntoFieldError;
 
 pub struct QueryRoot;
+
+fn require_jwt(context: &Context) -> Result<&str, juniper::FieldError> {
+    context.jwt_user_id().ok_or_else(|| {
+        juniper::FieldError::new("Login required for this operation", juniper::Value::null())
+    })
+}
+
+fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
+    if context.is_admin() {
+        Ok(())
+    } else {
+        crate::metrics::record_admin_authz_denied_total();
+        Err(juniper::FieldError::new(
+            "Admin authorization required",
+            juniper::Value::null(),
+        ))
+    }
+}
+
+async fn ensure_customer_can_access_order(
+    context: &Context,
+    order_id: &str,
+) -> Result<(), juniper::FieldError> {
+    if context.is_admin() {
+        return Ok(());
+    }
+    let uid = require_jwt(context)?.to_string();
+    let rows = orders::handlers::search_order(SearchOrder {
+        user_id: uid,
+        order_date_start: None,
+        order_date_end: None,
+        status_id: None,
+        order_id: Some(order_id.to_string()),
+        limit: Some("1".to_string()),
+        offset: Some("0".to_string()),
+    })
+    .await
+    .map_err(|e| e.into_field_error())?;
+
+    if rows.is_empty() {
+        return Err(juniper::FieldError::new(
+            "Order not found for current user",
+            juniper::Value::null(),
+        ));
+    }
+    Ok(())
+}
 
 /// Minimal auth capability info; uses Context fields so they are not reported as dead code.
 #[derive(juniper::GraphQLObject)]
@@ -115,6 +166,25 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    // Product moods (admin: list moods for dropdown)
+    #[instrument(err, ret)]
+    async fn search_product_mood(input: SearchProductMoodInput) -> FieldResult<Vec<ProductMood>> {
+        product_moods::handlers::search_product_mood(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Distinct moods from the newest products (storefront Shop by mood).
+    #[instrument(err, ret)]
+    async fn shop_highlight_moods(
+        recent_product_limit: Option<i32>,
+        max_moods: Option<i32>,
+    ) -> FieldResult<Vec<ProductMood>> {
+        product_moods::handlers::shop_highlight_moods(recent_product_limit, max_moods)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     /// P2 Recommendations: get related products for a given product.
     #[instrument(err, ret)]
     async fn get_related_products(input: GetRelatedProducts) -> FieldResult<Vec<Product>> {
@@ -141,15 +211,45 @@ impl QueryRoot {
 
     // Order
     #[instrument(err, ret)]
-    async fn search_order(search: SearchOrder) -> FieldResult<Vec<Order>> {
+    async fn search_order(context: &Context, mut search: SearchOrder) -> FieldResult<Vec<Order>> {
+        if !context.is_admin() {
+            let uid = require_jwt(context)?.to_string();
+            if !search.user_id.is_empty() && search.user_id != uid {
+                return Err(juniper::FieldError::new(
+                    "Customers can only query their own orders",
+                    juniper::Value::null(),
+                ));
+            }
+            search.user_id = uid;
+        }
         orders::handlers::search_order(search)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    async fn search_order_status(context: &Context) -> FieldResult<Vec<OrderStatus>> {
+        let _ = require_jwt(context)?;
+        orders::handlers::search_order_status()
             .await
             .map_err(|e| e.into_field_error())
     }
 
     // Wishlist
     #[instrument(err, ret)]
-    async fn search_wishlist_item(search: SearchWishlistItem) -> FieldResult<Vec<WishlistItem>> {
+    async fn search_wishlist_item(
+        context: &Context,
+        mut search: SearchWishlistItem,
+    ) -> FieldResult<Vec<WishlistItem>> {
+        if !context.is_admin() {
+            let uid = require_jwt(context)?.to_string();
+            if !search.user_id.is_empty() && search.user_id != uid {
+                return Err(juniper::FieldError::new(
+                    "Customers can only query their own wishlist",
+                    juniper::Value::null(),
+                ));
+            }
+            search.user_id = uid;
+        }
         wishlist::handlers::search_wishlist_item(search)
             .await
             .map_err(|e| e.into_field_error())
@@ -157,15 +257,78 @@ impl QueryRoot {
 
     // PaymentIntents
     #[instrument(err, ret)]
-    async fn get_payment_intent(input: GetPaymentIntent) -> FieldResult<Vec<PaymentIntent>> {
-        payment_intents::handlers::get_payment_intent(input)
+    async fn get_payment_intent(
+        context: &Context,
+        input: GetPaymentIntent,
+    ) -> FieldResult<Vec<PaymentIntent>> {
+        let customer_user_id = if context.is_admin() {
+            None
+        } else {
+            Some(require_jwt(context)?.to_string())
+        };
+
+        if let (Some(uid), Some(order_id)) = (&customer_user_id, input.order_id.as_deref()) {
+            let rows = orders::handlers::search_order(SearchOrder {
+                user_id: uid.clone(),
+                order_date_start: None,
+                order_date_end: None,
+                status_id: None,
+                order_id: Some(order_id.to_string()),
+                limit: Some("1".to_string()),
+                offset: Some("0".to_string()),
+            })
             .await
-            .map_err(|e| e.into_field_error())
+            .map_err(|e| e.into_field_error())?;
+            if rows.is_empty() {
+                return Ok(Vec::new());
+            }
+        }
+
+        let rows = payment_intents::handlers::get_payment_intent(input)
+            .await
+            .map_err(|e| e.into_field_error())?;
+
+        if let Some(uid) = customer_user_id {
+            let mut filtered = Vec::with_capacity(rows.len());
+            for row in rows {
+                if row.user_id.as_deref() == Some(uid.as_str()) {
+                    filtered.push(row);
+                    continue;
+                }
+                if let Some(oid) = row.order_id.as_deref() {
+                    let access = orders::handlers::search_order(SearchOrder {
+                        user_id: uid.clone(),
+                        order_date_start: None,
+                        order_date_end: None,
+                        status_id: None,
+                        order_id: Some(oid.to_string()),
+                        limit: Some("1".to_string()),
+                        offset: Some("0".to_string()),
+                    })
+                    .await
+                    .map_err(|e| e.into_field_error())?;
+                    if !access.is_empty() {
+                        filtered.push(row);
+                    }
+                }
+            }
+            Ok(filtered)
+        } else {
+            Ok(rows)
+        }
     }
 
     // Shipments
     #[instrument(err, ret)]
-    async fn get_shipment(input: GetShipment) -> FieldResult<Vec<Shipment>> {
+    async fn get_shipment(context: &Context, input: GetShipment) -> FieldResult<Vec<Shipment>> {
+        if let Some(order_id) = input.order_id.as_deref() {
+            ensure_customer_can_access_order(context, order_id).await?;
+        } else if !context.is_admin() {
+            return Err(juniper::FieldError::new(
+                "order_id is required for customer shipment lookups",
+                juniper::Value::null(),
+            ));
+        }
         shipments::handlers::get_shipment(input)
             .await
             .map_err(|e| e.into_field_error())
@@ -217,7 +380,8 @@ impl QueryRoot {
 
     // Order Events
     #[instrument(err, ret)]
-    async fn get_order_events(order_id: String) -> FieldResult<Vec<OrderEvent>> {
+    async fn get_order_events(context: &Context, order_id: String) -> FieldResult<Vec<OrderEvent>> {
+        ensure_customer_can_access_order(context, order_id.as_str()).await?;
         order_events::handlers::get_order_events(order_id)
             .await
             .map_err(|e| e.into_field_error())
@@ -226,10 +390,20 @@ impl QueryRoot {
     // Order Events search (admin audit log)
     #[instrument(err, ret)]
     async fn search_order_events(
+        context: &Context,
         order_id: Option<String>,
         limit: Option<String>,
         offset: Option<String>,
     ) -> FieldResult<Vec<OrderEvent>> {
+        if !context.is_admin() {
+            let oid = order_id.as_deref().ok_or_else(|| {
+                juniper::FieldError::new(
+                    "order_id is required for customer event queries",
+                    juniper::Value::null(),
+                )
+            })?;
+            ensure_customer_can_access_order(context, oid).await?;
+        }
         order_events::handlers::search_order_events(
             crate::resolvers::order_events::schema::SearchOrderEvents {
                 order_id,
@@ -253,10 +427,19 @@ impl QueryRoot {
 
     // Shipping addresses
     #[instrument(err, ret)]
-    async fn get_shipping_addresses() -> FieldResult<Vec<ShippingAddress>> {
-        shipping_addresses::handlers::get_shipping_addresses()
+    async fn get_shipping_addresses(context: &Context) -> FieldResult<Vec<ShippingAddress>> {
+        let uid = require_jwt(context)?.to_string();
+        let rows = shipping_addresses::handlers::get_shipping_addresses()
             .await
-            .map_err(|e| e.into_field_error())
+            .map_err(|e| e.into_field_error())?;
+
+        if context.is_admin() {
+            return Ok(rows);
+        }
+        Ok(rows
+            .into_iter()
+            .filter(|a| a.user_id.as_deref() == Some(uid.as_str()))
+            .collect())
     }
 
     // P2 Data retention: export current user's PII (no password)
@@ -269,7 +452,8 @@ impl QueryRoot {
 
     // Users (admin/user lookup)
     #[instrument(err, ret)]
-    async fn search_user(input: SearchUserInput) -> FieldResult<Vec<User>> {
+    async fn search_user(context: &Context, input: SearchUserInput) -> FieldResult<Vec<User>> {
+        require_admin(context)?;
         users::handlers::search_user(input)
             .await
             .map_err(|e| e.into_field_error())

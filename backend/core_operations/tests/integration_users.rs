@@ -278,6 +278,92 @@ async fn integration_user_create_rejects_duplicate_email_and_username() {
     txn.rollback().await.ok();
 }
 
+/// U2b - google provisioning is idempotent and reuses canonical customer identity on duplicate email.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_user_google_provisioning_reuses_existing_email_identity() {
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let role = user_roles::ActiveModel {
+        role_id: ActiveValue::NotSet,
+        role_name: ActiveValue::Set(format!("itest_role_google_merge_{}", now_tag)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert UserRoles");
+
+    let email = format!("itest_google_merge+{}@example.com", now_tag);
+    let phone = format!("90000{}", now_tag % 100000);
+
+    let base_user = core_operations::handlers::users::create_user(
+        &txn,
+        Request::new(CreateUserRequest {
+            username: format!("itest_google_base_{}", now_tag),
+            email: email.clone(),
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
+            full_name: Some("Base Email User".to_string()),
+            address: None,
+            phone: Some(phone.clone()),
+            role_id: Some(role.role_id),
+        }),
+    )
+    .await
+    .expect("base email user create should succeed")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("one base user");
+
+    let google_attempt = core_operations::handlers::users::create_user(
+        &txn,
+        Request::new(CreateUserRequest {
+            username: format!("itest_google_retry_{}", now_tag),
+            email: email.clone(),
+            auth_provider: "google".to_string(),
+            password_plain: None,
+            google_sub: Some(format!("google-sub-{}", now_tag)),
+            full_name: Some("Google Retry".to_string()),
+            address: None,
+            phone: Some(phone),
+            role_id: Some(role.role_id),
+        }),
+    )
+    .await
+    .expect("google provisioning should return existing canonical user")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("one returned user");
+
+    assert_eq!(
+        google_attempt.user_id, base_user.user_id,
+        "google provisioning should reuse existing user identity"
+    );
+
+    let by_id = core_operations::handlers::users::search_user(
+        &txn,
+        Request::new(SearchUserRequest {
+            user_id: base_user.user_id,
+        }),
+    )
+    .await
+    .expect("search user should succeed")
+    .into_inner()
+    .items;
+    assert_eq!(by_id.len(), 1);
+    assert_eq!(by_id[0].email, email);
+
+    txn.rollback().await.ok();
+}
+
 /// U3 – delete_user removes user and cascades to related data (e.g. cart rows deleted).
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
@@ -328,13 +414,11 @@ async fn integration_user_delete_cascades_to_cart() {
         name: ActiveValue::Set("Delete User Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price: ActiveValue::Set(None),
         price_paise: ActiveValue::Set(1_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
         occasion: ActiveValue::Set(None),
-        length_meters: ActiveValue::Set(None),
         has_blouse_piece: ActiveValue::Set(None),
         care_instructions: ActiveValue::Set(None),
         product_status_id: ActiveValue::Set(None),

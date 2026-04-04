@@ -129,6 +129,52 @@ pub fn validate_address_road(road: &str) -> Result<(), GqlError> {
     Ok(())
 }
 
+/// Validates India-style postal code (6 digits).
+pub fn validate_postal_code(postal_code: &str) -> Result<(), GqlError> {
+    let p = postal_code.trim();
+    if p.len() != 6 || !p.chars().all(|c| c.is_ascii_digit()) {
+        return Err(GqlError::new(
+            "Postal code must be exactly 6 digits",
+            Code::InvalidArgument,
+        ));
+    }
+    Ok(())
+}
+
+/// Validate positive money amount in minor units (paise).
+pub fn validate_amount_paise(amount: i64, label: &str) -> Result<(), GqlError> {
+    if amount <= 0 {
+        return Err(GqlError::new(
+            &format!("{} must be greater than 0", label),
+            Code::InvalidArgument,
+        ));
+    }
+    if amount > i64::from(i32::MAX) {
+        return Err(GqlError::new(
+            &format!("{} exceeds supported maximum", label),
+            Code::InvalidArgument,
+        ));
+    }
+    Ok(())
+}
+
+/// Validate non-negative money amount in minor units (paise).
+pub fn validate_non_negative_amount_paise(amount: i64, label: &str) -> Result<(), GqlError> {
+    if amount < 0 {
+        return Err(GqlError::new(
+            &format!("{} must be at least 0", label),
+            Code::InvalidArgument,
+        ));
+    }
+    if amount > i64::from(i32::MAX) {
+        return Err(GqlError::new(
+            &format!("{} exceeds supported maximum", label),
+            Code::InvalidArgument,
+        ));
+    }
+    Ok(())
+}
+
 /// Validates cart size (number of items). Use after fetching cart to enforce MAX_CART_ITEMS before add.
 pub fn validate_cart_size(current_count: usize) -> Result<(), GqlError> {
     if current_count >= MAX_CART_ITEMS {
@@ -175,5 +221,16 @@ mod tests {
     fn sku_slug_invalid() {
         assert!(validate_sku_slug("", "sku").is_err());
         assert!(validate_sku_slug("has space", "sku").is_err());
+    }
+
+    #[test]
+    fn amount_bounds() {
+        assert!(validate_amount_paise(1, "amount").is_ok());
+        assert!(validate_amount_paise(i64::from(i32::MAX), "amount").is_ok());
+        assert!(validate_amount_paise(0, "amount").is_err());
+        assert!(validate_amount_paise(i64::from(i32::MAX) + 1, "amount").is_err());
+        assert!(validate_non_negative_amount_paise(0, "amount").is_ok());
+        assert!(validate_non_negative_amount_paise(-1, "amount").is_err());
+        assert!(validate_non_negative_amount_paise(i64::from(i32::MAX) + 1, "amount").is_err());
     }
 }

@@ -1,7 +1,10 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef } from "react";
+import { motion, useInView, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
+
+const MOTION_OFFSET = 24;
 
 interface ScrollRevealProps {
   children: React.ReactNode;
@@ -10,6 +13,13 @@ interface ScrollRevealProps {
   direction?: "up" | "down" | "left" | "right";
 }
 
+const directionOffset = {
+  up: { y: MOTION_OFFSET },
+  down: { y: -MOTION_OFFSET },
+  left: { x: MOTION_OFFSET },
+  right: { x: -MOTION_OFFSET },
+};
+
 export function ScrollReveal({
   children,
   className = "",
@@ -17,40 +27,31 @@ export function ScrollReveal({
   direction = "up",
 }: ScrollRevealProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(false);
+  const inView = useInView(ref, { once: true, margin: "0px 0px 180px 0px" });
+  const reduceMotion = useReducedMotion();
+  const offset = directionOffset[direction];
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) setInView(true);
-      },
-      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
+  const initial = { opacity: 0, ...offset };
+  const visible = Boolean(reduceMotion) || inView;
+  const animate = visible ? { opacity: 1, x: 0, y: 0 } : initial;
 
   return (
-    <div
+    <motion.div
       ref={ref}
-      className={cn(
-        "scroll-reveal",
-        inView && "scroll-reveal-in-view",
-        direction === "up" && "scroll-reveal--up",
-        direction === "down" && "scroll-reveal--down",
-        direction === "left" && "scroll-reveal--left",
-        direction === "right" && "scroll-reveal--right",
-        className
-      )}
-      style={
-        delay > 0
-          ? ({ "--scroll-reveal-delay": `${delay}s` } as React.CSSProperties)
-          : undefined
+      initial={initial}
+      animate={animate}
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : {
+              opacity: { duration: 0.55, ease: [0.22, 1, 0.36, 1], delay },
+              x: { type: "spring", stiffness: 60, damping: 18, delay },
+              y: { type: "spring", stiffness: 60, damping: 18, delay },
+            }
       }
+      className={cn(className)}
     >
       {children}
-    </div>
+    </motion.div>
   );
 }

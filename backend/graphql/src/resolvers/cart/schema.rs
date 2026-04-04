@@ -2,7 +2,7 @@ use juniper::{graphql_object, FieldResult, GraphQLInputObject};
 
 use crate::resolvers::product::schema::Product;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Cart {
     pub cart_id: String,
     pub user_id: String,

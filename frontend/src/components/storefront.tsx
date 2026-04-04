@@ -1,230 +1,247 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import dynamic from "next/dynamic";
+import { usePathname, useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
-import { ensureGuestSession } from "@/lib/session";
-import { PRODUCTS_SEED } from "@/lib/seed-data";
-import type { Product, CartLine } from "@/lib/schemas";
+import { User } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useStorefront } from "@/context/storefront-context";
+import { useStorefrontLogin } from "@/context/storefront-login-context";
+import { useStorefrontCatalog } from "@/domains/storefront/hooks/use-storefront-catalog";
+import { useStorefrontNavigationEffects } from "@/domains/storefront/hooks/use-storefront-navigation-effects";
 import { useActiveSection } from "@/hooks/use-active-section";
 import { useLockBodyScroll } from "@/hooks/use-lock-body-scroll";
-import { useRazorpayTest } from "@/hooks/use-razorpay-test";
+import { ensureGuestSession } from "@/lib/session";
 import { goTo } from "@/hooks/use-scroll-to";
-import { AnnouncementBar } from "@/components/announcement-bar";
 import { Header } from "@/components/header";
 import { HeroSection } from "@/components/hero-section";
-import { EditorialStrip } from "@/components/editorial-strip";
 import { CollectionsSection } from "@/components/collections-section";
-import { SectionNav } from "@/components/section-nav";
+import { CategoriesSection } from "@/components/categories-section";
 import { ShopSection } from "@/components/shop-section";
-import { StorySection } from "@/components/story-section";
-import { Footer } from "@/components/footer";
+import { ExploreSection } from "@/components/explore-section";
 import { MenuDrawer } from "@/components/menu-drawer";
-import { CartDrawer } from "@/components/cart-drawer";
-import { WishlistDrawer } from "@/components/wishlist-drawer";
-import { QuickViewModal } from "@/components/quick-view-modal";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
-import { AuthSync } from "@/components/auth-sync";
+import { Section } from "@/components/ui/section";
+import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/loading";
 
-const AUTH0_ENABLED = !!(
-  typeof process !== "undefined" &&
-  process.env?.NEXT_PUBLIC_AUTH0_DOMAIN &&
-  process.env?.NEXT_PUBLIC_AUTH0_CLIENT_ID
-);
+const EditorialBlock = dynamic(() => import("@/components/editorial-block").then((m) => m.EditorialBlock), {
+  loading: () => (
+    <Section>
+      <div className="flex justify-center py-16">
+        <Spinner />
+      </div>
+    </Section>
+  ),
+});
+
+const StorySection = dynamic(() => import("@/components/story-section").then((m) => m.StorySection), {
+  loading: () => (
+    <Section id="story">
+      <div className="flex justify-center py-12">
+        <Spinner />
+      </div>
+    </Section>
+  ),
+});
+
+const Footer = dynamic(() => import("@/components/footer").then((m) => m.Footer), {
+  loading: () => (
+    <footer className="border-t border-[var(--color-line)] py-10">
+      <div className="mx-auto max-w-[2000px] px-4">
+        <div className="h-16 animate-pulse rounded bg-[var(--color-line)]/40" />
+      </div>
+    </footer>
+  ),
+});
 
 export function Storefront() {
-  const reduceMotion = useReducedMotion();
+  const pathname = usePathname();
+  const router = useRouter();
+  const { status, data: session } = useSession();
+  const { openLogin } = useStorefrontLogin();
+  const reduceMotion = !!useReducedMotion();
+  const { showToast } = useToast();
+  const { wishlist, toggleWish, cartCount, wishCount } = useStorefront();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [wishOpen, setWishOpen] = useState(false);
-  const [quickView, setQuickView] = useState<Product | null>(null);
-  const [query, setQuery] = useState("");
-  const [collection, setCollection] = useState("All");
-  const [occasion, setOccasion] = useState("All");
-  const [sort, setSort] = useState("Featured");
-  const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
-  const [cart, setCart] = useState<Record<string, { product: Product; qty: number }>>({});
 
-  const { paymentMessage, paymentLoading, runTest } = useRazorpayTest();
+  const {
+    query,
+    setQuery,
+    collection,
+    setCollection,
+    occasion,
+    setOccasion,
+    sort,
+    setSort,
+    products,
+    productsError,
+    productsBannerDismissed,
+    setProductsBannerDismissed,
+    categories,
+    moods,
+    shopMoodId,
+    loadingProducts,
+    filtered,
+    collectionOptions,
+    occasionOptions,
+    applyShopMoodFilter,
+  } = useStorefrontCatalog({ showToast });
+
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
-  useLockBodyScroll(menuOpen || cartOpen || wishOpen || !!quickView);
+  useLockBodyScroll(menuOpen);
+  useStorefrontNavigationEffects({ pathname, reduceMotion, loadingProducts });
 
   useEffect(() => {
-    ensureGuestSession();
+    void ensureGuestSession();
   }, []);
 
-  const occasions = useMemo(() => {
-    const set = new Set(PRODUCTS_SEED.map((p) => p.occasion));
-    return ["All", ...Array.from(set)];
-  }, []);
+  const goToProduct = (id: string) => router.push(`/product/${id}`);
+  const goToWithMotion = (id: string, instant?: boolean) => goTo(id, instant ?? reduceMotion);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let xs = PRODUCTS_SEED.filter((p) => {
-      const matchesQuery =
-        !q ||
-        [p.name, p.collection, p.fabric, p.occasion]
-          .join(" ")
-          .toLowerCase()
-          .includes(q);
-      const matchesCollection =
-        collection === "All" || p.collection === collection;
-      const matchesOccasion = occasion === "All" || p.occasion === occasion;
-      return matchesQuery && matchesCollection && matchesOccasion;
-    });
-    if (sort === "Price: Low") xs = [...xs].sort((a, b) => a.price - b.price);
-    if (sort === "Price: High") xs = [...xs].sort((a, b) => b.price - a.price);
-    if (sort === "Rating") xs = [...xs].sort((a, b) => b.rating - a.rating);
-    return xs;
-  }, [query, collection, occasion, sort]);
-
-  const cartLines: CartLine[] = useMemo(() => Object.values(cart), [cart]);
-  const cartCount = useMemo(
-    () => cartLines.reduce((s, l) => s + l.qty, 0),
-    [cartLines]
-  );
-  const cartSubtotal = useMemo(
-    () => cartLines.reduce((s, l) => s + l.qty * l.product.price, 0),
-    [cartLines]
-  );
-  const wishCount = useMemo(
-    () => Object.values(wishlist).filter(Boolean).length,
-    [wishlist]
-  );
-  const wishedProducts = useMemo(
-    () => PRODUCTS_SEED.filter((p) => wishlist[p.id]),
-    [wishlist]
-  );
-
-  const toggleWish = (p: Product) => {
-    setWishlist((prev) => ({ ...prev, [p.id]: !prev[p.id] }));
-  };
-  const addToCart = (p: Product) => {
-    setCart((prev) => {
-      const existing = prev[p.id];
-      const nextQty = existing ? existing.qty + 1 : 1;
-      return { ...prev, [p.id]: { product: p, qty: nextQty } };
-    });
-    setCartOpen(true);
-  };
-  const decCart = (id: string) => {
-    setCart((prev) => {
-      const line = prev[id];
-      if (!line) return prev;
-      if (line.qty <= 1) {
-        const { [id]: _, ...rest } = prev;
-        return rest;
-      }
-      return { ...prev, [id]: { ...line, qty: line.qty - 1 } };
-    });
-  };
-  const incCart = (id: string) => {
-    setCart((prev) => {
-      const line = prev[id];
-      if (!line) return prev;
-      return { ...prev, [id]: { ...line, qty: line.qty + 1 } };
-    });
-  };
-
-  const goToWithMotion = (id: string, instant?: boolean) =>
-    goTo(id, instant ?? !!reduceMotion);
+  const firstName = useMemo(() => {
+    const rawName = session?.user?.name?.trim() ?? "";
+    const looksLikePhone = /^\+?\d{10,15}$/.test(rawName);
+    return !rawName || looksLikePhone ? "Profile" : rawName.split(/\s+/)[0];
+  }, [session?.user?.name]);
 
   return (
-    <div
-      id="top"
-      className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]"
-    >
-      {AUTH0_ENABLED && <AuthSync />}
-      <AnnouncementBar />
+    <div id="top" className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <Header
         query={query}
         setQuery={setQuery}
         cartCount={cartCount}
         wishCount={wishCount}
         setMenuOpen={setMenuOpen}
-        setCartOpen={setCartOpen}
-        setWishOpen={setWishOpen}
         goTo={goToWithMotion}
-        authEnabled={AUTH0_ENABLED}
+        authEnabled
+        authButtons={
+          status === "authenticated" ? (
+            <Link
+              href="/profile"
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-line)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-accent-gold)] hover:text-[var(--color-accent-gold)]"
+              aria-label="Open profile"
+            >
+              <User size={14} />
+              {firstName}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openLogin()}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-line)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-accent-gold)] hover:text-[var(--color-accent-gold)]"
+              aria-label="Sign in"
+            >
+              <User size={14} />
+              Sign In
+            </button>
+          )
+        }
       />
 
       <HeroSection />
 
-      <EditorialStrip />
+      {productsError && !productsBannerDismissed && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="mx-auto flex max-w-[2000px] items-start justify-between gap-3">
+            <p className="min-w-0">
+              <strong>Catalog temporarily unavailable.</strong> We could not load products right now. {productsError}
+            </p>
+            <button
+              type="button"
+              onClick={() => setProductsBannerDismissed(true)}
+              className="shrink-0 rounded p-1 hover:bg-amber-200/50"
+              aria-label="Dismiss"
+            >
+              x
+            </button>
+          </div>
+        </div>
+      )}
 
       <CollectionsSection
         setCollection={setCollection}
-        reduceMotion={!!reduceMotion}
+        moods={moods}
+        onPickMood={(mood) => {
+          void applyShopMoodFilter(mood.moodId);
+        }}
+        reduceMotion={reduceMotion}
       />
 
-      <ShopSection
-        filtered={filtered}
-        collection={collection}
-        occasion={occasion}
-        sort={sort}
-        setCollection={setCollection}
-        setOccasion={setOccasion}
-        setSort={setSort}
-        occasions={occasions}
-        wishlist={wishlist}
-        onToggleWish={toggleWish}
-        onAddToCart={addToCart}
-        onQuickView={setQuickView}
+      <CategoriesSection
+        categories={categories.filter((category) => collectionOptions.includes(category.name))}
+        onPickCategory={(name) => setCollection(name)}
+        reduceMotion={reduceMotion}
       />
 
+      {loadingProducts ? (
+        <>
+          <Section id="shop">
+            <div className="flex justify-center py-16">
+              <Spinner />
+            </div>
+          </Section>
+          <Section id="explore">
+            <div className="flex justify-center py-16">
+              <Spinner />
+            </div>
+          </Section>
+        </>
+      ) : (
+        <>
+          <ShopSection
+            products={products}
+            wishlist={wishlist}
+            onToggleWish={toggleWish}
+            onQuickView={(product) => goToProduct(product.id)}
+            onViewAll={() => {
+              setSort("Latest");
+              goTo("explore", reduceMotion);
+            }}
+          />
+
+          <ExploreSection
+            filtered={filtered}
+            collection={collection}
+            occasion={occasion}
+            sort={sort}
+            setCollection={setCollection}
+            setOccasion={setOccasion}
+            setSort={setSort}
+            occasions={occasionOptions}
+            collections={collectionOptions}
+            moods={moods}
+            shopMoodId={shopMoodId}
+            onMoodChange={(id) => {
+              void applyShopMoodFilter(id);
+            }}
+            wishlist={wishlist}
+            onToggleWish={toggleWish}
+            onQuickView={(product) => goToProduct(product.id)}
+          />
+        </>
+      )}
+
+      <EditorialBlock />
       <StorySection />
-
       <Footer goTo={goToWithMotion} />
 
       <MenuDrawer
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         setCollection={setCollection}
-        reduceMotion={!!reduceMotion}
-      />
-
-      <WishlistDrawer
-        open={wishOpen}
-        onClose={() => setWishOpen(false)}
-        wishCount={wishCount}
-        wishedProducts={wishedProducts}
-        onQuickView={setQuickView}
-        onAddToCart={addToCart}
-        onToggleWish={toggleWish}
-      />
-
-      <CartDrawer
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
-        cartLines={cartLines}
-        cartSubtotal={cartSubtotal}
-        onDecCart={decCart}
-        onIncCart={incCart}
-        paymentLoading={paymentLoading}
-        paymentMessage={paymentMessage}
-        onTestRazorpay={runTest}
-        onCheckout={() => alert("Checkout flow not wired yet")}
-        authEnabled={AUTH0_ENABLED}
-      />
-
-      <QuickViewModal
-        product={quickView}
-        open={!!quickView}
-        onClose={() => setQuickView(null)}
-        wished={!!(quickView && wishlist[quickView.id])}
-        onToggleWish={toggleWish}
-        onAddToCart={addToCart}
+        reduceMotion={reduceMotion}
       />
 
       <MobileBottomBar
         activeSection={activeSection}
         wishCount={wishCount}
         cartCount={cartCount}
-        onWishOpen={() => setWishOpen(true)}
-        onCartOpen={() => setCartOpen(true)}
-        reduceMotion={!!reduceMotion}
+        onCartOpen={() => router.push("/bag")}
+        reduceMotion={reduceMotion}
       />
-
-      <SectionNav />
 
       <div className="h-16 md:hidden" />
     </div>

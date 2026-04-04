@@ -52,6 +52,7 @@ service GRPCServices {
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
     rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);
     rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);
+    rpc SearchOrderStatus(SearchOrderStatusRequest) returns (OrderStatusesResponse);
 
     // OrderDetails
     rpc CreateOrderDetails(CreateOrderDetailsRequest) returns (OrderDetailsResponse);
@@ -70,6 +71,7 @@ service GRPCServices {
     rpc SearchProductImage(SearchProductImageRequest) returns (ProductImagesResponse);
     rpc UpdateProductImage(UpdateProductImageRequest) returns (ProductImagesResponse);
     rpc DeleteProductImage(DeleteProductImageRequest) returns (ProductImagesResponse);
+    rpc SyncProductImages(SyncProductImagesRequest) returns (ProductImagesResponse);
 
     // Inventory
     rpc CreateInventoryItem(CreateInventoryItemRequest) returns (InventoryItemsResponse);
@@ -82,11 +84,12 @@ service GRPCServices {
     rpc SearchWishlistItem(SearchWishlistItemRequest) returns (WishlistItemsResponse);
     rpc DeleteWishlistItem(DeleteWishlistItemRequest) returns (WishlistItemsResponse);
 
-    // ProductAttributes
-    rpc CreateProductAttribute(CreateProductAttributeRequest) returns (ProductAttributesResponse);
-    rpc SearchProductAttribute(SearchProductAttributeRequest) returns (ProductAttributesResponse);
-    rpc UpdateProductAttribute(UpdateProductAttributeRequest) returns (ProductAttributesResponse);
-    rpc DeleteProductAttribute(DeleteProductAttributeRequest) returns (ProductAttributesResponse);
+    // ProductMoods
+    rpc CreateProductMood(CreateProductMoodRequest) returns (ProductMoodsResponse);
+    rpc SearchProductMood(SearchProductMoodRequest) returns (ProductMoodsResponse);
+    rpc ShopHighlightMoods(ShopHighlightMoodsRequest) returns (ShopHighlightMoodsResponse);
+    rpc UpdateProductMood(UpdateProductMoodRequest) returns (ProductMoodsResponse);
+    rpc DeleteProductMood(DeleteProductMoodRequest) returns (ProductMoodsResponse);
 
     // ShippingMethods
     rpc CreateShippingMethod(CreateShippingMethodRequest) returns (ShippingMethodsResponse);
@@ -118,16 +121,34 @@ service GRPCServices {
     rpc UpdateSize(UpdateSizeRequest) returns (SizesResponse);
     rpc DeleteSize(DeleteSizeRequest) returns (SizesResponse);
 
+    // Fabrics
+    rpc CreateFabric(CreateFabricRequest) returns (FabricsResponse);
+    rpc SearchFabric(SearchFabricRequest) returns (FabricsResponse);
+    rpc UpdateFabric(UpdateFabricRequest) returns (FabricsResponse);
+    rpc DeleteFabric(DeleteFabricRequest) returns (FabricsResponse);
+
+    // Weaves
+    rpc CreateWeave(CreateWeaveRequest) returns (WeavesResponse);
+    rpc SearchWeave(SearchWeaveRequest) returns (WeavesResponse);
+    rpc UpdateWeave(UpdateWeaveRequest) returns (WeavesResponse);
+    rpc DeleteWeave(DeleteWeaveRequest) returns (WeavesResponse);
+
+    // Occasions
+    rpc CreateOccasion(CreateOccasionRequest) returns (OccasionsResponse);
+    rpc SearchOccasion(SearchOccasionRequest) returns (OccasionsResponse);
+    rpc UpdateOccasion(UpdateOccasionRequest) returns (OccasionsResponse);
+    rpc DeleteOccasion(DeleteOccasionRequest) returns (OccasionsResponse);
+
     // Colors
     rpc CreateColor(CreateColorRequest) returns (ColorsResponse);
     rpc SearchColor(SearchColorRequest) returns (ColorsResponse);
     rpc UpdateColor(UpdateColorRequest) returns (ColorsResponse);
     rpc DeleteColor(DeleteColorRequest) returns (ColorsResponse);
 
-    // ProductAttributeMapping
-    rpc CreateProductAttributeMapping(CreateProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
-    rpc SearchProductAttributeMapping(SearchProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
-    rpc DeleteProductAttributeMapping(DeleteProductAttributeMappingRequest) returns (ProductAttributeMappingsResponse);
+    // ProductMoodMapping
+    rpc CreateProductMoodMapping(CreateProductMoodMappingRequest) returns (ProductMoodMappingsResponse);
+    rpc SearchProductMoodMapping(SearchProductMoodMappingRequest) returns (ProductMoodMappingsResponse);
+    rpc DeleteProductMoodMapping(DeleteProductMoodMappingRequest) returns (ProductMoodMappingsResponse);
 
     // ProductVariants
     rpc CreateProductVariant(CreateProductVariantRequest) returns (ProductVariantsResponse);

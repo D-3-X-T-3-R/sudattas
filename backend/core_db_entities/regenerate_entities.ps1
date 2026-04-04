@@ -98,6 +98,13 @@ Write-Host ""
 Write-Host "[6/6] Generating new entity files..." -ForegroundColor Yellow
 Set-Location $scriptDir
 
+Write-Host "Updating sea-orm-cli to latest..." -ForegroundColor Yellow
+cargo install sea-orm-cli --locked --force
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[FAIL] Failed to install/update sea-orm-cli" -ForegroundColor Red
+    exit 1
+}
+
 $connectionString = "mysql://root:12345678@localhost:3306/SUDATTAS"
 sea-orm-cli generate entity -u $connectionString -o src\entity --with-serde both --date-time-crate chrono --max-connections 1
 
@@ -105,7 +112,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "[FAIL] Entity generation failed" -ForegroundColor Red
     Write-Host ""
     Write-Host "Troubleshooting:" -ForegroundColor Yellow
-    Write-Host "  1. Make sure sea-orm-cli is installed: cargo install sea-orm-cli" -ForegroundColor Gray
+    Write-Host "  1. Make sure sea-orm-cli is installed: cargo install sea-orm-cli --locked --force" -ForegroundColor Gray
     Write-Host "  2. Check MySQL is accessible: docker exec sudattas-mysql mysql -u root -p12345678 -e 'SELECT 1;'" -ForegroundColor Gray
     exit 1
 }

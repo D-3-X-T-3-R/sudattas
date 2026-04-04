@@ -38,7 +38,8 @@ So:
 To expand further:
 
 1. **gRPC:** Add handler tests (MockDB) for orders, order_details, payment_intent, shipment, coupon, review, inventory, discount, shipping_*, product_images, order_events.
-2. **E2E:** Optional E2E for full flows (browse → cart → place order) and webhook endpoint.
+2. **E2E:** `graphql/tests/e2e_business_flows.rs` now covers business-flow smoke paths (browse, add-to-bag, authenticated identity context, save-address, profile-order lookup, admin allowed/denied boundary).
+3. **E2E:** Optional expansion for fully successful place-order/payment-verify webhook lifecycle with deterministic fixtures.
 3. **Integration:** Optional integration tests for more domains (reviews, payments, addresses).
 
 Running `cargo tarpaulin` (or checking Codecov) gives the exact coverage number; this doc answers “what is tested” and “are we testing all user interaction” (we are not).

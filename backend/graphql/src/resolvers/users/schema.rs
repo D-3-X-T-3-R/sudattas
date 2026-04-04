@@ -84,6 +84,10 @@ pub struct UpdateUserInput {
 #[graphql(description = "Search for a user by ID")]
 pub struct SearchUserInput {
     pub user_id: String,
+    /// Optional page size for list-mode queries (user_id = "0")
+    pub limit: Option<String>,
+    /// Optional offset for list-mode queries (user_id = "0")
+    pub offset: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

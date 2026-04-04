@@ -26,12 +26,20 @@ export const HERO_SLIDES = [
   },
 ];
 
+/** Single composite hero image generated for Sudatta's. */
+export const HERO_IMAGES = [
+  { src: "/hero/hero-sudattas-full.png", alt: "Sudatta's handcrafted sarees hero" },
+];
+
 export const COLLECTION_IMAGES = [
   heroOne,
   heroTwo,
   categoryHero,
   heroOne,
 ];
+
+/** Seed products use no external image URLs; product card shows placeholder until DB products load. */
+const SEED_IMAGE = "";
 
 export const PRODUCTS_SEED: Product[] = [
   {
@@ -45,8 +53,8 @@ export const PRODUCTS_SEED: Product[] = [
     occasion: "Festive",
     description:
       "Clean ivory body with a statement border. Designed to look expensive without being loud.",
-    image: categoryHero,
-    hoverImage: categoryHero,
+    image: SEED_IMAGE,
+    hoverImage: SEED_IMAGE,
     imageAlt: "Saree product image",
   },
   {
@@ -60,8 +68,8 @@ export const PRODUCTS_SEED: Product[] = [
     occasion: "Cocktail",
     description:
       "A modern floral story—editorial colors, fluid drape, and crisp finishing.",
-    image: categoryHero,
-    hoverImage: heroTwo,
+    image: SEED_IMAGE,
+    hoverImage: SEED_IMAGE,
     imageAlt: "Saree product image",
   },
   {
@@ -75,8 +83,8 @@ export const PRODUCTS_SEED: Product[] = [
     occasion: "Office",
     description:
       "Minimal motifs with a sharp edge. Built for repeat-wear and clean styling.",
-    image: heroOne,
-    hoverImage: categoryHero,
+    image: SEED_IMAGE,
+    hoverImage: SEED_IMAGE,
     imageAlt: "Saree product image",
   },
   {
@@ -90,8 +98,8 @@ export const PRODUCTS_SEED: Product[] = [
     occasion: "Wedding",
     description:
       "Dense craft, refined finish. Premium without the chaos.",
-    image: heroTwo,
-    hoverImage: heroOne,
+    image: SEED_IMAGE,
+    hoverImage: SEED_IMAGE,
     imageAlt: "Saree product image",
   },
 ];

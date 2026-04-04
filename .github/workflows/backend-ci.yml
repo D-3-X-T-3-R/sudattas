@@ -17,6 +17,20 @@ env:
 
 jobs:
   # ============================================================================
+  # Job 0: Public Env Safety
+  # ============================================================================
+  public-env-safety:
+    name: Public Env Safety
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Verify no privileged NEXT_PUBLIC env vars are exposed
+      run: bash ./scripts/check-no-privileged-public-env.sh
+
+  # ============================================================================
   # Job 1: Lint and Format Check
   # ============================================================================
   lint:
@@ -122,10 +136,12 @@ jobs:
         # 01_schema.sql is the single source of truth; creates and uses database SUDATTAS
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded successfully"
+        chmod +x ./backend/scripts/apply_sql_migrations.sh
+        ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations --verify-idempotent
 
     - name: Regenerate entities and verify
       run: |
-        cargo install sea-orm-cli
+        cargo install sea-orm-cli --locked
         sea-orm-cli generate entity \
           -u "mysql://root:test_password@127.0.0.1:3306/SUDATTAS" \
           -o backend/core_db_entities/src/entity \
@@ -133,7 +149,7 @@ jobs:
           --date-time-crate chrono \
           --max-connections 1
         if ! git diff --exit-code backend/core_db_entities/src/entity; then
-          echo "::error::Entity files are out of sync with schema. Run: sea-orm-cli generate entity -u 'mysql://root:test_password@127.0.0.1:3306/SUDATTAS' -o backend/core_db_entities/src/entity --with-serde both --date-time-crate chrono"
+          echo "::error::Entity files are out of sync with schema. Run: cargo install sea-orm-cli --locked && sea-orm-cli generate entity -u 'mysql://root:test_password@127.0.0.1:3306/SUDATTAS' -o backend/core_db_entities/src/entity --with-serde both --date-time-crate chrono --max-connections 1"
           exit 1
         fi
 
@@ -228,6 +244,8 @@ jobs:
         sleep 10
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded successfully"
+        chmod +x ./backend/scripts/apply_sql_migrations.sh
+        ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
 
     - name: Run integration tests
       working-directory: ./backend
@@ -308,9 +326,8 @@ jobs:
         sleep 10
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         echo "Database schema loaded"
-
-    - name: Seed Redis session for e2e auth
-      run: redis-cli -h 127.0.0.1 SET session:ci-e2e-session 1
+        chmod +x ./backend/scripts/apply_sql_migrations.sh
+        ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
 
     - name: Build E2E binaries
       working-directory: ./backend
@@ -325,24 +342,43 @@ jobs:
         REDIS_URL: redis://127.0.0.1:6379
         OAUTH_DOMAIN: https://accounts.google.com/
         OAUTH_AUDIENCE: https://www.googleapis.com/oauth2/v3/tokeninfo
+        ALLOWED_ORIGINS: https://app.sudattas.local
         GRAPHQL_URL: http://127.0.0.1:8080
-        GRAPHQL_SESSION_ID: ci-e2e-session
-        RATE_LIMIT_PER_MINUTE: "200"
+        RATE_LIMIT_PER_MINUTE: "2000"
+        INTERNAL_API_SECRET: ci-e2e-internal-secret
+        GRAPHQL_E2E_CUSTOMER_USER_ID: "9002"
+        GRAPHQL_E2E_ADMIN_USER_ID: "9001"
+        ADMIN_ALLOWED_USER_IDS: "9001"
       timeout-minutes: 8
       run: |
         ./target/debug/core_operations &
         sleep 5
         ./target/debug/graphql &
-        for i in $(seq 1 60); do
-          if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1; then
-            echo "GraphQL server ready"
-            break
-          fi
-          sleep 3
-        done
-        curl -sf http://127.0.0.1:8080/ > /dev/null || { echo "GraphQL server did not become ready"; exit 1; }
+        chmod +x ./scripts/wait_for_http_ready.sh
+        ./scripts/wait_for_http_ready.sh http://127.0.0.1:8080/ready 60 3
+        SESSION_JSON="$(curl -fsS -X POST http://127.0.0.1:8080/session/guest)"
+        GRAPHQL_SESSION_ID="$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("session_id",""))' <<< "$SESSION_JSON")"
+        if [[ -z "$GRAPHQL_SESSION_ID" ]]; then
+          echo "Failed to create guest session from /session/guest"
+          echo "Response: $SESSION_JSON"
+          exit 1
+        fi
+        export GRAPHQL_SESSION_ID
+        echo "Created guest session for session-path E2E tests"
+        set +e
         cargo test -p graphql --test e2e_tests --all-features -- --ignored
+        E2E_TESTS_STATUS=$?
+        unset GRAPHQL_SESSION_ID
         cargo test -p graphql --test e2e_all_graphql_operations --all-features -- --ignored
+        E2E_ALL_STATUS=$?
+        cargo test -p graphql --test e2e_business_flows --all-features -- --ignored
+        E2E_FLOWS_STATUS=$?
+        set -e
+        if [[ $E2E_TESTS_STATUS -ne 0 || $E2E_ALL_STATUS -ne 0 || $E2E_FLOWS_STATUS -ne 0 ]]; then
+          echo "One or more GraphQL E2E suites failed."
+          echo "e2e_tests=$E2E_TESTS_STATUS e2e_all_graphql_operations=$E2E_ALL_STATUS e2e_business_flows=$E2E_FLOWS_STATUS"
+          exit 1
+        fi
 
   # Aggregate test status so downstream jobs can keep `needs: test`
   test:
@@ -415,6 +451,8 @@ jobs:
       run: |
         sleep 10
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
+        chmod +x ./backend/scripts/apply_sql_migrations.sh
+        ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
 
     - name: Install tarpaulin
       run: cargo install cargo-tarpaulin
@@ -502,7 +540,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint, test, security, build]
+    needs: [public-env-safety, lint, test, security, build]
     if: always()
     
     steps:
@@ -510,6 +548,10 @@ jobs:
       run: |
         if [[ "${{ needs.lint.result }}" != "success" ]]; then
           echo "Lint job failed"
+          exit 1
+        fi
+        if [[ "${{ needs.public-env-safety.result }}" != "success" ]]; then
+          echo "Public env safety job failed"
           exit 1
         fi
         if [[ "${{ needs.test.result }}" != "success" ]]; then
