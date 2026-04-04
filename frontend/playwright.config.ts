@@ -4,6 +4,7 @@ const port = Number(process.env.PORT ?? 3000);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
 const desktopMode = process.env.PW_DESKTOP === "1";
 const ci = Boolean(process.env.CI);
+const disableArtifacts = process.env.PW_DISABLE_ARTIFACTS === "1";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -15,9 +16,9 @@ export default defineConfig({
   use: {
     baseURL,
     headless: true,
-    trace: "retain-on-failure",
-    screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    trace: disableArtifacts ? "off" : "retain-on-failure",
+    screenshot: disableArtifacts ? "off" : "only-on-failure",
+    video: disableArtifacts ? "off" : "retain-on-failure",
   },
   projects: [
     {
@@ -35,7 +36,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `npm run start -- --hostname 127.0.0.1 --port ${port}`,
-    cwd: __dirname,
+    cwd: process.cwd(),
     port,
     reuseExistingServer: !ci,
     timeout: 120_000,
