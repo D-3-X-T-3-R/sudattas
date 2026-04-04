@@ -249,10 +249,12 @@ jobs:
         fi
 
         ./backend/scripts/wait_for_http_ready.sh http://127.0.0.1:8080/ready 90 3
-        cd frontend
-        mkdir -p blob-report
         echo "Running Playwright shard ${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL}"
-        PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npm run test:e2e:journeys -- --shard=${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL} --reporter=blob --output=test-results
+        (
+          cd frontend
+          mkdir -p blob-report
+          PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/e2e/journey-paths.spec.ts --shard=${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL} --reporter=blob --output=test-results
+        )
 
     - name: Upload shard artifacts (always)
       if: always()
