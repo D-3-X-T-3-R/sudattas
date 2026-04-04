@@ -9,6 +9,7 @@ use crate::query_handler::Context;
 use serde::Deserialize;
 use std::sync::Arc;
 use std::time::Instant;
+use tracing::{error, info};
 use warp::http::StatusCode;
 use warp::hyper::body::Bytes;
 use warp::reply::Response;
@@ -19,6 +20,8 @@ use warp::Reply;
 struct GraphQLRequestBody {
     query: Option<String>,
     operation_name: Option<String>,
+    #[serde(default)]
+    variables: Option<juniper::Variables>,
 }
 
 /// Max query depth from env or default.
@@ -66,7 +69,7 @@ pub async fn handle_graphql_request(
     }
 
     let operation_name = req.operation_name.as_deref();
-    let variables = juniper::Variables::new();
+    let variables = req.variables.unwrap_or_default();
 
     let start = Instant::now();
     let result =
@@ -81,6 +84,15 @@ pub async fn handle_graphql_request(
 
     let (status, body_json) = match result {
         Ok((value, errors)) => {
+            info!(
+                request_id = ?ctx.request_id(),
+                client_action = ?ctx.client_action(),
+                auth_mode = %ctx.auth_mode(),
+                has_idempotency_key = ctx.idempotency_key().is_some(),
+                operation_name = ?operation_name,
+                graphql_error_count = errors.len(),
+                "GraphQL request processed"
+            );
             let data = serde_json::to_value(&value).unwrap_or(serde_json::Value::Null);
             let errs: Vec<serde_json::Value> = errors
                 .iter()
@@ -101,6 +113,15 @@ pub async fn handle_graphql_request(
             (200, response)
         }
         Err(e) => {
+            error!(
+                request_id = ?ctx.request_id(),
+                client_action = ?ctx.client_action(),
+                auth_mode = %ctx.auth_mode(),
+                has_idempotency_key = ctx.idempotency_key().is_some(),
+                operation_name = ?operation_name,
+                error = %e,
+                "GraphQL execution failed"
+            );
             let response = serde_json::json!({
                 "data": null,
                 "errors": [{ "message": e.to_string() }]

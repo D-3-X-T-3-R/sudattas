@@ -10,6 +10,8 @@ pub use update_product_images::*;
 pub mod confirm_image_upload;
 pub mod get_presigned_upload_url;
 pub mod r2_client;
+pub mod sync_product_images;
 
 pub use confirm_image_upload::confirm_image_upload;
 pub use get_presigned_upload_url::get_presigned_upload_url;
+pub use sync_product_images::sync_product_images;

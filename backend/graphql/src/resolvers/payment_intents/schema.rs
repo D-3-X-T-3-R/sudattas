@@ -97,7 +97,7 @@ pub struct VerifyRazorpayPaymentInput {
     pub razorpay_signature: String,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VerifyRazorpayPaymentResult {
     pub verified: bool,
     pub payment_intent: Option<PaymentIntent>,

@@ -11,6 +11,7 @@ use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64, to_option_i64},
 };
+use crate::validation::{validate_email, validate_phone};
 
 fn user_response_to_gql(u: UserResponse) -> User {
     User {
@@ -27,6 +28,9 @@ fn user_response_to_gql(u: UserResponse) -> User {
 
 #[instrument]
 pub(crate) async fn create_user(input: NewUser) -> Result<Vec<User>, GqlError> {
+    validate_email(&input.email)?;
+    validate_phone(input.phone.as_deref())?;
+
     let mut client = connect_grpc_client().await?;
     let response = client
         .create_user(CreateUserRequest {
@@ -54,16 +58,31 @@ pub(crate) async fn search_user(input: SearchUserInput) -> Result<Vec<User>, Gql
     let mut client = connect_grpc_client().await?;
     let user_id = parse_i64(&input.user_id, "user_id")?;
     let response = client.search_user(SearchUserRequest { user_id }).await?;
-    Ok(response
+    let mut rows: Vec<User> = response
         .into_inner()
         .items
         .into_iter()
         .map(user_response_to_gql)
-        .collect())
+        .collect();
+
+    // For list mode (user_id = 0), allow bounded pagination at GraphQL layer.
+    if user_id == 0 {
+        let limit = crate::graphql_limits::cap_page_size(to_option_i64(input.limit)).unwrap_or(50);
+        let offset = to_option_i64(input.offset).unwrap_or(0).max(0) as usize;
+        let limit = limit.max(1) as usize;
+        rows = rows.into_iter().skip(offset).take(limit).collect();
+    }
+
+    Ok(rows)
 }
 
 #[instrument]
 pub(crate) async fn update_user(input: UpdateUserInput) -> Result<Vec<User>, GqlError> {
+    if let Some(ref email) = input.email {
+        validate_email(email)?;
+    }
+    validate_phone(input.phone.as_deref())?;
+
     let mut client = connect_grpc_client().await?;
     let user_id = parse_i64(&input.user_id, "user_id")?;
     let response = client

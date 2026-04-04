@@ -3,8 +3,12 @@
 ## Rate limiting (GraphQL)
 
 - **Per-IP** rate limiting is applied to GraphQL and webhook routes (not to GET `/`, GET `/ready`, or OPTIONS).
-- Configure via env: `RATE_LIMIT_PER_MINUTE` (default `60`). Set to `0` to disable.
+- Configure via env: `RATE_LIMIT_PER_MINUTE` (default `240`). Set to `0` to disable.
+- Webhook route limit: `RATE_LIMIT_WEBHOOK_PER_MINUTE` (default `120`).
+- Optional trusted proxy mode: `RATE_LIMIT_TRUST_PROXY_HEADERS=true` makes rate limiting use `X-Real-Ip` / `X-Forwarded-For` before socket remote IP.
+  Use this only when GraphQL sits behind a trusted proxy/app server; do not enable on internet-facing GraphQL directly.
 - When exceeded: HTTP **429 Too Many Requests**.
+- 429 responses include `Retry-After: 1` to support client backoff.
 
 ## gRPC client (GraphQL → gRPC)
 
@@ -23,6 +27,12 @@
 
 - Each request gets a `request_id` (UUID) in the tracing span (or from `x-request-id` header if provided). Use it for log correlation.
 - The same ID is propagated to gRPC as `x-request-id` metadata for place_order and capture_payment (and can be extended to other resolvers via `connect_grpc_client_from_context(ctx)`).
+- Checkout/payment mutation logs include structured correlation fields:
+  - `request_id`
+  - `client_action` (from `X-Client-Action`)
+  - `auth_mode`
+  - `has_idempotency_key`
+  - operation-specific ids (`order_id`, `user_id`, `amount_paise` where relevant)
 
 ## Webhooks
 

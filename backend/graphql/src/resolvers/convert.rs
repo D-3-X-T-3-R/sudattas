@@ -22,6 +22,14 @@ pub fn product_response_to_gql(p: ProductResponse) -> Product {
         formatted: money.formatted,
         stock_quantity: None,
         category_id: Some(p.category_id.to_string()),
+        sku: p.sku,
+        slug: p.slug,
+        fabric: p.fabric,
+        weave: p.weave,
+        occasion: p.occasion,
+        has_blouse_piece: p.has_blouse_piece,
+        care_instructions: p.care_instructions,
+        product_status_id: p.product_status_id.map(|v| v.to_string()),
     }
 }
 

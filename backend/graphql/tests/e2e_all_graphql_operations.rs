@@ -26,6 +26,14 @@ async fn post_gql(
     if let Ok(session_id) = std::env::var("GRAPHQL_SESSION_ID") {
         req = req.header("X-Session-Id", session_id);
     }
+    if let Ok(secret) = std::env::var("INTERNAL_API_SECRET") {
+        if !secret.trim().is_empty() {
+            req = req.header("X-Internal-Auth", secret);
+            let admin_uid =
+                std::env::var("GRAPHQL_E2E_ADMIN_USER_ID").unwrap_or_else(|_| "9001".to_string());
+            req = req.header("X-Customer-User-Id", admin_uid);
+        }
+    }
     let res = req.send().await.expect("POST /v2");
     let status = res.status();
     let body: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
@@ -160,30 +168,6 @@ async fn e2e_query_search_wishlist_item() {
 
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_query_search_country() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "query { searchCountry(search: {}) { countryId countryName } }",
-        None,
-    )
-    .await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_query_search_state() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "query { searchState(search: {}) { stateId stateName } }",
-        None,
-    )
-    .await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_query_get_payment_intent() {
     let (status, body) = post_gql(
         &Client::new(),
@@ -272,7 +256,7 @@ async fn e2e_query_search_inventory_item() {
 async fn e2e_query_search_product_image() {
     let (status, body) = post_gql(
         &Client::new(),
-        "query { searchProductImage(search: {}) { imageId productId objectKey } }",
+        "query { searchProductImage(search: {}) { imageId productId url } }",
         None,
     )
     .await;
@@ -304,34 +288,10 @@ async fn e2e_query_get_order_events() {
 
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_query_search_discount() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "query { searchDiscount(input: {}) { discountId productId } }",
-        None,
-    )
-    .await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_query_search_shipping_method() {
     let (status, body) = post_gql(
         &Client::new(),
         "query { searchShippingMethod(input: {}) { methodId name } }",
-        None,
-    )
-    .await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_query_search_shipping_zone() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "query { searchShippingZone(input: {}) { zoneId name } }",
         None,
     )
     .await;
@@ -458,28 +418,6 @@ async fn e2e_mutation_add_wishlist_item() {
     let (status, body) = post_gql(
         &Client::new(),
         "mutation { addWishlistItem(wishlist: { userId: \"1\", productId: \"1\" }) { wishlistId productId } }",
-        None,
-    ).await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_create_country() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { createCountry(country: { countryName: \"E2E Country\", countryCode: \"E2\" }) { countryId countryName } }",
-        None,
-    ).await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_create_state() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { createState(state: { stateName: \"E2E State\", countryId: \"1\" }) { stateId stateName } }",
         None,
     ).await;
     assert_valid_gql_response(status, &body);
@@ -635,30 +573,6 @@ async fn e2e_mutation_update_order() {
 
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_delete_country() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { deleteCountry(countryId: \"1\") { countryId countryName } }",
-        None,
-    )
-    .await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_delete_state() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { deleteState(stateId: \"1\") { stateId stateName } }",
-        None,
-    )
-    .await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_mutation_create_payment_intent() {
     let (status, body) = post_gql(
         &Client::new(),
@@ -797,40 +711,6 @@ async fn e2e_mutation_delete_inventory_item() {
 
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_create_discount() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { createDiscount(input: { productId: \"1\", discountPercentage: 10.0, startDate: \"2025-01-01\", endDate: \"2025-12-31\" }) { discountId productId } }",
-        None,
-    ).await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_update_discount() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { updateDiscount(input: { discountId: \"1\", discountPercentage: 20.0, startDate: \"2025-01-01\", endDate: \"2025-12-31\" }) { discountId discountPercentage } }",
-        None,
-    ).await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_delete_discount() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { deleteDiscount(discountId: \"1\") { discountId productId } }",
-        None,
-    )
-    .await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_mutation_create_shipping_method() {
     let (status, body) = post_gql(
         &Client::new(),
@@ -857,40 +737,6 @@ async fn e2e_mutation_delete_shipping_method() {
     let (status, body) = post_gql(
         &Client::new(),
         "mutation { deleteShippingMethod(methodId: \"1\") { methodId methodName } }",
-        None,
-    )
-    .await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_create_shipping_zone() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { createShippingZone(input: { zoneName: \"E2E Zone\", description: \"\" }) { zoneId zoneName } }",
-        None,
-    ).await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_update_shipping_zone() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { updateShippingZone(input: { zoneId: \"1\", zoneName: \"Updated Zone\", description: \"\" }) { zoneId zoneName } }",
-        None,
-    ).await;
-    assert_valid_gql_response(status, &body);
-}
-
-#[tokio::test]
-#[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_mutation_delete_shipping_zone() {
-    let (status, body) = post_gql(
-        &Client::new(),
-        "mutation { deleteShippingZone(zoneId: \"1\") { zoneId zoneName } }",
         None,
     )
     .await;
@@ -1042,17 +888,17 @@ async fn e2e_admin_review_status_and_variants_and_coupons() {
 
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
-async fn e2e_product_attributes_and_mappings() {
+async fn e2e_product_moods_and_mappings() {
     let (status, body) = post_gql(
         &Client::new(),
         r#"
         mutation {
-          createProductAttribute(input: { attributeName: "Material", attributeValue: "Cotton" }) {
-            attributeId
+          createProductMood(input: { moodName: "Elegant" }) {
+            moodId
           }
-          createProductAttributeMapping(input: { productId: "1", attributeId: "1" }) {
+          createProductMoodMapping(input: { productId: "1", moodId: "1" }) {
             productId
-            attributeId
+            moodId
           }
         }
         "#,

@@ -23,6 +23,15 @@ pub fn record_webhook_processing_failed_total() {
     ::metrics::counter!("webhook_processing_failed_total", 1);
 }
 
+/// Webhook event processing latency in seconds.
+pub fn record_webhook_processing_duration_seconds(duration_sec: f64, outcome: &'static str) {
+    ::metrics::histogram!(
+        "webhook_processing_duration_seconds",
+        duration_sec,
+        "outcome" => outcome
+    );
+}
+
 /// Inventory decrement failed (insufficient stock) in place_order.
 pub fn record_inventory_update_failure_total() {
     ::metrics::counter!("inventory_update_failure_total", 1);
@@ -61,6 +70,13 @@ mod tests {
     fn record_webhook_processing_failed_does_not_panic() {
         install_test_recorder();
         record_webhook_processing_failed_total();
+    }
+
+    #[test]
+    fn record_webhook_processing_duration_does_not_panic() {
+        install_test_recorder();
+        record_webhook_processing_duration_seconds(0.02, "processed");
+        record_webhook_processing_duration_seconds(0.15, "failed");
     }
 
     #[test]

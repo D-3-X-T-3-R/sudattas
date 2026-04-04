@@ -30,34 +30,49 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     title?: string;
+    /** Merged with default title styles when `title` is set. */
+    titleClassName?: string;
     showClose?: boolean;
+    contentClassName?: string;
   }
->(({ className, children, title, showClose = true, ...props }, ref) => (
+>(({ className, children, title, titleClassName, showClose = true, contentClassName, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      aria-describedby={undefined}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden bg-[var(--color-ivory)] shadow-2xl focus:outline-none",
+        "fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl bg-[var(--color-ivory)] shadow-[0_20px_50px_-12px_rgba(26,24,20,0.18),0_8px_28px_-8px_rgba(26,24,20,0.1)] focus:outline-none",
         className
       )}
       {...props}
     >
-      <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
-        {title && (
-          <DialogPrimitive.Title className="text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]">
-            {title}
-          </DialogPrimitive.Title>
-        )}
-        {showClose && (
-          <DialogPrimitive.Close asChild>
-            <Button variant="outline" size="icon" aria-label="Close">
-              <X className="h-5 w-5" />
-            </Button>
-          </DialogPrimitive.Close>
-        )}
-      </div>
-      <div className="p-5">{children}</div>
+      {(title || showClose) ? (
+        <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
+          {title ? (
+            <DialogPrimitive.Title
+              className={cn(
+                "text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]",
+                titleClassName
+              )}
+            >
+              {title}
+            </DialogPrimitive.Title>
+          ) : (
+            <DialogPrimitive.Title className="sr-only">Dialog</DialogPrimitive.Title>
+          )}
+          {showClose && (
+            <DialogPrimitive.Close asChild>
+              <Button variant="outline" size="icon" aria-label="Close">
+                <X className="h-5 w-5" />
+              </Button>
+            </DialogPrimitive.Close>
+          )}
+        </div>
+      ) : (
+        <DialogPrimitive.Title className="sr-only">Dialog</DialogPrimitive.Title>
+      )}
+      <div className={cn("p-5", contentClassName)}>{children}</div>
     </DialogPrimitive.Content>
   </DialogPortal>
 ));

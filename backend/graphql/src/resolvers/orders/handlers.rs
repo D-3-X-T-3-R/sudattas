@@ -1,12 +1,13 @@
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateOrderRequest,
-    DeleteOrderRequest, PlaceOrderRequest, SearchOrderRequest, UpdateOrderRequest,
+    DeleteOrderRequest, PlaceOrderRequest, SearchOrderRequest, SearchOrderStatusRequest,
+    UpdateOrderRequest,
 };
 use tracing::instrument;
 
 use super::schema::{
     AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CreateOrderInput, NewOrder, Order,
-    OrderMutation, SearchOrder,
+    OrderMutation, OrderStatus, SearchOrder,
 };
 use crate::resolvers::{
     convert,
@@ -43,6 +44,23 @@ pub(crate) async fn place_order(
         .items
         .into_iter()
         .map(convert::order_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn search_order_status() -> Result<Vec<OrderStatus>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .search_order_status(SearchOrderStatusRequest {})
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(|r| OrderStatus {
+            status_id: r.status_id.to_string(),
+            status_name: r.status_name,
+        })
         .collect())
 }
 

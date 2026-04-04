@@ -24,6 +24,8 @@ fn test_api_version_query() {
         auth: Some(AuthSource::Jwt("user_123".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let (res, _errors) = juniper::execute_sync(
@@ -51,6 +53,8 @@ fn test_api_version_format_semver_like() {
         auth: Some(AuthSource::Jwt("any".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let (res, _) = juniper::execute_sync(
@@ -84,6 +88,8 @@ fn test_api_version_with_session_context() {
         auth: Some(AuthSource::Session("guest_99".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -115,6 +121,8 @@ fn test_auth_info_query() {
         auth: Some(AuthSource::Session("42".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -164,6 +172,8 @@ fn test_auth_info_jwt_context() {
         auth: Some(AuthSource::Jwt("jwt_user_456".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -200,6 +210,8 @@ fn test_auth_info_session_disabled_when_no_redis() {
         auth: Some(AuthSource::Session("sid".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -239,6 +251,8 @@ fn test_multiple_root_fields_in_one_query() {
         auth: Some(AuthSource::Jwt("u".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -279,6 +293,8 @@ async fn test_place_order_requires_jwt_rejects_session_only() {
         auth: Some(AuthSource::Session("guest_99".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let (res, errors) = juniper::execute(
@@ -313,6 +329,8 @@ async fn test_place_order_with_jwt_accepts_request() {
         auth: Some(AuthSource::Jwt("user_42".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let schema = schema();
@@ -338,6 +356,105 @@ async fn test_place_order_with_jwt_accepts_request() {
     }
 }
 
+#[tokio::test]
+async fn test_admin_mutation_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Session("guest_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"mutation { createCategory(category: { name: "Test" }) { categoryId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "admin mutation should reject non-admin auth, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(
+        err.contains("admin authorization required"),
+        "expected admin authorization error, got: {}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn test_search_user_requires_admin_authorization() {
+    std::env::set_var("ADMIN_ALLOWED_USER_IDS", "admin_user_999");
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"{ searchUser(input: { userId: "1" }) { userId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+    std::env::remove_var("ADMIN_ALLOWED_USER_IDS");
+
+    assert!(
+        !errors.is_empty(),
+        "searchUser should reject non-admin user, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"));
+}
+
+#[tokio::test]
+async fn test_search_order_rejects_cross_user_access_for_customer() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("42".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"{ searchOrder(search: { userId: "99" }) { orderId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "customer should not query another user's orders, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("own orders"));
+}
+
 // =============================================================================
 
 #[test]
@@ -348,6 +465,8 @@ fn test_invalid_query_syntax_returns_errors() {
         auth: Some(AuthSource::Jwt("u".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let schema = schema();
@@ -373,6 +492,8 @@ fn test_unknown_field_returns_errors() {
         auth: Some(AuthSource::Jwt("u".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let schema = schema();
@@ -402,6 +523,8 @@ fn test_money_type_in_schema() {
         auth: Some(AuthSource::Jwt("u".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -466,6 +589,8 @@ async fn integration_handler_rejects_deep_query_with_400() {
         auth: Some(AuthSource::Jwt("u".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
     let deep_query = "{ a { b { c { d { e { f { g { h { i { j { x } } } } } } } } } } }";
     let body =
@@ -501,6 +626,8 @@ async fn integration_handler_records_graphql_metrics() {
         auth: Some(AuthSource::Jwt("u".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
     let body = warp::hyper::body::Bytes::from(
         serde_json::json!({ "query": "{ apiVersion }" }).to_string(),
@@ -556,6 +683,8 @@ async fn integration_handler_rejects_high_complexity_with_400_when_limit_set() {
         auth: Some(AuthSource::Jwt("u".to_string())),
         request_id: None,
         idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
     };
     let body =
         warp::hyper::body::Bytes::from(serde_json::json!({ "query": complex_query }).to_string());

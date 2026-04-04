@@ -17,3 +17,6 @@ pub mod admin_mark_delivered;
 pub mod admin_mark_shipped;
 pub use admin_mark_delivered::*;
 pub use admin_mark_shipped::*;
+
+pub mod search_order_status;
+pub use search_order_status::*;

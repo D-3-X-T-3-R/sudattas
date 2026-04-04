@@ -24,6 +24,26 @@ const Sheet = ({
   className,
 }: SheetProps) => {
   const fromX = side === "left" ? -420 : 420;
+  const titleId = React.useId();
+  const closeBtnRef = React.useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = React.useRef<HTMLElement | null>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    window.setTimeout(() => closeBtnRef.current?.focus(), 0);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, [onClose, open]);
 
   return (
     <AnimatePresence>
@@ -50,16 +70,18 @@ const Sheet = ({
             )}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="sheet-title"
+            aria-labelledby={titleId}
+            tabIndex={-1}
           >
             <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
               <span
-                id="sheet-title"
+                id={titleId}
                 className="text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]"
               >
                 {title}
               </span>
               <Button
+                ref={closeBtnRef}
                 variant="outline"
                 size="icon"
                 onClick={onClose}

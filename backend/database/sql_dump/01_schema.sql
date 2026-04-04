@@ -1,53 +1,10 @@
 SET character_set_client = utf8mb4;
 
-CREATE DATABASE IF NOT EXISTS `SUDATTAS`;
+DROP DATABASE IF EXISTS `SUDATTAS`;
+CREATE DATABASE `SUDATTAS`;
 USE `SUDATTAS`;
 
--- Dropping existing tables if they exist;
--- Dropping tables with dependencies first
-
 SET FOREIGN_KEY_CHECKS = 0;
-
-DROP TABLE IF EXISTS `OutboxEvents`;
-DROP TABLE IF EXISTS `OrderEvents`;
-DROP TABLE IF EXISTS `WebhookEvents`;
-DROP TABLE IF EXISTS `Shipments`;
-DROP TABLE IF EXISTS `PaymentIntents`;
-DROP TABLE IF EXISTS `IdempotencyKeys`;
-DROP TABLE IF EXISTS `Sessions`;
-DROP TABLE IF EXISTS `Coupons`;
-DROP TABLE IF EXISTS `OrderDetails`;
-DROP TABLE IF EXISTS `Cart`;
-DROP TABLE IF EXISTS `Wishlist`;
-DROP TABLE IF EXISTS `ProductImages`;
-DROP TABLE IF EXISTS `Reviews`;
-DROP TABLE IF EXISTS `Transactions`;
-DROP TABLE IF EXISTS `NewsletterSubscribers`;
-DROP TABLE IF EXISTS `InventoryLog`;
-DROP TABLE IF EXISTS `UserActivity`;
-DROP TABLE IF EXISTS `EventLogs`;
-DROP TABLE IF EXISTS `Inventory`;
-DROP TABLE IF EXISTS `Orders`;
-DROP TABLE IF EXISTS `ProductVariants`;
-DROP TABLE IF EXISTS `Products`;
-DROP TABLE IF EXISTS `ProductCategories`;
-DROP TABLE IF EXISTS `ProductAttributes`;
-DROP TABLE IF EXISTS `ProductAttributeMapping`;
-DROP TABLE IF EXISTS `ShippingMethods`;
-DROP TABLE IF EXISTS `UserRoles`;
-DROP TABLE IF EXISTS `Sizes`;
-DROP TABLE IF EXISTS `Colors`;
-DROP TABLE IF EXISTS `ShippingAddresses`;
-DROP TABLE IF EXISTS `OrderStatus`;
-DROP TABLE IF EXISTS `SecurityAuditLog`;
-DROP TABLE IF EXISTS `Users`;
-DROP TABLE IF EXISTS `UserStatuses`;
-DROP TABLE IF EXISTS `ProductStatuses`;
-DROP TABLE IF EXISTS `CouponRedemptions`;
-DROP TABLE IF EXISTS `CouponScope`;
-DROP TABLE IF EXISTS `Refunds`;
-
-SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================================
 -- CORE TABLES (Production-Ready)
@@ -79,6 +36,96 @@ CREATE TABLE `ProductCategories` (
     PRIMARY KEY (`CategoryID`),
     UNIQUE KEY `uq_category_name` (`Name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `ProductCategories` (`Name`) VALUES
+  ('Sarees'),
+  ('Kurtis & Tunics'),
+  ('Dresses'),
+  ('Lehengas'),
+  ('Blouses'),
+  ('Ethnic Sets'),
+  ('Casual Wear'),
+  ('Formal Wear'),
+  ('Loungewear'),
+  ('Jewellery'),
+  ('Bags & Clutches'),
+  ('Footwear'),
+  ('Accessories'),
+  ('Home & Living'),
+  ('Gifting');
+
+-- Lookup table for Fabrics (for product metadata)
+CREATE TABLE `Fabrics` (
+    `FabricID` bigint NOT NULL AUTO_INCREMENT,
+    `Name` varchar(100) NOT NULL,
+    PRIMARY KEY (`FabricID`),
+    UNIQUE KEY `uq_fabric_name` (`Name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `Fabrics` (`Name`) VALUES
+  ('Cotton'),
+  ('Silk'),
+  ('Linen'),
+  ('Chiffon'),
+  ('Georgette'),
+  ('Crepe'),
+  ('Organza'),
+  ('Net'),
+  ('Rayon'),
+  ('Viscose'),
+  ('Satin'),
+  ('Velvet'),
+  ('Brocade'),
+  ('Khadi'),
+  ('Muslin'),
+  ('Tussar Silk'),
+  ('Banarasi Silk'),
+  ('Art Silk'),
+  ('Polyester'),
+  ('Cotton Silk');
+
+-- Lookup table for Weaves (for product metadata)
+CREATE TABLE `Weaves` (
+    `WeaveID` bigint NOT NULL AUTO_INCREMENT,
+    `Name` varchar(100) NOT NULL,
+    PRIMARY KEY (`WeaveID`),
+    UNIQUE KEY `uq_weave_name` (`Name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `Weaves` (`Name`) VALUES
+  ('Plain'),
+  ('Twill'),
+  ('Satin'),
+  ('Jacquard'),
+  ('Dobby'),
+  ('Kanjivaram'),
+  ('Banarasi'),
+  ('Ikat'),
+  ('Chanderi'),
+  ('Kota'),
+  ('Jamdani'),
+  ('Handloom'),
+  ('Powerloom');
+
+-- Lookup table for Occasions (for product metadata)
+CREATE TABLE `Occasions` (
+    `OccasionID` bigint NOT NULL AUTO_INCREMENT,
+    `Name` varchar(100) NOT NULL,
+    PRIMARY KEY (`OccasionID`),
+    UNIQUE KEY `uq_occasion_name` (`Name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `Occasions` (`Name`) VALUES
+  ('Casual'),
+  ('Work'),
+  ('Festive'),
+  ('Wedding'),
+  ('Party'),
+  ('Puja'),
+  ('Bridal'),
+  ('Daily Wear'),
+  ('Evening'),
+  ('Formal');
 
 -- Table structure for table `Users`
 -- auth_provider distinguishes the login method for each account.
@@ -133,14 +180,30 @@ INSERT IGNORE INTO `ProductStatuses` (`code`) VALUES
   ('active'),
   ('archived');
 
--- Table structure for table `ProductAttributes`
-CREATE TABLE `ProductAttributes` (
-    `AttributeID` BIGINT NOT NULL AUTO_INCREMENT,
-    `AttributeName` VARCHAR(255) NOT NULL,
-    `AttributeValue` VARCHAR(255) NOT NULL,
-    PRIMARY KEY (`AttributeID`),
-    UNIQUE KEY `uq_attr` (`AttributeName`, `AttributeValue`)
+CREATE TABLE `ProductMoods` (
+    `MoodID` BIGINT NOT NULL AUTO_INCREMENT,
+    `MoodName` VARCHAR(255) NOT NULL,
+    PRIMARY KEY (`MoodID`),
+    UNIQUE KEY `uq_mood_name` (`MoodName`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `ProductMoods` (`MoodName`) VALUES
+  ('TANT-ER-SAAJ'),
+  ('Doodh e Alta'),
+  ('Amar Kolkata'),
+  ('Kanchi Canvas'),
+  ('Khadi Roots'),
+  ('Cotton Carnival'),
+  ('The Weaver''s Whisper'),
+  ('Summer Softs'),
+  ('Daily Diva'),
+  ('Mom chitra'),
+  ('Aura of Tussar'),
+  ('Gamcha Fusion Series'),
+  ('Silken Whispers'),
+  ('Kantha Tussar Treasures'),
+  ('The Jamdani Tussar Series'),
+  ('Tussar Embroidered Tales');
 
 -- Table structure for table `Products` (Enhanced for saree e-commerce)
 CREATE TABLE `Products` (
@@ -149,13 +212,11 @@ CREATE TABLE `Products` (
     `Name` varchar(255) NOT NULL,
     `slug` VARCHAR(255) UNIQUE,
     `Description` text,
-    `Price` decimal(10,2) NULL COMMENT 'Legacy field, do not use; use price_paise instead',
     `price_paise` INT NOT NULL COMMENT 'Price in paise (₹499.00 = 49900)',
     `CategoryID` bigint NOT NULL,
-    `fabric` VARCHAR(100),
+    `fabric` VARCHAR(100) COMMENT 'Common values: Cotton, Silk, Linen, Chiffon, Georgette, Crepe, Organza, Net, Rayon, Viscose, Satin, Velvet, Brocade, Khadi, Muslin, Tussar Silk, Banarasi Silk, Art Silk, Polyester, Cotton Silk',
     `weave` VARCHAR(100),
     `occasion` VARCHAR(100),
-    `length_meters` DECIMAL(3,1) DEFAULT 5.5,
     `has_blouse_piece` BOOLEAN DEFAULT TRUE,
     `care_instructions` TEXT,
     -- Product management
@@ -172,14 +233,14 @@ CREATE TABLE `Products` (
       FOREIGN KEY (`product_status_id`) REFERENCES `ProductStatuses`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Many-to-many mapping between products and attributes
-CREATE TABLE `ProductAttributeMapping` (
+-- Many-to-many mapping between products and moods
+CREATE TABLE `ProductMoodMapping` (
     `ProductID` BIGINT NOT NULL,
-    `AttributeID` BIGINT NOT NULL,
-    PRIMARY KEY (`ProductID`, `AttributeID`),
+    `MoodID` BIGINT NOT NULL,
+    PRIMARY KEY (`ProductID`, `MoodID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`) ON DELETE CASCADE,
-    FOREIGN KEY (`AttributeID`) REFERENCES `ProductAttributes`(`AttributeID`) ON DELETE CASCADE,
-    INDEX `idx_attr_product` (`AttributeID`, `ProductID`)
+    FOREIGN KEY (`MoodID`) REFERENCES `ProductMoods`(`MoodID`) ON DELETE CASCADE,
+    INDEX `idx_mood_product` (`MoodID`, `ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `OrderStatus`
@@ -242,12 +303,45 @@ CREATE TABLE `Sizes` (
     PRIMARY KEY (`SizeID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+INSERT IGNORE INTO `Sizes` (`SizeName`) VALUES
+  ('Free Size'),
+  ('XS'),
+  ('S'),
+  ('M'),
+  ('L'),
+  ('XL'),
+  ('XXL'),
+  ('3XL');
+
 -- Table structure for table `Colors`
 CREATE TABLE `Colors` (
     `ColorID` bigint NOT NULL AUTO_INCREMENT,
     `ColorName` varchar(50) NOT NULL,
     PRIMARY KEY (`ColorID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT IGNORE INTO `Colors` (`ColorName`) VALUES
+  ('Red'),
+  ('Maroon'),
+  ('Pink'),
+  ('Orange'),
+  ('Yellow'),
+  ('Green'),
+  ('Olive'),
+  ('Blue'),
+  ('Navy'),
+  ('Teal'),
+  ('Purple'),
+  ('Violet'),
+  ('Magenta'),
+  ('Brown'),
+  ('Beige'),
+  ('Cream'),
+  ('Grey'),
+  ('Black'),
+  ('White'),
+  ('Gold'),
+  ('Silver');
 
 -- Table structure for table `ProductVariants`
 CREATE TABLE `ProductVariants` (
@@ -333,16 +427,16 @@ CREATE TABLE `Wishlist` (
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Table structure for table `ProductImages` (Enhanced for CDN)
+-- Table structure for table `ProductImages` (one row per image; ordered by display_order)
 CREATE TABLE `ProductImages` (
     `ImageID` bigint NOT NULL AUTO_INCREMENT,
     `ProductID` bigint NOT NULL,
-    `urls` JSON NOT NULL COMMENT 'JSON object of CDN image URLs for this product, e.g. {\"1\": \"hero_url\", \"2\": \"detail_url\"}',
+    `display_order` int NOT NULL DEFAULT 0,
+    `url` varchar(2048) NOT NULL COMMENT 'CDN URL for this image',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`ImageID`),
     FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`),
-    UNIQUE KEY `uq_product_images_product` (`ProductID`),
-    INDEX `idx_product_order` (`ProductID`)
+    INDEX `idx_product_order` (`ProductID`, `display_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Inventory` (Enhanced with reserved stock)

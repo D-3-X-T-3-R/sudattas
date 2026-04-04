@@ -45,6 +45,16 @@ pub fn record_webhook_accepted_total() {
     metrics::counter!("webhook_accepted_total", 1);
 }
 
+/// Admin authorization denied at GraphQL resolver boundary.
+pub fn record_admin_authz_denied_total() {
+    metrics::counter!("graphql_admin_authz_denied_total", 1);
+}
+
+/// Auth rejection at HTTP boundary before GraphQL execution.
+pub fn record_auth_rejection_total(kind: &'static str) {
+    metrics::counter!("graphql_auth_rejection_total", 1, "kind" => kind);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,5 +101,19 @@ mod tests {
         install_test_recorder();
         record_webhook_invalid_signature_total();
         record_webhook_accepted_total();
+    }
+
+    #[test]
+    fn record_admin_authz_denied_does_not_panic() {
+        install_test_recorder();
+        record_admin_authz_denied_total();
+    }
+
+    #[test]
+    fn record_auth_rejection_does_not_panic() {
+        install_test_recorder();
+        record_auth_rejection_total("unauthorized");
+        record_auth_rejection_total("csrf");
+        record_auth_rejection_total("rate_limited");
     }
 }

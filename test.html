@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudatta's Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            /* Colors Pulled from your Logo */
+            --color-ivory: #F5EFE6;
+            --color-ink: #1a1814;
+            --color-forest: #1B3022; /* Matches your logo background */
+            --color-gold: #C5A059;   /* Matches your Ganesha icon */
+            --color-line: #e0d9d0;
+            --font-serif: 'Playfair Display', serif;
+            --font-sans: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--color-ivory);
+            font-family: var(--font-sans);
+            /* Subtle Grain Overlay */
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.98;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 25px 50px -12px rgba(26, 24, 20, 0.08);
+        }
+
+        .btn-luxury {
+            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            letter-spacing: 0.12em;
+            font-family: var(--font-serif);
+            border-radius: 2px;
+        }
+
+        .btn-luxury:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(27, 48, 34, 0.15);
+        }
+
+        .input-minimal {
+            background: transparent;
+            border: none;
+            border-bottom: 1.5px solid var(--color-line);
+            transition: border-color 0.3s ease;
+        }
+
+        .input-minimal:focus {
+            outline: none;
+            border-bottom-color: var(--color-gold);
+        }
+
+        /* Animated Divider */
+        .divider-line {
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--color-line), transparent);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+
+    <div class="login-card w-full max-w-md p-10 md:p-14">
+        
+        <div class="text-center mb-12">
+            <h1 class="text-3xl font-serif italic text-[var(--color-forest)] mb-2">Sudatta's</h1>
+            <p class="text-[0.65rem] uppercase tracking-[0.3em] text-[var(--color-gold)] font-medium">Designer Boutique</p>
+        </div>
+
+        <button class="btn-luxury w-full py-4 mb-4 bg-[var(--color-forest)] text-white text-xs uppercase font-medium border border-[var(--color-forest)]">
+            Sign in with Biometrics
+        </button>
+
+        <button class="btn-luxury w-full py-4 mb-10 bg-white text-[var(--color-ink)] text-xs uppercase font-medium border border-[var(--color-line)] hover:border-[var(--color-gold)]">
+            Continue with Google
+        </button>
+
+        <div class="relative flex items-center mb-10">
+            <div class="flex-grow divider-line"></div>
+            <span class="mx-4 text-[10px] uppercase tracking-[0.2em] text-stone-400 italic font-serif">or</span>
+            <div class="flex-grow divider-line"></div>
+        </div>
+
+        <form class="space-y-8">
+            <div class="relative">
+                <label class="block text-[10px] uppercase tracking-widest text-stone-500 mb-2">Email or Phone</label>
+                <input type="text" placeholder="e.g. +91 98765 43210" class="input-minimal w-full py-2 text-sm text-[var(--color-ink)]">
+            </div>
+
+            <button type="submit" class="btn-luxury w-full py-4 bg-transparent border border-[var(--color-ink)] text-[var(--color-ink)] text-xs uppercase hover:bg-[var(--color-ink)] hover:text-white">
+                Continue
+            </button>
+        </form>
+
+        <p class="mt-12 text-center text-[10px] text-stone-400 tracking-wide uppercase">
+            New to Sudatta's? <a href="#" class="text-[var(--color-gold)] border-b border-[var(--color-gold)] pb-0.5 ml-1">Create Account</a>
+        </p>
+    </div>
+
+</body>
+</html>
+
+
+OUTPUT:
+- Provide full code
+- Ensure it runs without external dependencies breaking

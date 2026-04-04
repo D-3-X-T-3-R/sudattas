@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { gql } from "@/lib/graphqlClient";
+import { useLiveAnnouncer } from "@/components/ui/live-announcer";
+import { fetchApiEnvelope } from "@/lib/api-envelope";
 import {
   paymentIntentSchema,
   verifyRazorpayPayloadSchema,
 } from "@/lib/schemas";
+import { toRouteFailureUi } from "@/lib/route-state";
 
 declare global {
   interface Window {
@@ -14,6 +16,23 @@ declare global {
       on: (event: string, handler: () => void) => void;
     };
   }
+}
+
+type OrderReconcilePayload = {
+  statusName: string;
+  paymentState: string;
+  fulfillmentState: string;
+};
+
+const FINAL_PAYMENT_STATES = new Set([
+  "paid",
+  "failed",
+  "refunded",
+  "needs_review",
+]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function loadRazorpayScript(): Promise<void> {
@@ -31,47 +50,82 @@ function loadRazorpayScript(): Promise<void> {
 export function useRazorpayTest() {
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const { announce } = useLiveAnnouncer();
 
-  const runTest = useCallback(async () => {
-    setPaymentMessage(null);
+  const setPaymentMessageWithAnnounce = useCallback(
+    (message: string | null, politeness: "polite" | "assertive" = "polite") => {
+      setPaymentMessage(message);
+      if (message) announce(message, politeness);
+    },
+    [announce]
+  );
+
+  const pollOrderReconciliation = useCallback(async (orderId: string) => {
+    const maxAttempts = 6;
+    const delayMs = 4000;
+
+    for (let i = 0; i < maxAttempts; i += 1) {
+      await sleep(delayMs);
+      const detail = await fetchApiEnvelope<{
+        paymentState: string;
+        fulfillmentState: string;
+        statusName: string;
+      }>(`/api/account/orders/${encodeURIComponent(orderId)}`, {
+        cache: "no-store",
+      });
+      if (FINAL_PAYMENT_STATES.has(detail.paymentState)) {
+        return detail as OrderReconcilePayload;
+      }
+    }
+    return null;
+  }, []);
+
+  const runCheckout = useCallback(async (input?: { shippingAddressId?: string }) => {
+    const shippingAddressId = input?.shippingAddressId?.trim();
+    if (!shippingAddressId) {
+      setPaymentMessageWithAnnounce("Select a shipping address first.", "assertive");
+      return;
+    }
+
+    setPaymentMessageWithAnnounce(null);
     setPaymentLoading(true);
     try {
-      const data = await gql<{
-        createPaymentIntent?: Array<{
+      const placeOrderKey = `checkout-place-${crypto.randomUUID()}`;
+      const start = await fetchApiEnvelope<{
+        order: {
+          orderId: string;
+        };
+        paymentIntent: {
           intentId?: string;
           razorpayOrderId: string;
           razorpayKeyId: string;
           orderId: string;
           amountPaise: string;
           currency: string;
-        }>;
-      }>(
-        `mutation CreatePaymentIntent {
-          createPaymentIntent(input: { orderId: "1", userId: "1", amountPaise: "10000", currency: "INR" }) {
-            intentId
-            razorpayOrderId
-            razorpayKeyId
-            orderId
-            amountPaise
-            currency
-          }
-        }`
-      );
-      const raw = data?.createPaymentIntent?.[0];
-      if (!raw?.razorpayKeyId || !raw?.razorpayOrderId) {
-        setPaymentMessage(
-          "No Razorpay key/order returned. Check backend RAZORPAY_KEY_ID and order 1 exists."
+        };
+        idempotency: { placeOrderKey: string; verifyKey: string };
+      }>("/api/checkout/place-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shippingAddressId, idempotencyKey: placeOrderKey }),
+      });
+
+      const raw = start?.paymentIntent;
+        if (!raw?.razorpayKeyId || !raw?.razorpayOrderId) {
+        setPaymentMessageWithAnnounce(
+          "No Razorpay key/order returned. Please retry in a moment."
         );
         return;
       }
       const parsed = paymentIntentSchema.safeParse(raw);
       if (!parsed.success) {
-        setPaymentMessage("Invalid payment intent response.");
+        setPaymentMessageWithAnnounce("Invalid payment intent response.", "assertive");
         return;
       }
       const intent = parsed.data;
       await loadRazorpayScript();
-      const orderId = intent.orderId || "1";
+      const orderId = intent.orderId;
+      const verifyKey = start?.idempotency?.verifyKey;
       const options = {
         key: intent.razorpayKeyId,
         amount: intent.amountPaise,
@@ -85,49 +139,76 @@ export function useRazorpayTest() {
           razorpay_signature: string;
         }) {
           try {
-            const esc = (s: string) => JSON.stringify(String(s ?? ""));
-            const verifyData = await gql<{
-              verifyRazorpayPayment?: Array<{
-                verified: boolean;
-                paymentIntent?: { status: string };
-              }>;
-            }>(
-              `mutation VerifyRazorpay {
-                verifyRazorpayPayment(input: {
-                  orderId: ${esc(orderId)},
-                  razorpayPaymentId: ${esc(response.razorpay_payment_id)},
-                  razorpayOrderId: ${esc(response.razorpay_order_id)},
-                  razorpaySignature: ${esc(response.razorpay_signature)}
-                }) { verified paymentIntent { status } }
-              }`
-            );
-            const verifyRaw = verifyData?.verifyRazorpayPayment?.[0];
-            const verifyParsed = verifyRazorpayPayloadSchema.safeParse(verifyRaw);
-            if (verifyParsed.success && verifyParsed.data.verified) {
-              setPaymentMessage("Payment verified successfully.");
+            const verifyResult = await fetchApiEnvelope<{
+              verified: boolean;
+              paymentState: string;
+              orderStatusId: string | null;
+              orderUiState: string;
+            }>("/api/checkout/verify-payment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                orderId,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpaySignature: response.razorpay_signature,
+                idempotencyKey: verifyKey,
+              }),
+            });
+            const verifyParsed = verifyRazorpayPayloadSchema.safeParse({
+              verified: verifyResult.verified,
+              paymentIntent: { status: verifyResult.paymentState },
+            });
+            if (verifyParsed.success && verifyResult.verified) {
+              if (FINAL_PAYMENT_STATES.has(verifyResult.paymentState)) {
+                setPaymentMessageWithAnnounce(
+                  `Payment ${verifyResult.paymentState}. Order state: ${verifyResult.orderUiState}.`
+                );
+              } else {
+                setPaymentMessageWithAnnounce(
+                  `Payment verification received. Current state: ${verifyResult.paymentState}; awaiting final backend/webhook reconciliation.`
+                );
+                try {
+                  const reconciled = await pollOrderReconciliation(orderId);
+                  if (reconciled) {
+                    setPaymentMessageWithAnnounce(
+                      `Payment ${reconciled.paymentState}. Order state: ${reconciled.statusName}.`
+                    );
+                  } else {
+                    setPaymentMessageWithAnnounce(
+                      "Verification received. Final payment state is still processing; please refresh your profile orders shortly."
+                    );
+                  }
+                } catch (pollError) {
+                  setPaymentMessageWithAnnounce(
+                    toRouteFailureUi("account", pollError).message,
+                    "assertive"
+                  );
+                }
+              }
             } else {
-              setPaymentMessage("Verify failed or invalid response.");
+              setPaymentMessageWithAnnounce("Verify failed or invalid response.", "assertive");
             }
           } catch (e) {
-            setPaymentMessage(
-              "Verify failed: " + ((e as Error).message || String(e))
-            );
+            setPaymentMessageWithAnnounce(toRouteFailureUi("account", e).message, "assertive");
           }
         },
       };
       const rzp = new window.Razorpay!(options);
       rzp.on("payment.failed", () => {
-        setPaymentMessage("Payment failed or was closed.");
+        setPaymentMessageWithAnnounce("Payment failed or was closed.", "assertive");
       });
       rzp.open();
     } catch (e) {
-      setPaymentMessage(
-        "Error: " + ((e as Error).message || String(e))
-      );
+      setPaymentMessageWithAnnounce(toRouteFailureUi("account", e).message, "assertive");
     } finally {
       setPaymentLoading(false);
     }
-  }, []);
+  }, [pollOrderReconciliation, setPaymentMessageWithAnnounce]);
 
-  return { paymentMessage, paymentLoading, runTest };
+  const runTest = useCallback(async () => {
+    setPaymentMessageWithAnnounce("Use checkout flow from /checkout/address.");
+  }, [setPaymentMessageWithAnnounce]);
+
+  return { paymentMessage, paymentLoading, runTest, runCheckout };
 }

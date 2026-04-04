@@ -89,6 +89,20 @@ pub async fn verify_razorpay_payment(
             ))
         })?;
 
+    // Idempotent replay: once an intent is already verified/captured with the same
+    // payment id, return success without re-verifying signature again.
+    let same_payment_id = intent
+        .razorpay_payment_id
+        .as_ref()
+        .map(|id| id == &req.razorpay_payment_id)
+        .unwrap_or(false);
+    if same_payment_id && matches!(intent.status, Status::ClientVerified | Status::Processed) {
+        return Ok(Response::new(VerifyRazorpayPaymentResponse {
+            verified: true,
+            payment_intent: Some(intent_to_response(&intent)),
+        }));
+    }
+
     if !verify_signature(
         &req.razorpay_order_id,
         &req.razorpay_payment_id,

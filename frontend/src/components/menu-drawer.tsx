@@ -1,9 +1,10 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { COLLECTIONS } from "@/lib/constants";
-import { goTo } from "@/hooks/use-scroll-to";
+import { goTo, setPendingHomeSection } from "@/hooks/use-scroll-to";
 
 export interface MenuDrawerProps {
   open: boolean;
@@ -18,9 +19,23 @@ export function MenuDrawer({
   setCollection,
   reduceMotion = false,
 }: MenuDrawerProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const isHome = pathname === "/";
+
+  const navigateToSection = (id: string) => {
+    if (!isHome) {
+      setPendingHomeSection(id, { fromOtherPage: true });
+      router.push("/");
+    } else {
+      goTo(id, reduceMotion);
+    }
+  };
+
   const nav = [
     { label: "New arrivals", goToId: "shop" as const },
-    { label: "Collections", goToId: "collections" as const },
+    { label: "Moods", goToId: "collections" as const },
+    { label: "Collections", goToId: "category-collections" as const },
     { label: "Occasion", goToId: "shop" as const },
     { label: "Best sellers", goToId: "shop" as const },
   ];
@@ -34,7 +49,7 @@ export function MenuDrawer({
               key={x.label}
               type="button"
               onClick={() => {
-                goTo(x.goToId, reduceMotion);
+                navigateToSection(x.goToId);
                 onClose();
               }}
               className="flex w-full items-center justify-between border-b border-[var(--color-line)] pb-3 text-left"
@@ -58,7 +73,7 @@ export function MenuDrawer({
                 type="button"
                 onClick={() => {
                   setCollection(c.key);
-                  goTo("shop", reduceMotion);
+                  navigateToSection("shop");
                   onClose();
                 }}
                 className="rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-sm hover:bg-white/80"
@@ -70,7 +85,7 @@ export function MenuDrawer({
               type="button"
               onClick={() => {
                 setCollection("All");
-                goTo("shop", reduceMotion);
+                navigateToSection("shop");
                 onClose();
               }}
               className="rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-sm hover:bg-white/80"
@@ -82,11 +97,11 @@ export function MenuDrawer({
 
         <div className="rounded-2xl border border-[var(--color-line)] bg-white p-4">
           <div className="text-[11px] font-semibold tracking-[0.24em] text-[var(--color-muted)]">
-            NOTE
+            CURATED
           </div>
           <div className="mt-2 text-sm text-[var(--color-muted)]">
-            This is a visual mock. For production, replace placeholders with
-            real product media and connect to your Rust + MySQL backend.
+            Explore collections and moods to discover the drape that fits your
+            moment.
           </div>
         </div>
       </div>

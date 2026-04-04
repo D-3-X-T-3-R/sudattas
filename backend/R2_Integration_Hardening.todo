@@ -1,0 +1,85 @@
+R2 Integration Hardening — Checklist
+
+## 1. Sanitize uploaded filename
+
+- [ ] Strip path components
+- [ ] Replace `/` and `\` with `_`
+- [ ] Allow only `[a-zA-Z0-9._-]`
+- [ ] Enforce allowed extensions: `.jpg`, `.jpeg`, `.png`, `.webp`
+- [ ] Implement in: `core_operations/src/handlers/product_images/get_presigned_upload_url.rs`
+
+## 2. Validate Content-Type and enforce file size limit
+
+- [ ] Validate MIME type against an allowlist
+- [ ] Add max upload size validation
+- [ ] Optionally store expected size for later verification
+- [ ] Update: `GetPresignedUploadUrlRequest` (proto) and `get_presigned_upload_url.rs`
+
+## 3. Verify object exists before DB insert
+
+- [ ] Add `head_object()` (or equivalent) check before inserting DB record
+- [ ] Validate that the object exists in R2
+- [ ] Store file size in DB
+- [ ] Implement in: `confirm_image_upload.rs`
+
+## 4. Remove or properly implement thumbnail logic
+
+- [ ] Decide on strategy:
+  - [ ] Remove thumbnail logic completely, **or**
+  - [ ] Implement background thumbnail generation, **or**
+  - [ ] Migrate to Cloudflare Images
+
+## 5. Add Cache-Control headers
+
+- [ ] Use immutable object naming (UUID-based keys)
+- [ ] Set `Cache-Control: public, max-age=31536000, immutable`
+- [ ] Ensure upload client sends/sets required headers
+
+## 6. Improve R2 client configuration
+
+- [ ] Enable `force_path_style(true)` if required by the endpoint
+- [ ] Add a startup connectivity test to R2 (fail fast if unreachable)
+
+## 7. Enforce required R2 environment variables at startup
+
+- [ ] Validate presence of:
+  - [ ] `R2_ACCOUNT_ID`
+  - [ ] `R2_ACCESS_KEY_ID`
+  - [ ] `R2_SECRET_ACCESS_KEY`
+  - [ ] `R2_BUCKET_NAME`
+  - [ ] `R2_PUBLIC_URL`
+- [ ] Fail fast on missing/invalid configuration
+
+## 8. Remove dead code around R2
+
+- [ ] Remove unused imports
+- [ ] Delete placeholder / unused functions
+- [ ] Ensure `cargo clippy` passes cleanly
+
+## 9. Add DB constraints for product images
+
+- [ ] Add index on `(product_id, display_order)`
+- [ ] Add unique constraint on `(product_id, cdn_path)`
+- [ ] Enforce a single primary image per product (if applicable)
+
+## 10. Implement orphan cleanup strategy
+
+- [ ] Create a cleanup job for unconfirmed uploads
+- [ ] Delete unconfirmed objects older than N hours, **or**
+- [ ] Track pending uploads with expiration and clean them up
+
+## 11. Logging & observability
+
+- [ ] Log presigned URL generation (success/failure + key metadata)
+- [ ] Log confirm-upload success/failure with enough context
+- [ ] Add metrics for upload failures and cleanup actions
+
+## 12. Security review
+
+- [ ] Ensure the R2 bucket is **not** public write
+- [ ] Use minimal-privilege R2 API tokens/keys
+- [ ] Document and schedule periodic rotation of access keys
+
+## End goal
+
+Secure, validated, cache-optimized, and production-safe R2 integration.

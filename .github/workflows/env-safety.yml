@@ -1,0 +1,30 @@
+name: Env Safety
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'scripts/**'
+      - '.github/workflows/env-safety.yml'
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'scripts/**'
+      - '.github/workflows/env-safety.yml'
+
+jobs:
+  no-privileged-public-env:
+    name: No Privileged Public Env
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check NEXT_PUBLIC privileged env leakage
+      run: bash ./scripts/check-no-privileged-public-env.sh
+

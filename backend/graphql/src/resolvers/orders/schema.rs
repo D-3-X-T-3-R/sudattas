@@ -76,6 +76,24 @@ pub struct NewOrder {
     pub coupon_code: Option<String>,
 }
 
+/// Order status row (from OrderStatus table) for admin dropdowns.
+#[derive(Default, Debug, Clone)]
+pub struct OrderStatus {
+    pub status_id: String,
+    pub status_name: String,
+}
+
+#[graphql_object]
+#[graphql(description = "Order status (for admin filters)")]
+impl OrderStatus {
+    async fn status_id(&self) -> &String {
+        &self.status_id
+    }
+    async fn status_name(&self) -> &String {
+        &self.status_name
+    }
+}
+
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
 pub struct SearchOrder {
     pub user_id: String,

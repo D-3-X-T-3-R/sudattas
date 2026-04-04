@@ -46,23 +46,25 @@ message CartItemsResponse {
 
 message CreateShippingAddressRequest {
     optional int64 user_id = 1;
-    string country = 2;
-    string state_region = 3;
-    string city = 4;
-    string postal_code = 5;
-    optional string road = 6;
-    optional string apartment_no_or_name = 7;
-}
-
-message UpdateShippingAddressRequest {
-    int64 shipping_address_id = 1;
-    optional int64 user_id = 2;
+    bool is_default = 2;
     string country = 3;
     string state_region = 4;
     string city = 5;
     string postal_code = 6;
     optional string road = 7;
     optional string apartment_no_or_name = 8;
+}
+
+message UpdateShippingAddressRequest {
+    int64 shipping_address_id = 1;
+    optional int64 user_id = 2;
+    bool is_default = 3;
+    string country = 4;
+    string state_region = 5;
+    string city = 6;
+    string postal_code = 7;
+    optional string road = 8;
+    optional string apartment_no_or_name = 9;
 }
 
 message DeleteShippingAddressRequest {
@@ -74,12 +76,13 @@ message GetShippingAddressRequest { }
 message ShippingAddressResponse {
     int64 shipping_address_id = 1;
     optional int64 user_id = 2;
-    string country = 3;
-    string state_region = 4;
-    string city = 5;
-    string postal_code = 6;
-    optional string road = 7;
-    optional string apartment_no_or_name = 8;
+    bool is_default = 3;
+    string country = 4;
+    string state_region = 5;
+    string city = 6;
+    string postal_code = 7;
+    optional string road = 8;
+    optional string apartment_no_or_name = 9;
 }
 
 message ShippingAddressesResponse {
@@ -93,6 +96,14 @@ message CreateProductRequest {
     optional string description = 2;
     int64 price_paise = 3;  // Price in minor units (e.g. 49900 = ₹499.00)
     int64 category_id = 4;   // Required; schema ProductCategories
+    optional string sku = 5;
+    optional string slug = 6;
+    optional string fabric = 7;
+    optional string weave = 8;
+    optional string occasion = 9;
+    optional bool has_blouse_piece = 10;
+    optional string care_instructions = 11;
+    optional int64 product_status_id = 12;
 }
 
 message SearchProductRequest {
@@ -104,6 +115,11 @@ message SearchProductRequest {
     optional int64 product_id = 6;
     optional int64 limit = 7;
     optional int64 offset = 8;
+    optional string fabric = 9;
+    optional string weave = 10;
+    optional string occasion = 11;
+    optional int64 product_status_id = 12;
+    optional int64 mood_id = 13;  // filter products that have this mood linked
 }
 
 message GetProductsByIdRequest {
@@ -116,6 +132,14 @@ message UpdateProductRequest {
     int64 price_paise = 3;
     int64 category_id = 4;
     int64 product_id = 5;
+    optional string sku = 6;
+    optional string slug = 7;
+    optional string fabric = 8;
+    optional string weave = 9;
+    optional string occasion = 10;
+    optional bool has_blouse_piece = 11;
+    optional string care_instructions = 12;
+    optional int64 product_status_id = 13;
 }
 
 message DeleteProductRequest {
@@ -128,6 +152,14 @@ message ProductResponse {
     int64 price_paise = 3;
     int64 category_id = 4;
     int64 product_id = 5;
+    optional string sku = 6;
+    optional string slug = 7;
+    optional string fabric = 8;
+    optional string weave = 9;
+    optional string occasion = 10;
+    optional bool has_blouse_piece = 11;
+    optional string care_instructions = 12;
+    optional int64 product_status_id = 13;
 }
 
 message ProductsResponse {
@@ -312,6 +344,16 @@ message OrdersResponse {
     repeated OrderResponse items = 1;
 }
 
+// OrderStatus (list for admin dropdowns; table OrderStatus)
+message SearchOrderStatusRequest {}
+message OrderStatusResponse {
+    int64 status_id = 1;
+    string status_name = 2;
+}
+message OrderStatusesResponse {
+    repeated OrderStatusResponse items = 1;
+}
+
 // OrderDetails (schema: VariantID not ProductID)
 
 message CreateOrderDetailRequest {
@@ -473,6 +515,7 @@ message GetPresignedUploadUrlRequest {
     int64 product_id = 1;
     string filename = 2;
     string content_type = 3;
+    optional int32 display_order = 4;  // When set, used as image index for key (avoids race when uploading multiple in parallel)
 }
 
 message PresignedUploadUrlResponse {
@@ -483,9 +526,21 @@ message PresignedUploadUrlResponse {
 
 message ConfirmImageUploadRequest {
     int64 product_id = 1;
-    string key = 2;
+    string key = 2;           // R2 object key (required when url is not set; used for new uploads)
     optional string alt_text = 3;
     optional int32 display_order = 4;
+    optional string url = 5;  // when set, use this URL for this display_order (for re-adding existing images after delete)
+}
+
+// Sync product images: update display_order for kept, bulk insert new, delete removed (1 row per image).
+message SyncProductImageItem {
+    optional int64 image_id = 1;  // existing row to keep; set its display_order to index
+    optional string key = 2;      // new upload; insert row with url built from key
+    optional string url = 3;      // when key empty, use this url for new row
+}
+message SyncProductImagesRequest {
+    int64 product_id = 1;
+    repeated SyncProductImageItem items = 2;  // ordered list; index = display_order
 }
 
 // Inventory (schema: VariantID; no supplier)
@@ -553,37 +608,48 @@ message WishlistItemsResponse {
     repeated WishlistItemResponse items = 1;
 }
 
-// ProductAttributes (schema: lookup only; UNIQUE(AttributeName, AttributeValue); link products via ProductAttributeMapping)
+// ProductMoods (schema: lookup only; id + MoodName; link products via ProductMoodMapping)
 
-message CreateProductAttributeRequest {
-    string attribute_name = 1;
-    string attribute_value = 2;
+message CreateProductMoodRequest {
+    string mood_name = 1;
 }
 
-message SearchProductAttributeRequest {
-    optional int64 attribute_id = 1;
-    optional string attribute_name = 2;
-    optional string attribute_value = 3;
+message SearchProductMoodRequest {
+    optional int64 mood_id = 1;
+    optional string mood_name = 2;
 }
 
-message UpdateProductAttributeRequest {
-    int64 attribute_id = 1;
-    optional string attribute_name = 2;
-    optional string attribute_value = 3;
+message UpdateProductMoodRequest {
+    int64 mood_id = 1;
+    optional string mood_name = 2;
 }
 
-message DeleteProductAttributeRequest {
-    int64 attribute_id = 1;
+message DeleteProductMoodRequest {
+    int64 mood_id = 1;
 }
 
-message ProductAttributeResponse {
-    int64 attribute_id = 1;
-    string attribute_name = 2;
-    string attribute_value = 3;
+message ProductMoodResponse {
+    int64 mood_id = 1;
+    string mood_name = 2;
 }
 
-message ProductAttributesResponse {
-    repeated ProductAttributeResponse items = 1;
+message ProductMoodsResponse {
+    repeated ProductMoodResponse items = 1;
+}
+
+// Storefront: distinct moods from the newest products (scan recent products, collect mood ids in order).
+message ShopHighlightMoodsRequest {
+    optional int64 recent_product_limit = 1; // products to scan, default 100, max 500
+    optional int64 max_moods = 2;           // max moods to return, default 4, max 20
+}
+
+message ShopHighlightMoodItem {
+    int64 mood_id = 1;
+    string mood_name = 2;
+}
+
+message ShopHighlightMoodsResponse {
+    repeated ShopHighlightMoodItem items = 1;
 }
 
 // ShippingMethods
@@ -740,6 +806,90 @@ message SizesResponse {
     repeated SizeResponse items = 1;
 }
 
+// Fabrics
+
+message CreateFabricRequest {
+    string fabric_name = 1;
+}
+
+message SearchFabricRequest {
+    int64 fabric_id = 1;
+}
+
+message UpdateFabricRequest {
+    int64 fabric_id = 1;
+    string fabric_name = 2;
+}
+
+message DeleteFabricRequest {
+    int64 fabric_id = 1;
+}
+
+message FabricResponse {
+    int64 fabric_id = 1;
+    string fabric_name = 2;
+}
+
+message FabricsResponse {
+    repeated FabricResponse items = 1;
+}
+
+// Weaves
+
+message CreateWeaveRequest {
+    string weave_name = 1;
+}
+
+message SearchWeaveRequest {
+    int64 weave_id = 1;
+}
+
+message UpdateWeaveRequest {
+    int64 weave_id = 1;
+    string weave_name = 2;
+}
+
+message DeleteWeaveRequest {
+    int64 weave_id = 1;
+}
+
+message WeaveResponse {
+    int64 weave_id = 1;
+    string weave_name = 2;
+}
+
+message WeavesResponse {
+    repeated WeaveResponse items = 1;
+}
+
+// Occasions
+
+message CreateOccasionRequest {
+    string occasion_name = 1;
+}
+
+message SearchOccasionRequest {
+    int64 occasion_id = 1;
+}
+
+message UpdateOccasionRequest {
+    int64 occasion_id = 1;
+    string occasion_name = 2;
+}
+
+message DeleteOccasionRequest {
+    int64 occasion_id = 1;
+}
+
+message OccasionResponse {
+    int64 occasion_id = 1;
+    string occasion_name = 2;
+}
+
+message OccasionsResponse {
+    repeated OccasionResponse items = 1;
+}
+
 // Colors
 
 message CreateColorRequest {
@@ -768,30 +918,30 @@ message ColorsResponse {
     repeated ColorResponse items = 1;
 }
 
-// ProductAttributeMapping (schema: many-to-many Products <-> ProductAttributes)
+// ProductMoodMapping (schema: many-to-many Products <-> ProductMoods)
 
-message CreateProductAttributeMappingRequest {
+message CreateProductMoodMappingRequest {
     int64 product_id = 1;
-    int64 attribute_id = 2;
+    int64 mood_id = 2;
 }
 
-message SearchProductAttributeMappingRequest {
+message SearchProductMoodMappingRequest {
     int64 product_id = 1;
-    int64 attribute_id = 2;
+    optional int64 mood_id = 2;  // when absent or 0: return all mappings for product_id
 }
 
-message DeleteProductAttributeMappingRequest {
+message DeleteProductMoodMappingRequest {
     int64 product_id = 1;
-    int64 attribute_id = 2;
+    int64 mood_id = 2;
 }
 
-message ProductAttributeMappingResponse {
+message ProductMoodMappingResponse {
     int64 product_id = 1;
-    int64 attribute_id = 2;
+    int64 mood_id = 2;
 }
 
-message ProductAttributeMappingsResponse {
-    repeated ProductAttributeMappingResponse items = 1;
+message ProductMoodMappingsResponse {
+    repeated ProductMoodMappingResponse items = 1;
 }
 
 // ProductVariants

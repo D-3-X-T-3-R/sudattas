@@ -1,10 +1,79 @@
 "use client";
 
+const PENDING_HOME_SECTION_KEY = "pendingHomeSection";
+const PENDING_HOME_FROM_OTHER_PAGE_KEY = "pendingHomeFromOtherPage";
+
+/** Used before `router.push('/')` from bag/wishlist/etc. */
+export function setPendingHomeSection(
+  id: string,
+  options?: { fromOtherPage?: boolean }
+): void {
+  try {
+    sessionStorage.setItem(PENDING_HOME_SECTION_KEY, id);
+    if (options?.fromOtherPage) {
+      sessionStorage.setItem(PENDING_HOME_FROM_OTHER_PAGE_KEY, "1");
+    }
+  } catch {
+    /* private mode */
+  }
+}
+
+/**
+ * Read pending nav without clearing. Use this in effects that may run twice (React Strict Mode);
+ * call `clearPendingHomeSection()` after a successful scroll.
+ */
+export function peekPendingHomeSection(): {
+  id: string | null;
+  fromOtherPage: boolean;
+} {
+  try {
+    const id = sessionStorage.getItem(PENDING_HOME_SECTION_KEY);
+    const fromOther = sessionStorage.getItem(PENDING_HOME_FROM_OTHER_PAGE_KEY);
+    return { id: id ?? null, fromOtherPage: fromOther === "1" };
+  } catch {
+    return { id: null, fromOtherPage: false };
+  }
+}
+
+export function clearPendingHomeSection(): void {
+  try {
+    sessionStorage.removeItem(PENDING_HOME_SECTION_KEY);
+    sessionStorage.removeItem(PENDING_HOME_FROM_OTHER_PAGE_KEY);
+  } catch {
+    /* private mode */
+  }
+}
+
+function stickyHeaderOffsetPx(): number {
+  const header = document.querySelector("header");
+  if (header instanceof HTMLElement) {
+    return Math.ceil(header.getBoundingClientRect().height);
+  }
+  return 88;
+}
+
+function documentScrollY(): number {
+  return (
+    window.scrollY ||
+    window.pageYOffset ||
+    document.documentElement.scrollTop ||
+    document.body.scrollTop ||
+    0
+  );
+}
+
+/**
+ * Scroll so the section sits under the sticky header (not vertically centered).
+ * Tall `<section>`s + native `/#hash` scrolling can fight this; callers may schedule retries.
+ */
 export function goTo(id: string, instant = false): void {
   if (id === "top") {
     window.scrollTo({ top: 0, behavior: instant ? "auto" : "smooth" });
     return;
   }
   const el = document.getElementById(id);
-  el?.scrollIntoView({ behavior: instant ? "auto" : "smooth" });
+  if (!el) return;
+  const offset = stickyHeaderOffsetPx();
+  const top = el.getBoundingClientRect().top + documentScrollY() - offset;
+  window.scrollTo({ top: Math.max(0, top), behavior: instant ? "auto" : "smooth" });
 }
