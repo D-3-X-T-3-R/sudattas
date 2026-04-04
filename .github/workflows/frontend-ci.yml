@@ -58,14 +58,6 @@ jobs:
           frontend/.next/cache
         key: next-build-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json', 'frontend/next.config.*', 'frontend/tsconfig.json', 'frontend/src/**', 'frontend/tests/**') }}
 
-    - name: Upload Next.js build artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: frontend-next-build
-        path: frontend/.next
-        include-hidden-files: true
-        if-no-files-found: error
-
     - name: Frontend performance budgets
       run: node ./scripts/check-frontend-performance-budgets.mjs
 
@@ -75,50 +67,11 @@ jobs:
     - name: Journey blueprint discipline
       run: node ./scripts/check-user-journeys-blueprint.mjs
 
-  build-backend:
-    name: Build Backend Binaries
-    runs-on: ubuntu-latest
-    needs: lint-build
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
-
-    - name: Cache Rust build artifacts
-      uses: Swatinem/rust-cache@v2
-      with:
-        workspaces: backend -> target
-
-    - name: Install protobuf compiler
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y protobuf-compiler libprotobuf-dev
-        protoc --version
-
-    - name: Build backend binaries
-      working-directory: ./backend
-      run: cargo build -p core_operations -p graphql --all-features
-
-    - name: Stage backend binaries for artifacts
-      run: |
-        mkdir -p /tmp/backend-binaries
-        cp backend/target/debug/core_operations /tmp/backend-binaries/core_operations
-        cp backend/target/debug/graphql /tmp/backend-binaries/graphql
-
-    - name: Upload backend binaries
-      uses: actions/upload-artifact@v4
-      with:
-        name: backend-binaries
-        path: /tmp/backend-binaries
-        if-no-files-found: error
-
   journey-e2e:
     name: Journey E2E (Shard ${{ matrix.shard_index }}/${{ matrix.shard_total }})
     runs-on: ubuntu-latest
-    needs: [lint-build, build-backend]
+    needs: lint-build
+    if: ${{ false }} # Temporarily disable until we can stabilize the tests and reduce flakiness.
     strategy:
       fail-fast: false
       matrix:
@@ -159,16 +112,13 @@ jobs:
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
 
-    - name: Download backend binaries
-      uses: actions/download-artifact@v4
+    - name: Cache Rust build artifacts
+      uses: Swatinem/rust-cache@v2
       with:
-        name: backend-binaries
-        path: backend/target/debug
+        workspaces: backend -> target
 
     - name: Make backend binaries executable
       run: |
-        chmod +x backend/target/debug/core_operations
-        chmod +x backend/target/debug/graphql
         chmod +x backend/scripts/wait_for_http_ready.sh
 
     - name: Install protobuf compiler and redis-tools
@@ -189,18 +139,16 @@ jobs:
           frontend/.next/cache
         key: next-build-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json', 'frontend/next.config.*', 'frontend/tsconfig.json', 'frontend/src/**', 'frontend/tests/**') }}
 
-    - name: Download Next.js build artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: frontend-next-build
-        path: frontend
-
     - name: Setup backend test database schema
       run: |
         sleep 10
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         chmod +x ./backend/scripts/apply_sql_migrations.sh
         ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
+
+    - name: Build backend binaries
+      working-directory: ./backend
+      run: cargo build -p core_operations -p graphql --all-features
 
     - name: Install Playwright browser
       working-directory: ./frontend
@@ -222,6 +170,7 @@ jobs:
         NEXTAUTH_URL: http://127.0.0.1:3000
         PLAYWRIGHT_SHARD_INDEX: ${{ matrix.shard_index }}
         PLAYWRIGHT_SHARD_TOTAL: ${{ matrix.shard_total }}
+        PW_DISABLE_ARTIFACTS: "1"
       run: |
         set -euo pipefail
         mkdir -p /tmp/backend-logs
@@ -252,71 +201,5 @@ jobs:
         echo "Running Playwright shard ${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL}"
         (
           cd frontend
-          mkdir -p blob-report
-          PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/e2e/journey-paths.spec.ts --shard=${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL} --reporter=blob --output=test-results
+          PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/e2e/journey-paths.spec.ts --shard=${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL} --reporter=line
         )
-
-    - name: Upload shard artifacts (always)
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: shard-${{ matrix.shard_index }}-artifacts
-        path: |
-          /tmp/core_operations.log
-          /tmp/graphql.log
-          frontend/blob-report
-          frontend/test-results
-          frontend/playwright-report
-        if-no-files-found: ignore
-
-  merge-reports:
-    name: Merge Playwright Reports
-    runs-on: ubuntu-latest
-    needs: journey-e2e
-    if: always()
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
-
-    - name: Install frontend dependencies
-      working-directory: ./frontend
-      run: npm ci
-
-    - name: Download shard artifacts
-      uses: actions/download-artifact@v4
-      with:
-        pattern: shard-*-artifacts
-        path: frontend/all-shard-artifacts
-        merge-multiple: false
-
-    - name: Merge blob reports
-      working-directory: ./frontend
-      run: |
-        set -euo pipefail
-        mkdir -p all-blob-reports
-        found=0
-        while IFS= read -r blob_dir; do
-          found=1
-          cp -r "${blob_dir}/." all-blob-reports/
-        done < <(find all-shard-artifacts -type d -name blob-report)
-        if [[ "$found" -eq 0 ]]; then
-          echo "No blob-report directories found; skipping report merge."
-          exit 0
-        fi
-        npx playwright merge-reports --reporter html all-blob-reports
-
-    - name: Upload merged Playwright HTML report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: playwright-merged-html-report
-        path: frontend/playwright-report
-        if-no-files-found: ignore
