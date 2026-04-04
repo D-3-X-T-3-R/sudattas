@@ -35,6 +35,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `npm run start -- --hostname 127.0.0.1 --port ${port}`,
+    cwd: __dirname,
     port,
     reuseExistingServer: !ci,
     timeout: 120_000,
