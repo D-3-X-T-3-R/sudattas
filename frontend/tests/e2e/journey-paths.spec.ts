@@ -4,16 +4,23 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 
 type JourneyRow = {
   id: string;
-  section: number;
+  section?: number;
   journey: string;
   sitePath: string;
   endpoint: string;
+  source: string;
 };
 
-const BLUEPRINT = path.resolve(
-  __dirname,
-  "../../../docs/user-journeys-blueprint.md"
-);
+type JourneySeed = {
+  seed: string;
+  email: string;
+  idempotencyKey: string;
+};
+
+const DEFAULT_BLUEPRINTS = [
+  path.resolve(__dirname, "../../../docs/user-journeys-blueprint.md"),
+  path.resolve(__dirname, "../../../docs/user-journeys-catalog-5000.md"),
+];
 const DEFERRED_IDS = new Set(["UJ-204", "UJ-205", "UJ-206", "UJ-207"]);
 const ROUTE_STATUS_OK = new Set([200, 301, 302, 303, 307, 308, 401, 403, 404]);
 const API_STATUS_OK = new Set([200, 201, 204, 400, 401, 403, 404, 405, 409, 422, 429]);
@@ -29,30 +36,105 @@ function parseSectionFilter(): Set<number> | null {
   return new Set(nums);
 }
 
-function parseRows(): JourneyRow[] {
-  const text = fs.readFileSync(BLUEPRINT, "utf8");
+function resolveJourneyFiles(): string[] {
+  const fromEnv = process.env.JOURNEY_BLUEPRINT_FILES?.trim();
+  if (!fromEnv) return DEFAULT_BLUEPRINTS.filter((p) => fs.existsSync(p));
+  return fromEnv
+    .split(",")
+    .map((f) => path.resolve(__dirname, "../../../", f.trim()))
+    .filter((p) => fs.existsSync(p));
+}
+
+function splitMarkdownRow(line: string): string[] | null {
+  if (!line.startsWith("|")) return null;
+
+  const cells: string[] = [];
+  let current = "";
+
+  for (let i = 1; i < line.length; i += 1) {
+    const ch = line[i];
+    const next = line[i + 1];
+
+    if (ch === "\\" && next === "|") {
+      current += "|";
+      i += 1;
+      continue;
+    }
+
+    if (ch === "|") {
+      cells.push(current.trim().replace(/&#124;/g, "|"));
+      current = "";
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (cells.length === 0) return null;
+
+  const maybeSeparator = cells.every((c) => /^:?-{3,}:?$/.test(c));
+  if (maybeSeparator) return null;
+
+  return cells;
+}
+
+function parseRowsFromFile(filePath: string): JourneyRow[] {
+  const text = fs.readFileSync(filePath, "utf8");
   const lines = text.split(/\r?\n/);
   const rows: JourneyRow[] = [];
+
   for (const line of lines) {
-    const m = line.match(
-      /^\| (UJ-\d{3}) \| (\d+) \| (.*?) \| (.*?) \| (.*?) \|$/
-    );
-    if (!m) continue;
+    const cells = splitMarkdownRow(line);
+    if (!cells || cells.length < 4) continue;
+
+    const id = cells[0];
+    if (!/^UJ(?:X)?-\d{3,4}$/.test(id)) continue;
+
+    const parsedSection = Number(cells[1]);
+    const section = Number.isFinite(parsedSection) ? parsedSection : undefined;
+    const journey = cells[2] ?? "";
+    const sitePath = cells[3] ?? "";
+    const endpoint = cells[4] ?? "";
+
     rows.push({
-      id: m[1],
-      section: Number(m[2]),
-      journey: m[3],
-      sitePath: m[4],
-      endpoint: m[5],
+      id,
+      section,
+      journey,
+      sitePath,
+      endpoint,
+      source: path.basename(filePath),
     });
   }
+
   return rows;
+}
+
+function parseRows(): JourneyRow[] {
+  const files = resolveJourneyFiles();
+  const all = files.flatMap(parseRowsFromFile);
+  const unique = new Map<string, JourneyRow>();
+
+  for (const row of all) {
+    if (!unique.has(row.id)) unique.set(row.id, row);
+  }
+
+  return [...unique.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function journeySeed(id: string): JourneySeed {
+  const compact = id.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return {
+    seed: compact,
+    email: `user-${compact}@test.com`,
+    idempotencyKey: `journey-${compact}`,
+  };
 }
 
 function normalizePath(raw: string): string | null {
   let p = raw.trim();
   if (!p) return null;
   p = p.replace(/`/g, "");
+  if (p.startsWith("http://") || p.startsWith("https://")) return null;
   if (!p.startsWith("/")) return null;
 
   p = p.replace(/\[slug\]/gi, "sample-slug");
@@ -73,7 +155,7 @@ function normalizePath(raw: string): string | null {
 
   if (p === "/admin" || p === "/admin/") return "/imtheboss";
   if (p.startsWith("/admin/")) return `/imtheboss${p.slice("/admin".length)}`;
-  if (p === "/account/measurements") return "/profile"; // fallback to current account surface
+  if (p === "/account/measurements") return "/profile";
   if (p === "/api/checkout") return "/api/checkout/place-order";
   if (p === "/api/account") return "/api/account/profile";
 
@@ -82,31 +164,61 @@ function normalizePath(raw: string): string | null {
 
 function extractPaths(cell: string): string[] {
   const paths = new Set<string>();
+
   for (const m of cell.matchAll(/`([^`]+)`/g)) {
     const p = normalizePath(m[1]);
     if (p) paths.add(p);
   }
-  for (const m of cell.matchAll(/(\/[A-Za-z0-9_\-./\[\]*]+)/g)) {
+
+  for (const m of cell.matchAll(/(\/[-A-Za-z0-9_./\[\]*]+)/g)) {
     const p = normalizePath(m[1]);
     if (p) paths.add(p);
   }
+
   return [...paths];
 }
 
-async function assertRoutePath(
-  pathValue: string,
-  page: Page,
-  label: string
-) {
-  const res = await page.goto(pathValue, { waitUntil: "domcontentloaded" });
-  if (!res) return;
-  expect(
-    ROUTE_STATUS_OK.has(res.status()),
-    `${label} ${pathValue} -> ${res.status()}`
-  ).toBeTruthy();
+function seedHeaders(seed: JourneySeed): Record<string, string> {
+  return {
+    "x-journey-seed": seed.seed,
+    "x-journey-email": seed.email,
+  };
 }
 
-async function assertApiEnvelope(res: Awaited<ReturnType<APIRequestContext["get"]>>, label: string) {
+async function getWithSeed(request: APIRequestContext, target: string, seed: JourneySeed) {
+  return request.get(target, {
+    failOnStatusCode: false,
+    headers: seedHeaders(seed),
+  });
+}
+
+async function postWithSeed(
+  request: APIRequestContext,
+  target: string,
+  seed: JourneySeed,
+  data: Record<string, unknown>,
+  headers: Record<string, string> = {}
+) {
+  return request.post(target, {
+    failOnStatusCode: false,
+    data,
+    headers: {
+      ...seedHeaders(seed),
+      ...headers,
+    },
+  });
+}
+
+async function assertRoutePath(pathValue: string, page: Page, label: string) {
+  const res = await page.goto(pathValue, { waitUntil: "domcontentloaded" });
+  if (!res) return;
+  expect(ROUTE_STATUS_OK.has(res.status()), `${label} ${pathValue} -> ${res.status()}`).toBeTruthy();
+}
+
+async function assertApiEnvelope(
+  res: Awaited<ReturnType<APIRequestContext["get"]>>,
+  label: string
+) {
   const status = res.status();
   expect(API_STATUS_OK.has(status), `${label} unexpected status ${status}`).toBeTruthy();
   const ctype = res.headers()["content-type"] || "";
@@ -132,32 +244,37 @@ async function tryOpenProductFromHome(page: Page): Promise<boolean> {
   return true;
 }
 
-async function runSection11Scenario(journey: string, request: APIRequestContext) {
+async function runSection11Scenario(journey: string, request: APIRequestContext, seed: JourneySeed) {
   if (journey.includes("rate limit")) {
-    const res = await request.get("/api/products", { failOnStatusCode: false });
+    const res = await getWithSeed(request, "/api/products", seed);
     expect([200, 429, 503].includes(res.status())).toBeTruthy();
     return;
   }
+
   if (journey.includes("idempotency")) {
-    const first = await request.post("/api/account/cart/merge", {
-      data: {},
-      headers: { "Idempotency-Key": "journey-e2e-idempotency" },
-      failOnStatusCode: false,
-    });
-    const second = await request.post("/api/account/cart/merge", {
-      data: {},
-      headers: { "Idempotency-Key": "journey-e2e-idempotency" },
-      failOnStatusCode: false,
-    });
+    const first = await postWithSeed(
+      request,
+      "/api/account/cart/merge",
+      seed,
+      {},
+      { "Idempotency-Key": `${seed.idempotencyKey}-same` }
+    );
+    const second = await postWithSeed(
+      request,
+      "/api/account/cart/merge",
+      seed,
+      {},
+      { "Idempotency-Key": `${seed.idempotencyKey}-same` }
+    );
     expect(API_STATUS_OK.has(first.status())).toBeTruthy();
     expect(API_STATUS_OK.has(second.status())).toBeTruthy();
   }
 }
 
-async function runSection15Scenario(journey: string, request: APIRequestContext) {
+async function runSection15Scenario(journey: string, request: APIRequestContext, seed: JourneySeed) {
   if (journey.includes("robots") || journey.includes("sitemap")) {
-    const robots = await request.get("/robots.txt", { failOnStatusCode: false });
-    const sitemap = await request.get("/sitemap.xml", { failOnStatusCode: false });
+    const robots = await getWithSeed(request, "/robots.txt", seed);
+    const sitemap = await getWithSeed(request, "/sitemap.xml", seed);
     expect([200, 404].includes(robots.status())).toBeTruthy();
     expect([200, 404].includes(sitemap.status())).toBeTruthy();
   }
@@ -170,18 +287,14 @@ async function runSection16Scenario(page: Page) {
   await page.setViewportSize({ width: 1280, height: 720 });
 }
 
-async function runScenario(
-  row: JourneyRow,
-  page: Page,
-  request: APIRequestContext
-) {
+async function runScenario(row: JourneyRow, page: Page, request: APIRequestContext) {
   const label = `${row.id} ${row.journey}`;
-  const paths = extractPaths(row.sitePath);
+  const seed = journeySeed(row.id);
+  const paths = extractPaths(`${row.sitePath} ${row.endpoint}`);
   expect(paths.length, `${row.id} has no route in Site Path`).toBeGreaterThan(0);
 
   const journey = row.journey.toLowerCase();
 
-  // Special flows with multi-step behavior.
   if (journey.includes("back/forward navigation")) {
     await assertRoutePath("/", page, label);
     await assertRoutePath("/bag", page, label);
@@ -207,7 +320,7 @@ async function runScenario(
   }
 
   if (journey.includes("session mint") || journey.includes("session creation")) {
-    const res = await request.get("/api/auth/capabilities", { failOnStatusCode: false });
+    const res = await getWithSeed(request, "/api/auth/capabilities", seed);
     await assertApiEnvelope(res, `${label} /api/auth/capabilities`);
     const body = await res.json();
     expect(body?.ok).toBeTruthy();
@@ -217,7 +330,7 @@ async function runScenario(
 
   for (const p of paths) {
     if (p.startsWith("/api/")) {
-      const res = await request.get(p, { failOnStatusCode: false });
+      const res = await getWithSeed(request, p, seed);
       await assertApiEnvelope(res, `${label} ${p}`);
     } else {
       await assertRoutePath(p, page, label);
@@ -266,9 +379,10 @@ async function runScenario(
     await page.goto("/bag", { waitUntil: "domcontentloaded" });
     await expect(page.locator("body")).toContainText(/bag/i);
     if (journey.includes("validation error")) {
-      const bad = await request.post("/api/account/cart", {
-        data: { cartId: "", variantId: "", quantity: 0 },
-        failOnStatusCode: false,
+      const bad = await postWithSeed(request, "/api/account/cart", seed, {
+        cartId: "",
+        variantId: "",
+        quantity: 0,
       });
       expect([400, 401].includes(bad.status())).toBeTruthy();
     }
@@ -282,18 +396,15 @@ async function runScenario(
   }
 
   if (row.section === 7) {
-    const res = await request.post("/api/checkout/verify-payment", {
-      data: {},
-      failOnStatusCode: false,
-    });
+    const res = await postWithSeed(request, "/api/checkout/verify-payment", seed, {});
     expect([400, 401, 403].includes(res.status())).toBeTruthy();
     return;
   }
 
   if (row.section === 8) {
-    const caps = await request.get("/api/auth/capabilities", { failOnStatusCode: false });
+    const caps = await getWithSeed(request, "/api/auth/capabilities", seed);
     await assertApiEnvelope(caps, `${label} capabilities`);
-    const profile = await request.get("/api/account/profile", { failOnStatusCode: false });
+    const profile = await getWithSeed(request, "/api/account/profile", seed);
     expect([200, 401].includes(profile.status())).toBeTruthy();
     return;
   }
@@ -311,19 +422,19 @@ async function runScenario(
       await expect(page.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
     }
     if (row.id === "UJ-210" || row.id === "UJ-211") {
-      const telem = await request.get("/api/telemetry/summary", { failOnStatusCode: false });
+      const telem = await getWithSeed(request, "/api/telemetry/summary", seed);
       expect([200, 401].includes(telem.status())).toBeTruthy();
     }
     return;
   }
 
   if (row.section === 11) {
-    await runSection11Scenario(journey, request);
+    await runSection11Scenario(journey, request, seed);
     return;
   }
 
   if (row.section === 12) {
-    const ready = await request.get("/api/auth/capabilities", { failOnStatusCode: false });
+    const ready = await getWithSeed(request, "/api/auth/capabilities", seed);
     await assertApiEnvelope(ready, `${label} resilience-check`);
     return;
   }
@@ -344,7 +455,7 @@ async function runScenario(
   }
 
   if (row.section === 15) {
-    await runSection15Scenario(journey, request);
+    await runSection15Scenario(journey, request, seed);
     return;
   }
 
@@ -357,14 +468,17 @@ async function runScenario(
 const rows = parseRows();
 const sectionFilter = parseSectionFilter();
 const activeRows = sectionFilter
-  ? rows.filter((r) => sectionFilter.has(r.section))
+  ? rows.filter((r) => r.section !== undefined && sectionFilter.has(r.section))
   : rows;
 
-test.describe.configure({ mode: "parallel" });
+const coreRows = rows.filter((r) => r.id.startsWith("UJ-"));
+const extendedRows = rows.filter((r) => r.id.startsWith("UJX-"));
 
-test("journey blueprint exists and matrix rows parse", async () => {
-  expect(fs.existsSync(BLUEPRINT)).toBeTruthy();
-  expect(rows.length).toBeGreaterThanOrEqual(220);
+test("journey catalogs exist and matrix rows parse", async () => {
+  const files = resolveJourneyFiles();
+  expect(files.length).toBeGreaterThan(0);
+  expect(coreRows.length).toBeGreaterThanOrEqual(220);
+  expect(extendedRows.length).toBeGreaterThanOrEqual(5000);
   expect(activeRows.length).toBeGreaterThan(0);
 });
 
@@ -374,6 +488,7 @@ for (const row of activeRows) {
     test.skip(title, async () => {});
     continue;
   }
+
   test(title, async ({ page, request }) => {
     await runScenario(row, page, request);
   });
