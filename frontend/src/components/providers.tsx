@@ -7,6 +7,7 @@ import { ensureGuestSession } from "@/lib/session";
 import { ToastProvider } from "@/components/ui/toast";
 import { LiveAnnouncerProvider } from "@/components/ui/live-announcer";
 import { StorefrontLoginProvider } from "@/context/storefront-login-context";
+import { StorefrontAuthSync } from "@/components/storefront-auth-sync";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -25,6 +26,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
   return (
     <SessionProvider>
+      <StorefrontAuthSync />
       <QueryClientProvider client={queryClient}>
         <LiveAnnouncerProvider>
           <StorefrontLoginProvider>

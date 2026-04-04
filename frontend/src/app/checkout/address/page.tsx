@@ -7,7 +7,7 @@ import { Country, State, City } from "country-state-city";
 import { SiteHeader } from "@/components/site-header";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { useStorefront } from "@/context/storefront-context";
-import { useRazorpayTest } from "@/hooks/use-razorpay-test";
+import { useRazorpayCheckout } from "@/hooks/use-razorpay-checkout";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
 import { toRouteFailureUi, type RouteFailureUi } from "@/lib/route-state";
 import { addressInputSchema } from "@/lib/validation-schemas";
@@ -43,12 +43,13 @@ function buildAddressIdempotencyKey(input: {
   return `checkout-address-${canonical}`;
 }
 
+// eslint-disable-next-line max-lines-per-function
 export default function CheckoutAddressPage() {
   const router = useRouter();
   const { status } = useSession();
   const { openLogin } = useStorefrontLogin();
   const { cartLines } = useStorefront();
-  const { paymentLoading, paymentMessage, runCheckout } = useRazorpayTest();
+  const { paymentLoading, paymentMessage, runCheckout } = useRazorpayCheckout();
   const { announce } = useLiveAnnouncer();
 
   const [addresses, setAddresses] = useState<ShippingAddressRow[]>([]);
@@ -185,7 +186,16 @@ export default function CheckoutAddressPage() {
           }),
         });
       }
-      await runCheckout({ shippingAddressId: selectedId });
+      await runCheckout({
+        shippingAddressId: selectedId,
+        onSuccess: ({ orderId }) => router.push(`/checkout/success?orderId=${encodeURIComponent(orderId)}`),
+        onFailure: ({ orderId, reason }) => {
+          const params = new URLSearchParams();
+          if (orderId) params.set("orderId", orderId);
+          if (reason) params.set("reason", reason);
+          router.push(`/checkout/failed?${params.toString()}`);
+        },
+      });
     };
     void persistAndCheckout();
   };
