@@ -81,12 +81,23 @@ pub struct UpdateUserInput {
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
-#[graphql(description = "Search for a user by ID")]
+#[graphql(description = "Search users by any supported field")]
 pub struct SearchUserInput {
-    pub user_id: String,
-    /// Optional page size for list-mode queries (user_id = "0")
+    /// Optional user id exact-match filter.
+    pub user_id: Option<String>,
+    pub username: Option<String>,
+    pub email: Option<String>,
+    /// "email" | "google"
+    pub auth_provider: Option<String>,
+    pub google_sub: Option<String>,
+    pub full_name: Option<String>,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub role_id: Option<String>,
+    pub user_status_id: Option<String>,
+    /// Optional page size.
     pub limit: Option<String>,
-    /// Optional offset for list-mode queries (user_id = "0")
+    /// Optional offset.
     pub offset: Option<String>,
 }
 

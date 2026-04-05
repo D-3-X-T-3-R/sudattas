@@ -17,6 +17,11 @@ CREATE TABLE `UserRoles` (
     PRIMARY KEY (`RoleID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+INSERT IGNORE INTO `UserRoles` (`RoleName`) VALUES
+  ('customer'),
+  ('admin'),
+  ('super_admin');
+
 -- Lookup table for user statuses
 CREATE TABLE `UserStatuses` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,

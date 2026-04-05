@@ -2,6 +2,7 @@ use dotenvy::dotenv;
 use governor::{Quota, RateLimiter};
 use graphql::graphql_handler;
 use graphql::health;
+use graphql::query_handler::admin_roles;
 use graphql::query_handler::{AuthSource, Context};
 use graphql::schema;
 use graphql::security::csrf;
@@ -320,11 +321,16 @@ async fn main() {
              x_guest_session_id: Option<String>,
              (jwks, redis_url, allowed_origins): (_, Option<String>, Option<Arc<Vec<String>>>)| async move {
                 let mut auth: Option<AuthSource> = None;
+                let mut jwt_subject: Option<String> = None;
+                let mut admin_authorized: Option<bool> = None;
+                let mut admin_resolution_source: Option<String> = None;
+                let request_id = x_request_id.or_else(|| Some(Uuid::new_v4().to_string()));
 
                 // --- JWT path ---
                 if let Some(ref t) = token {
                     match validate_token(t, &jwks) {
                         Ok(claims) => {
+                            jwt_subject = Some(claims.sub.clone());
                             let auth_user_id = claims.user_id.unwrap_or_else(|| claims.sub.clone());
                             debug!(auth_method = "jwt", sub = %claims.sub, auth_user_id = %auth_user_id, "Request authenticated");
                             auth = Some(AuthSource::Jwt(auth_user_id));
@@ -352,6 +358,29 @@ async fn main() {
                             warn!("X-Session-Id received but REDIS_URL is not configured");
                         }
                     }
+                }
+
+                // --- Admin role resolution (JWT only): DB/cache lookup by JWT sub ---
+                if matches!(auth, Some(AuthSource::Jwt(_))) {
+                    if let Some(sub) = jwt_subject.as_deref() {
+                        match admin_roles::resolve_admin_from_db(sub, request_id.as_deref()).await {
+                            Ok(resolution) => {
+                                admin_authorized = Some(resolution.is_admin);
+                                admin_resolution_source = Some(resolution.source.to_string());
+                                graphql::metrics::record_admin_role_resolution_total(
+                                    resolution.source,
+                                    "success",
+                                );
+                            }
+                            Err(err) => {
+                                warn!(error = %err, "Admin role lookup failed");
+                                graphql::metrics::record_admin_role_resolution_total("db", "failure");
+                            }
+                        }
+                    }
+                }
+                if matches!(auth, Some(AuthSource::Jwt(_))) && admin_resolution_source.is_none() {
+                    admin_resolution_source = Some("env_fallback".to_string());
                 }
 
                 // --- Trusted internal auth (server-side frontend proxy) ---
@@ -429,8 +458,6 @@ async fn main() {
                     }
                 }
 
-                let request_id =
-                    x_request_id.or_else(|| Some(Uuid::new_v4().to_string()));
                 Ok::<Context, Rejection>(Context {
                     jwks,
                     redis_url,
@@ -439,6 +466,9 @@ async fn main() {
                     idempotency_key,
                     client_action: x_client_action,
                     guest_session_id: x_guest_session_id,
+                    jwt_subject,
+                    admin_authorized,
+                    admin_resolution_source,
                 })
             },
         );
