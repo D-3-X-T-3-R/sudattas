@@ -69,7 +69,20 @@ async fn integration_user_create_and_search() {
 
     let search_res = core_operations::handlers::users::search_user(
         &txn,
-        Request::new(SearchUserRequest { user_id }),
+        Request::new(SearchUserRequest {
+            user_id: Some(user_id),
+            username: None,
+            email: None,
+            auth_provider: None,
+            google_sub: None,
+            full_name: None,
+            address: None,
+            phone: None,
+            role_id: None,
+            user_status_id: None,
+            limit: None,
+            offset: None,
+        }),
     )
     .await
     .expect("search_user should succeed");
@@ -137,7 +150,20 @@ async fn integration_user_create_update_search() {
 
     let search_res = core_operations::handlers::users::search_user(
         &txn,
-        Request::new(SearchUserRequest { user_id }),
+        Request::new(SearchUserRequest {
+            user_id: Some(user_id),
+            username: None,
+            email: None,
+            auth_provider: None,
+            google_sub: None,
+            full_name: None,
+            address: None,
+            phone: None,
+            role_id: None,
+            user_status_id: None,
+            limit: None,
+            offset: None,
+        }),
     )
     .await
     .expect("search_user should succeed");
@@ -351,7 +377,18 @@ async fn integration_user_google_provisioning_reuses_existing_email_identity() {
     let by_id = core_operations::handlers::users::search_user(
         &txn,
         Request::new(SearchUserRequest {
-            user_id: base_user.user_id,
+            user_id: Some(base_user.user_id),
+            username: None,
+            email: None,
+            auth_provider: None,
+            google_sub: None,
+            full_name: None,
+            address: None,
+            phone: None,
+            role_id: None,
+            user_status_id: None,
+            limit: None,
+            offset: None,
         }),
     )
     .await

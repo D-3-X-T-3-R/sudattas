@@ -77,6 +77,14 @@ fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
         Ok(())
     } else {
         crate::metrics::record_admin_authz_denied_total();
+        let reason = if context.jwt_user_id().is_none() {
+            "not_jwt"
+        } else if context.admin_resolution_source() == Some("env_fallback") {
+            "fallback_not_admin"
+        } else {
+            "not_admin"
+        };
+        crate::metrics::record_admin_authz_denied_reason_total(reason);
         Err(juniper::FieldError::new(
             "Admin authorization required",
             juniper::Value::null(),
