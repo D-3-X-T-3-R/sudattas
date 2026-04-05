@@ -1,35 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getServerSession: vi.fn(),
-  isAdminEmail: vi.fn(),
+  getAuthenticatedSession: vi.fn(),
+  getAdminSession: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 
-vi.mock("next-auth", () => ({
-  getServerSession: mocks.getServerSession,
-}));
-
-vi.mock("@/lib/auth", () => ({
-  authOptions: {},
-}));
-
 vi.mock("@/lib/admin-auth-server", () => ({
-  isAdminEmail: mocks.isAdminEmail,
+  getAuthenticatedSession: mocks.getAuthenticatedSession,
+  getAdminSession: mocks.getAdminSession,
 }));
 
 import { GET } from "@/app/api/auth/capabilities/route";
 
 describe("GET /api/auth/capabilities", () => {
   beforeEach(() => {
-    mocks.getServerSession.mockReset();
-    mocks.isAdminEmail.mockReset();
+    mocks.getAuthenticatedSession.mockReset();
+    mocks.getAdminSession.mockReset();
   });
 
   it("returns guest capabilities when session lookup throws", async () => {
-    mocks.getServerSession.mockRejectedValue(new Error("session unavailable"));
-    mocks.isAdminEmail.mockReturnValue(false);
+    mocks.getAuthenticatedSession.mockResolvedValue(null);
+    mocks.getAdminSession.mockResolvedValue(null);
 
     const res = await GET();
     const json = (await res.json()) as {
@@ -46,11 +39,13 @@ describe("GET /api/auth/capabilities", () => {
     expect(json.data.mode).toBe("guest");
   });
 
-  it("returns admin mode for allowlisted admin sessions", async () => {
-    mocks.getServerSession.mockResolvedValue({
+  it("returns admin mode for backend-authorized admin sessions", async () => {
+    mocks.getAuthenticatedSession.mockResolvedValue({
       user: { email: "admin@example.com" },
     });
-    mocks.isAdminEmail.mockReturnValue(true);
+    mocks.getAdminSession.mockResolvedValue({
+      user: { email: "admin@example.com" },
+    });
 
     const res = await GET();
     const json = (await res.json()) as {

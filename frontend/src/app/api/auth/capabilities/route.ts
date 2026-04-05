@@ -1,17 +1,9 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { isAdminEmail } from "@/lib/admin-auth-server";
+import { getAdminSession, getAuthenticatedSession } from "@/lib/admin-auth-server";
 
 export async function GET() {
-  let session = null;
-  try {
-    session = await getServerSession(authOptions);
-  } catch {
-    session = null;
-  }
-  const email = session?.user?.email ?? null;
+  const session = await getAuthenticatedSession();
   const authenticated = Boolean(session);
-  const admin = isAdminEmail(email);
+  const admin = Boolean(authenticated && (await getAdminSession()));
 
   return Response.json({
     ok: true,
