@@ -18,8 +18,8 @@ use core_db_entities::entity::{
 };
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
-    CreateOrderRequest, CreatePaymentIntentRequest, GetCartItemsRequest,
-    GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
+    CreateOrderRequest, CreatePaymentIntentRequest, GetCartItemsRequest, GetProductsByIdRequest,
+    OrdersResponse, PlaceOrderRequest,
 };
 use sea_orm::DbBackend;
 use sea_orm::{

@@ -6,7 +6,8 @@ use crate::order_state_machine;
 use chrono::Utc;
 use core_db_entities::entity::{order_details, order_status, orders};
 use proto::proto::core::{
-    CreateOrderEventRequest, DeleteCartItemRequest, OrderResponse, OrdersResponse, UpdateOrderRequest,
+    CreateOrderEventRequest, DeleteCartItemRequest, OrderResponse, OrdersResponse,
+    UpdateOrderRequest,
 };
 use sea_orm::DbBackend;
 use sea_orm::{
