@@ -94,15 +94,15 @@ async fn process_pending_outbox_events_one_success_returns_one() {
         created_at: now,
         published_at: None,
     };
-    // MySQL: update() does exec (UPDATE) then find_updated_model_by_id (SELECT by pk) = 1 exec + 1 query.
-    // So total: 1 query (find pending), 1 exec (UPDATE), 1 query (find_by_id for updated row).
+    // OrderPlaced skips email (no extra queries); queries: (1) list pending, (2) SELECT after outbox UPDATE.
     let row_updated = outbox_events::Model {
         status: OutboxStatus::Processed,
         published_at: Some(now),
         ..row.clone()
     };
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_query_results(vec![vec![row], vec![row_updated]])
+        .append_query_results(vec![vec![row.clone()]])
+        .append_query_results(vec![vec![row_updated.clone()]])
         .append_exec_results(vec![
             MockExecResult {
                 last_insert_id: 0,

@@ -1,3 +1,4 @@
+use crate::handlers::cart::delete_cart_item;
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::money::paise_to_decimal;
@@ -5,7 +6,7 @@ use crate::order_state_machine;
 use chrono::Utc;
 use core_db_entities::entity::{order_details, order_status, orders};
 use proto::proto::core::{
-    CreateOrderEventRequest, OrderResponse, OrdersResponse, UpdateOrderRequest,
+    CreateOrderEventRequest, DeleteCartItemRequest, OrderResponse, OrdersResponse, UpdateOrderRequest,
 };
 use sea_orm::DbBackend;
 use sea_orm::{
@@ -104,7 +105,7 @@ pub async fn update_order(
                         order_id: model.order_id,
                         event_type: "status_changed".to_string(),
                         from_status: Some(from_name),
-                        to_status: Some(to_name),
+                        to_status: Some(to_name.clone()),
                         actor_type: "system".to_string(),
                         message: Some(format!(
                             "Order {} status changed to {}",
@@ -113,6 +114,28 @@ pub async fn update_order(
                     }),
                 )
                 .await;
+
+                // Matches Paid transition via order_state_machine (webhook): clear cart when marked paid
+                // through GraphQL update_order — that path does not call transition_order_status.
+                if to_name == "confirmed" {
+                    if let Err(e) = delete_cart_item(
+                        txn,
+                        Request::new(DeleteCartItemRequest {
+                            user_id: Some(model.user_id),
+                            cart_id: None,
+                            session_id: None,
+                        }),
+                    )
+                    .await
+                    {
+                        tracing::warn!(
+                            error = %e.message(),
+                            order_id = model.order_id,
+                            user_id = model.user_id,
+                            "clear cart after update_order to confirmed failed (non-fatal)"
+                        );
+                    }
+                }
             }
 
             let total_amount_paise = model.grand_total_minor;
