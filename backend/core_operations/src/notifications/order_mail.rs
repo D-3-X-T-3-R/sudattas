@@ -222,7 +222,9 @@ pub fn build_payment_captured_email(s: &OrderMailSnapshot) -> (String, String, S
     text.push_str(&format!("\n\n{}", url));
 
     let mut html = String::new();
-    html.push_str("<!DOCTYPE html><html><body style=\"font-family:system-ui,sans-serif;line-height:1.5\">");
+    html.push_str(
+        "<!DOCTYPE html><html><body style=\"font-family:system-ui,sans-serif;line-height:1.5\">",
+    );
     html.push_str(&format!("<p>Hi {},</p>", html_escape(&s.customer_name)));
     html.push_str(&format!(
         "<p>Thank you for your order. We've received <strong>order #{}</strong> and your payment was successful.</p>",
@@ -251,7 +253,11 @@ pub fn build_payment_captured_email(s: &OrderMailSnapshot) -> (String, String, S
         "<pre style=\"white-space:pre-wrap\">{}</pre>",
         html_escape(&s.shipping_block)
     ));
-    html.push_str(&format!("<p><a href=\"{}\">{}</a></p>", html_escape(&url), html_escape(&url)));
+    html.push_str(&format!(
+        "<p><a href=\"{}\">{}</a></p>",
+        html_escape(&url),
+        html_escape(&url)
+    ));
     html.push_str("</body></html>");
 
     (subject, text, html)
@@ -265,7 +271,10 @@ pub fn build_shipped_email(s: &OrderMailSnapshot) -> (String, String, String) {
     let subject = format!("Your order #{oid} has shipped");
     let text = format!(
         "Hi {},\n\nOrder #{} is on its way. Status: {}.\n\n{}\n",
-        s.customer_name, oid, s.status_name, storefront_url()
+        s.customer_name,
+        oid,
+        s.status_name,
+        storefront_url()
     );
     let html = format!(
         "<p>Hi {},</p><p>Order <strong>#{}</strong> is on its way. Status: {}.</p>",

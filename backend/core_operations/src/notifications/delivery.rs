@@ -76,8 +76,7 @@ async fn deliver_order_typed(
     let Some(snap) = load_order_mail_snapshot(db, order_id).await? else {
         warn!(
             event_id = event.event_id,
-            order_id,
-            "outbox: order or user not found; skip email"
+            order_id, "outbox: order or user not found; skip email"
         );
         return Ok(());
     };
@@ -94,7 +93,10 @@ async fn deliver_order_typed(
 
 async fn deliver_abandoned_cart(event: &outbox_events::Model) -> Result<(), Status> {
     let Some(to) = parse_abandoned_cart_email(&event.payload) else {
-        warn!(event_id = event.event_id, "outbox: AbandonedCart missing email; skip");
+        warn!(
+            event_id = event.event_id,
+            "outbox: AbandonedCart missing email; skip"
+        );
         return Ok(());
     };
     let name = "there";

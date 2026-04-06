@@ -1,5 +1,7 @@
 use core_db_entities::get_db;
-use core_operations::{check_auth, procedures::outbox_worker::process_pending_outbox_events, MyGRPCServices};
+use core_operations::{
+    check_auth, procedures::outbox_worker::process_pending_outbox_events, MyGRPCServices,
+};
 use dotenvy::dotenv;
 use proto::proto::core::grpc_services_server::GrpcServicesServer;
 use std::time::Duration;

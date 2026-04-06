@@ -21,18 +21,20 @@ pub async fn search_order(
         .apply_if(req.order_id, |query, id| {
             query.filter(orders::Column::OrderId.eq(id))
         })
-        .apply_if(req.order_date_start, |query, ts| {
-            match DateTime::<Utc>::from_timestamp(ts, 0) {
+        .apply_if(
+            req.order_date_start,
+            |query, ts| match DateTime::<Utc>::from_timestamp(ts, 0) {
                 Some(dt) => query.filter(orders::Column::OrderDate.gte(dt)),
                 None => query,
-            }
-        })
-        .apply_if(req.order_date_end, |query, ts| {
-            match DateTime::<Utc>::from_timestamp(ts, 0) {
+            },
+        )
+        .apply_if(
+            req.order_date_end,
+            |query, ts| match DateTime::<Utc>::from_timestamp(ts, 0) {
                 Some(dt) => query.filter(orders::Column::OrderDate.lte(dt)),
                 None => query,
-            }
-        })
+            },
+        )
         .apply_if(req.status_id, |query, sid| {
             query.filter(orders::Column::StatusId.eq(sid))
         })
