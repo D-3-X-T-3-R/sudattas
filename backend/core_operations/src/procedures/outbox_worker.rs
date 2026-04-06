@@ -30,21 +30,21 @@ pub async fn process_pending_outbox_events(
 
     let mut processed_count = 0;
     for row in &pending {
-        let txn = conn
-            .begin()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        if let Err(e) = delivery::deliver_event(row).await {
+        // Deliver outside a DB txn so HTTP/email does not hold locks; enrichment uses read-only queries on `conn`.
+        if let Err(e) = delivery::deliver_event(conn, row).await {
             warn!(
                 event_id = row.event_id,
                 event_type = row.event_type,
                 error = %e.message(),
                 "outbox: delivery failed, event left Pending for retry"
             );
-            let _ = txn.rollback().await;
             continue;
         }
+
+        let txn = conn
+            .begin()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
 
         let mut active: outbox_events::ActiveModel = row.clone().into();
         active.status = ActiveValue::Set(OutboxStatus::Processed);

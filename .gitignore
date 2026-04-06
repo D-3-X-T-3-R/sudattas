@@ -28,6 +28,9 @@ yarn-error.log*
 debug/
 debug/*
 target/
+# Ad-hoc CARGO_TARGET_DIR outputs (do not commit)
+backend/target-check-co/
+backend/target-outbox-test/
 Cargo.lock
 **/*.rs.bk
 *.pdb

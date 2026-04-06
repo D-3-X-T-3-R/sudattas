@@ -14,7 +14,7 @@ use integration_common::test_db_url;
 
 use core_db_entities::entity::{
     cart, inventory, order_details, order_status, product_categories, product_variants, products,
-    shipping_addresses, user_roles,
+    sea_orm_active_enums::PaymentStatus, shipping_addresses, user_roles,
 };
 use core_operations::procedures::orders::place_order;
 use proto::proto::core::{
@@ -27,9 +27,23 @@ use sea_orm::{
 };
 use tonic::{Code, Request};
 
+async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
+    if let Ok(Some(id)) = core_operations::order_state_machine::get_status_id(txn, name).await {
+        return id;
+    }
+    let m = order_status::ActiveModel {
+        status_id: ActiveValue::NotSet,
+        status_name: ActiveValue::Set(name.to_string()),
+    }
+    .insert(txn)
+    .await
+    .expect("insert OrderStatus");
+    m.status_id
+}
+
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_place_order_happy_path_creates_order_and_clears_cart() {
+async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_payment() {
     use core_db_entities::entity::{inventory as inventory_entity, orders};
 
     let db = Database::connect(&test_db_url())
@@ -234,7 +248,30 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart() {
         "quantity_available should be decremented by ordered quantity"
     );
 
-    // Cart cleared for the user.
+    // Cart still has items until payment succeeds (pending order + Razorpay).
+    let remaining_cart = cart::Entity::find()
+        .filter(cart::Column::UserId.eq(user_id))
+        .all(&txn)
+        .await
+        .expect("query Cart for user");
+    assert!(
+        !remaining_cart.is_empty(),
+        "cart should remain after place_order until paid"
+    );
+
+    let _ = ensure_order_status(&txn, "confirmed").await;
+    core_operations::order_state_machine::transition_order_status(
+        &txn,
+        order.order_id,
+        core_operations::order_state_machine::OrderState::Paid,
+        "payment_captured",
+        "system",
+        Some("test payment"),
+        Some(PaymentStatus::Captured),
+    )
+    .await
+    .expect("transition to paid");
+
     let remaining_cart = cart::Entity::find()
         .filter(cart::Column::UserId.eq(user_id))
         .all(&txn)
@@ -242,7 +279,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart() {
         .expect("query Cart for user");
     assert!(
         remaining_cart.is_empty(),
-        "cart should be cleared after successful place_order"
+        "cart should be cleared after order becomes Paid"
     );
 
     // Roll back to keep test non-destructive.
