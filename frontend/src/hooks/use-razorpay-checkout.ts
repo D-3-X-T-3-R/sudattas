@@ -14,7 +14,8 @@ declare global {
   interface Window {
     Razorpay?: new (options: Record<string, unknown>) => {
       open: () => void;
-      on: (event: string, handler: () => void) => void;
+      /** Razorpay passes e.g. `{ error: { description, code, ... } }` for `payment.failed`. */
+      on: (event: string, handler: (...args: unknown[]) => void) => void;
     };
   }
 }
