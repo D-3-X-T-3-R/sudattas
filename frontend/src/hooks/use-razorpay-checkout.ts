@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
+import { ApiEnvelopeError } from "@/lib/api-envelope";
 import {
   paymentIntentSchema,
   verifyRazorpayPayloadSchema,
@@ -13,7 +14,8 @@ declare global {
   interface Window {
     Razorpay?: new (options: Record<string, unknown>) => {
       open: () => void;
-      on: (event: string, handler: () => void) => void;
+      /** Razorpay passes e.g. `{ error: { description, code, ... } }` for `payment.failed`. */
+      on: (event: string, handler: (...args: unknown[]) => void) => void;
     };
   }
 }
@@ -47,7 +49,8 @@ function loadRazorpayScript(): Promise<void> {
   });
 }
 
-export function useRazorpayTest() {
+// eslint-disable-next-line max-lines-per-function
+export function useRazorpayCheckout() {
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const { announce } = useLiveAnnouncer();
@@ -59,6 +62,13 @@ export function useRazorpayTest() {
     },
     [announce]
   );
+
+  const accountErrorMessage = useCallback((error: unknown): string => {
+    if (error instanceof ApiEnvelopeError && error.message?.trim()) {
+      return error.message;
+    }
+    return toRouteFailureUi("account", error).message;
+  }, []);
 
   const pollOrderReconciliation = useCallback(async (orderId: string) => {
     const maxAttempts = 6;
@@ -80,7 +90,11 @@ export function useRazorpayTest() {
     return null;
   }, []);
 
-  const runCheckout = useCallback(async (input?: { shippingAddressId?: string }) => {
+  const runCheckout = useCallback(async (input?: {
+    shippingAddressId?: string;
+    onSuccess?: (payload: { orderId: string; paymentState: string; orderUiState: string }) => void;
+    onFailure?: (payload: { orderId: string; reason?: string }) => void;
+  }) => {
     const shippingAddressId = input?.shippingAddressId?.trim();
     if (!shippingAddressId) {
       setPaymentMessageWithAnnounce("Select a shipping address first.", "assertive");
@@ -160,6 +174,29 @@ export function useRazorpayTest() {
               paymentIntent: { status: verifyResult.paymentState },
             });
             if (verifyParsed.success && verifyResult.verified) {
+              const successPayload = {
+                orderId,
+                paymentState: verifyResult.paymentState,
+                orderUiState: verifyResult.orderUiState,
+              };
+              if (verifyResult.paymentState === "failed") {
+                if (input?.onFailure) {
+                  input.onFailure({
+                    orderId,
+                    reason: "Payment verification marked this payment as failed.",
+                  });
+                  return;
+                }
+                setPaymentMessageWithAnnounce(
+                  "Payment failed. Please try again with a different payment method.",
+                  "assertive"
+                );
+                return;
+              }
+              if (input?.onSuccess) {
+                input.onSuccess(successPayload);
+                return;
+              }
               if (FINAL_PAYMENT_STATES.has(verifyResult.paymentState)) {
                 setPaymentMessageWithAnnounce(
                   `Payment ${verifyResult.paymentState}. Order state: ${verifyResult.orderUiState}.`
@@ -190,21 +227,33 @@ export function useRazorpayTest() {
               setPaymentMessageWithAnnounce("Verify failed or invalid response.", "assertive");
             }
           } catch (e) {
-            setPaymentMessageWithAnnounce(toRouteFailureUi("account", e).message, "assertive");
+            setPaymentMessageWithAnnounce(accountErrorMessage(e), "assertive");
           }
         },
       };
       const rzp = new window.Razorpay!(options);
-      rzp.on("payment.failed", () => {
+      rzp.on("payment.failed", (failure: unknown) => {
+        const reason =
+          typeof failure === "object" &&
+          failure !== null &&
+          "error" in failure &&
+          typeof (failure as { error?: { description?: unknown } }).error?.description ===
+            "string"
+            ? (failure as { error: { description: string } }).error.description
+            : "Payment failed or was closed.";
+        if (input?.onFailure) {
+          input.onFailure({ orderId, reason });
+          return;
+        }
         setPaymentMessageWithAnnounce("Payment failed or was closed.", "assertive");
       });
       rzp.open();
     } catch (e) {
-      setPaymentMessageWithAnnounce(toRouteFailureUi("account", e).message, "assertive");
+      setPaymentMessageWithAnnounce(accountErrorMessage(e), "assertive");
     } finally {
       setPaymentLoading(false);
     }
-  }, [pollOrderReconciliation, setPaymentMessageWithAnnounce]);
+  }, [accountErrorMessage, pollOrderReconciliation, setPaymentMessageWithAnnounce]);
 
   const runTest = useCallback(async () => {
     setPaymentMessageWithAnnounce("Use checkout flow from /checkout/address.");

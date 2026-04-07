@@ -1,9 +1,11 @@
-//! Verify client-returned Razorpay signature after checkout; mark intent as ClientVerified.
-//! Webhook remains the final authority for Paid.
+//! Verify client-returned Razorpay signature after checkout; mark intent processed and move order to Paid.
+//! Ensures confirmation email / cart clear run when Razorpay webhooks cannot reach the server (e.g. local dev).
+//! A later `payment.captured` webhook remains idempotent (`transition_order_status` no-ops if already Paid).
 
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::order_state_machine::{self, OrderState};
 use core_db_entities::entity::payment_intents;
-use core_db_entities::entity::sea_orm_active_enums::Status;
+use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status};
 use hmac::{Hmac, Mac};
 use proto::proto::core::{
     PaymentIntentResponse, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
@@ -121,11 +123,24 @@ pub async fn verify_razorpay_payment(
     }
 
     let mut active = intent.clone().into_active_model();
-    active.status = ActiveValue::Set(Status::ClientVerified);
+    active.status = ActiveValue::Set(Status::Processed);
     active.razorpay_payment_id = ActiveValue::Set(Some(req.razorpay_payment_id.clone()));
 
     let updated: payment_intents::Model =
         active.update(txn).await.map_err(map_db_error_to_status)?;
+
+    if let Some(oid) = updated.order_id {
+        order_state_machine::transition_order_status(
+            txn,
+            oid,
+            OrderState::Paid,
+            "payment_client_verified",
+            "customer",
+            Some("Payment verified after Razorpay checkout"),
+            Some(PaymentStatus::Captured),
+        )
+        .await?;
+    }
 
     Ok(Response::new(VerifyRazorpayPaymentResponse {
         verified: true,

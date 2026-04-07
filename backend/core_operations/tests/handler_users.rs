@@ -187,7 +187,20 @@ async fn search_user_by_user_id_filters_correctly() {
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let req = Request::new(SearchUserRequest { user_id: 20 });
+    let req = Request::new(SearchUserRequest {
+        user_id: Some(20),
+        username: None,
+        email: None,
+        auth_provider: None,
+        google_sub: None,
+        full_name: None,
+        address: None,
+        phone: None,
+        role_id: None,
+        user_status_id: None,
+        limit: None,
+        offset: None,
+    });
     let result = search_user(&txn, req).await;
     assert!(result.is_ok());
     let UsersResponse { items } = result.unwrap().into_inner();

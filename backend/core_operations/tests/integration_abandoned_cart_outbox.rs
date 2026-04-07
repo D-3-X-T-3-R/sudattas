@@ -438,17 +438,17 @@ async fn place_order_setup(
     )
 }
 
-/// OB1 – place_order enqueues an OrderPlaced outbox event with correct payload.
+/// OB1 – place_order does not enqueue OrderPlaced; confirmation email is enqueued on PaymentCaptured (Paid).
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_place_order_enqueues_order_placed_outbox() {
+async fn integration_place_order_does_not_enqueue_order_placed_outbox() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, _shipping_id, _total_paise) = place_order_setup(&txn, now_tag).await;
+    let (order_id, _user_id, _shipping_id, _total_paise) = place_order_setup(&txn, now_tag).await;
 
     let events = outbox_events::Entity::find()
         .filter(outbox_events::Column::EventType.eq(ORDER_PLACED))
@@ -456,19 +456,9 @@ async fn integration_place_order_enqueues_order_placed_outbox() {
         .all(&txn)
         .await
         .expect("query outbox_events");
-    assert_eq!(events.len(), 1);
-    let payload = &events[0].payload;
-    assert_eq!(
-        payload
-            .get("order_id")
-            .and_then(|v: &serde_json::Value| v.as_i64()),
-        Some(order_id)
-    );
-    assert_eq!(
-        payload
-            .get("user_id")
-            .and_then(|v: &serde_json::Value| v.as_i64()),
-        Some(user_id)
+    assert!(
+        events.is_empty(),
+        "OrderPlaced outbox removed; customer email fires on payment success (PaymentCaptured)"
     );
 
     txn.rollback().await.ok();

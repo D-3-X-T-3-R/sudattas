@@ -13,8 +13,8 @@ mod integration_common;
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::Status as PaymentIntentStatus;
 use core_db_entities::entity::{
-    inventory, order_status, payment_intents, product_categories, product_variants, products,
-    shipping_addresses, user_roles,
+    inventory, order_status, orders, payment_intents, product_categories, product_variants,
+    products, shipping_addresses, user_roles,
 };
 use core_operations::procedures::orders::place_order;
 use hmac::{Hmac, Mac};
@@ -30,6 +30,20 @@ use sha2::Sha256;
 use tonic::Request;
 
 type HmacSha256 = Hmac<Sha256>;
+
+async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
+    if let Ok(Some(id)) = core_operations::order_state_machine::get_status_id(txn, name).await {
+        return id;
+    }
+    let m = order_status::ActiveModel {
+        status_id: ActiveValue::NotSet,
+        status_name: ActiveValue::Set(name.to_string()),
+    }
+    .insert(txn)
+    .await
+    .expect("insert OrderStatus");
+    m.status_id
+}
 
 /// Compute Razorpay-style signature: HMAC-SHA256(secret, "razorpay_order_id|razorpay_payment_id") hex-encoded.
 fn compute_razorpay_signature(order_id: &str, payment_id: &str, secret: &str) -> String {
@@ -212,7 +226,7 @@ async fn integration_place_order_creates_payment_intent() {
     txn.rollback().await.ok();
 }
 
-/// P2 – Happy-path verify_razorpay_payment marks intent as ClientVerified and sets razorpay_payment_id.
+/// P2 – Happy-path verify_razorpay_payment marks intent Processed, sets payment id, moves order to Paid.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_verify_razorpay_payment_success_updates_intent() {
@@ -225,6 +239,7 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
 
     let now_tag = Utc::now().timestamp_millis();
     let (_user_id, order_id) = place_order_setup(&txn, now_tag, 2_000).await;
+    let confirmed_id = ensure_order_status(&txn, "confirmed").await;
 
     let intents = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
@@ -260,10 +275,20 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
         .await
         .expect("query intent")
         .expect("intent exists");
-    assert_eq!(updated.status, PaymentIntentStatus::ClientVerified);
+    assert_eq!(updated.status, PaymentIntentStatus::Processed);
     assert_eq!(
         updated.razorpay_payment_id.as_deref(),
         Some(razorpay_payment_id.as_str())
+    );
+
+    let order_row = orders::Entity::find_by_id(order_id)
+        .one(&txn)
+        .await
+        .expect("query order")
+        .expect("order exists");
+    assert_eq!(
+        order_row.status_id, confirmed_id,
+        "verify should promote order to Paid (confirmed)"
     );
 
     txn.rollback().await.ok();

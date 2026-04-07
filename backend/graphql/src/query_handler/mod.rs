@@ -1,6 +1,7 @@
 use crate::security::jwks_loader::JWKSet;
 use warp::Reply;
 
+pub mod admin_roles;
 pub mod mutation_root;
 pub mod query_root;
 
@@ -36,6 +37,12 @@ pub struct Context {
     pub client_action: Option<String>,
     /// Optional guest session identifier from `X-Guest-Session-Id` header (frontend correlation).
     pub guest_session_id: Option<String>,
+    /// JWT sub claim when authenticated via JWT.
+    pub jwt_subject: Option<String>,
+    /// Per-request admin resolution computed at auth gate (DB/cache).
+    pub admin_authorized: Option<bool>,
+    /// Resolution source for observability (`cache`, `db`, `env_fallback`, `none`).
+    pub admin_resolution_source: Option<String>,
 }
 
 impl Context {
@@ -92,6 +99,14 @@ impl Context {
         self.guest_session_id.as_deref()
     }
 
+    pub fn jwt_subject(&self) -> Option<&str> {
+        self.jwt_subject.as_deref()
+    }
+
+    pub fn admin_resolution_source(&self) -> Option<&str> {
+        self.admin_resolution_source.as_deref()
+    }
+
     pub fn auth_mode(&self) -> &'static str {
         match &self.auth {
             Some(AuthSource::Jwt(_)) => "jwt",
@@ -102,9 +117,12 @@ impl Context {
         }
     }
 
-    /// Admin is resolved from JWT user id against `ADMIN_ALLOWED_USER_IDS` (comma-separated).
-    /// Empty allowlist means no admin privileges are granted.
+    /// Admin is resolved at request auth gate via DB role lookup.
+    /// Temporary fallback: if request-gate did not compute admin, uses `ADMIN_ALLOWED_USER_IDS`.
     pub fn is_admin(&self) -> bool {
+        if let Some(is_admin) = self.admin_authorized {
+            return is_admin;
+        }
         let Some(uid) = self.jwt_user_id() else {
             return false;
         };

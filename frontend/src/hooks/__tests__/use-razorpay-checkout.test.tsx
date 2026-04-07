@@ -14,9 +14,9 @@ vi.mock("@/lib/api-envelope", () => ({
   fetchApiEnvelope: (...args: unknown[]) => mocks.fetchApiEnvelope(...args),
 }));
 
-import { useRazorpayTest } from "@/hooks/use-razorpay-test";
+import { useRazorpayCheckout } from "@/hooks/use-razorpay-checkout";
 
-describe("useRazorpayTest async reconciliation", () => {
+describe("useRazorpayCheckout async reconciliation", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -78,7 +78,7 @@ describe("useRazorpayTest async reconciliation", () => {
         statusName: "processing",
       });
 
-    const { result } = renderHook(() => useRazorpayTest());
+    const { result } = renderHook(() => useRazorpayCheckout());
 
     await act(async () => {
       await result.current.runCheckout({ shippingAddressId: "10" });

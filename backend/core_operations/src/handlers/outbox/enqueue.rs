@@ -1,4 +1,5 @@
-//! P1 Outbox: enqueue notification events (OrderPlaced, PaymentCaptured, Shipped, Delivered, Refunded).
+//! P1 Outbox: enqueue notification events (PaymentCaptured when order is paid, Shipped, Delivered, Refunded).
+//! `OrderPlaced` is kept for constants / legacy rows; customer confirmation email is sent on `PaymentCaptured`.
 
 use crate::handlers::db_errors::map_db_error_to_status;
 use chrono::Utc;

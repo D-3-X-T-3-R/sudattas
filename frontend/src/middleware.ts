@@ -2,14 +2,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-function adminAllowlist(): string[] {
-  const raw = process.env.ADMIN_ALLOWED_EMAILS ?? "";
-  return raw
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 function isLoginPath(pathname: string): boolean {
   return pathname === "/imtheboss/login";
 }
@@ -29,12 +21,7 @@ export async function middleware(request: NextRequest) {
     secret: process.env.AUTH_SECRET,
   });
 
-  const email = typeof token?.email === "string" ? token.email.toLowerCase() : "";
-  const allowlist = adminAllowlist();
-  const authorized =
-    allowlist.length > 0 && email.length > 0 && allowlist.includes(email);
-
-  if (authorized) {
+  if (token && (token as { isAdmin?: boolean }).isAdmin === true) {
     return NextResponse.next();
   }
 

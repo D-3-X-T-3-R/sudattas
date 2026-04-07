@@ -183,7 +183,18 @@ message CreateUserRequest {
 }
 
 message SearchUserRequest {
-    int64 user_id = 1;
+    optional int64 user_id = 1;
+    optional string username = 2;
+    optional string email = 3;
+    optional string auth_provider = 4;  // "email" | "google"
+    optional string google_sub = 5;
+    optional string full_name = 6;
+    optional string address = 7;
+    optional string phone = 8;
+    optional int64 role_id = 9;
+    optional int64 user_status_id = 10;
+    optional int64 limit = 11;
+    optional int64 offset = 12;
 }
 
 message UpdateUserRequest {
@@ -212,6 +223,8 @@ message UserResponse {
     optional string phone = 7;
     string create_date = 8;
     optional string session_id = 9;      // Set on create_user when Redis session is created
+    optional int64 role_id = 10;
+    optional int64 user_status_id = 11;
 }
 
 message UsersResponse {

@@ -1,5 +1,6 @@
 // SearchOrderRequest Proto message
 use crate::handlers::db_errors::map_db_error_to_status;
+use chrono::{DateTime, Utc};
 use core_db_entities::entity::orders;
 use proto::proto::core::{OrderResponse, OrdersResponse, SearchOrderRequest};
 use sea_orm::{
@@ -17,17 +18,25 @@ pub async fn search_order(
         .apply_if(req.user_id, |query, v| {
             query.filter(orders::Column::UserId.eq(v))
         })
-        .apply_if(req.order_id, |query, _| {
-            query.filter(orders::Column::OrderId.eq(req.order_id))
+        .apply_if(req.order_id, |query, id| {
+            query.filter(orders::Column::OrderId.eq(id))
         })
-        .apply_if(req.order_date_start, |query, _| {
-            query.filter(orders::Column::OrderDate.gte(req.order_date_start))
-        })
-        .apply_if(req.order_date_end, |query, _| {
-            query.filter(orders::Column::OrderDate.lte(req.order_date_end))
-        })
-        .apply_if(req.status_id, |query, _| {
-            query.filter(orders::Column::StatusId.eq(req.status_id))
+        .apply_if(
+            req.order_date_start,
+            |query, ts| match DateTime::<Utc>::from_timestamp(ts, 0) {
+                Some(dt) => query.filter(orders::Column::OrderDate.gte(dt)),
+                None => query,
+            },
+        )
+        .apply_if(
+            req.order_date_end,
+            |query, ts| match DateTime::<Utc>::from_timestamp(ts, 0) {
+                Some(dt) => query.filter(orders::Column::OrderDate.lte(dt)),
+                None => query,
+            },
+        )
+        .apply_if(req.status_id, |query, sid| {
+            query.filter(orders::Column::StatusId.eq(sid))
         })
         .apply_if(req.limit, |query, v| query.limit(v as u64))
         .apply_if(req.offset, |query, v| query.offset(v as u64))

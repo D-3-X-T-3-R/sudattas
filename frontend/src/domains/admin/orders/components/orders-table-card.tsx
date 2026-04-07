@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { OrderListRow } from "@/lib/admin-queries";
@@ -29,6 +30,8 @@ export function OrdersTableCard({
   pageSize,
   setPage,
 }: OrdersTableCardProps) {
+  const router = useRouter();
+
   return (
     <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-violet-500 bg-white shadow-[var(--admin-card-shadow)]">
       <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
@@ -64,7 +67,16 @@ export function OrdersTableCard({
                   {orders.map((order) => (
                     <tr
                       key={order.orderId}
-                      className="border-b border-[var(--color-line)] last:border-0 hover:bg-[var(--color-surface)]"
+                      role="link"
+                      tabIndex={0}
+                      className="cursor-pointer border-b border-[var(--color-line)] last:border-0 hover:bg-[var(--color-surface)]"
+                      onClick={() => router.push(`/imtheboss/orders/${order.orderId}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          router.push(`/imtheboss/orders/${order.orderId}`);
+                        }
+                      }}
                     >
                       <td className="py-3 pr-4 font-mono text-[var(--color-ink)]">{order.orderId}</td>
                       <td className="py-3 pr-4 text-[var(--color-ink)]">{formatOrderDate(order.orderDate)}</td>

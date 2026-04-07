@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -9,64 +8,33 @@ import { Kicker, SectionHeading } from "@/components/ui/typography";
 import { cn } from "@/lib/utils";
 import { trackClientTelemetry } from "@/lib/client-telemetry";
 
-function AdminLoginForm() {
-  const searchParams = useSearchParams();
-  const accessDenied = searchParams.get("error") === "AccessDenied";
-
-  useEffect(() => {
-    if (!accessDenied) return;
-    trackClientTelemetry({
-      route: "/imtheboss/login",
-      userMode: "admin",
-      action: "AUTH_SIGN_IN_GOOGLE",
-      outcome: "failure",
-      errorClass: "unauthorized",
-      errorCode: "ACCESS_DENIED",
-      message: "Admin access denied by allowlist.",
-      status: 403,
-    });
-  }, [accessDenied]);
-
+function GoogleSignInButton({ simpleLabel = false }: { simpleLabel?: boolean }) {
   return (
-    <div
+    <Button
+      size="lg"
       className={cn(
-        "flex min-h-screen flex-col items-center justify-center bg-[var(--color-ivory)] px-4",
-        "border-t border-[var(--color-line)]"
+        simpleLabel
+          ? "h-14 w-full rounded-xl border border-[#C9A646]/35 bg-[#0F3D2E] text-2xl font-semibold text-[#F6F3EA] hover:bg-[#0A2A20]"
+          : "w-full rounded-full font-semibold"
       )}
+      onClick={() => {
+        trackClientTelemetry({
+          route: "/imtheboss/login",
+          userMode: "admin",
+          action: "AUTH_SIGN_IN_GOOGLE_ATTEMPT",
+          outcome: "success",
+          errorClass: "none",
+          errorCode: null,
+          message: "Admin sign-in attempt initiated.",
+          status: 200,
+        });
+        signIn("google", { callbackUrl: "/imtheboss" });
+      }}
     >
-      <div className="w-full max-w-sm space-y-8 text-center">
-        <div>
-          <Kicker className="text-[var(--color-muted)]">Admin</Kicker>
-          <SectionHeading size="lg" className="mt-2">
-            Sign in to continue
-          </SectionHeading>
-          <p className="mt-3 text-sm text-[var(--color-muted)]">
-            Use your Google account to access the admin panel.
-          </p>
-          {accessDenied && (
-            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800" role="alert">
-              Access denied. Your account is not authorized for admin.
-            </p>
-          )}
-        </div>
-
-        <Button
-          size="lg"
-          className="w-full rounded-full font-semibold"
-          onClick={() => {
-            trackClientTelemetry({
-              route: "/imtheboss/login",
-              userMode: "admin",
-              action: "AUTH_SIGN_IN_GOOGLE_ATTEMPT",
-              outcome: "success",
-              errorClass: "none",
-              errorCode: null,
-              message: "Admin sign-in attempt initiated.",
-              status: 200,
-            });
-            signIn("google", { callbackUrl: "/imtheboss" });
-          }}
-        >
+      {simpleLabel ? (
+        "Sign in"
+      ) : (
+        <>
           <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24" aria-hidden>
             <path
               fill="currentColor"
@@ -86,7 +54,65 @@ function AdminLoginForm() {
             />
           </svg>
           Sign in with Google
-        </Button>
+        </>
+      )}
+    </Button>
+  );
+}
+
+function AdminLoginForm() {
+  const searchParams = useSearchParams();
+  const accessDenied = searchParams.get("error") === "AccessDenied";
+
+  useEffect(() => {
+    if (!accessDenied) return;
+    trackClientTelemetry({
+      route: "/imtheboss/login",
+      userMode: "admin",
+      action: "AUTH_SIGN_IN_GOOGLE",
+      outcome: "failure",
+      errorClass: "unauthorized",
+      errorCode: "ACCESS_DENIED",
+      message: "Admin access denied by backend role check.",
+      status: 403,
+    });
+  }, [accessDenied]);
+
+  if (accessDenied) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,#1D6A53_0%,#0F3D2E_45%,#0A2A20_100%)] px-4">
+        <div className="w-full max-w-[390px] rounded-[30px] border border-[#C9A646]/25 bg-[#0C3126]/95 p-8 text-center shadow-[0_24px_60px_rgba(10,42,32,0.55)]">
+          <h1 className="text-5xl font-semibold tracking-tight text-white">Access Denied</h1>
+          <p className="mx-auto mt-8 max-w-[260px] text-3xl leading-tight text-[#F6F3EA]">
+            You do not have permission to sign in.
+          </p>
+          <div className="mt-10">
+            <GoogleSignInButton simpleLabel />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex min-h-screen flex-col items-center justify-center bg-[var(--color-ivory)] px-4",
+        "border-t border-[var(--color-line)]"
+      )}
+    >
+      <div className="w-full max-w-sm space-y-8 text-center">
+        <div>
+          <Kicker className="text-[var(--color-muted)]">Admin</Kicker>
+          <SectionHeading size="lg" className="mt-2">
+            Sign in to continue
+          </SectionHeading>
+          <p className="mt-3 text-sm text-[var(--color-muted)]">
+            Use your Google account to access the admin panel.
+          </p>
+        </div>
+
+        <GoogleSignInButton />
 
         <p className="text-xs text-[var(--color-muted)]">
           You will be redirected to Google to sign in securely.
@@ -101,7 +127,7 @@ export default function AdminLoginPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-[var(--color-ivory)]">
-          <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+          <p className="text-sm text-[var(--color-muted)]">Loading...</p>
         </div>
       }
     >

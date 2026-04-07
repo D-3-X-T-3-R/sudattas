@@ -1,4 +1,4 @@
-//! Integration tests for cart behavior (delete one item, guest vs user, clear after place_order).
+//! Integration tests for cart behavior (delete one item, guest vs user, clear after payment / Paid).
 //!
 //! **Setup**
 //! - Set `TEST_DATABASE_URL` or `DATABASE_URL`.
@@ -14,7 +14,7 @@ use integration_common::test_db_url;
 
 use core_db_entities::entity::{
     cart, inventory, order_status, product_categories, product_variants, products,
-    shipping_addresses, user_roles,
+    sea_orm_active_enums::PaymentStatus, shipping_addresses, user_roles,
 };
 use core_operations::procedures::orders::place_order;
 use proto::proto::core::{
@@ -26,6 +26,20 @@ use sea_orm::{
     TransactionTrait,
 };
 use tonic::{Code, Request};
+
+async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
+    if let Ok(Some(id)) = core_operations::order_state_machine::get_status_id(txn, name).await {
+        return id;
+    }
+    let m = order_status::ActiveModel {
+        status_id: ActiveValue::NotSet,
+        status_name: ActiveValue::Set(name.to_string()),
+    }
+    .insert(txn)
+    .await
+    .expect("insert OrderStatus");
+    m.status_id
+}
 
 /// C1 – create_cart_item × 2 then delete_cart_item with cart_id leaves the other item intact and returned.
 #[tokio::test]
@@ -307,10 +321,10 @@ async fn integration_guest_cart_not_used_for_place_order() {
     txn.rollback().await.ok();
 }
 
-/// C3 – Multiple cart items for same user all cleared after successful place_order.
+/// C3 – Multiple cart items remain after place_order; all cleared after order becomes Paid.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_place_order_clears_all_user_cart_items() {
+async fn integration_place_order_clears_all_user_cart_items_after_payment() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -511,9 +525,39 @@ async fn integration_place_order_clears_all_user_cart_items() {
     )
     .await
     .expect("place_order should succeed");
-    assert_eq!(place_res.into_inner().items.len(), 1);
+    let place_body = place_res.into_inner();
+    assert_eq!(place_body.items.len(), 1);
+    let order_id = place_body.items[0].order_id;
 
-    let get_after = core_operations::handlers::cart::get_cart_items(
+    let get_after_place = core_operations::handlers::cart::get_cart_items(
+        &txn,
+        Request::new(GetCartItemsRequest {
+            user_id: Some(user_id),
+            session_id: None,
+        }),
+    )
+    .await
+    .expect("get_cart_items");
+    assert_eq!(
+        get_after_place.get_ref().items.len(),
+        3,
+        "cart unchanged until payment succeeds"
+    );
+
+    let _ = ensure_order_status(&txn, "confirmed").await;
+    core_operations::order_state_machine::transition_order_status(
+        &txn,
+        order_id,
+        core_operations::order_state_machine::OrderState::Paid,
+        "payment_captured",
+        "system",
+        Some("test payment"),
+        Some(PaymentStatus::Captured),
+    )
+    .await
+    .expect("transition to paid");
+
+    let get_after_pay = core_operations::handlers::cart::get_cart_items(
         &txn,
         Request::new(GetCartItemsRequest {
             user_id: Some(user_id),
@@ -523,8 +567,8 @@ async fn integration_place_order_clears_all_user_cart_items() {
     .await
     .expect("get_cart_items");
     assert!(
-        get_after.get_ref().items.is_empty(),
-        "all cart items should be cleared after place_order"
+        get_after_pay.get_ref().items.is_empty(),
+        "all cart items should be cleared after Paid"
     );
 
     let cart_rows = cart::Entity::find()

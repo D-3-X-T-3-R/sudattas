@@ -24,6 +24,8 @@ fn user_to_response(user: users::Model) -> UserResponse {
         phone: user.phone,
         create_date: user.create_date.to_rfc3339(),
         session_id: None,
+        role_id: user.role_id,
+        user_status_id: user.user_status_id,
     }
 }
 
