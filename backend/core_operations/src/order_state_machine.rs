@@ -3,6 +3,7 @@
 //! Defines allowed order status transitions and a single function to apply them,
 //! update the order, and emit order_events.
 
+use crate::handlers::cart::delete_cart_item;
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::outbox::{
@@ -10,7 +11,7 @@ use crate::handlers::outbox::{
 };
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use core_db_entities::entity::{order_status, orders};
-use proto::proto::core::CreateOrderEventRequest;
+use proto::proto::core::{CreateOrderEventRequest, DeleteCartItemRequest};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
     QueryFilter,
@@ -158,6 +159,10 @@ pub async fn transition_order_status(
             ))
         })?;
     let from_state = status_name_to_state(&current_row.status_name);
+    if from_state == to_state {
+        return Ok(());
+    }
+
     let to_status_id = get_status_id(txn, to_state.as_status_name())
         .await?
         .ok_or_else(|| {
@@ -207,6 +212,27 @@ pub async fn transition_order_status(
     if let Some(evt) = outbox_type {
         let payload = json!({ "order_id": order_id, "user_id": user_id });
         let _ = enqueue_outbox_event(txn, evt, "order", &order_id.to_string(), payload).await;
+    }
+
+    // Cart is cleared only after payment succeeds (Paid), not at place_order — same txn as Paid transition.
+    if to_state == OrderState::Paid && from_state != OrderState::Paid {
+        if let Err(e) = delete_cart_item(
+            txn,
+            Request::new(DeleteCartItemRequest {
+                user_id: Some(user_id),
+                cart_id: None,
+                session_id: None,
+            }),
+        )
+        .await
+        {
+            tracing::warn!(
+                error = %e.message(),
+                order_id,
+                user_id,
+                "clear cart after payment failed (non-fatal)"
+            );
+        }
     }
 
     Ok(())

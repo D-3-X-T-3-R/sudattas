@@ -330,8 +330,31 @@ pub struct CreateUserRequest {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SearchUserRequest {
-    #[prost(int64, tag = "1")]
-    pub user_id: i64,
+    #[prost(int64, optional, tag = "1")]
+    pub user_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "2")]
+    pub username: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub email: ::core::option::Option<::prost::alloc::string::String>,
+    /// "email" | "google"
+    #[prost(string, optional, tag = "4")]
+    pub auth_provider: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "5")]
+    pub google_sub: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "6")]
+    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "7")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "8")]
+    pub phone: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, optional, tag = "9")]
+    pub role_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "10")]
+    pub user_status_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "11")]
+    pub limit: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "12")]
+    pub offset: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -389,6 +412,10 @@ pub struct UserResponse {
     /// Set on create_user when Redis session is created
     #[prost(string, optional, tag = "9")]
     pub session_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, optional, tag = "10")]
+    pub role_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "11")]
+    pub user_status_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

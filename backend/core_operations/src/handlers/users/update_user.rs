@@ -71,6 +71,8 @@ pub async fn update_user(
                 phone: updated.phone,
                 create_date: updated.create_date.to_rfc3339(),
                 session_id: None,
+                role_id: updated.role_id,
+                user_status_id: updated.user_status_id,
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

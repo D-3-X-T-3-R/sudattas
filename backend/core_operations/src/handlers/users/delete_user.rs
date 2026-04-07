@@ -31,6 +31,8 @@ pub async fn delete_user(
                         phone: model.phone,
                         create_date: model.create_date.to_rfc3339(),
                         session_id: None,
+                        role_id: model.role_id,
+                        user_status_id: model.user_status_id,
                     }],
                 }))
             }

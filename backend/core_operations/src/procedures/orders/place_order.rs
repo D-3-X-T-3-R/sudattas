@@ -1,11 +1,9 @@
-use crate::handlers::cart::delete_cart_item;
 use crate::handlers::coupons::{
     eligibility::{check_coupon_scope, check_per_customer_limit, CartProduct},
     validate_coupon::check_coupon,
 };
 use crate::handlers::idempotency::compute_request_hash;
 use crate::handlers::order_events::create_order_event;
-use crate::handlers::outbox::{enqueue_outbox_event, ORDER_PLACED};
 use crate::money::{paise_checked_add, paise_checked_mul};
 
 use crate::handlers::{
@@ -20,8 +18,8 @@ use core_db_entities::entity::{
 };
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
-    CreateOrderRequest, CreatePaymentIntentRequest, DeleteCartItemRequest, GetCartItemsRequest,
-    GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
+    CreateOrderRequest, CreatePaymentIntentRequest, GetCartItemsRequest, GetProductsByIdRequest,
+    OrdersResponse, PlaceOrderRequest,
 };
 use sea_orm::DbBackend;
 use sea_orm::{
@@ -459,28 +457,9 @@ pub async fn place_order(
     )
     .await;
 
-    // P1 Outbox: enqueue OrderPlaced for transactional notification
-    let payload = json!({ "order_id": create_order.order_id, "user_id": create_order.user_id });
-    let _ = enqueue_outbox_event(
-        txn,
-        ORDER_PLACED,
-        "order",
-        &create_order.order_id.to_string(),
-        payload,
-    )
-    .await;
-
-    let _ = delete_cart_item(
-        txn,
-        Request::new(DeleteCartItemRequest {
-            user_id: Some(req.user_id),
-            cart_id: None,
-            session_id: None,
-        }),
-    )
-    .await?
-    .into_inner()
-    .items;
+    // Order confirmation email and cart clear happen when the order becomes Paid (webhook /
+    // transition_order_status or admin update to confirmed), not here — so cancelling Razorpay
+    // leaves the cart intact.
 
     // If we have an idempotency key, mark this operation as completed and store
     // the created order_id as the response_ref so replays can return it.

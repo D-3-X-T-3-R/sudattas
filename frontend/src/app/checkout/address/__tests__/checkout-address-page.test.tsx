@@ -27,8 +27,8 @@ vi.mock("@/context/storefront-context", () => ({
   useStorefront: () => ({ cartLines: [] }),
 }));
 
-vi.mock("@/hooks/use-razorpay-test", () => ({
-  useRazorpayTest: () => ({
+vi.mock("@/hooks/use-razorpay-checkout", () => ({
+  useRazorpayCheckout: () => ({
     paymentLoading: false,
     paymentMessage: null,
     runCheckout: vi.fn(),

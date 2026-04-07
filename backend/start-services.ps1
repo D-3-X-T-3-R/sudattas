@@ -169,13 +169,13 @@ Write-Host "Building and starting app services (Core Operations, GraphQL)..." -F
 $composeStatus = Invoke-Compose -Args @("up", "-d", "--build", "core_operations", "graphql")
 if ($composeStatus -ne 0) { throw "docker compose core_operations/graphql failed" }
 
-# Keep only the latest 20 DB dumps under database/db-backups
-Write-Host "Pruning old DB backups (keeping latest 20)..." -ForegroundColor Yellow
+# Keep only the latest 50 DB dumps under database/db-backups
+Write-Host "Pruning old DB backups (keeping latest 50)..." -ForegroundColor Yellow
 $BackupDirForPrune = Join-Path $BackendRoot "database\db-backups"
 if (Test-Path -Path $BackupDirForPrune -PathType Container) {
     Get-ChildItem -Path $BackupDirForPrune -Filter "db-backup-*.sql" -File -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending |
-        Select-Object -Skip 20 |
+        Select-Object -Skip 50 |
         ForEach-Object {
             Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
             Write-Host "  Removed: $($_.Name)" -ForegroundColor Gray

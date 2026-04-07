@@ -155,6 +155,31 @@ async function syncGoogleUserToBackend(input: {
   });
 }
 
+async function probeAdminAccessByToken(token: string): Promise<boolean> {
+  const query = `query AdminProbeCanSearchUsers {
+    searchUser(input: { limit: "1", offset: "0" }) {
+      userId
+    }
+  }`;
+  try {
+    const res = await fetch(`${getGraphqlBaseUrl()}/v2`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query, variables: {} }),
+      cache: "no-store",
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      errors?: Array<{ message?: string }>;
+    };
+    return res.ok && !(json.errors?.length);
+  } catch {
+    return false;
+  }
+}
+
 async function syncPhoneOtpUserToBackend(phoneE164: string): Promise<string | null> {
   const digits = digitsOnly(phoneE164);
   if (!digits) return null;
@@ -250,26 +275,8 @@ export const authOptions: NextAuthOptions = {
         return false;
       }
 
-      // Enforce allowlist only for admin sign-in page flow.
-      // Storefront login should remain open to regular customers.
-      const allowedRaw = serverEnv.ADMIN_ALLOWED_EMAILS;
-      if (isAdminFlow && allowedRaw?.trim()) {
-        const allowed = allowedRaw
-          .split(",")
-          .map((e) => e.trim().toLowerCase())
-          .filter(Boolean);
-        if (allowed.length > 0 && !allowed.includes(email)) {
-          await trackAuthEvent({
-            action: "AUTH_SIGN_IN_GOOGLE",
-            outcome: "failure",
-            userMode,
-            errorClass: "unauthorized",
-            errorCode: "ACCESS_DENIED",
-            message: "Admin allowlist denied email.",
-          });
-          return false;
-        }
-      }
+      // Admin authorization is backend-role-driven; avoid frontend allowlist hard-deny.
+      // Non-admin users are rejected by backend admin resolvers.
 
       // Backend-authoritative provisioning: persist storefront user on successful Google auth.
       const idToken = account?.id_token;
@@ -291,9 +298,23 @@ export const authOptions: NextAuthOptions = {
         username,
         fullName: user?.name ?? null,
       });
+      const isAdmin = await probeAdminAccessByToken(idToken);
       const synced = Boolean(customerUserId);
       if (synced) {
-        (user as { customerUserId?: string }).customerUserId = customerUserId ?? undefined;
+        (user as { customerUserId?: string; isAdmin?: boolean }).customerUserId =
+          customerUserId ?? undefined;
+        (user as { customerUserId?: string; isAdmin?: boolean }).isAdmin = isAdmin;
+      }
+      if (isAdminFlow && !isAdmin) {
+        await trackAuthEvent({
+          action: "AUTH_SIGN_IN_GOOGLE",
+          outcome: "failure",
+          userMode,
+          errorClass: "unauthorized",
+          errorCode: "ADMIN_ACCESS_DENIED",
+          message: "User authenticated but is not authorized for admin panel.",
+        });
+        return false;
       }
       await trackAuthEvent({
         action: "AUTH_SIGN_IN_GOOGLE",
@@ -319,15 +340,28 @@ export const authOptions: NextAuthOptions = {
           (token as { customerUserId?: string }).customerUserId = userCustomerId;
         }
       }
+      if (typeof (token as { isAdmin?: boolean }).isAdmin !== "boolean") {
+        (token as { isAdmin?: boolean }).isAdmin = false;
+      }
+      const userIsAdmin = (user as { isAdmin?: boolean } | undefined)?.isAdmin;
+      if (typeof userIsAdmin === "boolean") {
+        (token as { isAdmin?: boolean }).isAdmin = userIsAdmin;
+      }
       // Persist so we have it on session refresh
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        const s = session as { accessToken?: string; idToken?: string; customerUserId?: string };
+        const s = session as {
+          accessToken?: string;
+          idToken?: string;
+          customerUserId?: string;
+          isAdmin?: boolean;
+        };
         s.accessToken = token.accessToken as string | undefined;
         s.idToken = token.idToken as string | undefined;
         s.customerUserId = (token as { customerUserId?: string }).customerUserId;
+        s.isAdmin = (token as { isAdmin?: boolean }).isAdmin === true;
       }
       return session;
     },

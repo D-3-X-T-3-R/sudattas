@@ -25,9 +25,10 @@ describe("checkout verify-payment contract", () => {
     mocks.callGraphqlAsCustomer
       .mockResolvedValueOnce({
         data: {
-          verifyRazorpayPayment: [
-            { verified: true, paymentIntent: { intentId: "pi1", status: "captured", razorpayPaymentId: "pay_1" } },
-          ],
+          verifyRazorpayPayment: {
+            verified: true,
+            paymentIntent: { intentId: "pi1", status: "captured", razorpayPaymentId: "pay_1" },
+          },
         },
       })
       .mockResolvedValueOnce({
@@ -74,4 +75,3 @@ describe("checkout verify-payment contract", () => {
     );
   });
 });
-

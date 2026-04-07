@@ -50,6 +50,23 @@ pub fn record_admin_authz_denied_total() {
     metrics::counter!("graphql_admin_authz_denied_total", 1);
 }
 
+/// Admin authorization denied with reason label (e.g. not_admin, not_jwt, role_lookup_failed).
+pub fn record_admin_authz_denied_reason_total(reason: &'static str) {
+    metrics::counter!("graphql_admin_authz_denied_reason_total", 1, "reason" => reason);
+}
+
+/// Admin role resolution attempt outcome/source.
+/// source: cache | db | env_fallback | none
+/// outcome: success | failure
+pub fn record_admin_role_resolution_total(source: &'static str, outcome: &'static str) {
+    metrics::counter!(
+        "graphql_admin_role_resolution_total",
+        1,
+        "source" => source,
+        "outcome" => outcome
+    );
+}
+
 /// Auth rejection at HTTP boundary before GraphQL execution.
 pub fn record_auth_rejection_total(kind: &'static str) {
     metrics::counter!("graphql_auth_rejection_total", 1, "kind" => kind);
@@ -107,6 +124,14 @@ mod tests {
     fn record_admin_authz_denied_does_not_panic() {
         install_test_recorder();
         record_admin_authz_denied_total();
+        record_admin_authz_denied_reason_total("not_admin");
+    }
+
+    #[test]
+    fn record_admin_role_resolution_does_not_panic() {
+        install_test_recorder();
+        record_admin_role_resolution_total("cache", "success");
+        record_admin_role_resolution_total("db", "failure");
     }
 
     #[test]

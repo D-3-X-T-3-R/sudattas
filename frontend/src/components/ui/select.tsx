@@ -38,13 +38,16 @@ const SelectContent = React.forwardRef<
       ref={ref}
       className={cn(
         "z-50 min-w-[8rem] overflow-hidden rounded-md border border-[var(--color-line)] bg-white text-[var(--color-ink)] shadow-md",
+        "max-h-[min(22rem,var(--radix-select-content-available-height))]",
         position === "popper" && "translate-y-1",
         className
       )}
       position={position}
       {...props}
     >
-      <SelectPrimitive.Viewport className="p-1">{children}</SelectPrimitive.Viewport>
+      <SelectPrimitive.Viewport className="max-h-[min(22rem,var(--radix-select-content-available-height))] overflow-y-auto overscroll-contain p-1 touch-pan-y">
+        {children}
+      </SelectPrimitive.Viewport>
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
 ));
@@ -74,4 +77,3 @@ const SelectItem = React.forwardRef<
 SelectItem.displayName = SelectPrimitive.Item.displayName;
 
 export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue };
-
