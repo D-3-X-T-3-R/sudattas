@@ -70,7 +70,13 @@ describe("ProfilePage", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Saved Addresses")).toBeInTheDocument();
+      expect(screen.getByText("Test User")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /^addresses$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /saved addresses/i })).toBeInTheDocument();
     });
 
     await user.type(screen.getByLabelText("Road / street"), "MG Road");

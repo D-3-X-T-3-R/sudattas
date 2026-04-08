@@ -43,6 +43,7 @@ pub async fn admin_mark_order_shipped(
                     awb_code: req.awb_code,
                     carrier: req.carrier,
                     status: None,
+                    tracking_events_json: None,
                 }),
             )
             .await?;

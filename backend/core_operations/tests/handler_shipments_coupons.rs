@@ -117,6 +117,7 @@ async fn update_shipment_not_found_yields_not_found_status() {
         awb_code: None,
         carrier: None,
         status: None,
+        tracking_events_json: None,
     });
     let result = update_shipment(&txn, req).await;
     assert!(result.is_err());
@@ -160,6 +161,7 @@ async fn update_shipment_updates_status_and_sets_delivered_at_when_processed() {
         awb_code: None,
         carrier: None,
         status: Some("processed".to_string()),
+        tracking_events_json: None,
     });
 
     let result = update_shipment(&txn, req).await;

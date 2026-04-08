@@ -89,14 +89,19 @@ pub(crate) async fn search_order(search: SearchOrder) -> Result<Vec<Order>, GqlE
 }
 
 #[instrument]
-pub(crate) async fn delete_order(order_id: String) -> Result<Vec<Order>, GqlError> {
+pub(crate) async fn delete_order(
+    order_id: String,
+    acting_user_id: Option<i64>,
+) -> Result<Vec<Order>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
     let response = client
         .delete_order(DeleteOrderRequest {
-            order_id: to_i64(order_id),
+            order_id: parse_i64(&order_id, "order_id")?,
+            acting_user_id,
         })
-        .await?;
+        .await
+        .map_err(crate::resolvers::error::map_err)?;
 
     Ok(response
         .into_inner()

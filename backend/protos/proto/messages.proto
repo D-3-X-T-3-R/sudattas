@@ -323,7 +323,9 @@ message UpdateOrderRequest {
 }
 
 message DeleteOrderRequest {
-    int64 order_id = 1;
+  int64 order_id = 1;
+  // When set, the order must belong to this user (customer self-cancel). Omit for trusted admin/service.
+  optional int64 acting_user_id = 2;
 }
 
 // P1 Admin: mark order shipped/delivered with enforced transitions
@@ -1179,6 +1181,8 @@ message UpdateShipmentRequest {
     optional string awb_code = 3;
     optional string carrier = 4;
     optional string status = 5;  // pending | processed | failed
+    // JSON array of customer-visible courier steps, e.g. [{"label":"Picked up","at":"...","location":"..."}]
+    optional string tracking_events_json = 6;
 }
 
 message GetShipmentRequest {
@@ -1195,6 +1199,7 @@ message ShipmentResponse {
     string status = 6;
     string created_at = 7;
     optional string delivered_at = 8;
+    optional string tracking_events_json = 9;
 }
 
 message ShipmentsResponse {

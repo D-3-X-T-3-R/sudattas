@@ -14,6 +14,7 @@ type OrderDetailRow = {
     productId?: string;
     name?: string;
     formatted?: string;
+    images?: Array<{ url?: string | null; thumbnailUrl?: string | null }>;
   }>;
 };
 
@@ -43,6 +44,7 @@ type ShipmentRow = {
   awbCode?: string | null;
   createdAt: string;
   deliveredAt?: string | null;
+  trackingEventsJson?: string | null;
 };
 
 type OrderEventRow = {
@@ -83,6 +85,10 @@ const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
         productId
         name
         formatted
+        images {
+          url
+          thumbnailUrl
+        }
       }
     }
   }
@@ -114,6 +120,7 @@ const SHIPMENT_QUERY = `query AccountOrderShipments($input: GetShipment!) {
     awbCode
     createdAt
     deliveredAt
+    trackingEventsJson
   }
 }`;
 
