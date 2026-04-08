@@ -4,7 +4,7 @@ use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::Status;
 use core_db_entities::entity::shipments;
 use proto::proto::core::{ShipmentsResponse, UpdateShipmentRequest};
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait, IntoActiveModel};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait, IntoActiveModel, JsonValue};
 use tonic::{Request, Response, Status as TonicStatus};
 
 pub async fn update_shipment(
@@ -40,6 +40,23 @@ pub async fn update_shipment(
             model.delivered_at = ActiveValue::Set(Some(Utc::now()));
         }
         model.status = ActiveValue::Set(status);
+    }
+
+    if let Some(raw) = req.tracking_events_json {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            model.tracking_events = ActiveValue::Set(None);
+        } else {
+            let v: serde_json::Value = serde_json::from_str(trimmed).map_err(|_| {
+                TonicStatus::invalid_argument("Invalid tracking_events JSON (must be a JSON array)")
+            })?;
+            if !v.is_array() {
+                return Err(TonicStatus::invalid_argument(
+                    "tracking_events JSON must be a JSON array",
+                ));
+            }
+            model.tracking_events = ActiveValue::Set(Some(JsonValue::from(v)));
+        }
     }
 
     match model.update(txn).await {

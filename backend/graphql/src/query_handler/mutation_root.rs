@@ -443,10 +443,18 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Cancels the order (status → `cancelled`). Admins may cancel any order; customers only their own.
     #[instrument(err, ret)]
     async fn delete_order(context: &Context, order_id: String) -> FieldResult<Vec<Order>> {
-        require_admin(context)?;
-        orders::handlers::delete_order(order_id)
+        let acting_user_id = if context.is_admin() {
+            None
+        } else {
+            let uid = require_jwt(context)?;
+            Some(
+                crate::resolvers::utils::parse_i64(uid, "user_id").map_err(|e| e.into_field_error())?,
+            )
+        };
+        orders::handlers::delete_order(order_id, acting_user_id)
             .await
             .map_err(|e| e.into_field_error())
     }

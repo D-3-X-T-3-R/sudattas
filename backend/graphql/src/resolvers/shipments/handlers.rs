@@ -19,6 +19,7 @@ fn shipment_response_to_gql(s: ShipmentResponse) -> Shipment {
         status: s.status,
         created_at: s.created_at,
         delivered_at: s.delivered_at,
+        tracking_events_json: s.tracking_events_json,
     }
 }
 
@@ -51,6 +52,7 @@ pub(crate) async fn update_shipment(input: UpdateShipment) -> Result<Vec<Shipmen
             awb_code: input.awb_code,
             carrier: input.carrier,
             status: input.status,
+            tracking_events_json: input.tracking_events_json,
         })
         .await?;
     Ok(response

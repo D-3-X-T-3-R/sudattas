@@ -597,6 +597,9 @@ pub struct UpdateOrderRequest {
 pub struct DeleteOrderRequest {
     #[prost(int64, tag = "1")]
     pub order_id: i64,
+    /// When set, the order must belong to this user (customer self-cancel). Omit for trusted admin/service.
+    #[prost(int64, optional, tag = "2")]
+    pub acting_user_id: ::core::option::Option<i64>,
 }
 /// P1 Admin: mark order shipped/delivered with enforced transitions
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -2115,6 +2118,9 @@ pub struct UpdateShipmentRequest {
     /// pending | processed | failed
     #[prost(string, optional, tag = "5")]
     pub status: ::core::option::Option<::prost::alloc::string::String>,
+    /// JSON array of customer-visible courier steps, e.g. \[{"label":"Picked up","at":"...","location":"..."}\]
+    #[prost(string, optional, tag = "6")]
+    pub tracking_events_json: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2145,6 +2151,8 @@ pub struct ShipmentResponse {
     pub created_at: ::prost::alloc::string::String,
     #[prost(string, optional, tag = "8")]
     pub delivered_at: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "9")]
+    pub tracking_events_json: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

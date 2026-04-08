@@ -33,6 +33,10 @@ pub async fn create_shipment(
 }
 
 pub fn model_to_response(model: shipments::Model) -> ShipmentResponse {
+    let tracking_events_json = model
+        .tracking_events
+        .as_ref()
+        .map(std::string::ToString::to_string);
     ShipmentResponse {
         shipment_id: model.shipment_id,
         order_id: model.order_id,
@@ -45,5 +49,6 @@ pub fn model_to_response(model: shipments::Model) -> ShipmentResponse {
             .unwrap_or_else(|| "pending".to_string()),
         created_at: model.created_at.map(|t| t.to_string()).unwrap_or_default(),
         delivered_at: model.delivered_at.map(|t| t.to_string()),
+        tracking_events_json,
     }
 }

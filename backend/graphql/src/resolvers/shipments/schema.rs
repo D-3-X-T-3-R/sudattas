@@ -10,6 +10,8 @@ pub struct Shipment {
     pub status: String,
     pub created_at: String,
     pub delivered_at: Option<String>,
+    /// JSON array of courier milestones for the storefront, e.g. [{"label":"Picked up","at":"...","location":"..."}].
+    pub tracking_events_json: Option<String>,
 }
 
 #[graphql_object]
@@ -39,6 +41,9 @@ impl Shipment {
     async fn delivered_at(&self) -> &Option<String> {
         &self.delivered_at
     }
+    async fn tracking_events_json(&self) -> &Option<String> {
+        &self.tracking_events_json
+    }
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -59,6 +64,8 @@ pub struct UpdateShipment {
     pub carrier: Option<String>,
     /// pending | processed | failed
     pub status: Option<String>,
+    /// JSON array of customer-visible courier steps (replaces stored timeline when set).
+    pub tracking_events_json: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
