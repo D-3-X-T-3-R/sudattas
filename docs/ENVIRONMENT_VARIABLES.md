@@ -38,6 +38,8 @@ This document defines public-safe vs server-only variables and startup validatio
 - `GRAPHQL_LISTEN_ADDR` (default `0.0.0.0:8080`)
 - `REDIS_URL` (optional; required for guest sessions)
 - `ALLOWED_ORIGINS` (optional comma-separated allowlist)
+- `RAZORPAY_WEBHOOK_SECRET` (recommended in production; validates `x-razorpay-signature` on `POST /wheresthemoney/razorpay`)
+- `SHIPROCKET_WEBHOOK_SECRET` (recommended in production; validates `x-shiprocket-token` on `POST /blastoff/parcelupdate`)
 - `RATE_LIMIT_PER_MINUTE` (default `240`)
 - `RATE_LIMIT_WEBHOOK_PER_MINUTE` (default `120`)
 - `RATE_LIMIT_TRUST_PROXY_HEADERS` (default `false`)
@@ -53,6 +55,11 @@ This document defines public-safe vs server-only variables and startup validatio
 
 - `GRPC_SERVER` (default `0.0.0.0:50051`)
 - `GRPC_METRICS_ADDR` (default `0.0.0.0:9090`)
+- `SHIPROCKET_EMAIL` / `SHIPROCKET_PASSWORD` (required to book shipments via Shiprocket from admin mark-shipped flow)
+- `SHIPROCKET_PICKUP_LOCATION` (optional; default `Primary`)
+- `SHIPROCKET_PICKUP_POSTCODE` (required for checkout quote-based shipping calculation)
+- `SHIPROCKET_DEFAULT_WEIGHT_KG`, `SHIPROCKET_ESTIMATED_UNIT_WEIGHT_KG`, `SHIPROCKET_PACKAGE_LENGTH_CM`, `SHIPROCKET_PACKAGE_BREADTH_CM`, `SHIPROCKET_PACKAGE_HEIGHT_CM` (optional package/weight defaults)
+- `SHIPROCKET_COURIER_ID` (optional fixed courier override)
 
 ### Validation
 

@@ -1,13 +1,14 @@
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateOrderRequest,
-    DeleteOrderRequest, PlaceOrderRequest, SearchOrderRequest, SearchOrderStatusRequest,
-    UpdateOrderRequest,
+    DeleteOrderRequest, EstimateCheckoutShippingRequest, PlaceOrderRequest, SearchOrderRequest,
+    SearchOrderStatusRequest, UpdateOrderRequest,
 };
 use tracing::instrument;
 
 use super::schema::{
     AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CreateOrderInput, NewOrder, Order,
-    OrderMutation, OrderStatus, SearchOrder,
+    CheckoutShippingEstimate, EstimateCheckoutShippingInput, OrderMutation, OrderStatus,
+    SearchOrder,
 };
 use crate::resolvers::{
     convert,
@@ -45,6 +46,32 @@ pub(crate) async fn place_order(
         .into_iter()
         .map(convert::order_response_to_gql)
         .collect())
+}
+
+#[instrument(skip(user_id))]
+pub(crate) async fn estimate_checkout_shipping(
+    input: EstimateCheckoutShippingInput,
+    user_id: String,
+    request_id: Option<&str>,
+) -> Result<CheckoutShippingEstimate, GqlError> {
+    let mut client = grpc_client::connect_grpc_client_with_metadata(request_id).await?;
+    let response = client
+        .estimate_checkout_shipping(EstimateCheckoutShippingRequest {
+            shipping_address_id: parse_i64(&input.shipping_address_id, "shipping_address_id")?,
+            user_id: parse_i64(&user_id, "user_id")?,
+            coupon_code: input.coupon_code,
+        })
+        .await?;
+    let row = response.into_inner();
+    Ok(CheckoutShippingEstimate {
+        shipping_amount_paise: row.shipping_amount_paise,
+        courier_name: row.courier_name,
+        estimated_delivery_days: row.estimated_delivery_days,
+        item_subtotal_paise: row.item_subtotal_paise,
+        order_total_paise: row.order_total_paise,
+        quote_available: row.quote_available,
+        note: row.note,
+    })
 }
 
 #[instrument]
@@ -180,6 +207,10 @@ pub(crate) async fn admin_mark_order_shipped(
             order_id: parse_i64(&input.order_id, "order_id")?,
             awb_code: input.awb_code,
             carrier: input.carrier,
+            shiprocket_book: input.shiprocket_book,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         })
         .await?;
     Ok(true)

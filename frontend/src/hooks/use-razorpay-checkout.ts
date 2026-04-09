@@ -256,7 +256,7 @@ export function useRazorpayCheckout() {
   }, [accountErrorMessage, pollOrderReconciliation, setPaymentMessageWithAnnounce]);
 
   const runTest = useCallback(async () => {
-    setPaymentMessageWithAnnounce("Use checkout flow from /checkout/address.");
+    setPaymentMessageWithAnnounce("Use checkout flow from /bag.");
   }, [setPaymentMessageWithAnnounce]);
 
   return { paymentMessage, paymentLoading, runTest, runCheckout };

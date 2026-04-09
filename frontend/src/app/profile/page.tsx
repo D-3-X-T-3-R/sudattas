@@ -36,9 +36,11 @@ type AuthenticatedSectionProps = {
   canSaveAddress: boolean;
   adding: boolean;
   addAddress: () => Promise<void>;
+  updateAddress: (shippingAddressId: string) => Promise<void>;
   deleteAddress: (shippingAddressId: string) => Promise<void>;
   setDefaultAddress: (shippingAddressId: string) => Promise<void>;
   ensureOrderDetailLoaded: (orderId: string) => Promise<void>;
+  refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
 };
 
@@ -139,10 +141,12 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     setForm,
     canSaveAddress,
     adding,
-    addAddress,
-    deleteAddress,
-    setDefaultAddress,
+  addAddress,
+  updateAddress,
+  deleteAddress,
+  setDefaultAddress,
     ensureOrderDetailLoaded,
+    refreshOrderDetail,
     cancelOrder,
   } = props;
 
@@ -171,9 +175,11 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         canSaveAddress={canSaveAddress}
         adding={adding}
         addAddress={addAddress}
+        updateAddress={updateAddress}
         deleteAddress={deleteAddress}
         setDefaultAddress={setDefaultAddress}
         ensureOrderDetailLoaded={ensureOrderDetailLoaded}
+        refreshOrderDetail={refreshOrderDetail}
         cancelOrder={cancelOrder}
         onSignOut={() => void signOut({ callbackUrl: "/" })}
       />
@@ -196,6 +202,8 @@ export default function ProfilePage() {
   const [routeFailure, setRouteFailure] = useState<RouteFailureUi | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<AddressFormState>({
+    recipientName: "",
+    phoneNumber: "",
     country: "India",
     stateRegion: "",
     city: "",
@@ -210,6 +218,8 @@ export default function ProfilePage() {
 
   const canSaveAddress = useMemo(() => {
     const parsed = addressInputSchema.safeParse({
+      recipientName: form.recipientName.trim() || null,
+      phoneNumber: form.phoneNumber.trim() || null,
       country: form.country.trim(),
       stateRegion: form.stateRegion.trim(),
       city: form.city.trim(),
@@ -235,23 +245,40 @@ export default function ProfilePage() {
 
   const orderDetailFetchRef = useRef<Set<string>>(new Set());
 
-  const ensureOrderDetailLoaded = useCallback(async (orderId: string) => {
-    if (orderDetailsRef.current[orderId]) return;
-    if (orderDetailFetchRef.current.has(orderId)) return;
-    orderDetailFetchRef.current.add(orderId);
-    setRouteFailure(null);
-    try {
-      const detail = await fetchApiEnvelope<AccountOrderDetailPayload>(
-        `/api/account/orders/${encodeURIComponent(orderId)}`,
-        { cache: "no-store" }
-      );
-      if (detail) setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
-    } catch (e) {
-      setRouteFailure(toRouteFailureUi("account", e));
-    } finally {
-      orderDetailFetchRef.current.delete(orderId);
-    }
-  }, []);
+  const fetchOrderDetail = useCallback(
+    async (orderId: string, forceRefresh: boolean) => {
+      if (!forceRefresh && orderDetailsRef.current[orderId]) return;
+      if (orderDetailFetchRef.current.has(orderId)) return;
+      orderDetailFetchRef.current.add(orderId);
+      setRouteFailure(null);
+      try {
+        const detail = await fetchApiEnvelope<AccountOrderDetailPayload>(
+          `/api/account/orders/${encodeURIComponent(orderId)}`,
+          { cache: "no-store" }
+        );
+        if (detail) setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
+      } catch (e) {
+        setRouteFailure(toRouteFailureUi("account", e));
+      } finally {
+        orderDetailFetchRef.current.delete(orderId);
+      }
+    },
+    []
+  );
+
+  const ensureOrderDetailLoaded = useCallback(
+    async (orderId: string) => {
+      await fetchOrderDetail(orderId, false);
+    },
+    [fetchOrderDetail]
+  );
+
+  const refreshOrderDetail = useCallback(
+    async (orderId: string) => {
+      await fetchOrderDetail(orderId, true);
+    },
+    [fetchOrderDetail]
+  );
 
   const cancelOrder = useCallback(
     async (orderId: string) => {
@@ -279,6 +306,8 @@ export default function ProfilePage() {
     setRouteFailure(null);
     try {
       const parsed = addressInputSchema.safeParse({
+        recipientName: form.recipientName.trim() || null,
+        phoneNumber: form.phoneNumber.trim() || null,
         country: form.country.trim(),
         stateRegion: form.stateRegion.trim(),
         city: form.city.trim(),
@@ -295,9 +324,72 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input: { ...parsed.data, isDefault: addresses.length === 0 } }),
       });
-      setForm({ country: "India", stateRegion: "", city: "", postalCode: "", road: "", apartmentNoOrName: "" });
+      setForm({
+        recipientName: "",
+        phoneNumber: "",
+        country: "India",
+        stateRegion: "",
+        city: "",
+        postalCode: "",
+        road: "",
+        apartmentNoOrName: "",
+      });
       await loadAccountData();
       announce("Address saved successfully.");
+    } catch (e) {
+      const ui = toRouteFailureUi("account", e);
+      setRouteFailure(ui);
+      announce(ui.message, "assertive");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const updateAddress = async (shippingAddressId: string) => {
+    if (!canSaveAddress || adding) return;
+    const row = addresses.find((a) => a.shippingAddressId === shippingAddressId);
+    if (!row) return;
+    setAdding(true);
+    setError(null);
+    setRouteFailure(null);
+    try {
+      const parsed = addressInputSchema.safeParse({
+        recipientName: form.recipientName.trim() || null,
+        phoneNumber: form.phoneNumber.trim() || null,
+        country: form.country.trim(),
+        stateRegion: form.stateRegion.trim(),
+        city: form.city.trim(),
+        postalCode: form.postalCode.replace(/\D/g, "").slice(0, 6),
+        road: form.road.trim(),
+        apartmentNoOrName: form.apartmentNoOrName.trim() || null,
+      });
+      if (!parsed.success) {
+        setError(parsed.error.issues[0]?.message ?? "Invalid address.");
+        return;
+      }
+      await fetchApiEnvelope<ShippingAddressRow>("/api/account/addresses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: {
+            shippingAddressId,
+            ...parsed.data,
+            isDefault: Boolean(row.isDefault),
+          },
+        }),
+      });
+      setForm({
+        recipientName: "",
+        phoneNumber: "",
+        country: "India",
+        stateRegion: "",
+        city: "",
+        postalCode: "",
+        road: "",
+        apartmentNoOrName: "",
+      });
+      await loadAccountData();
+      announce("Address updated successfully.");
     } catch (e) {
       const ui = toRouteFailureUi("account", e);
       setRouteFailure(ui);
@@ -341,6 +433,8 @@ export default function ProfilePage() {
             postalCode: row.postalCode,
             road: row.road ?? "",
             apartmentNoOrName: row.apartmentNoOrName ?? null,
+            recipientName: row.recipientName ?? null,
+            phoneNumber: row.phoneNumber ?? null,
             isDefault: true,
           },
         }),
@@ -381,9 +475,11 @@ export default function ProfilePage() {
             canSaveAddress={canSaveAddress}
             adding={adding}
             addAddress={addAddress}
+            updateAddress={updateAddress}
             deleteAddress={deleteAddress}
             setDefaultAddress={setDefaultAddress}
             ensureOrderDetailLoaded={ensureOrderDetailLoaded}
+            refreshOrderDetail={refreshOrderDetail}
             cancelOrder={cancelOrder}
           />
         )}

@@ -11,6 +11,8 @@ pub struct ShippingAddress {
     pub postal_code: String,
     pub road: Option<String>,
     pub apartment_no_or_name: Option<String>,
+    pub recipient_name: Option<String>,
+    pub phone_number: Option<String>,
 }
 
 #[graphql_object]
@@ -43,6 +45,12 @@ impl ShippingAddress {
     async fn apartment_no_or_name(&self) -> &Option<String> {
         &self.apartment_no_or_name
     }
+    async fn recipient_name(&self) -> &Option<String> {
+        &self.recipient_name
+    }
+    async fn phone_number(&self) -> &Option<String> {
+        &self.phone_number
+    }
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -56,6 +64,8 @@ pub struct NewShippingAddress {
     pub postal_code: String,
     pub road: Option<String>,
     pub apartment_no_or_name: Option<String>,
+    pub recipient_name: Option<String>,
+    pub phone_number: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -70,4 +80,6 @@ pub struct ShippingAddressMutation {
     pub postal_code: String,
     pub road: Option<String>,
     pub apartment_no_or_name: Option<String>,
+    pub recipient_name: Option<String>,
+    pub phone_number: Option<String>,
 }

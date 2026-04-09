@@ -21,6 +21,8 @@ export type ShippingAddressRow = {
   shippingAddressId: string;
   userId?: string | null;
   isDefault?: boolean;
+  recipientName?: string | null;
+  phoneNumber?: string | null;
   country: string;
   stateRegion: string;
   city: string;
@@ -87,6 +89,8 @@ export type AccountOrderDetailPayload = {
     createdAt: string;
     deliveredAt?: string | null;
     trackingEventsJson?: string | null;
+    shiprocketStatusId?: string | null;
+    shiprocketStatusLabel?: string | null;
   }>;
   events: Array<{
     eventId: string;
@@ -105,6 +109,8 @@ type ProfileNavId = "profile" | "orders" | "addresses" | "settings" | "support";
 
 function formatAddress(a: ShippingAddressRow): string {
   const parts = [
+    a.recipientName,
+    a.phoneNumber,
     [a.apartmentNoOrName, a.road].filter(Boolean).join(", "),
     a.city,
     a.stateRegion,
@@ -243,7 +249,7 @@ function FulfillmentTrackingPanel({
             const step: TrackingStepState = delivered ? "done" : isLast ? "current" : "done";
             const dot =
               step === "done" ? "bg-[#0F3D2E]" : step === "current" ? "bg-[#C9A646]" : "bg-[#D4D0C8]";
-            const textMuted = step === "pending" ? "text-[#A8A29A]" : "text-[#0F3D2E]";
+            const textMuted = "text-[#0F3D2E]";
             const sub = [formatCourierStepTime(s.at), s.location?.trim()].filter(Boolean).join(" · ");
             return (
               <li key={`${i}-${s.label}`} className="flex gap-3">
@@ -477,9 +483,11 @@ type ProfileAuthenticatedContentProps = {
   canSaveAddress: boolean;
   adding: boolean;
   addAddress: () => Promise<void>;
+  updateAddress: (shippingAddressId: string) => Promise<void>;
   deleteAddress: (shippingAddressId: string) => Promise<void>;
   setDefaultAddress: (shippingAddressId: string) => Promise<void>;
   ensureOrderDetailLoaded: (orderId: string) => Promise<void>;
+  refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
   onSignOut: () => void;
 };
@@ -537,9 +545,11 @@ export function ProfileAuthenticatedContent({
   canSaveAddress,
   adding,
   addAddress,
+  updateAddress,
   deleteAddress,
   setDefaultAddress,
   ensureOrderDetailLoaded,
+  refreshOrderDetail,
   cancelOrder,
   onSignOut,
 }: ProfileAuthenticatedContentProps) {
@@ -548,6 +558,8 @@ export function ProfileAuthenticatedContent({
   const [loginHint, setLoginHint] = useState(false);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancelDialogOrderId, setCancelDialogOrderId] = useState<string | null>(null);
+  const [refreshingOrderId, setRefreshingOrderId] = useState<string | null>(null);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeNav !== "orders" || orders.length === 0) return;
@@ -700,11 +712,26 @@ export function ProfileAuthenticatedContent({
                               </button>
                             ) : null}
                           </div>
-                          <FulfillmentTrackingPanel
-                            fulfillmentState={detail?.fulfillmentState}
-                            trackingEventsJson={ship?.trackingEventsJson}
-                            awbCode={ship?.awbCode}
-                          />
+                          <div className="flex shrink-0 flex-col items-stretch gap-2 sm:min-w-[180px]">
+                            <FulfillmentTrackingPanel
+                              fulfillmentState={detail?.fulfillmentState}
+                              trackingEventsJson={ship?.trackingEventsJson}
+                              awbCode={ship?.awbCode}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRefreshingOrderId(o.orderId);
+                                void refreshOrderDetail(o.orderId).finally(() => {
+                                  setRefreshingOrderId((prev) => (prev === o.orderId ? null : prev));
+                                });
+                              }}
+                              disabled={refreshingOrderId === o.orderId}
+                              className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#A37D34] transition hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {refreshingOrderId === o.orderId ? "Refreshing..." : "Refresh tracking"}
+                            </button>
+                          </div>
                         </article>
                       );
                     })}
@@ -801,6 +828,25 @@ export function ProfileAuthenticatedContent({
                         <button type="button" onClick={() => void deleteAddress(a.shippingAddressId)} className="text-xs font-semibold uppercase tracking-[0.12em] text-red-600">
                           Remove
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingAddressId(a.shippingAddressId);
+                            setForm({
+                              recipientName: a.recipientName ?? "",
+                              phoneNumber: a.phoneNumber ?? "",
+                              country: a.country ?? "",
+                              stateRegion: a.stateRegion ?? "",
+                              city: a.city ?? "",
+                              postalCode: a.postalCode ?? "",
+                              road: a.road ?? "",
+                              apartmentNoOrName: a.apartmentNoOrName ?? "",
+                            });
+                          }}
+                          className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-accent-brown)]"
+                        >
+                          Edit
+                        </button>
                         {!a.isDefault ? (
                           <button type="button" onClick={() => void setDefaultAddress(a.shippingAddressId)} className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-accent-brown)]">
                             Make default
@@ -813,6 +859,32 @@ export function ProfileAuthenticatedContent({
               )}
 
               <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="profile-recipient-name" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Recipient name
+                  </label>
+                  <input
+                    id="profile-recipient-name"
+                    value={form.recipientName}
+                    onChange={(e) => setForm((p) => ({ ...p, recipientName: e.target.value }))}
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "profile-form-error" : undefined}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profile-phone-number" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Phone number
+                  </label>
+                  <input
+                    id="profile-phone-number"
+                    value={form.phoneNumber}
+                    onChange={(e) => setForm((p) => ({ ...p, phoneNumber: e.target.value }))}
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "profile-form-error" : undefined}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                  />
+                </div>
                 <div>
                   <label htmlFor="profile-road" className="mb-1 block text-xs text-[var(--color-muted)]">
                     Road / street
@@ -892,14 +964,43 @@ export function ProfileAuthenticatedContent({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => void addAddress()}
-                disabled={!canSaveAddress || adding}
-                className="mt-3 rounded-full bg-[var(--color-accent-gold)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-50"
-              >
-                {adding ? "Saving..." : "Save Address"}
-              </button>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editingAddressId) {
+                      void updateAddress(editingAddressId).then(() => setEditingAddressId(null));
+                      return;
+                    }
+                    void addAddress();
+                  }}
+                  disabled={!canSaveAddress || adding}
+                  className="rounded-full bg-[var(--color-accent-gold)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                >
+                  {adding ? "Saving..." : editingAddressId ? "Update Address" : "Save Address"}
+                </button>
+                {editingAddressId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingAddressId(null);
+                      setForm({
+                        recipientName: "",
+                        phoneNumber: "",
+                        country: "India",
+                        stateRegion: "",
+                        city: "",
+                        postalCode: "",
+                        road: "",
+                        apartmentNoOrName: "",
+                      });
+                    }}
+                    className="rounded-full border border-[var(--color-line)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]"
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         )}

@@ -1,3 +1,4 @@
+use super::query_root;
 use super::Context;
 use crate::resolvers::{
     cart::{
@@ -150,6 +151,7 @@ use crate::resolvers::{
         self,
         schema::{DeleteWishlistItem, NewWishlistItem, WishlistItem},
     },
+    utils::parse_i64,
 };
 use juniper::FieldResult;
 use juniper::IntoFieldError;
@@ -670,6 +672,20 @@ impl MutationRoot {
     ) -> FieldResult<Vec<Shipment>> {
         require_admin(context)?;
         shipments::handlers::update_shipment(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Customer: refresh shipment rows from Shiprocket track-by-AWB (configure Shiprocket webhooks for automatic updates).
+    #[instrument(err, ret)]
+    async fn sync_order_shipments_from_shiprocket(
+        context: &Context,
+        order_id: String,
+    ) -> FieldResult<Vec<Shipment>> {
+        query_root::ensure_customer_can_access_order(context, order_id.trim())
+            .await?;
+        let oid = parse_i64(order_id.trim(), "order_id").map_err(|e| e.into_field_error())?;
+        shipments::handlers::sync_order_shipments_from_shiprocket(oid)
             .await
             .map_err(|e| e.into_field_error())
     }

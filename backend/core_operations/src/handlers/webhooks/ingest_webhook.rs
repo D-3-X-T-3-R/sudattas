@@ -16,6 +16,11 @@ use std::time::Instant;
 use tonic::{Request, Response, Status as TonicStatus};
 use tracing::{info, warn};
 
+use crate::handlers::shipments::apply_shiprocket_scan::{
+    apply_shiprocket_scan_to_shipment, extract_scan_from_webhook_item,
+    find_shipment_for_shiprocket_event, flatten_shiprocket_webhook_items,
+};
+
 pub async fn ingest_webhook(
     txn: &DatabaseTransaction,
     request: Request<IngestWebhookRequest>,
@@ -89,12 +94,21 @@ pub async fn ingest_webhook(
 
     let inserted = event.insert(txn).await.map_err(map_db_error_to_status)?;
 
-    // Process: payment.captured → trigger capture_payment.
+    // Process: payment.captured → trigger capture_payment; shiprocket → update Shipments from payload.
     let new_status = if req.event_type == "payment.captured" && req.signature_verified {
         match process_payment_captured(txn, &payload_json).await {
             Ok(_) => Status::Processed,
             Err(e) => {
                 log::warn!("payment.captured processing failed: {}", e);
+                crate::observability::record_webhook_processing_failed_total();
+                Status::Failed
+            }
+        }
+    } else if req.provider == "shiprocket" && req.signature_verified {
+        match process_shiprocket_shipment_updates(txn, &payload_json).await {
+            Ok(_) => Status::Processed,
+            Err(e) => {
+                warn!("shiprocket webhook processing failed: {}", e);
                 crate::observability::record_webhook_processing_failed_total();
                 Status::Failed
             }
@@ -280,6 +294,81 @@ async fn process_payment_captured(
     }
 
     Ok(())
+}
+
+async fn process_shiprocket_shipment_updates(
+    txn: &DatabaseTransaction,
+    payload: &serde_json::Value,
+) -> Result<(), TonicStatus> {
+    let items = flatten_shiprocket_webhook_items(payload);
+    for item in items {
+        let Some(row) = find_shipment_for_shiprocket_event(txn, &item).await? else {
+            warn!(?item, "shiprocket webhook: no shipment matched awb / shiprocket_order_id");
+            continue;
+        };
+        let order_id = row.order_id;
+        let (sid, lbl, scan) = extract_scan_from_webhook_item(&item);
+        if sid.is_none() && scan.is_none() {
+            continue;
+        }
+        apply_shiprocket_scan_to_shipment(txn, row, sid, lbl, scan).await?;
+        if shiprocket_status_indicates_handover_to_courier(sid) {
+            auto_transition_order_to_shipped(txn, order_id).await;
+        }
+    }
+    Ok(())
+}
+
+fn shiprocket_status_indicates_handover_to_courier(status_id: Option<i32>) -> bool {
+    matches!(
+        status_id,
+        // Picked up / handover / in-transit and beyond.
+        Some(42 | 41 | 45 | 6 | 18 | 17 | 38 | 56 | 7 | 23)
+    )
+}
+
+async fn auto_transition_order_to_shipped(txn: &DatabaseTransaction, order_id: i64) {
+    // Ensure flow compatibility when order is still "confirmed" (paid):
+    // confirmed -> processing -> shipped
+    if let Err(e) = order_state_machine::transition_order_status(
+        txn,
+        order_id,
+        order_state_machine::OrderState::Processing,
+        "shiprocket_handover",
+        "system",
+        Some("Shipment handed to courier"),
+        None,
+    )
+    .await
+    {
+        if e.code() != tonic::Code::InvalidArgument {
+            warn!(
+                order_id,
+                error = %e,
+                "shiprocket webhook: failed to auto-transition order to processing"
+            );
+        }
+    }
+
+    if let Err(e) = order_state_machine::transition_order_status(
+        txn,
+        order_id,
+        order_state_machine::OrderState::Shipped,
+        "shiprocket_handover",
+        "system",
+        Some("Shipment handed to courier"),
+        None,
+    )
+    .await
+    {
+        if e.code() != tonic::Code::InvalidArgument {
+            warn!(
+                order_id,
+                error = %e,
+                "shiprocket webhook: failed to auto-transition order to shipped"
+            );
+        }
+    }
 }
 
 pub fn model_to_response(m: webhook_events::Model) -> WebhookEventResponse {

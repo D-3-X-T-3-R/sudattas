@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Filter } from "lucide-react";
 import { DATE_PRESETS, type DatePreset } from "@/domains/admin/orders/types";
+import { formatOrderStatusName } from "@/domains/admin/orders/utils";
 
 type OrdersFiltersCardProps = {
   datePreset: DatePreset;
@@ -83,7 +84,7 @@ export function OrdersFiltersCard({
             <option value="">All statuses</option>
             {statuses.map((s) => (
               <option key={s.statusId} value={s.statusId}>
-                {s.statusName}
+                {formatOrderStatusName(s.statusName)}
               </option>
             ))}
           </select>

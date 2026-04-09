@@ -33,7 +33,7 @@ export default async function CheckoutFailedPage({
         ) : null}
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link
-            href="/checkout/address"
+            href="/bag"
             className="inline-flex h-12 items-center justify-center rounded-full bg-[#0F3D2E] px-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#F6F3EA] transition hover:bg-[#0C3126]"
           >
             Retry Checkout

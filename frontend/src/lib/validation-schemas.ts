@@ -42,6 +42,8 @@ export const addressInputSchema = z.object({
       `Road/street must be at most ${BACKEND_MAX_ADDRESS_LINE_LEN} characters`
     ),
   apartmentNoOrName: z.string().trim().nullable().optional(),
+  recipientName: z.string().trim().nullable().optional(),
+  phoneNumber: phoneSchema.nullable().optional(),
 });
 
 // Accept positive rupee amount with up to 2 decimal places.

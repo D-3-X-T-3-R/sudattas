@@ -1,6 +1,6 @@
 use hmac::{Hmac, Mac};
 use proto::proto::core::IngestWebhookRequest;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use tracing::warn;
 use warp::hyper::body::Bytes;
 use warp::reply::{self, Reply};
@@ -26,6 +26,23 @@ fn verify_razorpay_signature(body: &[u8], signature: &str) -> bool {
 
 /// When RAZORPAY_WEBHOOK_SECRET is set and provider is razorpay, signature is required and must be valid.
 /// Returns Err((status, message)) to reject at HTTP boundary without calling gRPC.
+/// Optional shared secret: send header `X-Shiprocket-Token: <secret>` (or configure URL-only in dev).
+fn verify_shiprocket_webhook_token(token: Option<&str>) -> bool {
+    match std::env::var("SHIPROCKET_WEBHOOK_SECRET") {
+        Ok(secret) if !secret.trim().is_empty() => {
+            let ok = token.map(|t| t.trim() == secret.trim()).unwrap_or(false);
+            if !ok {
+                warn!("Shiprocket webhook rejected: X-Shiprocket-Token missing or wrong");
+            }
+            ok
+        }
+        _ => {
+            warn!("SHIPROCKET_WEBHOOK_SECRET not set; accepting Shiprocket webhooks without token verification (use only behind a private URL in production)");
+            true
+        }
+    }
+}
+
 fn enforce_signature_when_secret_set(
     provider: &str,
     signature_header: Option<&str>,
@@ -54,6 +71,7 @@ pub async fn handle_webhook(
     provider: String,
     signature_header: Option<String>,
     provider_event_id: Option<String>,
+    shiprocket_token: Option<String>,
     body: Bytes,
 ) -> Result<impl Reply, std::convert::Infallible> {
     let body_str = match std::str::from_utf8(&body) {
@@ -77,28 +95,53 @@ pub async fn handle_webhook(
     };
 
     // Phase 6: When secret is set, reject invalid/missing signature at HTTP boundary; do not call gRPC.
-    let signature_verified =
+    let signature_verified = if provider == "shiprocket" {
+        verify_shiprocket_webhook_token(shiprocket_token.as_deref())
+    } else {
         match enforce_signature_when_secret_set(&provider, signature_header.as_deref(), &body) {
             Ok(verified) => verified,
             Err((status, msg)) => {
                 crate::metrics::record_webhook_invalid_signature_total();
                 return Ok(reply::with_status(msg, status));
             }
-        };
+        }
+    };
 
     // Derive event_type and idempotency key from payload.
-    let event_type = payload["event"].as_str().unwrap_or("unknown").to_string();
-
-    let entity_id = payload["payload"]["payment"]["entity"]["id"]
-        .as_str()
-        .unwrap_or("")
-        .to_string();
-
-    let webhook_id = if entity_id.is_empty() {
-        format!("{}:{}", provider, hex::encode(&body[..body.len().min(32)]))
+    let (event_type, webhook_id) = if provider == "shiprocket" {
+        let et = payload["event"]
+            .as_str()
+            .or_else(|| payload["event_type"].as_str())
+            .unwrap_or("shiprocket.tracking")
+            .to_string();
+        let mut hasher = Sha256::new();
+        hasher.update(&body);
+        let wh = format!("shiprocket:{}", hex::encode(hasher.finalize()));
+        (et, wh)
     } else {
-        format!("{}:{}", provider, entity_id)
+        let et = payload["event"].as_str().unwrap_or("unknown").to_string();
+        let entity_id = payload["payload"]["payment"]["entity"]["id"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        let wh = if entity_id.is_empty() {
+            format!("{}:{}", provider, hex::encode(&body[..body.len().min(32)]))
+        } else {
+            format!("{}:{}", provider, entity_id)
+        };
+        (et, wh)
     };
+
+    let provider_event_id_resolved = provider_event_id.or_else(|| {
+        if provider == "shiprocket" {
+            payload
+                .get("id")
+                .and_then(|x| x.as_str())
+                .map(std::string::ToString::to_string)
+        } else {
+            None
+        }
+    });
 
     crate::metrics::record_webhook_accepted_total();
 
@@ -120,7 +163,7 @@ pub async fn handle_webhook(
             webhook_id,
             payload_json: body_str,
             signature_verified,
-            provider_event_id,
+            provider_event_id: provider_event_id_resolved,
         })
         .await
     {
@@ -160,7 +203,7 @@ mod tests {
         std::env::set_var("RAZORPAY_WEBHOOK_SECRET", "test_secret");
         let body = minimal_razorpay_body();
 
-        let reply = handle_webhook("razorpay".to_string(), None, None, body.clone())
+        let reply = handle_webhook("razorpay".to_string(), None, None, None, body.clone())
             .await
             .unwrap();
         assert_eq!(
@@ -172,6 +215,7 @@ mod tests {
         let reply = handle_webhook(
             "razorpay".to_string(),
             Some("   ".to_string()),
+            None,
             None,
             body.clone(),
         )
@@ -186,6 +230,7 @@ mod tests {
         let reply = handle_webhook(
             "razorpay".to_string(),
             Some("wrong_signature".to_string()),
+            None,
             None,
             body.clone(),
         )
@@ -203,7 +248,7 @@ mod tests {
         let mut mac = HmacSha256::new_from_slice(b"test_secret").unwrap();
         mac.update(&body);
         let sig = hex::encode(mac.finalize().into_bytes());
-        let reply = handle_webhook("razorpay".to_string(), Some(sig), None, body)
+        let reply = handle_webhook("razorpay".to_string(), Some(sig), None, None, body)
             .await
             .unwrap();
         let status = reply.into_response().status();

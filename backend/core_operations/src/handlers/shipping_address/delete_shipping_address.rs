@@ -59,6 +59,8 @@ pub async fn delete_shipping_address(
                             postal_code: model.postal_code,
                             road: model.road,
                             apartment_no_or_name: model.apartment_no_or_name,
+                            recipient_name: model.recipient_name,
+                            phone_number: model.phone_number,
                         }],
                     }))
                 }
