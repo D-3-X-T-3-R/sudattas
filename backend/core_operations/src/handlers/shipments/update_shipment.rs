@@ -1,7 +1,10 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::shipments::create_shipment::model_to_response;
+use crate::handlers::shipments::shipment_status_parse::parse_shipment_status_str;
+use crate::integrations::shiprocket_status::{
+    map_shiprocket_id_to_shipment_status, shiprocket_status_label_for_id,
+};
 use chrono::Utc;
-use core_db_entities::entity::sea_orm_active_enums::Status;
 use core_db_entities::entity::shipments;
 use proto::proto::core::{ShipmentsResponse, UpdateShipmentRequest};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait, IntoActiveModel, JsonValue};
@@ -30,16 +33,28 @@ pub async fn update_shipment(
     if let Some(v) = req.carrier {
         model.carrier = ActiveValue::Set(Some(v));
     }
+
+    if let Some(id) = req.shiprocket_status_id {
+        model.shiprocket_status_id = ActiveValue::Set(Some(id));
+        let lbl = req
+            .shiprocket_status_label
+            .clone()
+            .unwrap_or_else(|| shiprocket_status_label_for_id(id));
+        model.shiprocket_status_label = ActiveValue::Set(Some(lbl));
+        model.status = ActiveValue::Set(map_shiprocket_id_to_shipment_status(id));
+    } else if let Some(lbl) = req.shiprocket_status_label {
+        model.shiprocket_status_label = ActiveValue::Set(Some(lbl));
+    }
+
     if let Some(status_str) = req.status {
-        let status = match status_str.as_str() {
-            "processed" => Some(Status::Processed),
-            "failed" => Some(Status::Failed),
-            _ => Some(Status::Pending),
-        };
-        if matches!(status, Some(Status::Processed)) {
-            model.delivered_at = ActiveValue::Set(Some(Utc::now()));
+        if let Some(st) = parse_shipment_status_str(&status_str) {
+            if status_str.trim().eq_ignore_ascii_case("delivered")
+                || status_str.trim().eq_ignore_ascii_case("processed")
+            {
+                model.delivered_at = ActiveValue::Set(Some(Utc::now()));
+            }
+            model.status = ActiveValue::Set(st);
         }
-        model.status = ActiveValue::Set(status);
     }
 
     if let Some(raw) = req.tracking_events_json {

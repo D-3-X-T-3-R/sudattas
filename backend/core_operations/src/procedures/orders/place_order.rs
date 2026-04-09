@@ -5,6 +5,7 @@ use crate::handlers::coupons::{
 use crate::handlers::idempotency::compute_request_hash;
 use crate::handlers::order_events::create_order_event;
 use crate::money::{paise_checked_add, paise_checked_mul};
+use crate::integrations::shiprocket::{best_courier_quote_for_checkout, ShiprocketError};
 
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
@@ -15,6 +16,7 @@ use crate::order_state_machine;
 use core_db_entities::entity::prelude::IdempotencyKeys;
 use core_db_entities::entity::{
     idempotency_keys, orders, product_variants, sea_orm_active_enums::Status as IdempotencyStatus,
+    shipping_addresses,
 };
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
@@ -31,7 +33,7 @@ use sea_orm::DatabaseTransaction;
 use serde_json::json;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
-use tracing::info;
+use tracing::{info, warn};
 
 pub async fn place_order(
     txn: &DatabaseTransaction,
@@ -326,6 +328,46 @@ pub async fn place_order(
     };
 
     let discount_total_minor = gross_paise - total_paise;
+    let total_units: i64 = cart_items.iter().map(|item| item.quantity.max(1)).sum();
+
+    let shipping_address = shipping_addresses::Entity::find_by_id(req.shipping_address_id)
+        .one(txn)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?
+        .ok_or_else(|| {
+            Status::invalid_argument(format!(
+                "Shipping address {} not found",
+                req.shipping_address_id
+            ))
+        })?;
+    if shipping_address.user_id != Some(req.user_id) {
+        return Err(Status::permission_denied(
+            "Shipping address does not belong to the requesting user",
+        ));
+    }
+    let delivery_postcode = shipping_address.postal_code.trim().to_string();
+
+    let shipping_quote = match best_courier_quote_for_checkout(
+        delivery_postcode.as_str(),
+        total_paise,
+        total_units,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(ShiprocketError::NotConfigured) => None,
+        Err(e) => {
+            warn!("checkout shipping quote failed; falling back to zero shipping: {}", e);
+            None
+        }
+    };
+    let shipping_minor = shipping_quote
+        .as_ref()
+        .map(|q| q.shipping_amount_minor.max(0))
+        .unwrap_or(0);
+    let grand_total_paise = paise_checked_add(total_paise, shipping_minor).map_err(|e| {
+        Status::internal(format!("Overflow computing grand total in paise: {}", e))
+    })?;
 
     // Reserve inventory before creating the order so that on insufficient stock we fail without creating any order.
     for (variant_id, quantity) in &variant_quantity_map {
@@ -358,12 +400,12 @@ pub async fn place_order(
             shipping_address_id: req.shipping_address_id,
             status_id: pending_status_id,
             user_id: req.user_id,
-            total_amount_paise: total_paise,
+            total_amount_paise: grand_total_paise,
             subtotal_minor: Some(gross_paise),
-            shipping_minor: Some(0),
+            shipping_minor: Some(shipping_minor),
             tax_total_minor: Some(0),
             discount_total_minor: Some(discount_total_minor),
-            grand_total_minor: Some(total_paise),
+            grand_total_minor: Some(grand_total_paise),
             applied_coupon_id: coupon_snapshot.as_ref().map(|s| s.0),
             applied_coupon_code: coupon_snapshot.as_ref().map(|s| s.1.clone()),
             applied_discount_paise: coupon_snapshot.as_ref().map(|s| s.2 as i32),
@@ -420,7 +462,7 @@ pub async fn place_order(
     .items;
 
     // Auto-create a pending payment intent: backend creates Razorpay order via API (server-authoritative).
-    let amount_paise = total_paise;
+    let amount_paise = grand_total_paise;
     if let Err(e) = create_payment_intent(
         txn,
         tonic::Request::new(CreatePaymentIntentRequest {
@@ -450,8 +492,16 @@ pub async fn place_order(
             to_status: Some("processing".to_string()),
             actor_type: "customer".to_string(),
             message: Some(format!(
-                "Order {} placed successfully",
-                create_order.order_id
+                "Order {} placed successfully{}",
+                create_order.order_id,
+                shipping_quote
+                    .as_ref()
+                    .map(|q| format!(
+                        " (courier quote: {} / ₹{:.2})",
+                        q.courier_name,
+                        (q.shipping_amount_minor as f64) / 100.0
+                    ))
+                    .unwrap_or_default()
             )),
         }),
     )

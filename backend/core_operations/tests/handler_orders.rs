@@ -250,7 +250,8 @@ async fn delete_order_when_already_cancelled_returns_snapshot() {
     };
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_query_results(vec![vec![model.clone()], vec![st]])
+        .append_query_results(vec![vec![model.clone()]])
+        .append_query_results(vec![vec![st]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
@@ -279,6 +280,10 @@ async fn admin_mark_order_shipped_order_not_found_propagates_not_found() {
         order_id: 123,
         awb_code: None,
         carrier: None,
+        shiprocket_book: None,
+        shiprocket_order_id: None,
+        shiprocket_status_id: None,
+        shiprocket_status_label: None,
     });
     let result = admin_mark_order_shipped(&txn, req).await;
     assert!(result.is_err());

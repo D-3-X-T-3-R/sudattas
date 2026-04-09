@@ -49,6 +49,8 @@ pub async fn create_shipping_address(
         postal_code: ActiveValue::Set(req.postal_code),
         road: ActiveValue::Set(req.road),
         apartment_no_or_name: ActiveValue::Set(req.apartment_no_or_name),
+        recipient_name: ActiveValue::Set(req.recipient_name),
+        phone_number: ActiveValue::Set(req.phone_number),
     };
 
     match model.insert(txn).await {
@@ -63,6 +65,8 @@ pub async fn create_shipping_address(
                 postal_code: inserted.postal_code,
                 road: inserted.road,
                 apartment_no_or_name: inserted.apartment_no_or_name,
+                recipient_name: inserted.recipient_name,
+                phone_number: inserted.phone_number,
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

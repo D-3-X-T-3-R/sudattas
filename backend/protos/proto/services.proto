@@ -50,6 +50,7 @@ service GRPCServices {
     rpc UpdateOrder(UpdateOrderRequest) returns (OrdersResponse);
     rpc DeleteOrder(DeleteOrderRequest) returns (OrdersResponse);
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
+    rpc EstimateCheckoutShipping(EstimateCheckoutShippingRequest) returns (EstimateCheckoutShippingResponse);
     rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);
     rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);
     rpc SearchOrderStatus(SearchOrderStatusRequest) returns (OrderStatusesResponse);
@@ -208,6 +209,8 @@ service GRPCServices {
     rpc CreateShipment(CreateShipmentRequest) returns (ShipmentsResponse);
     rpc UpdateShipment(UpdateShipmentRequest) returns (ShipmentsResponse);
     rpc GetShipment(GetShipmentRequest) returns (ShipmentsResponse);
+    // Poll Shiprocket track-by-AWB for each shipment on the order (complement to POST /webhook/shiprocket).
+    rpc SyncOrderShipmentsFromShiprocket(SyncOrderShipmentsFromShiprocketRequest) returns (SyncOrderShipmentsFromShiprocketResponse);
 
     // Health / readiness (DB ping; for orchestrators)
     rpc Readiness(ReadinessRequest) returns (ReadinessResponse);

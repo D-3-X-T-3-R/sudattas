@@ -10,7 +10,7 @@ use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64},
 };
-use crate::validation::{validate_address_road, validate_postal_code};
+use crate::validation::{validate_address_road, validate_phone, validate_postal_code};
 
 fn parse_optional_user_id(input: Option<&str>) -> Result<Option<i64>, GqlError> {
     match input {
@@ -32,6 +32,8 @@ fn address_response_to_gql(a: ShippingAddressResponse) -> ShippingAddress {
         postal_code: a.postal_code,
         road: a.road,
         apartment_no_or_name: a.apartment_no_or_name,
+        recipient_name: a.recipient_name,
+        phone_number: a.phone_number,
     }
 }
 
@@ -59,6 +61,7 @@ pub(crate) async fn create_shipping_address(
         .ok_or_else(|| GqlError::new("Address road is required", Code::InvalidArgument))?;
     validate_address_road(road)?;
     validate_postal_code(&input.postal_code)?;
+    validate_phone(input.phone_number.as_deref())?;
 
     let mut client = connect_grpc_client().await?;
     let user_id = parse_optional_user_id(input.user_id.as_deref())?;
@@ -72,6 +75,8 @@ pub(crate) async fn create_shipping_address(
             postal_code: input.postal_code,
             road: input.road,
             apartment_no_or_name: input.apartment_no_or_name,
+            recipient_name: input.recipient_name,
+            phone_number: input.phone_number,
         })
         .await?;
     Ok(response
@@ -92,6 +97,7 @@ pub(crate) async fn update_shipping_address(
         .ok_or_else(|| GqlError::new("Address road is required", Code::InvalidArgument))?;
     validate_address_road(road)?;
     validate_postal_code(&input.postal_code)?;
+    validate_phone(input.phone_number.as_deref())?;
 
     let mut client = connect_grpc_client().await?;
     let user_id = parse_optional_user_id(input.user_id.as_deref())?;
@@ -106,6 +112,8 @@ pub(crate) async fn update_shipping_address(
             postal_code: input.postal_code,
             road: input.road,
             apartment_no_or_name: input.apartment_no_or_name,
+            recipient_name: input.recipient_name,
+            phone_number: input.phone_number,
         })
         .await?;
     Ok(response

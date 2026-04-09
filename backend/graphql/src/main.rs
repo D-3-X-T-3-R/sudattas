@@ -486,7 +486,6 @@ async fn main() {
                 async move { graphql_handler::handle_graphql_request(ctx, body, schema).await }
             }
         })
-        .recover(handle_auth_rejection)
         .with(cors.clone())
         .with(warp::trace::trace(
             |_| tracing::info_span!("request", request_id = %Uuid::new_v4()),
@@ -498,18 +497,29 @@ async fn main() {
 
     let options_routes = warp::options().map(warp::reply).with(cors.clone());
 
-    let webhook_route_inner = warp::post()
-        .and(warp::path("webhook"))
-        .and(warp::path::param::<String>()) // provider: e.g. "razorpay"
+    let shiprocket_webhook_route_inner = warp::post()
+        .and(warp::path("blastoff"))
+        .and(warp::path("parcelupdate"))
+        .and(warp::path::end())
         .and(warp::header::optional::<String>("x-razorpay-signature"))
         .and(warp::header::optional::<String>("x-razorpay-event-id"))
+        .and(warp::header::optional::<String>("x-shiprocket-token"))
+        .and(warp::header::optional::<String>("x-api-key"))
         .and(warp::body::bytes())
         .and_then(
-            |provider: String,
-             sig: Option<String>,
+            |sig: Option<String>,
              event_id: Option<String>,
+             shiprocket_token: Option<String>,
+             shiprocket_api_key: Option<String>,
              body: warp::hyper::body::Bytes| async move {
-                webhooks::handle_webhook(provider, sig, event_id, body)
+                let resolved_shiprocket_token = shiprocket_token.or(shiprocket_api_key);
+                webhooks::handle_webhook(
+                    "shiprocket".to_string(),
+                    sig,
+                    event_id,
+                    resolved_shiprocket_token,
+                    body,
+                )
                     .await
                     .map_err(|e| {
                         warn!("Webhook handler error: {:?}", e);
@@ -517,8 +527,35 @@ async fn main() {
                     })
             },
         );
+    let razorpay_webhook_route_inner = warp::post()
+        .and(warp::path("wheresthemoney"))
+        .and(warp::path("razorpay"))
+        .and(warp::path::end())
+        .and(warp::header::optional::<String>("x-razorpay-signature"))
+        .and(warp::header::optional::<String>("x-razorpay-event-id"))
+        .and(warp::header::optional::<String>("x-shiprocket-token"))
+        .and(warp::body::bytes())
+        .and_then(
+            |sig: Option<String>,
+             event_id: Option<String>,
+             shiprocket_token: Option<String>,
+             body: warp::hyper::body::Bytes| async move {
+                webhooks::handle_webhook(
+                    "razorpay".to_string(),
+                    sig,
+                    event_id,
+                    shiprocket_token,
+                    body,
+                )
+                .await
+                .map_err(|e| {
+                    warn!("Webhook handler error: {:?}", e);
+                    warp::reject::reject()
+                })
+            },
+        );
     let webhook_route = webhook_rate_limit_filter
-        .and(webhook_route_inner)
+        .and(shiprocket_webhook_route_inner.or(razorpay_webhook_route_inner))
         .map(|_, reply| reply);
 
     // Bind address is configurable via GRAPHQL_LISTEN_ADDR (default: 0.0.0.0:8080)

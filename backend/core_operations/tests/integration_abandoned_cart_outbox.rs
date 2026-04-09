@@ -511,6 +511,10 @@ async fn integration_shipped_delivered_enqueue_outbox_events() {
             order_id,
             awb_code: Some("OB2AWB".to_string()),
             carrier: Some("Carrier".to_string()),
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await

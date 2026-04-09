@@ -45,6 +45,8 @@ type ShipmentRow = {
   createdAt: string;
   deliveredAt?: string | null;
   trackingEventsJson?: string | null;
+  shiprocketStatusId?: string | null;
+  shiprocketStatusLabel?: string | null;
 };
 
 type OrderEventRow = {
@@ -121,6 +123,8 @@ const SHIPMENT_QUERY = `query AccountOrderShipments($input: GetShipment!) {
     createdAt
     deliveredAt
     trackingEventsJson
+    shiprocketStatusId
+    shiprocketStatusLabel
   }
 }`;
 
@@ -136,6 +140,16 @@ const EVENTS_QUERY = `query AccountOrderEvents($orderId: String!) {
   }
 }`;
 
+const SYNC_SHIPMENTS_MUTATION = `mutation AccountSyncOrderShipments($orderId: String!) {
+  syncOrderShipmentsFromShiprocket(orderId: $orderId) {
+    shipmentId
+  }
+}`;
+
+function formatOrderStatusName(statusName: string): string {
+  return statusName.trim().toLowerCase() === "processing" ? "processing order" : statusName;
+}
+
 function derivePaymentState(intents: PaymentIntentRow[]): string {
   if (!intents.length) return "not_started";
   const statuses = intents.map((i) => i.status.toLowerCase());
@@ -149,10 +163,76 @@ function derivePaymentState(intents: PaymentIntentRow[]): string {
 
 function deriveFulfillmentState(shipments: ShipmentRow[]): string {
   if (!shipments.length) return "not_shipped";
+  const fromShiprocket = (s: ShipmentRow) => {
+    const id = s.shiprocketStatusId?.trim();
+    if (id === "7" || id === "23") return "delivered";
+    if (id === "8") return "issue";
+    if (id === "9" || id === "10" || id === "14" || id === "15" || id === "16")
+      return "issue";
+    if (id === "17" || id === "38" || id === "56") return "out_for_delivery";
+    if (
+      id === "18" ||
+      id === "6" ||
+      id === "41" ||
+      id === "45" ||
+      id === "42"
+    )
+      return "in_transit";
+    return null;
+  };
+  for (const s of shipments) {
+    if (fromShiprocket(s) === "delivered") return "delivered";
+  }
+  let best: string | null = null;
+  for (const s of shipments) {
+    const sr = fromShiprocket(s);
+    if (!sr) continue;
+    if (sr === "issue") {
+      best = "issue";
+      break;
+    }
+    if (sr === "out_for_delivery") best = best ?? "out_for_delivery";
+    else if (sr === "in_transit") best = best ?? "in_transit";
+  }
+  if (best) return best;
   const statuses = shipments.map((s) => s.status.toLowerCase());
-  if (statuses.some((s) => s.includes("delivered"))) return "delivered";
-  if (statuses.some((s) => s.includes("failed") || s.includes("returned"))) return "issue";
-  if (statuses.some((s) => s.includes("shipped") || s.includes("in_transit"))) return "in_transit";
+  const labels = shipments
+    .map((s) => s.shiprocketStatusLabel?.toLowerCase() ?? "")
+    .filter(Boolean);
+  if (
+    statuses.some((x) => x.includes("delivered")) ||
+    labels.some((x) => x.includes("delivered"))
+  )
+    return "delivered";
+  if (
+    statuses.some(
+      (x) =>
+        x.includes("failed") ||
+        x.includes("returned") ||
+        x.includes("rto") ||
+        x.includes("cancelled")
+    ) ||
+    labels.some((x) => x.includes("rto") || x.includes("cancel"))
+  )
+    return "issue";
+  if (
+    statuses.some(
+      (x) =>
+        x.includes("shipped") ||
+        x.includes("in_transit") ||
+        x.includes("picked_up") ||
+        x.includes("out_for_delivery") ||
+        x.includes("awb_assigned")
+    ) ||
+    labels.some(
+      (x) =>
+        x.includes("transit") ||
+        x.includes("picked") ||
+        x.includes("delivery") ||
+        x.includes("awb")
+    )
+  )
+    return "in_transit";
   return statuses[0] ?? "pending";
 }
 
@@ -170,6 +250,12 @@ export async function GET(
   if (!trimmedOrderId) {
     return apiError("Order ID is required", 400, "VALIDATION_ERROR");
   }
+
+  // Best-effort freshness: refresh courier scans from Shiprocket when available.
+  // Ignore sync failures so normal order details still load.
+  await callGraphqlAsCustomer(userId, SYNC_SHIPMENTS_MUTATION, {
+    orderId: trimmedOrderId,
+  }).catch(() => null);
 
   const [orderResult, statusesResult, paymentResult, shipmentResult, eventsResult] =
     await Promise.all([
@@ -211,7 +297,10 @@ export async function GET(
   }
 
   const statusNameById = new Map(
-    (statusesResult.data?.searchOrderStatus ?? []).map((s) => [s.statusId, s.statusName])
+    (statusesResult.data?.searchOrderStatus ?? []).map((s) => [
+      s.statusId,
+      formatOrderStatusName(s.statusName),
+    ])
   );
   const statusName = statusNameById.get(order.statusId) ?? order.statusId;
   const paymentIntents = paymentResult.data?.getPaymentIntent ?? [];

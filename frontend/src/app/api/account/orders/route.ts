@@ -31,6 +31,10 @@ const ORDER_STATUS_QUERY = `query AccountOrderStatuses {
   }
 }`;
 
+function formatOrderStatusName(statusName: string): string {
+  return statusName.trim().toLowerCase() === "processing" ? "processing order" : statusName;
+}
+
 export async function GET() {
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
@@ -62,7 +66,10 @@ export async function GET() {
   }
 
   const statusNameById = new Map(
-    (statusesResult.data?.searchOrderStatus ?? []).map((s) => [s.statusId, s.statusName])
+    (statusesResult.data?.searchOrderStatus ?? []).map((s) => [
+      s.statusId,
+      formatOrderStatusName(s.statusName),
+    ])
   );
 
   const orders = (ordersResult.data?.searchOrder ?? []).map((order) => ({

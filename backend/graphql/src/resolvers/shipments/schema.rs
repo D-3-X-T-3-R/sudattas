@@ -12,6 +12,12 @@ pub struct Shipment {
     pub delivered_at: Option<String>,
     /// JSON array of courier milestones for the storefront, e.g. [{"label":"Picked up","at":"...","location":"..."}].
     pub tracking_events_json: Option<String>,
+    /// Shiprocket `shipment_status_id` when known (webhook / API sync).
+    pub shiprocket_status_id: Option<String>,
+    /// Human-readable Shiprocket status (API or mapped).
+    pub shiprocket_status_label: Option<String>,
+    /// Customer-facing tracking line (e.g. "In transit", "Out for delivery") derived from Shiprocket.
+    pub customer_tracking_status: String,
 }
 
 #[graphql_object]
@@ -44,6 +50,15 @@ impl Shipment {
     async fn tracking_events_json(&self) -> &Option<String> {
         &self.tracking_events_json
     }
+    async fn shiprocket_status_id(&self) -> &Option<String> {
+        &self.shiprocket_status_id
+    }
+    async fn shiprocket_status_label(&self) -> &Option<String> {
+        &self.shiprocket_status_label
+    }
+    async fn customer_tracking_status(&self) -> &String {
+        &self.customer_tracking_status
+    }
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -66,6 +81,8 @@ pub struct UpdateShipment {
     pub status: Option<String>,
     /// JSON array of customer-visible courier steps (replaces stored timeline when set).
     pub tracking_events_json: Option<String>,
+    pub shiprocket_status_id: Option<String>,
+    pub shiprocket_status_label: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

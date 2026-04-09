@@ -216,6 +216,10 @@ async fn transition_order_to_delivered(
             order_id,
             awb_code: Some("AWBREF".to_string()),
             carrier: Some("Carrier".to_string()),
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await
@@ -272,6 +276,10 @@ async fn transition_order_to_shipped(
             order_id,
             awb_code: None,
             carrier: None,
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await

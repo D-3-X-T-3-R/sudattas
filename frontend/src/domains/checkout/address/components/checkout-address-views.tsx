@@ -14,6 +14,7 @@ export type ShippingAddressRow = {
   shippingAddressId: string;
   userId?: string | null;
   isDefault?: boolean;
+  recipientName?: string | null;
   road?: string | null;
   apartmentNoOrName?: string | null;
   city: string;
@@ -23,6 +24,7 @@ export type ShippingAddressRow = {
 };
 
 export type NewAddressState = {
+  recipientName: string;
   countryIso: string;
   stateIso: string;
   city: string;
@@ -119,6 +121,10 @@ function AddAddressDialog({
       <DialogContent title="New address" titleClassName="text-[11px] uppercase tracking-[0.22em] text-[#8B816D]" className="max-w-lg rounded-[22px] border border-[#0F3D2E]/10" contentClassName="max-h-[min(85vh,640px)] overflow-y-auto p-4 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
+            <label htmlFor="checkout-address-recipient" className="mb-1 block text-xs font-medium text-[#615A50]">Recipient name</label>
+            <input id="checkout-address-recipient" value={newAddr.recipientName} onChange={(e) => setNewAddr((p) => ({ ...p, recipientName: e.target.value }))} autoComplete="name" className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]" aria-invalid={Boolean(saveAddressError)} aria-describedby={errorId} />
+          </div>
+          <div className="sm:col-span-2">
             <label htmlFor="checkout-address-line2" className="mb-1 block text-xs font-medium text-[#615A50]">Apartment, building, or house name (optional)</label>
             <input id="checkout-address-line2" value={newAddr.apartmentNoOrName} onChange={(e) => setNewAddr((p) => ({ ...p, apartmentNoOrName: e.target.value }))} autoComplete="address-line2" className="h-11 w-full rounded-xl border border-[var(--color-line)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent-gold)]" />
           </div>
@@ -172,7 +178,7 @@ function AddAddressDialog({
 }
 
 function formatAddressLine(a: ShippingAddressRow): string {
-  const tail = [[a.apartmentNoOrName, a.road].filter(Boolean).join(", "), a.city, a.stateRegion, a.postalCode, a.country].filter((p) => p && String(p).trim());
+  const tail = [a.recipientName, [a.apartmentNoOrName, a.road].filter(Boolean).join(", "), a.city, a.stateRegion, a.postalCode, a.country].filter((p) => p && String(p).trim());
   return tail.join(" | ") || "Saved address";
 }
 

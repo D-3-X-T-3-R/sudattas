@@ -89,6 +89,10 @@ pub struct CreateShippingAddressRequest {
     pub road: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "8")]
     pub apartment_no_or_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "9")]
+    pub recipient_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "10")]
+    pub phone_number: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -112,6 +116,10 @@ pub struct UpdateShippingAddressRequest {
     pub road: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "9")]
     pub apartment_no_or_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "10")]
+    pub recipient_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "11")]
+    pub phone_number: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -146,6 +154,10 @@ pub struct ShippingAddressResponse {
     pub road: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "9")]
     pub apartment_no_or_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "10")]
+    pub recipient_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "11")]
+    pub phone_number: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -526,6 +538,37 @@ pub struct PlaceOrderRequest {
     #[prost(string, optional, tag = "3")]
     pub coupon_code: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// Checkout shipping estimate for bag/checkout preview (no order mutation).
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EstimateCheckoutShippingRequest {
+    #[prost(int64, tag = "1")]
+    pub shipping_address_id: i64,
+    #[prost(int64, tag = "2")]
+    pub user_id: i64,
+    #[prost(string, optional, tag = "3")]
+    pub coupon_code: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EstimateCheckoutShippingResponse {
+    #[prost(int64, tag = "1")]
+    pub shipping_amount_paise: i64,
+    #[prost(string, optional, tag = "2")]
+    pub courier_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int32, optional, tag = "3")]
+    pub estimated_delivery_days: ::core::option::Option<i32>,
+    #[prost(int64, tag = "4")]
+    pub item_subtotal_paise: i64,
+    #[prost(int64, tag = "5")]
+    pub order_total_paise: i64,
+    #[prost(bool, tag = "6")]
+    pub quote_available: bool,
+    #[prost(string, optional, tag = "7")]
+    pub note: ::core::option::Option<::prost::alloc::string::String>,
+}
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -612,6 +655,17 @@ pub struct AdminMarkOrderShippedRequest {
     pub awb_code: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "3")]
     pub carrier: ::core::option::Option<::prost::alloc::string::String>,
+    /// When true, core_operations calls Shiprocket (create adhoc + assign AWB) and fills awb/carrier/shiprocket_order_id before persisting.
+    #[prost(bool, optional, tag = "4")]
+    pub shiprocket_book: ::core::option::Option<bool>,
+    /// Set by server when shiprocket_book succeeds; optional manual override if shiprocket_book is false.
+    #[prost(string, optional, tag = "5")]
+    pub shiprocket_order_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Filled by server after Shiprocket booking (assign AWB response); optional echo for downstream shipment row.
+    #[prost(int32, optional, tag = "6")]
+    pub shiprocket_status_id: ::core::option::Option<i32>,
+    #[prost(string, optional, tag = "7")]
+    pub shiprocket_status_label: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2102,6 +2156,10 @@ pub struct CreateShipmentRequest {
     pub awb_code: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "4")]
     pub carrier: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int32, optional, tag = "5")]
+    pub shiprocket_status_id: ::core::option::Option<i32>,
+    #[prost(string, optional, tag = "6")]
+    pub shiprocket_status_label: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2115,12 +2173,17 @@ pub struct UpdateShipmentRequest {
     pub awb_code: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "4")]
     pub carrier: ::core::option::Option<::prost::alloc::string::String>,
-    /// pending | processed | failed
+    /// Granular courier lifecycle: pending | awb_assigned | picked_up | in_transit | out_for_delivery | delivered | ...
+    /// Legacy: "processed" is treated as delivered (sets delivered_at).
     #[prost(string, optional, tag = "5")]
     pub status: ::core::option::Option<::prost::alloc::string::String>,
     /// JSON array of customer-visible courier steps, e.g. \[{"label":"Picked up","at":"...","location":"..."}\]
     #[prost(string, optional, tag = "6")]
     pub tracking_events_json: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int32, optional, tag = "7")]
+    pub shiprocket_status_id: ::core::option::Option<i32>,
+    #[prost(string, optional, tag = "8")]
+    pub shiprocket_status_label: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2153,6 +2216,27 @@ pub struct ShipmentResponse {
     pub delivered_at: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "9")]
     pub tracking_events_json: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int32, optional, tag = "10")]
+    pub shiprocket_status_id: ::core::option::Option<i32>,
+    #[prost(string, optional, tag = "11")]
+    pub shiprocket_status_label: ::core::option::Option<::prost::alloc::string::String>,
+    /// Friendly line for storefronts ("In transit", "Out for delivery", …) derived from Shiprocket id + internal status.
+    #[prost(string, tag = "12")]
+    pub customer_tracking_status: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncOrderShipmentsFromShiprocketRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncOrderShipmentsFromShiprocketResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<ShipmentResponse>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -3320,6 +3404,36 @@ pub mod grpc_services_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "PlaceOrder"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn estimate_checkout_shipping(
+            &mut self,
+            request: impl tonic::IntoRequest<super::EstimateCheckoutShippingRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::EstimateCheckoutShippingResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/EstimateCheckoutShipping",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "EstimateCheckoutShipping",
+                    ),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn admin_mark_order_shipped(
@@ -5992,6 +6106,39 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "GetShipment"));
             self.inner.unary(req, path, codec).await
         }
+        /// Poll Shiprocket track-by-AWB for each shipment on the order (complement to POST /webhook/shiprocket).
+        pub async fn sync_order_shipments_from_shiprocket(
+            &mut self,
+            request: impl tonic::IntoRequest<
+                super::SyncOrderShipmentsFromShiprocketRequest,
+            >,
+        ) -> std::result::Result<
+            tonic::Response<super::SyncOrderShipmentsFromShiprocketResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SyncOrderShipmentsFromShiprocket",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "SyncOrderShipmentsFromShiprocket",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         /// Health / readiness (DB ping; for orchestrators)
         pub async fn readiness(
             &mut self,
@@ -6223,6 +6370,13 @@ pub mod grpc_services_server {
             &self,
             request: tonic::Request<super::PlaceOrderRequest>,
         ) -> std::result::Result<tonic::Response<super::OrdersResponse>, tonic::Status>;
+        async fn estimate_checkout_shipping(
+            &self,
+            request: tonic::Request<super::EstimateCheckoutShippingRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::EstimateCheckoutShippingResponse>,
+            tonic::Status,
+        >;
         async fn admin_mark_order_shipped(
             &self,
             request: tonic::Request<super::AdminMarkOrderShippedRequest>,
@@ -6888,6 +7042,14 @@ pub mod grpc_services_server {
             request: tonic::Request<super::GetShipmentRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ShipmentsResponse>,
+            tonic::Status,
+        >;
+        /// Poll Shiprocket track-by-AWB for each shipment on the order (complement to POST /webhook/shiprocket).
+        async fn sync_order_shipments_from_shiprocket(
+            &self,
+            request: tonic::Request<super::SyncOrderShipmentsFromShiprocketRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SyncOrderShipmentsFromShiprocketResponse>,
             tonic::Status,
         >;
         /// Health / readiness (DB ping; for orchestrators)
@@ -8414,6 +8576,58 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = PlaceOrderSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/EstimateCheckoutShipping" => {
+                    #[allow(non_camel_case_types)]
+                    struct EstimateCheckoutShippingSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::EstimateCheckoutShippingRequest>
+                    for EstimateCheckoutShippingSvc<T> {
+                        type Response = super::EstimateCheckoutShippingResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::EstimateCheckoutShippingRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::estimate_checkout_shipping(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = EstimateCheckoutShippingSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -13176,6 +13390,61 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetShipmentSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SyncOrderShipmentsFromShiprocket" => {
+                    #[allow(non_camel_case_types)]
+                    struct SyncOrderShipmentsFromShiprocketSvc<T: GrpcServices>(
+                        pub Arc<T>,
+                    );
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<
+                        super::SyncOrderShipmentsFromShiprocketRequest,
+                    > for SyncOrderShipmentsFromShiprocketSvc<T> {
+                        type Response = super::SyncOrderShipmentsFromShiprocketResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::SyncOrderShipmentsFromShiprocketRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::sync_order_shipments_from_shiprocket(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SyncOrderShipmentsFromShiprocketSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -100,14 +100,30 @@ const UPDATE_ORDER_MUTATION = `mutation UpdateAdminOrder($order: OrderMutation!)
   }
 }`;
 
+const ADMIN_MARK_ORDER_SHIPPED_MUTATION = `mutation AdminMarkOrderShipped($input: AdminMarkOrderShippedInput!) {
+  adminMarkOrderShipped(input: $input)
+}`;
+
 /**
- * Admin: change order status via updateOrder. Backend enforces allowed state transitions.
- * Other fields are copied from the loaded order snapshot.
+ * Admin: change order status.
+ * For "shipped", callers can opt into Shiprocket booking by setting `shiprocketBook`.
+ * Other statuses use updateOrder.
  */
 export async function updateAdminOrderStatus(
   order: AdminOrderDetail,
-  newStatusId: string
+  newStatusId: string,
+  options?: { shiprocketBook?: boolean }
 ): Promise<void> {
+  if (options?.shiprocketBook) {
+    await gqlAdmin(ADMIN_MARK_ORDER_SHIPPED_MUTATION, {
+      input: {
+        orderId: order.orderId,
+        shiprocketBook: true,
+      },
+    });
+    return;
+  }
+
   await gqlAdmin(UPDATE_ORDER_MUTATION, {
     order: {
       orderId: order.orderId,

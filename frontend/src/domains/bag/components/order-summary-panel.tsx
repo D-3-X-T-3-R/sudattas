@@ -7,6 +7,9 @@ type OrderSummaryPanelProps = {
   cartLines: CartLine[];
   cartSubtotal: number;
   cartCount: number;
+  shippingAmount: number;
+  shippingLoading: boolean;
+  shippingNote?: string | null;
   onCheckout: () => void;
 };
 
@@ -14,8 +17,12 @@ export function OrderSummaryPanel({
   cartLines,
   cartSubtotal,
   cartCount,
+  shippingAmount,
+  shippingLoading,
+  shippingNote,
   onCheckout,
 }: OrderSummaryPanelProps) {
+  const totalAmount = cartSubtotal + shippingAmount;
   return (
     <div className="overflow-hidden rounded-[30px] bg-[radial-gradient(circle_at_top,rgba(201,166,70,0.22),transparent_42%),linear-gradient(165deg,#0E3D2F_0%,#114636_48%,#082E24_100%)] text-[#F6F3EA] shadow-[0_2px_8px_rgba(15,61,46,0.06)]">
       <div className="p-6 sm:p-7">
@@ -52,12 +59,17 @@ export function OrderSummaryPanel({
           </div>
           <div className="mt-3 flex items-center justify-between gap-4">
             <span className="text-sm text-[#F6F3EA]/65">Shipping</span>
-            <span className="text-sm font-medium text-[#F6F3EA]/70">Calculated at checkout</span>
+            <span className="text-sm font-medium text-[#F6F3EA]/70">
+              {shippingLoading ? "Calculating..." : INR.format(shippingAmount)}
+            </span>
           </div>
+          {shippingNote ? (
+            <p className="mt-2 text-xs text-[#F6F3EA]/70">{shippingNote}</p>
+          ) : null}
           <div className="my-5 border-t border-white/10" />
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-semibold text-[#F6F3EA]">Total Amount</span>
-            <span className="text-3xl font-semibold text-white">{INR.format(cartSubtotal)}</span>
+            <span className="text-3xl font-semibold text-white">{INR.format(totalAmount)}</span>
           </div>
         </div>
 

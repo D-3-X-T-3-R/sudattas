@@ -56,6 +56,8 @@ pub async fn update_shipping_address(
         postal_code: ActiveValue::Set(req.postal_code),
         road: ActiveValue::Set(req.road),
         apartment_no_or_name: ActiveValue::Set(req.apartment_no_or_name),
+        recipient_name: ActiveValue::Set(req.recipient_name),
+        phone_number: ActiveValue::Set(req.phone_number),
     };
 
     match model.update(txn).await {
@@ -70,6 +72,8 @@ pub async fn update_shipping_address(
                 postal_code: updated.postal_code,
                 road: updated.road,
                 apartment_no_or_name: updated.apartment_no_or_name,
+                recipient_name: updated.recipient_name,
+                phone_number: updated.phone_number,
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

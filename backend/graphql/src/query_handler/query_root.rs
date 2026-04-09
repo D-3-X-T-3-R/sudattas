@@ -20,7 +20,7 @@ use crate::resolvers::{
     order_events::{self, schema::OrderEvent},
     orders::{
         self,
-        schema::{Order, OrderStatus, SearchOrder},
+        schema::{CheckoutShippingEstimate, EstimateCheckoutShippingInput, Order, OrderStatus, SearchOrder},
     },
     payment_intents::{
         self,
@@ -92,16 +92,21 @@ fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
     }
 }
 
-async fn ensure_customer_can_access_order(
+pub(crate) async fn ensure_customer_can_access_order(
     context: &Context,
     order_id: &str,
 ) -> Result<(), juniper::FieldError> {
     if context.is_admin() {
         return Ok(());
     }
-    let uid = require_jwt(context)?.to_string();
+    let uid = context.user_id().ok_or_else(|| {
+        juniper::FieldError::new(
+            "Authentication required for this operation",
+            juniper::Value::null(),
+        )
+    })?;
     let rows = orders::handlers::search_order(SearchOrder {
-        user_id: uid,
+        user_id: uid.to_string(),
         order_date_start: None,
         order_date_end: None,
         status_id: None,
@@ -238,6 +243,17 @@ impl QueryRoot {
     async fn search_order_status(context: &Context) -> FieldResult<Vec<OrderStatus>> {
         let _ = require_jwt(context)?;
         orders::handlers::search_order_status()
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn estimate_checkout_shipping(
+        context: &Context,
+        input: EstimateCheckoutShippingInput,
+    ) -> FieldResult<CheckoutShippingEstimate> {
+        let uid = require_jwt(context)?.to_string();
+        orders::handlers::estimate_checkout_shipping(input, uid, context.request_id())
             .await
             .map_err(|e| e.into_field_error())
     }

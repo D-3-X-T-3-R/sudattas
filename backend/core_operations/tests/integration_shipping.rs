@@ -76,6 +76,8 @@ async fn integration_shipping_address_crud_end_to_end() {
             postal_code: "400001".to_string(),
             road: Some("SA Road".to_string()),
             apartment_no_or_name: Some("Unit 1".to_string()),
+            recipient_name: Some("Test User".to_string()),
+            phone_number: Some("+1 415 555 0101".to_string()),
         }),
     )
     .await
@@ -119,6 +121,8 @@ async fn integration_shipping_address_crud_end_to_end() {
             postal_code: "560001".to_string(),
             road: Some("Updated Road".to_string()),
             apartment_no_or_name: Some("Block B".to_string()),
+            recipient_name: Some("Test User".to_string()),
+            phone_number: Some("+1 415 555 0101".to_string()),
         }),
     )
     .await
@@ -231,6 +235,8 @@ async fn integration_place_order_uses_expected_shipping_address() {
             postal_code: "600001".to_string(),
             road: Some("Order Address Road".to_string()),
             apartment_no_or_name: Some("Flat 5".to_string()),
+            recipient_name: Some("Buyer One".to_string()),
+            phone_number: Some("+91 98765 43210".to_string()),
         }),
     )
     .await
@@ -385,6 +391,8 @@ async fn integration_default_shipping_address_uniqueness() {
             postal_code: "700001".to_string(),
             road: Some("Default One".to_string()),
             apartment_no_or_name: None,
+            recipient_name: Some("User One".to_string()),
+            phone_number: Some("+91 99887 76655".to_string()),
         }),
     )
     .await
@@ -406,6 +414,8 @@ async fn integration_default_shipping_address_uniqueness() {
             postal_code: "700002".to_string(),
             road: Some("Default Two".to_string()),
             apartment_no_or_name: None,
+            recipient_name: Some("User One".to_string()),
+            phone_number: Some("+91 99887 76655".to_string()),
         }),
     )
     .await

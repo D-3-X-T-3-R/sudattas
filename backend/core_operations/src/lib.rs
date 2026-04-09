@@ -39,6 +39,7 @@ use proto::proto::core::{
     IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
     NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse, OrderEventsResponse,
     OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse, PlaceOrderRequest,
+    EstimateCheckoutShippingRequest, EstimateCheckoutShippingResponse,
     PresignedUploadUrlResponse, ProductImagesResponse, ProductMoodMappingsResponse,
     ProductMoodsResponse, ProductVariantsResponse, ProductsResponse, ReadinessRequest,
     ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
@@ -51,6 +52,7 @@ use proto::proto::core::{
     SearchReviewRequest, SearchShippingMethodRequest, SearchSizeRequest, SearchTransactionRequest,
     SearchUserActivityRequest, SearchUserRequest, SearchUserRoleRequest, SearchWeaveRequest,
     SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
+    SyncOrderShipmentsFromShiprocketRequest, SyncOrderShipmentsFromShiprocketResponse,
     ShippingMethodsResponse, ShopHighlightMoodsRequest, ShopHighlightMoodsResponse, SizesResponse,
     SyncProductImagesRequest, TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest,
     UpdateColorRequest, UpdateCouponRequest, UpdateEventLogRequest, UpdateFabricRequest,
@@ -69,6 +71,7 @@ use sea_orm::TransactionTrait;
 use tonic::{Request, Response, Status};
 
 pub mod handlers;
+pub mod integrations;
 pub mod notifications;
 pub mod order_state_machine;
 pub mod procedures;
@@ -595,6 +598,20 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
+    async fn estimate_checkout_shipping(
+        &self,
+        request: Request<EstimateCheckoutShippingRequest>,
+    ) -> Result<Response<EstimateCheckoutShippingResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("Database not initialized"))?;
+        let txn = db.begin().await.map_err(map_db_error_to_status)?;
+        let res = procedures::orders::estimate_checkout_shipping(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
     async fn search_order(
         &self,
         request: Request<SearchOrderRequest>,
@@ -631,14 +648,23 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<AdminMarkOrderShippedRequest>,
     ) -> Result<Response<AdminMarkOrderShippedResponse>, Status> {
-        let txn = self
+        let db = self
             .db
             .as_ref()
-            .unwrap()
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::orders::admin_mark_order_shipped(&txn, request).await?;
+            .ok_or_else(|| Status::failed_precondition("database not initialized"))?;
+        let mut inner = request.into_inner();
+        if inner.shiprocket_book == Some(true) {
+            let booked = integrations::shiprocket::book_shipment_for_order(db, inner.order_id)
+                .await
+                .map_err(|e| Status::failed_precondition(e.to_string()))?;
+            inner.awb_code = Some(booked.awb_code);
+            inner.carrier = Some(booked.courier_name);
+            inner.shiprocket_order_id = Some(booked.shiprocket_shipment_id);
+            inner.shiprocket_status_id = booked.shiprocket_status_id;
+            inner.shiprocket_status_label = booked.shiprocket_status_label;
+        }
+        let txn = db.begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::orders::admin_mark_order_shipped(&txn, Request::new(inner)).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2076,6 +2102,18 @@ impl GrpcServices for MyGRPCServices {
         let res = handlers::shipments::get_shipment(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
+    }
+
+    async fn sync_order_shipments_from_shiprocket(
+        &self,
+        request: Request<SyncOrderShipmentsFromShiprocketRequest>,
+    ) -> Result<Response<SyncOrderShipmentsFromShiprocketResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::failed_precondition("database not initialized"))?;
+        let order_id = request.into_inner().order_id;
+        handlers::shipments::sync_order_shipments_from_shiprocket(db, order_id).await
     }
 
     async fn validate_coupon(

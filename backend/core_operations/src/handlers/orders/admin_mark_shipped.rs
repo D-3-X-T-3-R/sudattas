@@ -28,7 +28,10 @@ pub async fn admin_mark_order_shipped(
     .await?;
 
     let mut shipment_id: i64 = 0;
-    if req.awb_code.is_some() || req.carrier.is_some() {
+    let has_tracking = req.awb_code.is_some()
+        || req.carrier.is_some()
+        || req.shiprocket_order_id.is_some();
+    if has_tracking {
         let existing = shipments::Entity::find()
             .filter(shipments::Column::OrderId.eq(req.order_id))
             .one(txn)
@@ -39,11 +42,13 @@ pub async fn admin_mark_order_shipped(
                 txn,
                 Request::new(UpdateShipmentRequest {
                     shipment_id: ship.shipment_id,
-                    shiprocket_order_id: None,
+                    shiprocket_order_id: req.shiprocket_order_id.clone(),
                     awb_code: req.awb_code,
                     carrier: req.carrier,
                     status: None,
                     tracking_events_json: None,
+                    shiprocket_status_id: req.shiprocket_status_id,
+                    shiprocket_status_label: req.shiprocket_status_label.clone(),
                 }),
             )
             .await?;
@@ -53,9 +58,11 @@ pub async fn admin_mark_order_shipped(
                 txn,
                 Request::new(CreateShipmentRequest {
                     order_id: req.order_id,
-                    shiprocket_order_id: None,
+                    shiprocket_order_id: req.shiprocket_order_id.clone(),
                     awb_code: req.awb_code,
                     carrier: req.carrier,
+                    shiprocket_status_id: req.shiprocket_status_id,
+                    shiprocket_status_label: req.shiprocket_status_label.clone(),
                 }),
             )
             .await?;

@@ -15,6 +15,8 @@ type ShippingAddressRow = {
   postalCode: string;
   road?: string | null;
   apartmentNoOrName?: string | null;
+  recipientName?: string | null;
+  phoneNumber?: string | null;
 };
 
 const LIST_QUERY = `query AccountAddressList {
@@ -28,6 +30,8 @@ const LIST_QUERY = `query AccountAddressList {
     postalCode
     road
     apartmentNoOrName
+    recipientName
+    phoneNumber
   }
 }`;
 
@@ -42,6 +46,8 @@ const CREATE_MUTATION = `mutation CreateAccountAddress($input: NewShippingAddres
     postalCode
     road
     apartmentNoOrName
+    recipientName
+    phoneNumber
   }
 }`;
 
@@ -56,6 +62,8 @@ const UPDATE_MUTATION = `mutation UpdateAccountAddress($input: ShippingAddressMu
     postalCode
     road
     apartmentNoOrName
+    recipientName
+    phoneNumber
   }
 }`;
 
@@ -138,6 +146,8 @@ export async function PATCH(request: Request) {
     postalCode: candidate.postalCode,
     road: candidate.road,
     apartmentNoOrName: candidate.apartmentNoOrName ?? null,
+    recipientName: candidate.recipientName ?? null,
+    phoneNumber: candidate.phoneNumber ?? null,
   });
   if (!parsed.success) {
     return apiError(parsed.error.issues[0]?.message ?? "Invalid address input", 400, "VALIDATION_ERROR");
