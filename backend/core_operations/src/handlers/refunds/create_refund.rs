@@ -40,7 +40,7 @@ pub async fn create_refund(
     let status_name = status_row.status_name.as_str();
     let refundable = matches!(
         status_name,
-        "confirmed" | "processing" | "shipped" | "delivered"
+        "confirmed" | "processing" | "shipped" | "delivered" | "cancelled"
     );
     if !refundable {
         return Err(Status::failed_precondition(format!(

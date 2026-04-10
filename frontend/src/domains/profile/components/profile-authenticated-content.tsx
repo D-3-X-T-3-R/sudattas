@@ -127,6 +127,7 @@ function formatOrderDateShort(raw: string): string {
 }
 
 type TrackingStepState = "done" | "current" | "pending";
+type RefundTrackingState = "none" | "initiated" | "processed" | "failed";
 
 function fulfillmentTrackingSteps(fulfillmentState: string | undefined): { label: string; step: TrackingStepState }[] {
   const f = (fulfillmentState ?? "").toLowerCase();
@@ -193,6 +194,21 @@ function primaryShipmentForOrder(detail: AccountOrderDetailPayload | undefined) 
   const list = detail?.shipments ?? [];
   const withTracks = list.find((s) => (s.trackingEventsJson ?? "").trim().length > 0);
   return withTracks ?? list[0];
+}
+
+function refundTrackingStateForOrder(
+  statusName: string | undefined,
+  detail: AccountOrderDetailPayload | undefined
+): RefundTrackingState {
+  const status = (statusName ?? "").trim().toLowerCase();
+  const events = detail?.events ?? [];
+  const eventTypes = events.map((e) => (e.eventType ?? "").trim().toLowerCase());
+  if (eventTypes.some((x) => x === "refund_failed")) return "failed";
+  if (eventTypes.some((x) => x === "refund_recorded")) return "processed";
+  if (eventTypes.some((x) => x === "refund_initiated")) return "initiated";
+  if (status.includes("refund")) return "processed";
+  if (status.includes("cancel")) return "initiated";
+  return "none";
 }
 
 function OrderTrackingPanel({ fulfillmentState }: { fulfillmentState: string | undefined }) {
@@ -272,6 +288,28 @@ function FulfillmentTrackingPanel({
   }
 
   return <OrderTrackingPanel fulfillmentState={fulfillmentState} />;
+}
+
+function RefundTrackingPanel({ state }: { state: RefundTrackingState }) {
+  const label =
+    state === "processed"
+      ? "Refund completed"
+      : state === "failed"
+        ? "Refund failed"
+        : "Refund in progress";
+  const detail =
+    state === "processed"
+      ? "Money has been refunded to the original payment method."
+      : state === "failed"
+        ? "Refund failed at payment gateway. Please contact support."
+        : "Refund has been requested and is being processed by Razorpay.";
+  return (
+    <div className="shrink-0 rounded-2xl border border-[#C9A646]/35 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,61,46,0.06)] sm:min-w-[180px] sm:max-w-[240px]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#C9A646]">Track refund</p>
+      <p className="mt-2 text-sm font-semibold text-[#0F3D2E]">{label}</p>
+      <p className="mt-1 text-xs leading-relaxed text-[#615A50]">{detail}</p>
+    </div>
+  );
 }
 
 function thumbnailUrlFromProductImages(
@@ -589,9 +627,29 @@ export function ProfileAuthenticatedContent({
     return out;
   }, [sortedOrders, orderDetailsById]);
 
+  useEffect(() => {
+    if (activeNav !== "orders") return;
+    const summary = sortedOrders.map((o) => {
+      const detail = orderDetailsById[o.orderId];
+      const refundState = refundTrackingStateForOrder(o.statusName, detail);
+      return {
+        orderId: o.orderId,
+        statusName: o.statusName,
+        fulfillmentState: detail?.fulfillmentState ?? null,
+        paymentState: detail?.paymentState ?? null,
+        refundTrackingState: refundState,
+      };
+    });
+    console.info("[orders-flow][customer-ui] orders tab rendered", {
+      totalOrders: sortedOrders.length,
+      summary,
+    });
+  }, [activeNav, sortedOrders, orderDetailsById]);
+
   const confirmCancelOrder = async () => {
     const id = cancelDialogOrderId;
     if (!id) return;
+    console.info("[orders-flow][customer-ui] cancel dialog confirmed", { orderId: id });
     setCancelDialogOrderId(null);
     setCancellingOrderId(id);
     try {
@@ -676,6 +734,8 @@ export function ProfileAuthenticatedContent({
                       const showCancel =
                         isFirstForOrder && orderMayBeCancelledByCustomer(o.statusName);
                       const ship = primaryShipmentForOrder(detail);
+                      const refundTrackingState = refundTrackingStateForOrder(o.statusName, detail);
+                      const showRefundTracking = refundTrackingState !== "none";
                       return (
                         <article
                           key={key}
@@ -713,11 +773,15 @@ export function ProfileAuthenticatedContent({
                             ) : null}
                           </div>
                           <div className="flex shrink-0 flex-col items-stretch gap-2 sm:min-w-[180px]">
-                            <FulfillmentTrackingPanel
-                              fulfillmentState={detail?.fulfillmentState}
-                              trackingEventsJson={ship?.trackingEventsJson}
-                              awbCode={ship?.awbCode}
-                            />
+                            {showRefundTracking ? (
+                              <RefundTrackingPanel state={refundTrackingState} />
+                            ) : (
+                              <FulfillmentTrackingPanel
+                                fulfillmentState={detail?.fulfillmentState}
+                                trackingEventsJson={ship?.trackingEventsJson}
+                                awbCode={ship?.awbCode}
+                              />
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -729,7 +793,11 @@ export function ProfileAuthenticatedContent({
                               disabled={refreshingOrderId === o.orderId}
                               className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#A37D34] transition hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {refreshingOrderId === o.orderId ? "Refreshing..." : "Refresh tracking"}
+                              {refreshingOrderId === o.orderId
+                                ? "Refreshing..."
+                                : showRefundTracking
+                                  ? "Refresh refund"
+                                  : "Refresh tracking"}
                             </button>
                           </div>
                         </article>

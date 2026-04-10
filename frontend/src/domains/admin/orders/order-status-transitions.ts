@@ -6,7 +6,7 @@ const TARGETS_BY_CURRENT: Record<string, string[]> = {
   pending: ["pending", "confirmed", "needs_review", "cancelled"],
   confirmed: ["confirmed", "processing", "cancelled", "refunded"],
   processing: ["processing", "shipped", "cancelled", "refunded"],
-  shipped: ["shipped", "delivered", "refunded"],
+  shipped: ["shipped", "delivered", "cancelled", "refunded"],
   delivered: ["delivered", "refunded"],
   needs_review: ["needs_review", "pending", "confirmed", "cancelled", "refunded"],
   cancelled: ["cancelled"],

@@ -53,9 +53,27 @@ export function OrderDetailStatusEditor({
         shiprocketBook: shouldBookShiprocket,
       });
     },
+    onMutate: (newStatusId) => {
+      console.info("[orders-flow][admin-ui] status mutation started", {
+        orderId: order.orderId,
+        fromStatusId: order.statusId,
+        toStatusId: newStatusId,
+      });
+    },
     onSuccess: () => {
+      console.info("[orders-flow][admin-ui] status mutation success", {
+        orderId: order.orderId,
+        newStatusId: statusDraft,
+      });
       queryClient.invalidateQueries({ queryKey: ["admin", "order", orderIdParam] });
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
+    onError: (err) => {
+      console.error("[orders-flow][admin-ui] status mutation failed", {
+        orderId: order.orderId,
+        attemptedStatusId: statusDraft,
+        error: err instanceof Error ? err.message : String(err),
+      });
     },
   });
 

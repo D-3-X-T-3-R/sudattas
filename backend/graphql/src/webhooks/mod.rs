@@ -1,7 +1,7 @@
 use hmac::{Hmac, Mac};
 use proto::proto::core::IngestWebhookRequest;
 use sha2::{Digest, Sha256};
-use tracing::warn;
+use tracing::{info, warn};
 use warp::hyper::body::Bytes;
 use warp::reply::{self, Reply};
 
@@ -143,6 +143,15 @@ pub async fn handle_webhook(
         }
     });
 
+    info!(
+        provider = %provider,
+        event_type = %event_type,
+        webhook_id = %webhook_id,
+        signature_verified,
+        provider_event_id = ?provider_event_id_resolved,
+        "webhook accepted at HTTP layer, forwarding to core operations"
+    );
+
     crate::metrics::record_webhook_accepted_total();
 
     let mut client = match connect_grpc_client().await {
@@ -167,7 +176,10 @@ pub async fn handle_webhook(
         })
         .await
     {
-        Ok(_) => Ok(reply::with_status("OK", warp::http::StatusCode::OK)),
+        Ok(_) => {
+            info!("webhook processing accepted by core operations");
+            Ok(reply::with_status("OK", warp::http::StatusCode::OK))
+        }
         Err(e) => {
             let (status, msg) = if e.code() == proto::tonic::Code::AlreadyExists {
                 (

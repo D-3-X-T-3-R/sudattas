@@ -18,6 +18,14 @@ import type {
 } from "@/domains/profile/components/profile-authenticated-content";
 import type { AddressFormState } from "@/domains/profile/types";
 
+function flowLog(message: string, meta?: Record<string, unknown>) {
+  if (meta) {
+    console.info(`[orders-flow][customer-ui] ${message}`, meta);
+    return;
+  }
+  console.info(`[orders-flow][customer-ui] ${message}`);
+}
+
 type AuthenticatedSectionProps = {
   routeFailure: RouteFailureUi | null;
   loadAccountData: () => Promise<void>;
@@ -250,14 +258,31 @@ export default function ProfilePage() {
       if (!forceRefresh && orderDetailsRef.current[orderId]) return;
       if (orderDetailFetchRef.current.has(orderId)) return;
       orderDetailFetchRef.current.add(orderId);
+      flowLog("fetching order detail", { orderId, forceRefresh });
       setRouteFailure(null);
       try {
         const detail = await fetchApiEnvelope<AccountOrderDetailPayload>(
           `/api/account/orders/${encodeURIComponent(orderId)}`,
           { cache: "no-store" }
         );
-        if (detail) setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
+        if (detail) {
+          const eventTypes = (detail.events ?? []).map((e) => (e.eventType ?? "").trim().toLowerCase());
+          flowLog("order detail received", {
+            orderId,
+            statusName: detail.statusName,
+            paymentState: detail.paymentState,
+            fulfillmentState: detail.fulfillmentState,
+            refundInitiated: eventTypes.includes("refund_initiated"),
+            refundProcessed: eventTypes.includes("refund_recorded"),
+            refundFailed: eventTypes.includes("refund_failed"),
+          });
+          setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
+        }
       } catch (e) {
+        flowLog("order detail fetch failed", {
+          orderId,
+          error: e instanceof Error ? e.message : String(e),
+        });
         setRouteFailure(toRouteFailureUi("account", e));
       } finally {
         orderDetailFetchRef.current.delete(orderId);
@@ -283,14 +308,24 @@ export default function ProfilePage() {
   const cancelOrder = useCallback(
     async (orderId: string) => {
       setRouteFailure(null);
+      flowLog("cancel order requested by customer", { orderId });
       try {
-        await fetchApiEnvelope<{ orderId: string; statusId: string }>(
+        const res = await fetchApiEnvelope<{ orderId: string; statusId: string }>(
           `/api/account/orders/${encodeURIComponent(orderId)}/cancel`,
           { method: "POST" }
         );
+        flowLog("cancel order API success", {
+          orderId,
+          updatedStatusId: res?.statusId ?? null,
+        });
         await loadAccountData();
+        flowLog("account data refreshed after cancel", { orderId });
         announce("Order cancelled.");
       } catch (e) {
+        flowLog("cancel order failed", {
+          orderId,
+          error: e instanceof Error ? e.message : String(e),
+        });
         const ui = toRouteFailureUi("account", e);
         setRouteFailure(ui);
         announce(ui.message, "assertive");

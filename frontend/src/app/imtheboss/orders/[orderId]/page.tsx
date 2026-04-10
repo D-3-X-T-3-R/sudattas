@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ListOrdered, Package } from "lucide-react";
@@ -41,6 +42,25 @@ export default function AdminOrderDetailPage() {
 
   const errorUi = isError ? toRouteFailureUi("admin", error) : null;
   const notFound = !isLoading && !isError && orderId && order == null;
+
+  const refundTrackingNote =
+    order?.refundTrackingState === "processed"
+      ? "Refund completed."
+      : order?.refundTrackingState === "failed"
+        ? "Refund failed. Retry refund from payment dashboard."
+        : order?.refundTrackingState === "initiated"
+          ? "Refund in progress at Razorpay."
+        : null;
+
+  useEffect(() => {
+    if (!order) return;
+    console.info("[orders-flow][admin-ui] admin order page state", {
+      orderId: order.orderId,
+      statusId: order.statusId,
+      refundTrackingState: order.refundTrackingState,
+      refundTrackingNote,
+    });
+  }, [order, refundTrackingNote]);
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -117,6 +137,12 @@ export default function AdminOrderDetailPage() {
                   statuses={statuses}
                   orderIdParam={orderId}
                 />
+                {refundTrackingNote ? (
+                  <div className="sm:col-span-2">
+                    <dt className="text-[var(--color-muted)]">Track refund</dt>
+                    <dd className="mt-0.5 text-sm text-[var(--color-ink)]">{refundTrackingNote}</dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt className="text-[var(--color-muted)]">Shipping address ID</dt>
                   <dd className="mt-0.5 font-mono text-[var(--color-ink)]">{order.shippingAddressId}</dd>
