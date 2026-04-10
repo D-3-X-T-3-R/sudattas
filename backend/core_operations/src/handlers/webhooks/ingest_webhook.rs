@@ -902,3 +902,45 @@ pub fn model_to_response(m: webhook_events::Model) -> WebhookEventResponse {
         received_at: m.received_at.map(|t| t.to_string()).unwrap_or_default(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn helper_detects_refund_events() {
+        assert!(razorpay_event_is_refund_like("refund.processed"));
+        assert!(razorpay_event_is_refund_like("refund.failed"));
+        assert!(razorpay_event_is_refund_like("payment.refunded"));
+        assert!(!razorpay_event_is_refund_like("payment.captured"));
+    }
+
+    #[test]
+    fn helper_detects_cancel_from_event_or_payload_without_status_id() {
+        let item = json!({
+            "order_status": "Cancelled by seller",
+            "message": "Shipment cancellation accepted"
+        });
+        assert!(shiprocket_event_or_payload_indicates_cancelled(
+            "shiprocket.order.cancelled",
+            &item,
+            None,
+            None
+        ));
+        assert!(shiprocket_event_or_payload_indicates_cancelled(
+            "shiprocket.update",
+            &item,
+            None,
+            None
+        ));
+    }
+
+    #[test]
+    fn helper_refund_status_mapping_handles_pending_processed_failed() {
+        assert_eq!(map_refund_status("pending"), Status::Pending);
+        assert_eq!(map_refund_status("processed"), Status::Processed);
+        assert_eq!(map_refund_status("refund.processed"), Status::Processed);
+        assert_eq!(map_refund_status("failed"), Status::Failed);
+    }
+}

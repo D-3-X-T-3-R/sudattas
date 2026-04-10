@@ -321,6 +321,17 @@ mod tests {
     }
 
     #[test]
+    fn shipped_can_transition_to_cancelled_and_refunded() {
+        assert!(can_transition(OrderState::Shipped, OrderState::Cancelled));
+        assert!(can_transition(OrderState::Shipped, OrderState::Refunded));
+    }
+
+    #[test]
+    fn cancelled_can_transition_to_refunded() {
+        assert!(can_transition(OrderState::Cancelled, OrderState::Refunded));
+    }
+
+    #[test]
     fn same_state_is_allowed() {
         assert!(can_transition(
             OrderState::Processing,
