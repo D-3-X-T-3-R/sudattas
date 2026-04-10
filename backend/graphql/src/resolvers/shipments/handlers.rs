@@ -1,6 +1,6 @@
 use proto::proto::core::{
-    CreateShipmentRequest, GetShipmentRequest, ShipmentResponse, SyncOrderShipmentsFromShiprocketRequest,
-    UpdateShipmentRequest,
+    CreateShipmentRequest, GetShipmentRequest, ShipmentResponse,
+    SyncOrderShipmentsFromShiprocketRequest, UpdateShipmentRequest,
 };
 use tracing::instrument;
 

@@ -20,7 +20,10 @@ use crate::resolvers::{
     order_events::{self, schema::OrderEvent},
     orders::{
         self,
-        schema::{CheckoutShippingEstimate, EstimateCheckoutShippingInput, Order, OrderStatus, SearchOrder},
+        schema::{
+            CheckoutShippingEstimate, EstimateCheckoutShippingInput, Order, OrderStatus,
+            SearchOrder,
+        },
     },
     payment_intents::{
         self,

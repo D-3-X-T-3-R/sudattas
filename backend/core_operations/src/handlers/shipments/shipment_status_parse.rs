@@ -14,8 +14,9 @@ pub fn parse_shipment_status_str(raw: &str) -> Option<Status> {
             Some(Status::Processed)
         }
         "awb_assigned" | "awb assigned" | "label_generated" | "label generated"
-        | "manifest_generated" | "manifest generated" | "pickup_scheduled"
-        | "pickup scheduled" => Some(Status::Pending),
+        | "manifest_generated" | "manifest generated" | "pickup_scheduled" | "pickup scheduled" => {
+            Some(Status::Pending)
+        }
         _ => None,
     }
 }

@@ -7,7 +7,7 @@ use crate::integrations::shiprocket_status::{
 use chrono::Utc;
 use core_db_entities::entity::shipments;
 use proto::proto::core::{ShipmentsResponse, UpdateShipmentRequest};
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait, IntoActiveModel, JsonValue};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait, IntoActiveModel};
 use tonic::{Request, Response, Status as TonicStatus};
 
 pub async fn update_shipment(
@@ -70,7 +70,7 @@ pub async fn update_shipment(
                     "tracking_events JSON must be a JSON array",
                 ));
             }
-            model.tracking_events = ActiveValue::Set(Some(JsonValue::from(v)));
+            model.tracking_events = ActiveValue::Set(Some(v));
         }
     }
 

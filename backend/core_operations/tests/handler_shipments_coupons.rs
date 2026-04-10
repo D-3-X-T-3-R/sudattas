@@ -1,7 +1,7 @@
 //! Unit tests for shipments and coupons handlers using SeaORM MockDatabase.
 
 use chrono::Utc;
-use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType, ShipmentStatus};
+use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType, Status};
 use core_db_entities::entity::{coupons, shipments};
 use proto::proto::core::{
     ApplyCouponRequest, CreateShipmentRequest, GetShipmentRequest, UpdateShipmentRequest,
@@ -27,7 +27,7 @@ async fn create_shipment_success() {
             carrier: Some("DTDC".to_string()),
             shiprocket_status_id: None,
             shiprocket_status_label: None,
-            status: Some(ShipmentStatus::AwbAssigned),
+            status: Status::Processed,
             tracking_events: None,
             created_at: None,
             delivered_at: None,
@@ -55,7 +55,7 @@ async fn create_shipment_success() {
     assert_eq!(res.items[0].shiprocket_order_id.as_deref(), Some("sr_123"));
     assert_eq!(res.items[0].awb_code.as_deref(), Some("AWB456"));
     assert_eq!(res.items[0].carrier.as_deref(), Some("DTDC"));
-    assert_eq!(res.items[0].status, "awb_assigned");
+    assert_eq!(res.items[0].status, "processed");
 }
 
 #[tokio::test]
@@ -70,7 +70,7 @@ async fn get_shipment_by_order_id_returns_items() {
         carrier: Some("Bluedart".to_string()),
         shiprocket_status_id: None,
         shiprocket_status_label: None,
-        status: Some(ShipmentStatus::InTransit),
+        status: Status::Processed,
         tracking_events: None,
         created_at: None,
         delivered_at: None,
@@ -144,13 +144,13 @@ async fn update_shipment_updates_status_and_sets_delivered_at_when_processed() {
         carrier: Some("Xpress".to_string()),
         shiprocket_status_id: None,
         shiprocket_status_label: None,
-        status: Some(ShipmentStatus::Pending),
+        status: Status::Pending,
         tracking_events: None,
         created_at: Some(Utc::now()),
         delivered_at: None,
     };
     let updated = shipments::Model {
-        status: Some(ShipmentStatus::Delivered),
+        status: Status::Processed,
         delivered_at: Some(Utc::now()),
         ..existing.clone()
     };

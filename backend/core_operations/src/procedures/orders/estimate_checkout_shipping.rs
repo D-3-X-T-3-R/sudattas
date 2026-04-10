@@ -2,9 +2,9 @@ use crate::handlers::coupons::{
     eligibility::{check_coupon_scope, check_per_customer_limit, CartProduct},
     validate_coupon::check_coupon,
 };
+use crate::handlers::{cart::get_cart_items, products::get_products_by_id};
 use crate::integrations::shiprocket::{best_courier_quote_for_checkout, ShiprocketError};
 use crate::money::{paise_checked_add, paise_checked_mul};
-use crate::handlers::{cart::get_cart_items, products::get_products_by_id};
 
 use core_db_entities::entity::{product_variants, shipping_addresses};
 use proto::proto::core::{
@@ -141,23 +141,20 @@ pub async fn estimate_checkout_shipping(
     let delivery_postcode = shipping_address.postal_code.trim().to_string();
     let total_units: i64 = cart_items.iter().map(|item| item.quantity.max(1)).sum();
 
-    let quote = match best_courier_quote_for_checkout(
-        delivery_postcode.as_str(),
-        total_paise,
-        total_units,
-    )
-    .await
-    {
-        Ok(v) => v,
-        Err(ShiprocketError::NotConfigured) => None,
-        Err(e) => {
-            warn!(
-                "checkout shipping estimate quote failed; falling back to zero shipping: {}",
-                e
-            );
-            None
-        }
-    };
+    let quote =
+        match best_courier_quote_for_checkout(delivery_postcode.as_str(), total_paise, total_units)
+            .await
+        {
+            Ok(v) => v,
+            Err(ShiprocketError::NotConfigured) => None,
+            Err(e) => {
+                warn!(
+                    "checkout shipping estimate quote failed; falling back to zero shipping: {}",
+                    e
+                );
+                None
+            }
+        };
 
     let shipping_amount_paise = quote
         .as_ref()
@@ -176,9 +173,7 @@ pub async fn estimate_checkout_shipping(
     Ok(Response::new(EstimateCheckoutShippingResponse {
         shipping_amount_paise,
         courier_name: quote.as_ref().map(|q| q.courier_name.clone()),
-        estimated_delivery_days: quote
-            .as_ref()
-            .and_then(|q| q.estimated_delivery_days),
+        estimated_delivery_days: quote.as_ref().and_then(|q| q.estimated_delivery_days),
         item_subtotal_paise: total_paise,
         order_total_paise,
         quote_available: quote.is_some(),

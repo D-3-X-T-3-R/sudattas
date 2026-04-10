@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 "use client";
 
 import Image from "next/image";
@@ -568,6 +569,7 @@ function DashboardCard({
   );
 }
 
+// eslint-disable-next-line max-lines-per-function
 export function ProfileAuthenticatedContent({
   displayName,
   displayEmail,

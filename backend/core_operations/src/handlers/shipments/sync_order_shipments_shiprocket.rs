@@ -21,7 +21,12 @@ pub async fn sync_order_shipments_from_shiprocket(
 
     let mut items: Vec<ShipmentResponse> = Vec::new();
     for s in rows {
-        let awb = match s.awb_code.as_deref().map(str::trim).filter(|x| !x.is_empty()) {
+        let awb = match s
+            .awb_code
+            .as_deref()
+            .map(str::trim)
+            .filter(|x| !x.is_empty())
+        {
             Some(a) => a,
             None => {
                 items.push(model_to_response(s));
@@ -56,5 +61,7 @@ pub async fn sync_order_shipments_from_shiprocket(
         items.push(model_to_response(updated));
     }
 
-    Ok(Response::new(SyncOrderShipmentsFromShiprocketResponse { items }))
+    Ok(Response::new(SyncOrderShipmentsFromShiprocketResponse {
+        items,
+    }))
 }

@@ -108,6 +108,8 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
     let shipping = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
@@ -351,6 +353,8 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     let shipping = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
@@ -530,6 +534,8 @@ async fn integration_place_order_empty_cart_fails() {
     let shipping = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
@@ -622,6 +628,8 @@ async fn integration_cart_add_get_update_then_place_order() {
     let shipping = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
@@ -824,6 +832,8 @@ async fn integration_place_order_multiple_items_two_variants() {
     let shipping = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
@@ -1053,6 +1063,8 @@ async fn integration_place_order_then_search_order() {
     let shipping = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),

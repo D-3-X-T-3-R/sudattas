@@ -78,7 +78,10 @@ pub fn key_id_for_frontend() -> Option<String> {
 
 /// Create a Razorpay refund for a captured payment and return gateway refund details.
 /// Amount is in paise.
-pub async fn create_refund(payment_id: &str, amount_paise: i64) -> Result<RazorpayRefundResult, String> {
+pub async fn create_refund(
+    payment_id: &str,
+    amount_paise: i64,
+) -> Result<RazorpayRefundResult, String> {
     let key_id = std::env::var("RAZORPAY_KEY_ID").map_err(|_| "RAZORPAY_KEY_ID not set")?;
     let key_secret =
         std::env::var("RAZORPAY_KEY_SECRET").map_err(|_| "RAZORPAY_KEY_SECRET not set")?;

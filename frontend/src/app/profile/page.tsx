@@ -195,6 +195,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
   );
 }
 
+// eslint-disable-next-line max-lines-per-function
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const { openLogin } = useStorefrontLogin();

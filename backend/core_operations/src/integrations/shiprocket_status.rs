@@ -44,10 +44,7 @@ pub fn shiprocket_status_label_for_id(id: i32) -> String {
 
 /// Map Shiprocket `shipment_status_id` to our granular `Shipments.status`.
 /// Short, customer-facing line for order tracking UI (title case phrases).
-pub fn customer_tracking_label(
-    status_id: Option<i32>,
-    line: Option<&Status>,
-) -> String {
+pub fn customer_tracking_label(status_id: Option<i32>, line: Option<&Status>) -> String {
     if let Some(id) = status_id {
         return match id {
             1 | 2 => "Processing your shipment".to_string(),
