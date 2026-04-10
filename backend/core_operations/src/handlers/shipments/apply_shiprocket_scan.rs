@@ -8,7 +8,7 @@ use chrono::Utc;
 use core_db_entities::entity::shipments;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
-    JsonValue, QueryFilter,
+    JsonValue, QueryFilter, QueryOrder,
 };
 use serde_json::Value as JsonVal;
 use tonic::Status as TonicStatus;
@@ -82,6 +82,14 @@ pub async fn find_shipment_for_shiprocket_event(
                 .and_then(|x| x.as_str())
                 .map(String::from)
         });
+    let order_ref = item
+        .get("order_id")
+        .and_then(|x| x.as_str())
+        .or_else(|| item.get("channel_order_id").and_then(|x| x.as_str()))
+        .or_else(|| item.get("reference_number").and_then(|x| x.as_str()))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from);
 
     if let Some(a) = awb {
         if let Some(m) = shipments::Entity::find()
@@ -106,7 +114,37 @@ pub async fn find_shipment_for_shiprocket_event(
             return Ok(Some(m));
         }
     }
+    if let Some(ref_id) = order_ref {
+        if let Some(order_id) = parse_local_order_id_from_ref(&ref_id) {
+            if let Some(m) = shipments::Entity::find()
+                .filter(shipments::Column::OrderId.eq(order_id))
+                .order_by_desc(shipments::Column::ShipmentId)
+                .one(txn)
+                .await
+                .map_err(map_db_error_to_status)?
+            {
+                return Ok(Some(m));
+            }
+        }
+    }
     Ok(None)
+}
+
+fn parse_local_order_id_from_ref(raw: &str) -> Option<i64> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return None;
+    }
+    if let Ok(n) = t.parse::<i64>() {
+        return Some(n);
+    }
+    let upper = t.to_uppercase();
+    if let Some(rest) = upper.strip_prefix("SUD-") {
+        if let Ok(n) = rest.parse::<i64>() {
+            return Some(n);
+        }
+    }
+    None
 }
 
 pub fn extract_scan_from_webhook_item(item: &JsonVal) -> (Option<i32>, Option<String>, Option<JsonVal>) {

@@ -4,6 +4,14 @@ import {
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 
+function flowLog(message: string, meta?: Record<string, unknown>) {
+  if (meta) {
+    console.info(`[orders-flow][customer-api] ${message}`, meta);
+    return;
+  }
+  console.info(`[orders-flow][customer-api] ${message}`);
+}
+
 type OrderDetailRow = {
   orderDetailId: string;
   variantId: string;
@@ -240,22 +248,36 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ orderId: string }> }
 ) {
+  flowLog("order detail request received");
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
+    flowLog("request rejected: unauthenticated");
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
   }
 
   const { orderId } = await context.params;
   const trimmedOrderId = orderId.trim();
   if (!trimmedOrderId) {
+    flowLog("request rejected: missing order id", { userId });
     return apiError("Order ID is required", 400, "VALIDATION_ERROR");
   }
+  flowLog("loading order detail", { userId, orderId: trimmedOrderId });
 
   // Best-effort freshness: refresh courier scans from Shiprocket when available.
   // Ignore sync failures so normal order details still load.
   await callGraphqlAsCustomer(userId, SYNC_SHIPMENTS_MUTATION, {
     orderId: trimmedOrderId,
-  }).catch(() => null);
+  })
+    .then(() => {
+      flowLog("shiprocket sync attempted", { orderId: trimmedOrderId });
+    })
+    .catch((e) => {
+      flowLog("shiprocket sync skipped/failure (non-fatal)", {
+        orderId: trimmedOrderId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      return null;
+    });
 
   const [orderResult, statusesResult, paymentResult, shipmentResult, eventsResult] =
     await Promise.all([
@@ -283,12 +305,24 @@ export async function GET(
     shipmentResult.errors?.[0]?.message ??
     eventsResult.errors?.[0]?.message;
   if (firstError) {
+    flowLog("graphql error while loading order detail", {
+      orderId: trimmedOrderId,
+      error: firstError,
+    });
     return apiError(firstError, 400, "GRAPHQL_ERROR");
   }
 
   const order = orderResult.data?.searchOrder?.[0];
-  if (!order) return apiError("Order not found", 404, "NOT_FOUND");
+  if (!order) {
+    flowLog("order not found", { orderId: trimmedOrderId, userId });
+    return apiError("Order not found", 404, "NOT_FOUND");
+  }
   if (order.userId !== userId) {
+    flowLog("order identity mismatch", {
+      orderId: trimmedOrderId,
+      userId,
+      ownerUserId: order.userId,
+    });
     return apiError(
       "Order identity mismatch for authenticated customer",
       403,
@@ -316,6 +350,20 @@ export async function GET(
     paymentState: derivePaymentState(paymentIntents),
     fulfillmentState: deriveFulfillmentState(shipments),
   };
+  const eventTypes = events.map((e) => (e.eventType ?? "").trim().toLowerCase());
+  flowLog("order detail loaded", {
+    orderId: order.orderId,
+    userId,
+    statusName,
+    paymentState: payload.paymentState,
+    fulfillmentState: payload.fulfillmentState,
+    shipmentCount: shipments.length,
+    shipmentStatusIds: shipments.map((s) => s.shiprocketStatusId ?? ""),
+    shipmentStatusLabels: shipments.map((s) => s.shiprocketStatusLabel ?? ""),
+    refundInitiated: eventTypes.includes("refund_initiated"),
+    refundProcessed: eventTypes.includes("refund_recorded"),
+    refundFailed: eventTypes.includes("refund_failed"),
+  });
 
   return Response.json({
     ok: true,
