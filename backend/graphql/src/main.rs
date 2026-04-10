@@ -520,11 +520,11 @@ async fn main() {
                     resolved_shiprocket_token,
                     body,
                 )
-                    .await
-                    .map_err(|e| {
-                        warn!("Webhook handler error: {:?}", e);
-                        warp::reject::reject()
-                    })
+                .await
+                .map_err(|e| {
+                    warn!("Webhook handler error: {:?}", e);
+                    warp::reject::reject()
+                })
             },
         );
     let razorpay_webhook_route_inner = warp::post()

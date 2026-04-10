@@ -8,7 +8,7 @@ use chrono::Utc;
 use core_db_entities::entity::shipments;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
-    JsonValue, QueryFilter, QueryOrder,
+    QueryFilter, QueryOrder,
 };
 use serde_json::Value as JsonVal;
 use tonic::Status as TonicStatus;
@@ -24,7 +24,7 @@ pub async fn apply_shiprocket_scan_to_shipment(
         if let Some(ev) = scan_events {
             if ev.is_array() {
                 let mut active = shipment.into_active_model();
-                active.tracking_events = ActiveValue::Set(Some(JsonValue::from(ev)));
+                active.tracking_events = ActiveValue::Set(Some(ev));
                 return active.update(txn).await.map_err(map_db_error_to_status);
             }
         }
@@ -42,7 +42,7 @@ pub async fn apply_shiprocket_scan_to_shipment(
     }
     if let Some(ev) = scan_events {
         if ev.is_array() {
-            active.tracking_events = ActiveValue::Set(Some(JsonValue::from(ev)));
+            active.tracking_events = ActiveValue::Set(Some(ev));
         }
     }
     active.update(txn).await.map_err(map_db_error_to_status)
@@ -76,7 +76,11 @@ pub async fn find_shipment_for_shiprocket_event(
         .get("shipment_id")
         .and_then(|x| x.as_i64())
         .map(|n| n.to_string())
-        .or_else(|| item.get("shipment_id").and_then(|x| x.as_str()).map(String::from))
+        .or_else(|| {
+            item.get("shipment_id")
+                .and_then(|x| x.as_str())
+                .map(String::from)
+        })
         .or_else(|| {
             item.get("sr_order_id")
                 .and_then(|x| x.as_str())
@@ -147,14 +151,13 @@ fn parse_local_order_id_from_ref(raw: &str) -> Option<i64> {
     None
 }
 
-pub fn extract_scan_from_webhook_item(item: &JsonVal) -> (Option<i32>, Option<String>, Option<JsonVal>) {
+pub fn extract_scan_from_webhook_item(
+    item: &JsonVal,
+) -> (Option<i32>, Option<String>, Option<JsonVal>) {
     let status_id = item
         .get("shipment_status_id")
         .and_then(|x| x.as_i64())
-        .or_else(|| {
-            item.get("current_status_id")
-                .and_then(|x| x.as_i64())
-        })
+        .or_else(|| item.get("current_status_id").and_then(|x| x.as_i64()))
         .map(|x| x as i32);
     let label = item
         .get("shipment_status")

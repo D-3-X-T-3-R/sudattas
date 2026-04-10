@@ -65,7 +65,10 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
             Processing,
             [Shipped, Cancelled, Refunded].into_iter().collect(),
         ),
-        (Shipped, [Delivered, Cancelled, Refunded].into_iter().collect()),
+        (
+            Shipped,
+            [Delivered, Cancelled, Refunded].into_iter().collect(),
+        ),
         (Delivered, [Refunded].into_iter().collect()),
         (
             NeedsReview,

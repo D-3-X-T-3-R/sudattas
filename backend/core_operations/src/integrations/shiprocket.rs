@@ -1,9 +1,7 @@
 //! Shiprocket REST API: auth, create adhoc order, assign AWB (used when admin marks shipped with `shiprocket_book`).
 
 use core_db_entities::entity::{order_details, orders, shipping_addresses, users};
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Mutex;
@@ -28,7 +26,9 @@ pub enum ShiprocketError {
     UserNotFound(i64),
     #[error("order {0} has no line items")]
     NoLineItems(i64),
-    #[error("customer phone is required for Shiprocket; no valid phone on shipping address or user {0}")]
+    #[error(
+        "customer phone is required for Shiprocket; no valid phone on shipping address or user {0}"
+    )]
     MissingPhone(i64),
     #[error("Shiprocket auth failed: {0}")]
     AuthFailed(String),
@@ -67,7 +67,10 @@ impl Config {
     }
 
     fn from_env_prefix(prefix: &str, default_pickup_location: &str) -> Option<Self> {
-        let email = std::env::var(format!("{prefix}_EMAIL")).ok()?.trim().to_string();
+        let email = std::env::var(format!("{prefix}_EMAIL"))
+            .ok()?
+            .trim()
+            .to_string();
         let password = std::env::var(format!("{prefix}_PASSWORD"))
             .ok()?
             .trim()
@@ -179,7 +182,9 @@ async fn login(client: &reqwest::Client, cfg: &Config) -> Result<String, Shiproc
     let status = res.status();
     let body = res.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(ShiprocketError::AuthFailed(format!("HTTP {status}: {body}")));
+        return Err(ShiprocketError::AuthFailed(format!(
+            "HTTP {status}: {body}"
+        )));
     }
     let parsed: LoginResponse = serde_json::from_str(&body)
         .map_err(|_| ShiprocketError::AuthFailed(format!("invalid login JSON: {body}")))?;
@@ -212,7 +217,10 @@ fn extract_assign_shipment_status(v: &Value) -> (Option<i32>, Option<String>) {
     let id = v
         .pointer("/response/data/shipment_status_id")
         .and_then(|x| x.as_i64())
-        .or_else(|| v.pointer("/payload/shipment_status_id").and_then(|x| x.as_i64()))
+        .or_else(|| {
+            v.pointer("/payload/shipment_status_id")
+                .and_then(|x| x.as_i64())
+        })
         .or_else(|| v.get("shipment_status_id").and_then(|x| x.as_i64()))
         .or_else(|| {
             v.get("data")
@@ -223,7 +231,10 @@ fn extract_assign_shipment_status(v: &Value) -> (Option<i32>, Option<String>) {
     let label = v
         .pointer("/response/data/shipment_status")
         .and_then(|x| x.as_str())
-        .or_else(|| v.pointer("/payload/shipment_status").and_then(|x| x.as_str()))
+        .or_else(|| {
+            v.pointer("/payload/shipment_status")
+                .and_then(|x| x.as_str())
+        })
         .or_else(|| v.get("shipment_status").and_then(|x| x.as_str()))
         .map(std::string::ToString::to_string);
     (id, label)
@@ -467,7 +478,10 @@ pub async fn book_shipment_for_order(
     } else {
         user_phone
     };
-    let phone_digits: String = source_phone.chars().filter(|c| c.is_ascii_digit()).collect();
+    let phone_digits: String = source_phone
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect();
     if phone_digits.len() < 10 {
         return Err(ShiprocketError::MissingPhone(order.user_id));
     }
@@ -497,7 +511,7 @@ pub async fn book_shipment_for_order(
                 .map(str::trim)
                 .filter(|s| !s.is_empty())
         })
-        .unwrap_or_else(|| user.username.as_str());
+        .unwrap_or(user.username.as_str());
     let (billing_first, billing_last) = split_name(name_full);
     let billing_last = if billing_last.trim().is_empty() {
         "NA".to_string()
@@ -595,9 +609,8 @@ pub async fn book_shipment_for_order(
             "HTTP {create_status}: {create_text}"
         )));
     }
-    let create_json: Value = serde_json::from_str(&create_text).map_err(|_| {
-        ShiprocketError::CreateOrderFailed(format!("invalid JSON: {create_text}"))
-    })?;
+    let create_json: Value = serde_json::from_str(&create_text)
+        .map_err(|_| ShiprocketError::CreateOrderFailed(format!("invalid JSON: {create_text}")))?;
 
     let shipment_id = first_shipment_id(&create_json).ok_or_else(|| {
         ShiprocketError::CreateOrderFailed(format!(
@@ -612,17 +625,14 @@ pub async fn book_shipment_for_order(
     } else {
         let delivery_pin = address.postal_code.trim().to_string();
         let order_value_minor = order.grand_total_minor;
-        match best_courier_quote_for_checkout(
-            &delivery_pin,
-            order_value_minor,
-            total_units,
-        )
-        .await
-        {
+        match best_courier_quote_for_checkout(&delivery_pin, order_value_minor, total_units).await {
             Ok(Some(q)) => Some(q.courier_id),
             Ok(None) => None,
             Err(e) => {
-                warn!("shiprocket quote unavailable during AWB assign fallback: {}", e);
+                warn!(
+                    "shiprocket quote unavailable during AWB assign fallback: {}",
+                    e
+                );
                 None
             }
         }
@@ -647,14 +657,11 @@ pub async fn book_shipment_for_order(
             "HTTP {assign_status}: {assign_text}"
         )));
     }
-    let assign_json: Value = serde_json::from_str(&assign_text).map_err(|_| {
-        ShiprocketError::AssignAwbFailed(format!("invalid JSON: {assign_text}"))
-    })?;
+    let assign_json: Value = serde_json::from_str(&assign_text)
+        .map_err(|_| ShiprocketError::AssignAwbFailed(format!("invalid JSON: {assign_text}")))?;
 
     let (awb_code, courier_name) = first_awb_and_courier(&assign_json).ok_or_else(|| {
-        ShiprocketError::AssignAwbFailed(format!(
-            "missing awb in response: {assign_text}"
-        ))
+        ShiprocketError::AssignAwbFailed(format!("missing awb in response: {assign_text}"))
     })?;
 
     let (mut sr_id, mut sr_label) = extract_assign_shipment_status(&assign_json);
@@ -744,7 +751,9 @@ fn parse_track_api_response(v: &Value) -> ShiprocketTrackingSnapshot {
 }
 
 /// Poll Shiprocket for the latest status for an AWB (configure webhooks for push updates in production).
-pub async fn track_shipment_by_awb(awb: &str) -> Result<ShiprocketTrackingSnapshot, ShiprocketError> {
+pub async fn track_shipment_by_awb(
+    awb: &str,
+) -> Result<ShiprocketTrackingSnapshot, ShiprocketError> {
     let awb = awb.trim();
     if awb.is_empty() {
         return Err(ShiprocketError::TrackFailed("empty awb".to_string()));

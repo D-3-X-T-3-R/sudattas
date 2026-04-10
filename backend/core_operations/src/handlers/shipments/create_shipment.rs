@@ -1,7 +1,6 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::integrations::shiprocket_status::{
-    customer_tracking_label, map_shiprocket_id_to_shipment_status,
-    shiprocket_status_label_for_id,
+    customer_tracking_label, map_shiprocket_id_to_shipment_status, shiprocket_status_label_for_id,
 };
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::Status;
@@ -38,9 +37,10 @@ pub async fn create_shipment(
 
     let line_status = derive_line_status(&req);
     let sr_id = req.shiprocket_status_id;
-    let sr_label = req.shiprocket_status_label.clone().or_else(|| {
-        sr_id.map(shiprocket_status_label_for_id)
-    });
+    let sr_label = req
+        .shiprocket_status_label
+        .clone()
+        .or_else(|| sr_id.map(shiprocket_status_label_for_id));
 
     let shipment = shipments::ActiveModel {
         shipment_id: ActiveValue::NotSet,

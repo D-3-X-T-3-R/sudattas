@@ -320,7 +320,10 @@ async fn process_shiprocket_shipment_updates(
     let items = flatten_shiprocket_webhook_items(payload);
     for item in items {
         let Some(row) = find_shipment_for_shiprocket_event(txn, &item).await? else {
-            warn!(?item, "shiprocket webhook: no shipment matched awb / shiprocket_order_id");
+            warn!(
+                ?item,
+                "shiprocket webhook: no shipment matched awb / shiprocket_order_id"
+            );
             continue;
         };
         let order_id = row.order_id;
@@ -423,7 +426,10 @@ fn shiprocket_event_or_payload_indicates_cancelled(
 
 fn razorpay_event_is_refund_like(event_type: &str) -> bool {
     let e = event_type.trim().to_lowercase();
-    e == "refund.processed" || e == "refund.failed" || e == "refund.created" || e == "payment.refunded"
+    e == "refund.processed"
+        || e == "refund.failed"
+        || e == "refund.created"
+        || e == "payment.refunded"
 }
 
 async fn process_razorpay_refund_updates(
@@ -444,7 +450,11 @@ async fn process_razorpay_refund_updates(
     let payment_id = refund_entity
         .and_then(|x| x.get("payment_id"))
         .and_then(|x| x.as_str())
-        .or_else(|| payment_entity.and_then(|x| x.get("id")).and_then(|x| x.as_str()))
+        .or_else(|| {
+            payment_entity
+                .and_then(|x| x.get("id"))
+                .and_then(|x| x.as_str())
+        })
         .unwrap_or("")
         .trim()
         .to_string();
@@ -576,7 +586,10 @@ async fn process_razorpay_refund_updates(
     let (evt, msg) = if refund_status == Status::Failed {
         ("refund_failed", "Refund failed at payment gateway")
     } else {
-        ("refund_initiated", "Refund initiated; awaiting gateway confirmation")
+        (
+            "refund_initiated",
+            "Refund initiated; awaiting gateway confirmation",
+        )
     };
     let _ = create_order_event(
         txn,
@@ -652,7 +665,10 @@ async fn auto_refund_order_on_shiprocket_cancel(txn: &DatabaseTransaction, order
         .ok()
         .flatten()
     else {
-        warn!(order_id, "shiprocket webhook: order not found for auto-refund");
+        warn!(
+            order_id,
+            "shiprocket webhook: order not found for auto-refund"
+        );
         return;
     };
 
@@ -722,12 +738,7 @@ async fn auto_refund_order_on_shiprocket_cancel(txn: &DatabaseTransaction, order
         "shiprocket cancel flow: Razorpay refund API responded"
     );
 
-    let gateway_status = map_refund_status(
-        gateway_refund
-            .status
-            .as_deref()
-            .unwrap_or("pending"),
-    );
+    let gateway_status = map_refund_status(gateway_refund.status.as_deref().unwrap_or("pending"));
 
     if gateway_status == Status::Processed {
         if let Err(e) = create_refund(

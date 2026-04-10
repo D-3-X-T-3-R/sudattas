@@ -66,12 +66,13 @@ function formatAddress(a: ShippingAddressRow | null): string {
   return parts.join(" | ");
 }
 
+// eslint-disable-next-line max-lines-per-function
 export default function BagPage() {
   const router = useRouter();
   const { status } = useSession();
   const { openLogin } = useStorefrontLogin();
   const { cartLines, decCart, incCart, removeCart, toggleWish, wishlist, addToCart } = useStorefront();
-  const { paymentLoading, paymentMessage, runCheckout } = useRazorpayCheckout();
+  const { paymentMessage, runCheckout } = useRazorpayCheckout();
   const reduceMotion = !!useReducedMotion();
 
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set());

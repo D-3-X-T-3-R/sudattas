@@ -4,8 +4,8 @@ use crate::handlers::coupons::{
 };
 use crate::handlers::idempotency::compute_request_hash;
 use crate::handlers::order_events::create_order_event;
-use crate::money::{paise_checked_add, paise_checked_mul};
 use crate::integrations::shiprocket::{best_courier_quote_for_checkout, ShiprocketError};
+use crate::money::{paise_checked_add, paise_checked_mul};
 
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
@@ -347,27 +347,26 @@ pub async fn place_order(
     }
     let delivery_postcode = shipping_address.postal_code.trim().to_string();
 
-    let shipping_quote = match best_courier_quote_for_checkout(
-        delivery_postcode.as_str(),
-        total_paise,
-        total_units,
-    )
-    .await
-    {
-        Ok(v) => v,
-        Err(ShiprocketError::NotConfigured) => None,
-        Err(e) => {
-            warn!("checkout shipping quote failed; falling back to zero shipping: {}", e);
-            None
-        }
-    };
+    let shipping_quote =
+        match best_courier_quote_for_checkout(delivery_postcode.as_str(), total_paise, total_units)
+            .await
+        {
+            Ok(v) => v,
+            Err(ShiprocketError::NotConfigured) => None,
+            Err(e) => {
+                warn!(
+                    "checkout shipping quote failed; falling back to zero shipping: {}",
+                    e
+                );
+                None
+            }
+        };
     let shipping_minor = shipping_quote
         .as_ref()
         .map(|q| q.shipping_amount_minor.max(0))
         .unwrap_or(0);
-    let grand_total_paise = paise_checked_add(total_paise, shipping_minor).map_err(|e| {
-        Status::internal(format!("Overflow computing grand total in paise: {}", e))
-    })?;
+    let grand_total_paise = paise_checked_add(total_paise, shipping_minor)
+        .map_err(|e| Status::internal(format!("Overflow computing grand total in paise: {}", e)))?;
 
     // Reserve inventory before creating the order so that on insufficient stock we fail without creating any order.
     for (variant_id, quantity) in &variant_quantity_map {

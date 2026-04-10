@@ -14,6 +14,7 @@ import { OrderDetailStatusEditor } from "@/domains/admin/orders/components/order
 import { toRouteFailureUi } from "@/lib/route-state";
 import { formatOrderDate } from "@/domains/admin/orders/utils";
 
+// eslint-disable-next-line max-lines-per-function
 export default function AdminOrderDetailPage() {
   const params = useParams();
   const orderId =

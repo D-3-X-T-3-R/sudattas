@@ -143,6 +143,7 @@ use crate::resolvers::{
         self,
         schema::{DeleteUserInput, NewUser, RecordSecurityAuditEventInput, UpdateUserInput, User},
     },
+    utils::parse_i64,
     weaves::{
         self,
         schema::{DeleteWeaveInput, NewWeave, SearchWeaveInput, Weave, WeaveMutation},
@@ -151,7 +152,6 @@ use crate::resolvers::{
         self,
         schema::{DeleteWishlistItem, NewWishlistItem, WishlistItem},
     },
-    utils::parse_i64,
 };
 use juniper::FieldResult;
 use juniper::IntoFieldError;
@@ -453,7 +453,8 @@ impl MutationRoot {
         } else {
             let uid = require_jwt(context)?;
             Some(
-                crate::resolvers::utils::parse_i64(uid, "user_id").map_err(|e| e.into_field_error())?,
+                crate::resolvers::utils::parse_i64(uid, "user_id")
+                    .map_err(|e| e.into_field_error())?,
             )
         };
         orders::handlers::delete_order(order_id, acting_user_id)
@@ -682,8 +683,7 @@ impl MutationRoot {
         context: &Context,
         order_id: String,
     ) -> FieldResult<Vec<Shipment>> {
-        query_root::ensure_customer_can_access_order(context, order_id.trim())
-            .await?;
+        query_root::ensure_customer_can_access_order(context, order_id.trim()).await?;
         let oid = parse_i64(order_id.trim(), "order_id").map_err(|e| e.into_field_error())?;
         shipments::handlers::sync_order_shipments_from_shiprocket(oid)
             .await

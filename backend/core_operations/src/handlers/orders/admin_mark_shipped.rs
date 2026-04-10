@@ -28,9 +28,8 @@ pub async fn admin_mark_order_shipped(
     .await?;
 
     let mut shipment_id: i64 = 0;
-    let has_tracking = req.awb_code.is_some()
-        || req.carrier.is_some()
-        || req.shiprocket_order_id.is_some();
+    let has_tracking =
+        req.awb_code.is_some() || req.carrier.is_some() || req.shiprocket_order_id.is_some();
     if has_tracking {
         let existing = shipments::Entity::find()
             .filter(shipments::Column::OrderId.eq(req.order_id))
