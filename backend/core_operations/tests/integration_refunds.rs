@@ -550,7 +550,10 @@ async fn integration_create_refund_cancelled_order_succeeds() {
         .await
         .expect("query order")
         .expect("order exists");
-    assert_eq!(order.status_id, refunded_id, "cancelled order should transition to refunded");
+    assert_eq!(
+        order.status_id, refunded_id,
+        "cancelled order should transition to refunded"
+    );
 
     txn.rollback().await.ok();
 }
