@@ -8,6 +8,43 @@ import { useStorefront } from "@/context/storefront-context";
 import { ensureGuestSession, getGuestSessionId } from "@/lib/session";
 import type { Product } from "@/lib/schemas";
 
+const WISHLIST_CATALOG_CACHE_KEY = "sudattas_wishlist_catalog_v1";
+const WISHLIST_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type WishlistCatalogCache = {
+  savedAt: number;
+  products: Product[];
+  sizes: CatalogSize[];
+};
+
+function readWishlistCatalogCache(): WishlistCatalogCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(WISHLIST_CATALOG_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as WishlistCatalogCache;
+    if (!parsed || typeof parsed.savedAt !== "number") return null;
+    if (Date.now() - parsed.savedAt > WISHLIST_CATALOG_CACHE_TTL_MS) return null;
+    return {
+      savedAt: parsed.savedAt,
+      products: Array.isArray(parsed.products) ? parsed.products : [],
+      sizes: Array.isArray(parsed.sizes) ? parsed.sizes : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeWishlistCatalogCache(products: Product[], sizes: CatalogSize[]) {
+  if (typeof window === "undefined") return;
+  try {
+    const payload: WishlistCatalogCache = { savedAt: Date.now(), products, sizes };
+    window.sessionStorage.setItem(WISHLIST_CATALOG_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore cache write failures (private mode/quota).
+  }
+}
+
 export default function WishlistPage() {
   const { wishlist, toggleWish, addToCart, wishCount } = useStorefront();
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
@@ -16,6 +53,12 @@ export default function WishlistPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const cached = readWishlistCatalogCache();
+    if (cached) {
+      setCatalogProducts(cached.products);
+      setCatalogSizes(cached.sizes);
+      setLoading(false);
+    }
     void (async () => {
       await ensureGuestSession();
       const sid = getGuestSessionId();
@@ -30,13 +73,14 @@ export default function WishlistPage() {
         ]);
         const data = (await productsRes.json()) as { products?: Product[] } | Product[];
         const list = Array.isArray(data) ? data : data.products ?? [];
-        if (!cancelled) setCatalogProducts(list);
+        let nextSizes: CatalogSize[] = [];
         if (sizesRes) {
           const sd = (await sizesRes.json()) as { sizes?: CatalogSize[] };
-          if (!cancelled) setCatalogSizes(sd.sizes ?? []);
-        } else if (!cancelled) {
-          setCatalogSizes([]);
+          nextSizes = sd.sizes ?? [];
         }
+        writeWishlistCatalogCache(list, nextSizes);
+        if (!cancelled) setCatalogProducts(list);
+        if (!cancelled) setCatalogSizes(nextSizes);
       } catch {
         if (!cancelled) {
           setCatalogProducts([]);

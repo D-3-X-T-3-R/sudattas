@@ -53,6 +53,11 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
   const [cartLoading, setCartLoading] = useState(true);
   const lastToastRef = useRef<{ key: string; at: number } | null>(null);
   const inFlightRef = useRef<Set<string>>(new Set());
+  const cartRef = useRef<CartState>({});
+
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
 
   const reloadCartFromBackend = useCallback(async () => {
     setCartLoading(true);
@@ -124,7 +129,7 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
       if (inFlightRef.current.has(opKey)) return;
       inFlightRef.current.add(opKey);
       try {
-      const line = cart[id];
+      const line = cartRef.current[id];
       if (!line) return;
       const sessionId = getGuestSessionId();
 
@@ -161,7 +166,7 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
         finalizeOp(opKey);
       }
     },
-    [cart, showToast]
+    [showToast]
   );
 
   const incCart = useCallback(
@@ -170,7 +175,7 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
       if (inFlightRef.current.has(opKey)) return;
       inFlightRef.current.add(opKey);
       try {
-      const line = cart[id];
+      const line = cartRef.current[id];
       if (!line) return;
       const sessionId = getGuestSessionId();
 
@@ -192,7 +197,7 @@ export function useStorefrontCart({ showToast, announce }: UseStorefrontCartProp
         finalizeOp(opKey);
       }
     },
-    [cart, showToast]
+    [showToast]
   );
 
   const removeCart = useCallback(
