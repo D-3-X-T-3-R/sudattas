@@ -60,7 +60,7 @@ pub async fn create_shipment(
         carrier: ActiveValue::Set(req.carrier),
         shiprocket_status_id: ActiveValue::Set(sr_id),
         shiprocket_status_label: ActiveValue::Set(sr_label),
-        status: ActiveValue::Set(line_status),
+        shipment_status: ActiveValue::Set(line_status),
         tracking_events: ActiveValue::Set(None),
         created_at: ActiveValue::Set(Some(Utc::now())),
         delivered_at: ActiveValue::Set(None),
@@ -79,9 +79,9 @@ pub fn model_to_response(model: shipments::Model) -> ShipmentResponse {
         .tracking_events
         .as_ref()
         .map(std::string::ToString::to_string);
-    let status_str = status_to_wire_str(&model.status).to_string();
+    let status_str = status_to_wire_str(&model.shipment_status).to_string();
     let customer_tracking_status =
-        customer_tracking_label(model.shiprocket_status_id, Some(&model.status));
+        customer_tracking_label(model.shiprocket_status_id, Some(&model.shipment_status));
     ShipmentResponse {
         shipment_id: model.shipment_id,
         order_id: model.order_id,

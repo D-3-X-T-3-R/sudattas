@@ -49,7 +49,7 @@ pub async fn update_shipment(
         ) {
             model.delivered_at = ActiveValue::Set(Some(Utc::now()));
         }
-        model.status = ActiveValue::Set(next);
+        model.shipment_status = ActiveValue::Set(next);
     } else if let Some(lbl) = req.shiprocket_status_label {
         model.shiprocket_status_label = ActiveValue::Set(Some(lbl));
     }
@@ -59,7 +59,7 @@ pub async fn update_shipment(
             if matches!(st, ShipmentStatus::Delivered | ShipmentStatus::RtoDelivered) {
                 model.delivered_at = ActiveValue::Set(Some(Utc::now()));
             }
-            model.status = ActiveValue::Set(st);
+            model.shipment_status = ActiveValue::Set(st);
         }
     }
 

@@ -573,7 +573,7 @@ CREATE TABLE `Shipments` (
     `carrier` VARCHAR(100),
     `shiprocket_status_id` INT NULL COMMENT 'Shiprocket shipment_status_id',
     `shiprocket_status_label` VARCHAR(128) NULL COMMENT 'Shiprocket status label (API or mapped)',
-    `status` ENUM(
+    `shipment_status` ENUM(
         'pending',
         'awb_assigned',
         'label_generated',

@@ -36,7 +36,7 @@ pub async fn apply_shiprocket_scan_to_shipment(
     let mut active = shipment.into_active_model();
     active.shiprocket_status_id = ActiveValue::Set(Some(id));
     active.shiprocket_status_label = ActiveValue::Set(Some(label));
-    active.status = ActiveValue::Set(line.clone());
+    active.shipment_status = ActiveValue::Set(line.clone());
     if matches!(id, 7 | 23) {
         active.delivered_at = ActiveValue::Set(Some(Utc::now()));
     }
