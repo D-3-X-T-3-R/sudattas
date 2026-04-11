@@ -5,32 +5,23 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
 import { useSession } from "next-auth/react";
-import type { Product, CartLine } from "@/lib/schemas";
+import type { CartLine, Product } from "@/lib/schemas";
 import { useToast } from "@/components/ui/toast";
 import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 import { paiseToRupeesNumber } from "@/lib/money";
 import { useStorefrontWishlist } from "@/domains/storefront/hooks/use-storefront-wishlist";
 import { useStorefrontCart } from "@/domains/storefront/hooks/use-storefront-cart";
 
-type CartState = Record<
-  string,
-  { id: string; product: Product; qty: number; sizeName?: string | null }
->;
-
 type StorefrontContextValue = {
   wishlist: Record<string, boolean>;
   toggleWish: (p: Product) => void;
-  cart: CartState;
   addToCart: (p: Product, qty?: number, sizeName?: string | null) => void;
   decCart: (lineId: string) => void;
   incCart: (lineId: string) => void;
   removeCart: (lineId: string) => void;
-  cartOpen: boolean;
-  setCartOpen: (open: boolean) => void;
   cartLines: CartLine[];
   cartCount: number;
   cartSubtotal: number;
@@ -44,11 +35,9 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   const { status } = useSession();
   const { showToast } = useToast();
   const { announce } = useLiveAnnouncer();
-  const [cartOpen, setCartOpen] = useState(false);
 
   const { wishlist, toggleWish } = useStorefrontWishlist({ status, showToast, announce });
   const {
-    cart,
     cartLoading,
     cartLines,
     addToCart,
@@ -90,13 +79,10 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     () => ({
       wishlist,
       toggleWish,
-      cart,
       addToCart,
       decCart,
       incCart,
       removeCart,
-      cartOpen,
-      setCartOpen,
       cartLines,
       cartCount,
       cartSubtotal,
@@ -106,12 +92,10 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     [
       wishlist,
       toggleWish,
-      cart,
       addToCart,
       decCart,
       incCart,
       removeCart,
-      cartOpen,
       cartLines,
       cartCount,
       cartSubtotal,

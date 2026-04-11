@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ProfilePage from "@/app/profile/page";
 import { LiveAnnouncerProvider } from "@/components/ui/live-announcer";
@@ -79,13 +79,12 @@ describe("ProfilePage", () => {
       expect(screen.getByRole("heading", { name: /saved addresses/i })).toBeInTheDocument();
     });
 
-    await user.type(screen.getByLabelText("Road / street"), "MG Road");
-    await user.type(screen.getByLabelText("Apartment / house (optional)"), "Test Apt");
-    await user.type(screen.getByLabelText("City"), "Bengaluru");
-    await user.type(screen.getByLabelText("State / region"), "Karnataka");
-    await user.clear(screen.getByLabelText("Country"));
-    await user.type(screen.getByLabelText("Country"), "India");
-    await user.type(screen.getByLabelText("Pincode"), "560001");
+    fireEvent.input(screen.getByLabelText("Road / street"), { target: { value: "MG Road" } });
+    fireEvent.input(screen.getByLabelText("Apartment / house (optional)"), { target: { value: "Test Apt" } });
+    fireEvent.input(screen.getByLabelText("City"), { target: { value: "Bengaluru" } });
+    fireEvent.input(screen.getByLabelText("State / region"), { target: { value: "Karnataka" } });
+    fireEvent.input(screen.getByLabelText("Country"), { target: { value: "India" } });
+    fireEvent.input(screen.getByLabelText("Pincode"), { target: { value: "560001" } });
     await user.click(screen.getByRole("button", { name: "Save Address" }));
 
     await waitFor(() =>

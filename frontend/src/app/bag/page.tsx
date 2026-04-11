@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
@@ -99,6 +99,10 @@ export default function BagPage() {
   const [shippingAmount, setShippingAmount] = useState(0);
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingNote, setShippingNote] = useState<string | null>(null);
+  const cartSignature = useMemo(
+    () => cartLines.map((line) => `${line.id}:${line.qty}`).join("|"),
+    [cartLines]
+  );
 
   useEffect(() => {
     const currentIds = new Set(cartLines.map((line) => line.id));
@@ -120,7 +124,7 @@ export default function BagPage() {
       .catch(() => setCatalogSizes([]));
   }, []);
 
-  const loadAddresses = async () => {
+  const loadAddresses = useCallback(async () => {
     if (status !== "authenticated") return;
     try {
       const list = await fetchApiEnvelope<ShippingAddressRow[]>("/api/account/addresses", { cache: "no-store" });
@@ -133,12 +137,11 @@ export default function BagPage() {
       setAddresses([]);
       setSelectedAddressId(null);
     }
-  };
+  }, [status]);
 
   useEffect(() => {
     void loadAddresses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [loadAddresses]);
 
   const selectedAddress = useMemo(
     () => addresses.find((a) => a.shippingAddressId === selectedAddressId) ?? null,
@@ -146,6 +149,7 @@ export default function BagPage() {
   );
 
   useEffect(() => {
+    const controller = new AbortController();
     const estimate = async () => {
       if (status !== "authenticated" || !selectedAddressId || cartLines.length === 0) {
         setShippingAmount(0);
@@ -158,19 +162,29 @@ export default function BagPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ shippingAddressId: selectedAddressId }),
+          signal: controller.signal,
         });
         const paise = Number.parseInt(row.shippingAmountPaise, 10);
         setShippingAmount(Number.isFinite(paise) ? paise / 100 : 0);
         setShippingNote(row.note ?? null);
-      } catch {
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
         setShippingAmount(0);
         setShippingNote("Unable to fetch live shipping right now.");
       } finally {
-        setShippingLoading(false);
+        if (!controller.signal.aborted) {
+          setShippingLoading(false);
+        }
       }
     };
-    void estimate();
-  }, [status, selectedAddressId, cartLines.length]);
+    const timer = window.setTimeout(() => {
+      void estimate();
+    }, 180);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [status, selectedAddressId, cartSignature, cartLines.length]);
 
   const allSelected = cartLines.length > 0 && selectedLineIds.size === cartLines.length;
   const selectedLines = useMemo(
@@ -249,7 +263,7 @@ export default function BagPage() {
     }
   };
 
-  const makeDefaultAddress = async (address: ShippingAddressRow) => {
+  const makeDefaultAddress = useCallback(async (address: ShippingAddressRow) => {
     await fetchApiEnvelope<ShippingAddressRow>("/api/account/addresses", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -268,7 +282,7 @@ export default function BagPage() {
         },
       }),
     });
-  };
+  }, []);
 
   const handleCheckout = () => {
     if (status !== "authenticated") {
