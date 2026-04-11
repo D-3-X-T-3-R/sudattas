@@ -83,3 +83,38 @@ pub enum Status {
     #[sea_orm(string_value = "client_verified")]
     ClientVerified,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "shipment_status")]
+pub enum ShipmentStatus {
+    #[sea_orm(string_value = "pending")]
+    Pending,
+    #[sea_orm(string_value = "awb_assigned")]
+    AwbAssigned,
+    #[sea_orm(string_value = "label_generated")]
+    LabelGenerated,
+    #[sea_orm(string_value = "manifest_generated")]
+    ManifestGenerated,
+    #[sea_orm(string_value = "pickup_scheduled")]
+    PickupScheduled,
+    #[sea_orm(string_value = "picked_up")]
+    PickedUp,
+    #[sea_orm(string_value = "in_transit")]
+    InTransit,
+    #[sea_orm(string_value = "out_for_delivery")]
+    OutForDelivery,
+    #[sea_orm(string_value = "delivered")]
+    Delivered,
+    #[sea_orm(string_value = "rto_initiated")]
+    RtoInitiated,
+    #[sea_orm(string_value = "rto_delivered")]
+    RtoDelivered,
+    #[sea_orm(string_value = "cancelled")]
+    Cancelled,
+    #[sea_orm(string_value = "lost")]
+    Lost,
+    #[sea_orm(string_value = "delayed")]
+    Delayed,
+    #[sea_orm(string_value = "failed")]
+    Failed,
+}

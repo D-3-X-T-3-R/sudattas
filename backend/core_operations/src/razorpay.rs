@@ -1,11 +1,24 @@
 //! Razorpay API client for server-authoritative order creation.
 //! Requires RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET env vars (when not set, create_order returns Err).
+//! Optional override: `RAZORPAY_API_BASE` (defaults to `https://api.razorpay.com/v1`).
 
 use reqwest::Client;
 use serde::Deserialize;
 
-const RAZORPAY_ORDERS_URL: &str = "https://api.razorpay.com/v1/orders";
-const RAZORPAY_PAYMENTS_URL: &str = "https://api.razorpay.com/v1/payments";
+fn razorpay_api_base() -> String {
+    std::env::var("RAZORPAY_API_BASE")
+        .unwrap_or_else(|_| "https://api.razorpay.com/v1".to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
+fn razorpay_orders_url() -> String {
+    format!("{}/orders", razorpay_api_base())
+}
+
+fn razorpay_payments_url() -> String {
+    format!("{}/payments", razorpay_api_base())
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -49,7 +62,7 @@ pub async fn create_order(
 
     let client = Client::new();
     let res = client
-        .post(RAZORPAY_ORDERS_URL)
+        .post(razorpay_orders_url())
         .basic_auth(&key_id, Some(&key_secret))
         .json(&body)
         .send()
@@ -99,7 +112,7 @@ pub async fn create_refund(
     });
 
     let client = Client::new();
-    let url = format!("{}/{}/refund", RAZORPAY_PAYMENTS_URL, pid);
+    let url = format!("{}/{}/refund", razorpay_payments_url(), pid);
     let res = client
         .post(&url)
         .basic_auth(&key_id, Some(&key_secret))
