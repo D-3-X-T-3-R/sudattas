@@ -57,6 +57,9 @@ do
   cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored --test-threads=1
 done
 
+# Redis-backed ignored lib test (session lifecycle)
+cargo test -p core_operations --lib --all-features -- --ignored --test-threads=1 test_session_lifecycle
+
 echo "== 3/3 Ignored graphql e2e tests =="
 cargo test -p graphql --test e2e_tests --all-features -- --ignored
 cargo test -p graphql --test e2e_all_graphql_operations --all-features -- --ignored

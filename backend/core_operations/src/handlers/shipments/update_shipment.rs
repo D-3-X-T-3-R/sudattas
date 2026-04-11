@@ -5,6 +5,7 @@ use crate::integrations::shiprocket_status::{
     map_shiprocket_id_to_shipment_status, shiprocket_status_label_for_id,
 };
 use chrono::Utc;
+use core_db_entities::entity::sea_orm_active_enums::ShipmentStatus;
 use core_db_entities::entity::shipments;
 use proto::proto::core::{ShipmentsResponse, UpdateShipmentRequest};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait, IntoActiveModel};
@@ -41,16 +42,21 @@ pub async fn update_shipment(
             .clone()
             .unwrap_or_else(|| shiprocket_status_label_for_id(id));
         model.shiprocket_status_label = ActiveValue::Set(Some(lbl));
-        model.status = ActiveValue::Set(map_shiprocket_id_to_shipment_status(id));
+        let next = map_shiprocket_id_to_shipment_status(id);
+        if matches!(
+            next,
+            ShipmentStatus::Delivered | ShipmentStatus::RtoDelivered
+        ) {
+            model.delivered_at = ActiveValue::Set(Some(Utc::now()));
+        }
+        model.status = ActiveValue::Set(next);
     } else if let Some(lbl) = req.shiprocket_status_label {
         model.shiprocket_status_label = ActiveValue::Set(Some(lbl));
     }
 
     if let Some(status_str) = req.status {
         if let Some(st) = parse_shipment_status_str(&status_str) {
-            if status_str.trim().eq_ignore_ascii_case("delivered")
-                || status_str.trim().eq_ignore_ascii_case("processed")
-            {
+            if matches!(st, ShipmentStatus::Delivered | ShipmentStatus::RtoDelivered) {
                 model.delivered_at = ActiveValue::Set(Some(Utc::now()));
             }
             model.status = ActiveValue::Set(st);

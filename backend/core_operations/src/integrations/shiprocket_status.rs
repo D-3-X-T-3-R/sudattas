@@ -1,8 +1,8 @@
 //! Maps Shiprocket `shipment_status_id` (courier lifecycle) to our `Shipments.status` enum and labels.
 //!
-//! IDs follow Shiprocket’s tracking / webhook vocabulary (see their API docs; IDs may evolve).
+//! IDs follow Shiprocket's tracking / webhook vocabulary (see their API docs; IDs may evolve).
 
-use core_db_entities::entity::sea_orm_active_enums::Status;
+use core_db_entities::entity::sea_orm_active_enums::ShipmentStatus;
 
 /// Human-readable label for a Shiprocket `shipment_status_id` (best-effort; unknown IDs get a generic string).
 pub fn shiprocket_status_label_for_id(id: i32) -> String {
@@ -42,43 +42,68 @@ pub fn shiprocket_status_label_for_id(id: i32) -> String {
     }
 }
 
-/// Map Shiprocket `shipment_status_id` to our granular `Shipments.status`.
 /// Short, customer-facing line for order tracking UI (title case phrases).
-pub fn customer_tracking_label(status_id: Option<i32>, line: Option<&Status>) -> String {
+pub fn customer_tracking_label(status_id: Option<i32>, line: Option<&ShipmentStatus>) -> String {
     if let Some(id) = status_id {
         return match id {
             1 | 2 => "Processing your shipment".to_string(),
-            3 => "Courier assigned — preparing pickup".to_string(),
+            3 => "Courier assigned - preparing pickup".to_string(),
             4 | 19 => "Out for pickup".to_string(),
             5 | 13 | 26 => "Processing at hub".to_string(),
             42 => "Picked up".to_string(),
             6 | 18 | 41 | 45 => "In transit".to_string(),
-            15 => "Returning — in transit".to_string(),
+            15 => "Returning - in transit".to_string(),
             17 | 38 | 56 => "Out for delivery".to_string(),
             7 | 23 => "Delivered".to_string(),
             8 => "Shipment cancelled".to_string(),
             9 | 14 | 16 => "Return in progress".to_string(),
             10 => "Returned".to_string(),
-            11 | 20 | 21 => "Delivery issue — we're looking into it".to_string(),
-            12 | 24 | 25 => "Shipment problem — contact support".to_string(),
+            11 | 20 | 21 => "Delivery issue - we're looking into it".to_string(),
+            12 | 24 | 25 => "Shipment problem - contact support".to_string(),
             22 => "Delivery delayed".to_string(),
             _ => shiprocket_status_label_for_id(id),
         };
     }
+
     match line {
-        Some(Status::Pending) | None => "Preparing shipment".to_string(),
-        Some(Status::Processed) => "In transit".to_string(),
-        Some(Status::Failed) => "Delivery issue — we're looking into it".to_string(),
-        Some(Status::NeedsReview) => "Shipment problem — contact support".to_string(),
-        Some(Status::ClientVerified) => "Courier assigned — preparing pickup".to_string(),
+        Some(ShipmentStatus::Pending) | None => "Preparing shipment".to_string(),
+        Some(ShipmentStatus::AwbAssigned)
+        | Some(ShipmentStatus::LabelGenerated)
+        | Some(ShipmentStatus::ManifestGenerated)
+        | Some(ShipmentStatus::PickupScheduled) => {
+            "Courier assigned - preparing pickup".to_string()
+        }
+        Some(ShipmentStatus::PickedUp) | Some(ShipmentStatus::InTransit) => {
+            "In transit".to_string()
+        }
+        Some(ShipmentStatus::OutForDelivery) => "Out for delivery".to_string(),
+        Some(ShipmentStatus::Delivered) => "Delivered".to_string(),
+        Some(ShipmentStatus::RtoInitiated) => "Return in progress".to_string(),
+        Some(ShipmentStatus::RtoDelivered) => "Returned".to_string(),
+        Some(ShipmentStatus::Cancelled) => "Shipment cancelled".to_string(),
+        Some(ShipmentStatus::Lost) | Some(ShipmentStatus::Failed) => {
+            "Shipment problem - contact support".to_string()
+        }
+        Some(ShipmentStatus::Delayed) => "Delivery delayed".to_string(),
     }
 }
 
-pub fn map_shiprocket_id_to_shipment_status(id: i32) -> Status {
+/// Map Shiprocket `shipment_status_id` to our granular `Shipments.status`.
+pub fn map_shiprocket_id_to_shipment_status(id: i32) -> ShipmentStatus {
     match id {
-        1 | 2 | 3 | 4 | 5 | 13 | 19 | 26 => Status::Pending,
-        6 | 7 | 17 | 18 | 23 | 38 | 41 | 42 | 45 | 56 => Status::Processed,
-        8 | 9 | 10 | 11 | 12 | 14 | 15 | 16 | 20 | 21 | 22 | 24 | 25 => Status::Failed,
-        _ => Status::Processed,
+        1 | 2 => ShipmentStatus::Pending,
+        3 => ShipmentStatus::AwbAssigned,
+        4 | 19 => ShipmentStatus::PickupScheduled,
+        5 | 13 | 26 => ShipmentStatus::ManifestGenerated,
+        42 => ShipmentStatus::PickedUp,
+        6 | 18 | 41 | 45 => ShipmentStatus::InTransit,
+        17 | 38 | 56 => ShipmentStatus::OutForDelivery,
+        7 | 23 => ShipmentStatus::Delivered,
+        8 => ShipmentStatus::Cancelled,
+        9 | 14 | 15 | 16 => ShipmentStatus::RtoInitiated,
+        10 => ShipmentStatus::RtoDelivered,
+        11 | 12 | 20 | 21 | 24 | 25 => ShipmentStatus::Failed,
+        22 => ShipmentStatus::Delayed,
+        _ => ShipmentStatus::InTransit,
     }
 }

@@ -3,29 +3,39 @@ use crate::integrations::shiprocket_status::{
     customer_tracking_label, map_shiprocket_id_to_shipment_status, shiprocket_status_label_for_id,
 };
 use chrono::Utc;
-use core_db_entities::entity::sea_orm_active_enums::Status;
+use core_db_entities::entity::sea_orm_active_enums::ShipmentStatus;
 use core_db_entities::entity::shipments;
 use proto::proto::core::{CreateShipmentRequest, ShipmentResponse, ShipmentsResponse};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status as TonicStatus};
 
-fn derive_line_status(req: &CreateShipmentRequest) -> Status {
+fn derive_line_status(req: &CreateShipmentRequest) -> ShipmentStatus {
     if let Some(id) = req.shiprocket_status_id {
         return map_shiprocket_id_to_shipment_status(id);
     }
     if req.awb_code.is_some() || req.shiprocket_order_id.is_some() {
-        return Status::Processed;
+        return ShipmentStatus::AwbAssigned;
     }
-    Status::Pending
+    ShipmentStatus::Pending
 }
 
-fn status_to_wire_str(status: &Status) -> &'static str {
+fn status_to_wire_str(status: &ShipmentStatus) -> &'static str {
     match status {
-        Status::Pending => "pending",
-        Status::Processed => "processed",
-        Status::Failed => "failed",
-        Status::NeedsReview => "needs_review",
-        Status::ClientVerified => "client_verified",
+        ShipmentStatus::Pending => "pending",
+        ShipmentStatus::AwbAssigned => "awb_assigned",
+        ShipmentStatus::LabelGenerated => "label_generated",
+        ShipmentStatus::ManifestGenerated => "manifest_generated",
+        ShipmentStatus::PickupScheduled => "pickup_scheduled",
+        ShipmentStatus::PickedUp => "picked_up",
+        ShipmentStatus::InTransit => "in_transit",
+        ShipmentStatus::OutForDelivery => "out_for_delivery",
+        ShipmentStatus::Delivered => "delivered",
+        ShipmentStatus::RtoInitiated => "rto_initiated",
+        ShipmentStatus::RtoDelivered => "rto_delivered",
+        ShipmentStatus::Cancelled => "cancelled",
+        ShipmentStatus::Lost => "lost",
+        ShipmentStatus::Delayed => "delayed",
+        ShipmentStatus::Failed => "failed",
     }
 }
 

@@ -81,6 +81,10 @@ foreach ($test in $ignoredHandlerTests) {
     if ($LASTEXITCODE -ne 0) { throw "Ignored handler test failed: $test" }
 }
 
+# Redis-backed ignored lib test (session lifecycle)
+cargo test -p core_operations --lib --all-features -- --ignored --test-threads=1 test_session_lifecycle
+if ($LASTEXITCODE -ne 0) { throw "Ignored lib test failed: test_session_lifecycle" }
+
 Write-Host "== 3/3 Ignored graphql e2e tests ==" -ForegroundColor Cyan
 cargo test -p graphql --test e2e_tests --all-features -- --ignored
 if ($LASTEXITCODE -ne 0) { throw "Ignored graphql test failed: e2e_tests" }

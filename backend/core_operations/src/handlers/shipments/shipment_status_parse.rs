@@ -1,21 +1,29 @@
-//! Parse gRPC `status` strings into generic DB `Status` (includes legacy aliases).
+//! Parse gRPC `status` strings into shipment DB status (includes legacy aliases).
 
-use core_db_entities::entity::sea_orm_active_enums::Status;
+use core_db_entities::entity::sea_orm_active_enums::ShipmentStatus;
 
-pub fn parse_shipment_status_str(raw: &str) -> Option<Status> {
+pub fn parse_shipment_status_str(raw: &str) -> Option<ShipmentStatus> {
     match raw.trim().to_lowercase().as_str() {
-        "pending" => Some(Status::Pending),
-        "client_verified" | "client verified" => Some(Status::ClientVerified),
-        "needs_review" | "needs review" => Some(Status::NeedsReview),
-        "failed" | "cancelled" | "canceled" | "lost" | "rto_initiated" | "rto delivered"
-        | "rto_delivered" => Some(Status::Failed),
-        "processed" | "delivered" | "in_transit" | "in transit" | "shipped"
-        | "out_for_delivery" | "out for delivery" | "ofd" | "picked_up" | "picked up" => {
-            Some(Status::Processed)
+        "pending" => Some(ShipmentStatus::Pending),
+        "awb_assigned" | "awb assigned" => Some(ShipmentStatus::AwbAssigned),
+        "label_generated" | "label generated" => Some(ShipmentStatus::LabelGenerated),
+        "manifest_generated" | "manifest generated" => Some(ShipmentStatus::ManifestGenerated),
+        "pickup_scheduled" | "pickup scheduled" | "out for pickup" => {
+            Some(ShipmentStatus::PickupScheduled)
         }
-        "awb_assigned" | "awb assigned" | "label_generated" | "label generated"
-        | "manifest_generated" | "manifest generated" | "pickup_scheduled" | "pickup scheduled" => {
-            Some(Status::Pending)
+        "picked_up" | "picked up" => Some(ShipmentStatus::PickedUp),
+        "in_transit" | "in transit" | "shipped" | "processed" => Some(ShipmentStatus::InTransit),
+        "out_for_delivery" | "out for delivery" | "ofd" => Some(ShipmentStatus::OutForDelivery),
+        "delivered" => Some(ShipmentStatus::Delivered),
+        "rto_initiated" | "rto initiated" | "return in progress" | "rto acknowledged"
+        | "rto in transit" | "rto undelivered" => Some(ShipmentStatus::RtoInitiated),
+        "rto_delivered" | "rto delivered" | "returned" => Some(ShipmentStatus::RtoDelivered),
+        "cancelled" | "canceled" => Some(ShipmentStatus::Cancelled),
+        "lost" => Some(ShipmentStatus::Lost),
+        "delayed" => Some(ShipmentStatus::Delayed),
+        "failed" | "pickup error" | "pickup exception" | "undelivered" | "destroyed"
+        | "damaged" | "needs_review" | "needs review" | "client_verified" | "client verified" => {
+            Some(ShipmentStatus::Failed)
         }
         _ => None,
     }

@@ -368,15 +368,17 @@ jobs:
         set +e
         cargo test -p graphql --test e2e_tests --all-features -- --ignored
         E2E_TESTS_STATUS=$?
+        cargo test -p core_operations --lib --all-features -- --ignored --test-threads=1 test_session_lifecycle
+        SESSION_STATUS=$?
         unset GRAPHQL_SESSION_ID
         cargo test -p graphql --test e2e_all_graphql_operations --all-features -- --ignored
         E2E_ALL_STATUS=$?
         cargo test -p graphql --test e2e_business_flows --all-features -- --ignored
         E2E_FLOWS_STATUS=$?
         set -e
-        if [[ $E2E_TESTS_STATUS -ne 0 || $E2E_ALL_STATUS -ne 0 || $E2E_FLOWS_STATUS -ne 0 ]]; then
-          echo "One or more GraphQL E2E suites failed."
-          echo "e2e_tests=$E2E_TESTS_STATUS e2e_all_graphql_operations=$E2E_ALL_STATUS e2e_business_flows=$E2E_FLOWS_STATUS"
+        if [[ $E2E_TESTS_STATUS -ne 0 || $E2E_ALL_STATUS -ne 0 || $E2E_FLOWS_STATUS -ne 0 || $SESSION_STATUS -ne 0 ]]; then
+          echo "One or more E2E/ignored suites failed."
+          echo "e2e_tests=$E2E_TESTS_STATUS e2e_all_graphql_operations=$E2E_ALL_STATUS e2e_business_flows=$E2E_FLOWS_STATUS session_lifecycle=$SESSION_STATUS"
           exit 1
         fi
 
