@@ -27,7 +27,7 @@ async fn create_shipment_success() {
             carrier: Some("DTDC".to_string()),
             shiprocket_status_id: None,
             shiprocket_status_label: None,
-            status: ShipmentStatus::InTransit,
+            shipment_status: ShipmentStatus::InTransit,
             tracking_events: None,
             created_at: None,
             delivered_at: None,
@@ -70,7 +70,7 @@ async fn get_shipment_by_order_id_returns_items() {
         carrier: Some("Bluedart".to_string()),
         shiprocket_status_id: None,
         shiprocket_status_label: None,
-        status: ShipmentStatus::InTransit,
+        shipment_status: ShipmentStatus::InTransit,
         tracking_events: None,
         created_at: None,
         delivered_at: None,
@@ -144,13 +144,13 @@ async fn update_shipment_updates_status_and_sets_delivered_at_when_processed() {
         carrier: Some("Xpress".to_string()),
         shiprocket_status_id: None,
         shiprocket_status_label: None,
-        status: ShipmentStatus::Pending,
+        shipment_status: ShipmentStatus::Pending,
         tracking_events: None,
         created_at: Some(Utc::now()),
         delivered_at: None,
     };
     let updated = shipments::Model {
-        status: ShipmentStatus::Delivered,
+        shipment_status: ShipmentStatus::Delivered,
         delivered_at: Some(Utc::now()),
         ..existing.clone()
     };

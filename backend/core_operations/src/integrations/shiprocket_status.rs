@@ -1,4 +1,4 @@
-//! Maps Shiprocket `shipment_status_id` (courier lifecycle) to our `Shipments.status` enum and labels.
+//! Maps Shiprocket `shipment_status_id` (courier lifecycle) to our `Shipments.shipment_status` enum and labels.
 //!
 //! IDs follow Shiprocket's tracking / webhook vocabulary (see their API docs; IDs may evolve).
 
@@ -88,7 +88,7 @@ pub fn customer_tracking_label(status_id: Option<i32>, line: Option<&ShipmentSta
     }
 }
 
-/// Map Shiprocket `shipment_status_id` to our granular `Shipments.status`.
+/// Map Shiprocket `shipment_status_id` to our granular `Shipments.shipment_status`.
 pub fn map_shiprocket_id_to_shipment_status(id: i32) -> ShipmentStatus {
     match id {
         1 | 2 => ShipmentStatus::Pending,
