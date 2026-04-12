@@ -1,4 +1,4 @@
-/* eslint-disable max-lines */
+﻿/* eslint-disable max-lines */
 "use client";
 
 import Image from "next/image";
@@ -107,6 +107,7 @@ export type AccountOrderDetailPayload = {
 };
 
 type ProfileNavId = "profile" | "orders" | "addresses" | "settings" | "support";
+type SupportCategory = "order" | "payment" | "refund" | "shipping" | "account";
 
 function formatAddress(a: ShippingAddressRow): string {
   const parts = [
@@ -267,7 +268,7 @@ function FulfillmentTrackingPanel({
             const dot =
               step === "done" ? "bg-[#0F3D2E]" : step === "current" ? "bg-[#C9A646]" : "bg-[#D4D0C8]";
             const textMuted = "text-[#0F3D2E]";
-            const sub = [formatCourierStepTime(s.at), s.location?.trim()].filter(Boolean).join(" · ");
+            const sub = [formatCourierStepTime(s.at), s.location?.trim()].filter(Boolean).join(" Â· ");
             return (
               <li key={`${i}-${s.label}`} className="flex gap-3">
                 <div className="flex flex-col items-center pt-0.5">
@@ -361,7 +362,7 @@ function singleOrderLineItemPresentation(order: AccountOrderRow, line: AccountOr
   return {
     title: name,
     orderLabel: `Order #${order.orderId}`,
-    detailLine: bits.join(" • "),
+    detailLine: bits.join(" â€¢ "),
     price,
   };
 }
@@ -389,7 +390,7 @@ function orderLinePresentation(order: AccountOrderRow, detail: AccountOrderDetai
   return {
     title,
     orderLabel: `Order #${order.orderId}`,
-    detailLine: bits.join(" • "),
+    detailLine: bits.join(" â€¢ "),
     price,
   };
 }
@@ -600,6 +601,10 @@ export function ProfileAuthenticatedContent({
   const [cancelDialogOrderId, setCancelDialogOrderId] = useState<string | null>(null);
   const [refreshingOrderId, setRefreshingOrderId] = useState<string | null>(null);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [supportCategory, setSupportCategory] = useState<SupportCategory>("order");
+  const [supportOrderId, setSupportOrderId] = useState<string>("");
+  const [supportMessage, setSupportMessage] = useState<string>("");
+  const [supportFiles, setSupportFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (activeNav !== "orders" || orders.length === 0) return;
@@ -664,6 +669,81 @@ export function ProfileAuthenticatedContent({
   const firstName = displayName.trim().split(/\s+/)[0] || displayName;
   const phoneDisplay = accountProfile?.phone?.trim() ? accountProfile.phone.trim() : "Not available";
   const phoneMissing = !accountProfile?.phone?.trim();
+  const defaultAddress = addresses.find((a) => a.isDefault) ?? addresses[0];
+
+  const supportIssues = useMemo(() => {
+    return sortedOrders
+      .map((o) => {
+        const detail = orderDetailsById[o.orderId];
+        const refundState = refundTrackingStateForOrder(o.statusName, detail);
+        const statusName = (o.statusName ?? "").toLowerCase();
+        let issueType: string | null = null;
+        let issueState = "Open";
+        if (refundState === "failed") {
+          issueType = "Refund";
+          issueState = "Needs action";
+        } else if (refundState === "initiated") {
+          issueType = "Refund";
+          issueState = "In progress";
+        } else if ((detail?.fulfillmentState ?? "").toLowerCase().includes("issue")) {
+          issueType = "Shipping";
+          issueState = "In progress";
+        } else if (statusName.includes("cancel")) {
+          issueType = "Order";
+          issueState = refundState === "processed" ? "Resolved" : "In progress";
+        }
+        if (!issueType) return null;
+        return {
+          orderId: o.orderId,
+          type: issueType,
+          state: issueState,
+          at: formatOrderDateShort(o.orderDate),
+        };
+      })
+      .filter((v): v is { orderId: string; type: string; state: string; at: string } => Boolean(v))
+      .slice(0, 5);
+  }, [sortedOrders, orderDetailsById]);
+
+  const supportPaymentSummary = useMemo(() => {
+    let pending = 0;
+    let paid = 0;
+    let refunded = 0;
+    let failed = 0;
+    for (const o of sortedOrders) {
+      const p = (orderDetailsById[o.orderId]?.paymentState ?? "unknown").toLowerCase();
+      if (p.includes("refund")) refunded += 1;
+      else if (p.includes("paid") || p.includes("captured")) paid += 1;
+      else if (p.includes("fail")) failed += 1;
+      else pending += 1;
+    }
+    return { pending, paid, refunded, failed };
+  }, [sortedOrders, orderDetailsById]);
+
+  const supportLatestShipment = useMemo(() => {
+    for (const o of sortedOrders) {
+      const ship = primaryShipmentForOrder(orderDetailsById[o.orderId]);
+      if (ship) return { orderId: o.orderId, ship };
+    }
+    return null;
+  }, [sortedOrders, orderDetailsById]);
+
+  const supportEmailHref = useMemo(() => {
+    const subjectOrder = supportOrderId.trim() ? `Order #${supportOrderId.trim()} - ` : "";
+    const subject = `${subjectOrder}${supportCategory} support request`;
+    const lines = [
+      `Customer: ${displayName}`,
+      `Email: ${displayEmail}`,
+      `Category: ${supportCategory}`,
+      supportOrderId.trim() ? `Order ID: ${supportOrderId.trim()}` : "",
+      "",
+      supportMessage.trim() || "(Please describe your issue)",
+      "",
+      supportFiles.length > 0
+        ? `Attachments selected in portal: ${supportFiles.map((f) => f.name).join(", ")}`
+        : "",
+    ].filter(Boolean);
+    return `mailto:support@sudattas.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
+  }, [displayEmail, displayName, supportCategory, supportFiles, supportMessage, supportOrderId]);
 
   const navItems: { id: ProfileNavId; label: string; Icon: SidebarIconComponent }[] = [
     { id: "profile", label: "Profile", Icon: UserIcon },
@@ -770,7 +850,7 @@ export function ProfileAuthenticatedContent({
                                 disabled={cancellingOrderId === o.orderId}
                                 className="mt-3 rounded-full border border-[#C45C5C]/45 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A34A4A] transition hover:bg-[#fff5f5] disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                {cancellingOrderId === o.orderId ? "Cancelling…" : "Cancel order"}
+                                {cancellingOrderId === o.orderId ? "Cancellingâ€¦" : "Cancel order"}
                               </button>
                             ) : null}
                           </div>
@@ -1104,18 +1184,188 @@ export function ProfileAuthenticatedContent({
               <h1 className="mt-4 font-[family-name:var(--font-display)] text-6xl text-[#0F3D2E]">Support</h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[#615A50]">We are here for order and account questions.</p>
             </header>
-            <div className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-7 text-sm text-[var(--color-muted)] shadow-[0_4px_24px_rgba(10,42,32,0.04)] sm:p-8">
-              <p>For phone number updates or email changes, please reach out with your registered email so we can verify your account.</p>
-              <p className="mt-4">
-                <Link href="/bag" className="font-semibold text-[var(--color-accent-brown)] underline-offset-2 hover:underline">
-                  View bag
-                </Link>
-                {" · "}
-                <Link href="/wishlist" className="font-semibold text-[var(--color-accent-brown)] underline-offset-2 hover:underline">
-                  Wishlist
-                </Link>
-              </p>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Order help</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveNav("orders")}
+                    className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#A37D34]"
+                  >
+                    Track shipment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveNav("orders")}
+                    className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#A37D34]"
+                  >
+                    Track refund
+                  </button>
+                  <Link
+                    href="/terms"
+                    className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#A37D34]"
+                  >
+                    Return policy
+                  </Link>
+                </div>
+                <p className="mt-4 text-xs leading-6 text-[#615A50]">
+                  Cancellation is auto-allowed only before shipped status. For post-shipment requests, contact support with your order ID.
+                </p>
+              </section>
+
+              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Contact options</p>
+                <ul className="mt-3 space-y-2 text-sm text-[#615A50]">
+                  <li>
+                    Email:{" "}
+                    <a href="mailto:support@sudattas.com" className="font-semibold text-[#0F3D2E] underline-offset-2 hover:underline">
+                      support@sudattas.com
+                    </a>
+                  </li>
+                  <li>
+                    Phone/WhatsApp:{" "}
+                    <a href="tel:+919739097329" className="font-semibold text-[#0F3D2E] underline-offset-2 hover:underline">
+                      +91 97390 97329
+                    </a>
+                  </li>
+                  <li>Hours: Mon-Sat, 10:00 AM - 7:00 PM IST</li>
+                  <li>Typical response: within 24 hours</li>
+                </ul>
+              </section>
             </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">My recent issues</p>
+                {supportIssues.length === 0 ? (
+                  <p className="mt-3 text-sm text-[#615A50]">No active support issues right now.</p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {supportIssues.map((i) => (
+                      <li key={`${i.orderId}-${i.type}`} className="flex items-center justify-between rounded-xl border border-[#E6E0D5] bg-white px-3 py-2">
+                        <span className="text-sm text-[#0F3D2E]">
+                          {i.type} issue - Order #{i.orderId}
+                        </span>
+                        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8B816D]">{i.state}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Shipping info</p>
+                {supportLatestShipment ? (
+                  <div className="mt-3 space-y-2 text-sm text-[#615A50]">
+                    <p>
+                      Latest shipment order: <span className="font-semibold text-[#0F3D2E]">#{supportLatestShipment.orderId}</span>
+                    </p>
+                    <p>
+                      Courier:{" "}
+                      <span className="font-semibold text-[#0F3D2E]">{supportLatestShipment.ship.carrier || "Pending assignment"}</span>
+                    </p>
+                    <p>
+                      AWB: <span className="font-mono text-[#0F3D2E]">{supportLatestShipment.ship.awbCode || "Not assigned"}</span>
+                    </p>
+                    <p>
+                      Status:{" "}
+                      <span className="font-semibold text-[#0F3D2E]">
+                        {supportLatestShipment.ship.shiprocketStatusLabel || supportLatestShipment.ship.status}
+                      </span>
+                    </p>
+                    <p>Updated: {formatOrderDateShort(supportLatestShipment.ship.createdAt)}</p>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-[#615A50]">No shipment records yet.</p>
+                )}
+              </section>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Payment and refund info</p>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-xl border border-[#E6E0D5] bg-white px-3 py-2 text-[#615A50]">
+                    Paid: <span className="font-semibold text-[#0F3D2E]">{supportPaymentSummary.paid}</span>
+                  </div>
+                  <div className="rounded-xl border border-[#E6E0D5] bg-white px-3 py-2 text-[#615A50]">
+                    Pending: <span className="font-semibold text-[#0F3D2E]">{supportPaymentSummary.pending}</span>
+                  </div>
+                  <div className="rounded-xl border border-[#E6E0D5] bg-white px-3 py-2 text-[#615A50]">
+                    Refunded: <span className="font-semibold text-[#0F3D2E]">{supportPaymentSummary.refunded}</span>
+                  </div>
+                  <div className="rounded-xl border border-[#E6E0D5] bg-white px-3 py-2 text-[#615A50]">
+                    Failed: <span className="font-semibold text-[#0F3D2E]">{supportPaymentSummary.failed}</span>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs leading-6 text-[#615A50]">Razorpay reference IDs and refund state are visible in your order details timeline.</p>
+              </section>
+
+              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Raise a request</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <select
+                    value={supportCategory}
+                    onChange={(e) => setSupportCategory(e.target.value as SupportCategory)}
+                    className="h-10 rounded-md border border-[#DDD4C7] bg-white px-3 text-sm text-[#0F3D2E]"
+                  >
+                    <option value="order">Order</option>
+                    <option value="payment">Payment</option>
+                    <option value="refund">Refund</option>
+                    <option value="shipping">Shipping</option>
+                    <option value="account">Account</option>
+                  </select>
+                  <select
+                    value={supportOrderId}
+                    onChange={(e) => setSupportOrderId(e.target.value)}
+                    className="h-10 rounded-md border border-[#DDD4C7] bg-white px-3 text-sm text-[#0F3D2E]"
+                  >
+                    <option value="">Select order (optional)</option>
+                    {sortedOrders.map((o) => (
+                      <option key={o.orderId} value={o.orderId}>
+                        Order #{o.orderId}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <textarea
+                  value={supportMessage}
+                  onChange={(e) => setSupportMessage(e.target.value)}
+                  placeholder="Tell us what happened..."
+                  className="mt-2 min-h-[92px] w-full rounded-md border border-[#DDD4C7] bg-white px-3 py-2 text-sm text-[#0F3D2E]"
+                />
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => setSupportFiles(Array.from(e.target.files ?? []))}
+                  className="mt-2 block w-full text-xs text-[#615A50]"
+                />
+                {supportFiles.length > 0 ? (
+                  <p className="mt-1 text-xs text-[#615A50]">{supportFiles.length} file(s) selected</p>
+                ) : null}
+                <a
+                  href={supportEmailHref}
+                  className="mt-3 inline-flex rounded-full bg-[#C9A646] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white"
+                >
+                  Create support email draft
+                </a>
+              </section>
+            </div>
+
+            <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 text-sm text-[#615A50] shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">FAQ</p>
+              <ul className="mt-3 space-y-2">
+                <li>Where is my order? Use Orders &gt; Refresh tracking for latest courier scan.</li>
+                <li>When will refund arrive? Usually 3-7 business days after refund is processed.</li>
+                <li>How do I change address? Update default address from Addresses tab before checkout.</li>
+                <li>How to contact quickly? Use WhatsApp/phone during support hours for urgent issues.</li>
+              </ul>
+              {defaultAddress ? (
+                <p className="mt-3 text-xs text-[#8B816D]">Default delivery address on file: {formatAddress(defaultAddress)}</p>
+              ) : null}
+            </section>
           </div>
         )}
             </div>
@@ -1144,7 +1394,7 @@ export function ProfileAuthenticatedContent({
           </h2>
           <p className="text-center text-sm leading-[1.7] text-[#5C5650] sm:text-[0.9375rem]">
             Each piece at Sudatta&apos;s is carefully prepared to ensure it reaches you in perfect condition. If there&apos;s a specific reason for your
-            cancellation—like a change in size or a delivery timing concern—please let us know. We&apos;d love the chance to make it right before we halt
+            cancellationâ€”like a change in size or a delivery timing concernâ€”please let us know. We&apos;d love the chance to make it right before we halt
             the process.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
