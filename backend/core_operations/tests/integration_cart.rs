@@ -287,6 +287,8 @@ async fn integration_guest_cart_not_used_for_place_order() {
     let shipping = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
@@ -376,6 +378,8 @@ async fn integration_place_order_clears_all_user_cart_items_after_payment() {
     let shipping = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),

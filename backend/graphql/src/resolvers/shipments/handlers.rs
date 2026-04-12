@@ -1,5 +1,6 @@
 use proto::proto::core::{
-    CreateShipmentRequest, GetShipmentRequest, ShipmentResponse, UpdateShipmentRequest,
+    CreateShipmentRequest, GetShipmentRequest, ShipmentResponse,
+    SyncOrderShipmentsFromShiprocketRequest, UpdateShipmentRequest,
 };
 use tracing::instrument;
 
@@ -19,6 +20,10 @@ fn shipment_response_to_gql(s: ShipmentResponse) -> Shipment {
         status: s.status,
         created_at: s.created_at,
         delivered_at: s.delivered_at,
+        tracking_events_json: s.tracking_events_json,
+        shiprocket_status_id: s.shiprocket_status_id.map(|n| n.to_string()),
+        shiprocket_status_label: s.shiprocket_status_label,
+        customer_tracking_status: s.customer_tracking_status,
     }
 }
 
@@ -31,6 +36,8 @@ pub(crate) async fn create_shipment(input: NewShipment) -> Result<Vec<Shipment>,
             shiprocket_order_id: input.shiprocket_order_id,
             awb_code: input.awb_code,
             carrier: input.carrier,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         })
         .await?;
     Ok(response
@@ -51,6 +58,12 @@ pub(crate) async fn update_shipment(input: UpdateShipment) -> Result<Vec<Shipmen
             awb_code: input.awb_code,
             carrier: input.carrier,
             status: input.status,
+            tracking_events_json: input.tracking_events_json,
+            shiprocket_status_id: input
+                .shiprocket_status_id
+                .as_deref()
+                .and_then(|s| s.parse().ok()),
+            shiprocket_status_label: input.shiprocket_status_label,
         })
         .await?;
     Ok(response
@@ -69,6 +82,22 @@ pub(crate) async fn get_shipment(input: GetShipment) -> Result<Vec<Shipment>, Gq
             shipment_id: input.shipment_id.as_deref().and_then(|s| s.parse().ok()),
             order_id: input.order_id.as_deref().and_then(|s| s.parse().ok()),
         })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(shipment_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn sync_order_shipments_from_shiprocket(
+    order_id: i64,
+) -> Result<Vec<Shipment>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .sync_order_shipments_from_shiprocket(SyncOrderShipmentsFromShiprocketRequest { order_id })
         .await?;
     Ok(response
         .into_inner()

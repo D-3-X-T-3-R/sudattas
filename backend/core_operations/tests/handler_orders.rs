@@ -158,7 +158,26 @@ async fn update_order_illegal_state_transition_returns_invalid_argument() {
 }
 
 #[tokio::test]
-async fn delete_order_deletes_existing_and_returns_response() {
+async fn delete_order_not_found_yields_not_found_status() {
+    use core_operations::handlers::orders::delete_order;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<orders::Model>::new()])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(DeleteOrderRequest {
+        order_id: 999,
+        acting_user_id: None,
+    });
+    let result = delete_order(&txn, req).await;
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::NotFound);
+}
+
+#[tokio::test]
+async fn delete_order_acting_user_mismatch_yields_not_found() {
     use core_operations::handlers::orders::delete_order;
 
     let now = chrono::Utc::now();
@@ -186,38 +205,66 @@ async fn delete_order_deletes_existing_and_returns_response() {
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
         .append_query_results(vec![vec![model]])
-        .append_exec_results(vec![MockExecResult {
-            last_insert_id: 0,
-            rows_affected: 1,
-        }])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
-    let req = Request::new(DeleteOrderRequest { order_id: 5 });
+    let req = Request::new(DeleteOrderRequest {
+        order_id: 5,
+        acting_user_id: Some(99),
+    });
+    let result = delete_order(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
+}
+
+#[tokio::test]
+async fn delete_order_when_already_cancelled_returns_snapshot() {
+    use core_operations::handlers::orders::delete_order;
+
+    let now = chrono::Utc::now();
+    let cancelled_sid = 7_i64;
+    let model = orders::Model {
+        order_id: 5,
+        order_number: Some("ORD-5".to_string()),
+        user_id: 3,
+        order_date: now,
+        shipping_address_id: 20,
+        total_amount: Some(Decimal::new(5_000, 2)),
+        status_id: cancelled_sid,
+        payment_status: None,
+        payment_method: None,
+        currency: Some("INR".to_string()),
+        updated_at: None,
+        subtotal_minor: 4_000,
+        shipping_minor: Some(1_000),
+        tax_total_minor: None,
+        discount_total_minor: None,
+        grand_total_minor: 5_000,
+        applied_coupon_id: None,
+        applied_coupon_code: None,
+        applied_discount_paise: None,
+    };
+    let st = order_status::Model {
+        status_id: cancelled_sid,
+        status_name: "cancelled".to_string(),
+    };
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![model.clone()]])
+        .append_query_results(vec![vec![st]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(DeleteOrderRequest {
+        order_id: 5,
+        acting_user_id: None,
+    });
     let result = delete_order(&txn, req).await;
     assert!(result.is_ok());
     let OrdersResponse { items } = result.unwrap().into_inner();
     assert_eq!(items.len(), 1);
-    let o = &items[0];
-    assert_eq!(o.order_id, 5);
-    assert_eq!(o.user_id, 3);
-    assert_eq!(o.shipping_address_id, 20);
-}
-
-#[tokio::test]
-async fn delete_order_not_found_yields_not_found_status() {
-    use core_operations::handlers::orders::delete_order;
-
-    let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_query_results(vec![Vec::<orders::Model>::new()])
-        .into_connection();
-    let txn = db.begin().await.expect("begin");
-
-    let req = Request::new(DeleteOrderRequest { order_id: 999 });
-    let result = delete_order(&txn, req).await;
-    assert!(result.is_err());
-    let status = result.unwrap_err();
-    assert_eq!(status.code(), tonic::Code::NotFound);
+    assert_eq!(items[0].order_id, 5);
+    assert_eq!(items[0].status_id, cancelled_sid);
 }
 
 #[tokio::test]
@@ -233,6 +280,10 @@ async fn admin_mark_order_shipped_order_not_found_propagates_not_found() {
         order_id: 123,
         awb_code: None,
         carrier: None,
+        shiprocket_book: None,
+        shiprocket_order_id: None,
+        shiprocket_status_id: None,
+        shiprocket_status_label: None,
     });
     let result = admin_mark_order_shipped(&txn, req).await;
     assert!(result.is_err());

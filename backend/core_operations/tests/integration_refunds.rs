@@ -77,6 +77,8 @@ async fn place_order_minimal(
     let ship = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
@@ -216,6 +218,10 @@ async fn transition_order_to_delivered(
             order_id,
             awb_code: Some("AWBREF".to_string()),
             carrier: Some("Carrier".to_string()),
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await
@@ -272,6 +278,10 @@ async fn transition_order_to_shipped(
             order_id,
             awb_code: None,
             carrier: None,
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await
@@ -476,6 +486,74 @@ async fn integration_create_refund_pending_returns_failed_precondition() {
         .expect("query refunds")
         .len();
     assert_eq!(refund_count, 0, "no refund row should be created");
+
+    txn.rollback().await.ok();
+}
+
+/// R5 – create_refund on a cancelled order succeeds (needed for async courier cancellation → refund flow).
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_create_refund_cancelled_order_succeeds() {
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let (order_id, user_id, shipping_id, total_paise) = place_order_minimal(&txn, now_tag).await;
+
+    let confirmed_id = ensure_order_status(&txn, "confirmed").await;
+    let cancelled_id = ensure_order_status(&txn, "cancelled").await;
+    let _ = core_operations::handlers::orders::update_order(
+        &txn,
+        Request::new(UpdateOrderRequest {
+            order_id,
+            user_id,
+            shipping_address_id: shipping_id,
+            total_amount_paise: total_paise,
+            status_id: confirmed_id,
+        }),
+    )
+    .await
+    .expect("update to confirmed");
+
+    let _ = core_operations::handlers::orders::update_order(
+        &txn,
+        Request::new(UpdateOrderRequest {
+            order_id,
+            user_id,
+            shipping_address_id: shipping_id,
+            total_amount_paise: total_paise,
+            status_id: cancelled_id,
+        }),
+    )
+    .await
+    .expect("update to cancelled");
+
+    let create_res = core_operations::handlers::refunds::create_refund(
+        &txn,
+        Request::new(CreateRefundRequest {
+            order_id,
+            gateway_refund_id: format!("gw_cancelled_{}", now_tag),
+            amount_paise: total_paise,
+            currency: None,
+            line_items_refunded_json: None,
+        }),
+    )
+    .await
+    .expect("create_refund on cancelled should succeed");
+    assert_eq!(create_res.into_inner().items.len(), 1);
+
+    let refunded_id = ensure_order_status(&txn, "refunded").await;
+    let order = orders::Entity::find_by_id(order_id)
+        .one(&txn)
+        .await
+        .expect("query order")
+        .expect("order exists");
+    assert_eq!(
+        order.status_id, refunded_id,
+        "cancelled order should transition to refunded"
+    );
 
     txn.rollback().await.ok();
 }

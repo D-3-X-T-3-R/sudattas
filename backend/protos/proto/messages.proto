@@ -42,7 +42,7 @@ message CartItemsResponse {
     repeated CartItemResponse items = 1;
 }
 
-// ShippingAddress (flattened: no country/state/city lookup; schema has UserID, Country, StateRegion, City, PostalCode, Road, ApartmentNoOrName)
+// ShippingAddress (flattened: no country/state/city lookup; schema has UserID, RecipientName, Country, StateRegion, City, PostalCode, Road, ApartmentNoOrName)
 
 message CreateShippingAddressRequest {
     optional int64 user_id = 1;
@@ -53,6 +53,8 @@ message CreateShippingAddressRequest {
     string postal_code = 6;
     optional string road = 7;
     optional string apartment_no_or_name = 8;
+    optional string recipient_name = 9;
+    optional string phone_number = 10;
 }
 
 message UpdateShippingAddressRequest {
@@ -65,6 +67,8 @@ message UpdateShippingAddressRequest {
     string postal_code = 7;
     optional string road = 8;
     optional string apartment_no_or_name = 9;
+    optional string recipient_name = 10;
+    optional string phone_number = 11;
 }
 
 message DeleteShippingAddressRequest {
@@ -83,6 +87,8 @@ message ShippingAddressResponse {
     string postal_code = 7;
     optional string road = 8;
     optional string apartment_no_or_name = 9;
+    optional string recipient_name = 10;
+    optional string phone_number = 11;
 }
 
 message ShippingAddressesResponse {
@@ -289,6 +295,23 @@ message PlaceOrderRequest{
     int64 user_id = 2;
     optional string coupon_code = 3;
 }
+
+// Checkout shipping estimate for bag/checkout preview (no order mutation).
+message EstimateCheckoutShippingRequest {
+    int64 shipping_address_id = 1;
+    int64 user_id = 2;
+    optional string coupon_code = 3;
+}
+
+message EstimateCheckoutShippingResponse {
+    int64 shipping_amount_paise = 1;
+    optional string courier_name = 2;
+    optional int32 estimated_delivery_days = 3;
+    int64 item_subtotal_paise = 4;
+    int64 order_total_paise = 5;
+    bool quote_available = 6;
+    optional string note = 7;
+}
 message CreateOrderRequest {
     int64 user_id = 1;
     int64 shipping_address_id = 2;
@@ -323,7 +346,9 @@ message UpdateOrderRequest {
 }
 
 message DeleteOrderRequest {
-    int64 order_id = 1;
+  int64 order_id = 1;
+  // When set, the order must belong to this user (customer self-cancel). Omit for trusted admin/service.
+  optional int64 acting_user_id = 2;
 }
 
 // P1 Admin: mark order shipped/delivered with enforced transitions
@@ -331,6 +356,13 @@ message AdminMarkOrderShippedRequest {
     int64 order_id = 1;
     optional string awb_code = 2;
     optional string carrier = 3;
+    // When true, core_operations calls Shiprocket (create adhoc + assign AWB) and fills awb/carrier/shiprocket_order_id before persisting.
+    optional bool shiprocket_book = 4;
+    // Set by server when shiprocket_book succeeds; optional manual override if shiprocket_book is false.
+    optional string shiprocket_order_id = 5;
+    // Filled by server after Shiprocket booking (assign AWB response); optional echo for downstream shipment row.
+    optional int32 shiprocket_status_id = 6;
+    optional string shiprocket_status_label = 7;
 }
 message AdminMarkOrderShippedResponse {
     int64 order_id = 1;
@@ -1171,6 +1203,8 @@ message CreateShipmentRequest {
     optional string shiprocket_order_id = 2;
     optional string awb_code = 3;
     optional string carrier = 4;
+    optional int32 shiprocket_status_id = 5;
+    optional string shiprocket_status_label = 6;
 }
 
 message UpdateShipmentRequest {
@@ -1178,7 +1212,13 @@ message UpdateShipmentRequest {
     optional string shiprocket_order_id = 2;
     optional string awb_code = 3;
     optional string carrier = 4;
-    optional string status = 5;  // pending | processed | failed
+    // Granular courier lifecycle: pending | awb_assigned | picked_up | in_transit | out_for_delivery | delivered | ...
+    // Legacy: "processed" is treated as delivered (sets delivered_at).
+    optional string status = 5;
+    // JSON array of customer-visible courier steps, e.g. [{"label":"Picked up","at":"...","location":"..."}]
+    optional string tracking_events_json = 6;
+    optional int32 shiprocket_status_id = 7;
+    optional string shiprocket_status_label = 8;
 }
 
 message GetShipmentRequest {
@@ -1195,6 +1235,19 @@ message ShipmentResponse {
     string status = 6;
     string created_at = 7;
     optional string delivered_at = 8;
+    optional string tracking_events_json = 9;
+    optional int32 shiprocket_status_id = 10;
+    optional string shiprocket_status_label = 11;
+    // Friendly line for storefronts ("In transit", "Out for delivery", …) derived from Shiprocket id + internal status.
+    string customer_tracking_status = 12;
+}
+
+message SyncOrderShipmentsFromShiprocketRequest {
+    int64 order_id = 1;
+}
+
+message SyncOrderShipmentsFromShiprocketResponse {
+    repeated ShipmentResponse items = 1;
 }
 
 message ShipmentsResponse {

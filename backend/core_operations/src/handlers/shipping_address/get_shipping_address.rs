@@ -24,6 +24,8 @@ pub async fn get_shipping_address(
                     postal_code: m.postal_code,
                     road: m.road,
                     apartment_no_or_name: m.apartment_no_or_name,
+                    recipient_name: m.recipient_name,
+                    phone_number: m.phone_number,
                 })
                 .collect();
             Ok(Response::new(ShippingAddressesResponse { items }))

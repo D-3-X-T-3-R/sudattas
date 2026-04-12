@@ -24,6 +24,10 @@ pub struct Model {
     pub road: Option<String>,
     #[sea_orm(column_name = "ApartmentNoOrName")]
     pub apartment_no_or_name: Option<String>,
+    #[sea_orm(column_name = "RecipientName")]
+    pub recipient_name: Option<String>,
+    #[sea_orm(column_name = "PhoneNumber")]
+    pub phone_number: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

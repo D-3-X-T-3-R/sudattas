@@ -363,7 +363,6 @@ async fn verify_razorpay_payment_invalid_signature_returns_false_and_does_not_up
 }
 
 #[tokio::test]
-#[ignore = "verify promotes order to Paid; full SeaORM mock chain is covered by integration_payments P2"]
 async fn verify_razorpay_payment_duplicate_attempt_same_payload_is_idempotent() {
     use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
 

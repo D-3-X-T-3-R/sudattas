@@ -19,6 +19,8 @@ fn make_address(id: i64) -> shipping_addresses::Model {
         postal_code: "560001".into(),
         road: Some("MG Road".into()),
         apartment_no_or_name: Some("42".into()),
+        recipient_name: Some("Test User".into()),
+        phone_number: Some("+1 415 555 0101".into()),
     }
 }
 
@@ -51,6 +53,8 @@ async fn create_shipping_address_inserts_and_returns_created_model() {
         postal_code: "560001".into(),
         road: Some("MG Road".into()),
         apartment_no_or_name: Some("42".into()),
+        recipient_name: Some("Test User".into()),
+        phone_number: Some("+1 415 555 0101".into()),
     });
     let result = create_shipping_address(&txn, req).await;
     assert!(result.is_ok());
@@ -89,6 +93,8 @@ async fn update_shipping_address_updates_all_fields() {
         postal_code: "560001".into(),
         road: Some("MG Road".into()),
         apartment_no_or_name: Some("42".into()),
+        recipient_name: Some("Updated User".into()),
+        phone_number: Some("+44 20 7946 0958".into()),
     });
     let result = update_shipping_address(&txn, req).await;
     assert!(result.is_ok());

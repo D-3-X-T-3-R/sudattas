@@ -19,6 +19,7 @@ use sea_orm::{
 use serde_json::json;
 use std::collections::HashSet;
 use tonic::Request;
+use tracing::info;
 
 /// Order lifecycle states (maps to OrderStatus.StatusName in DB).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -64,7 +65,10 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
             Processing,
             [Shipped, Cancelled, Refunded].into_iter().collect(),
         ),
-        (Shipped, [Delivered, Refunded].into_iter().collect()),
+        (
+            Shipped,
+            [Delivered, Cancelled, Refunded].into_iter().collect(),
+        ),
         (Delivered, [Refunded].into_iter().collect()),
         (
             NeedsReview,
@@ -72,7 +76,7 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
                 .into_iter()
                 .collect(),
         ),
-        (Cancelled, HashSet::new()),
+        (Cancelled, [Refunded].into_iter().collect()),
         (Refunded, HashSet::new()),
     ]
 }
@@ -160,6 +164,13 @@ pub async fn transition_order_status(
         })?;
     let from_state = status_name_to_state(&current_row.status_name);
     if from_state == to_state {
+        info!(
+            order_id,
+            status = %to_state.as_status_name(),
+            event_type = %event_type,
+            actor_type = %actor_type,
+            "order status unchanged (already in target state)"
+        );
         return Ok(());
     }
 
@@ -180,6 +191,15 @@ pub async fn transition_order_status(
         )));
     }
 
+    info!(
+        order_id,
+        from_status = %from_state.as_status_name(),
+        to_status = %to_state.as_status_name(),
+        event_type = %event_type,
+        actor_type = %actor_type,
+        "order status transition requested"
+    );
+
     let user_id = order.user_id;
     let mut active: orders::ActiveModel = order.into_active_model();
     active.status_id = ActiveValue::Set(to_status_id);
@@ -187,6 +207,12 @@ pub async fn transition_order_status(
         active.payment_status = ActiveValue::Set(Some(ps));
     }
     let _ = active.update(txn).await.map_err(map_db_error_to_status)?;
+    info!(
+        order_id,
+        from_status = %from_state.as_status_name(),
+        to_status = %to_state.as_status_name(),
+        "order status transition committed"
+    );
 
     let _ = create_order_event(
         txn,
@@ -292,6 +318,17 @@ mod tests {
             OrderState::Processing
         ));
         assert!(can_transition(OrderState::Cancelled, OrderState::Cancelled));
+    }
+
+    #[test]
+    fn shipped_can_transition_to_cancelled_and_refunded() {
+        assert!(can_transition(OrderState::Shipped, OrderState::Cancelled));
+        assert!(can_transition(OrderState::Shipped, OrderState::Refunded));
+    }
+
+    #[test]
+    fn cancelled_can_transition_to_refunded() {
+        assert!(can_transition(OrderState::Cancelled, OrderState::Refunded));
     }
 
     #[test]

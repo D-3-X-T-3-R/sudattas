@@ -39,6 +39,13 @@ For orchestrators (e.g. Kubernetes):
 - **Prometheus:** `GET /metrics` — scrape endpoint for request counts and latency. See [RESILIENCE.md](RESILIENCE.md) for rate limiting, gRPC timeouts/retries/circuit breaker, and webhooks.
 - If GraphQL is behind a trusted proxy/app server, set `RATE_LIMIT_TRUST_PROXY_HEADERS=true` so rate limiting keys on end-user IP (`X-Forwarded-For` / `X-Real-Ip`) instead of the proxy socket IP.
 
+## Webhook endpoints (GraphQL service)
+
+- **Razorpay webhook:** `POST /wheresthemoney/razorpay`  
+  Requires valid `x-razorpay-signature` when `RAZORPAY_WEBHOOK_SECRET` is set.
+- **Shiprocket webhook:** `POST /blastoff/parcelupdate`  
+  Set `SHIPROCKET_WEBHOOK_SECRET` and send it as `x-shiprocket-token`.
+
 ## Cross-layer route contract
 
 Frontend and backend boundary rules are documented in [`../docs/CROSS_LAYER_CONTRACT.md`](../docs/CROSS_LAYER_CONTRACT.md).

@@ -76,6 +76,50 @@ pub struct NewOrder {
     pub coupon_code: Option<String>,
 }
 
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Estimate checkout shipping for current cart and selected address")]
+pub struct EstimateCheckoutShippingInput {
+    pub shipping_address_id: String,
+    pub coupon_code: Option<String>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct CheckoutShippingEstimate {
+    pub shipping_amount_paise: i64,
+    pub courier_name: Option<String>,
+    pub estimated_delivery_days: Option<i32>,
+    pub item_subtotal_paise: i64,
+    pub order_total_paise: i64,
+    pub quote_available: bool,
+    pub note: Option<String>,
+}
+
+#[graphql_object]
+#[graphql(description = "Checkout shipping estimate")]
+impl CheckoutShippingEstimate {
+    async fn shipping_amount_paise(&self) -> String {
+        self.shipping_amount_paise.to_string()
+    }
+    async fn courier_name(&self) -> &Option<String> {
+        &self.courier_name
+    }
+    async fn estimated_delivery_days(&self) -> &Option<i32> {
+        &self.estimated_delivery_days
+    }
+    async fn item_subtotal_paise(&self) -> String {
+        self.item_subtotal_paise.to_string()
+    }
+    async fn order_total_paise(&self) -> String {
+        self.order_total_paise.to_string()
+    }
+    async fn quote_available(&self) -> bool {
+        self.quote_available
+    }
+    async fn note(&self) -> &Option<String> {
+        &self.note
+    }
+}
+
 /// Order status row (from OrderStatus table) for admin dropdowns.
 #[derive(Default, Debug, Clone)]
 pub struct OrderStatus {
@@ -142,6 +186,8 @@ pub struct AdminMarkOrderShippedInput {
     pub order_id: String,
     pub awb_code: Option<String>,
     pub carrier: Option<String>,
+    /// When true, creates a Shiprocket shipment (requires SHIPROCKET_* env); ignores awb_code/carrier from input.
+    pub shiprocket_book: Option<bool>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

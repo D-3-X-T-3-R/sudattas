@@ -1,7 +1,7 @@
 //! Unit tests for shipments and coupons handlers using SeaORM MockDatabase.
 
 use chrono::Utc;
-use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType, Status};
+use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType, ShipmentStatus};
 use core_db_entities::entity::{coupons, shipments};
 use proto::proto::core::{
     ApplyCouponRequest, CreateShipmentRequest, GetShipmentRequest, UpdateShipmentRequest,
@@ -25,7 +25,9 @@ async fn create_shipment_success() {
             shiprocket_order_id: Some("sr_123".to_string()),
             awb_code: Some("AWB456".to_string()),
             carrier: Some("DTDC".to_string()),
-            status: Some(Status::Pending),
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
+            shipment_status: ShipmentStatus::InTransit,
             tracking_events: None,
             created_at: None,
             delivered_at: None,
@@ -38,6 +40,8 @@ async fn create_shipment_success() {
         shiprocket_order_id: Some("sr_123".to_string()),
         awb_code: Some("AWB456".to_string()),
         carrier: Some("DTDC".to_string()),
+        shiprocket_status_id: None,
+        shiprocket_status_label: None,
     });
     let result = create_shipment(&txn, req).await;
     assert!(
@@ -51,7 +55,7 @@ async fn create_shipment_success() {
     assert_eq!(res.items[0].shiprocket_order_id.as_deref(), Some("sr_123"));
     assert_eq!(res.items[0].awb_code.as_deref(), Some("AWB456"));
     assert_eq!(res.items[0].carrier.as_deref(), Some("DTDC"));
-    assert_eq!(res.items[0].status, "pending");
+    assert_eq!(res.items[0].status, "in_transit");
 }
 
 #[tokio::test]
@@ -64,7 +68,9 @@ async fn get_shipment_by_order_id_returns_items() {
         shiprocket_order_id: Some("sr_456".to_string()),
         awb_code: Some("AWB789".to_string()),
         carrier: Some("Bluedart".to_string()),
-        status: Some(Status::Processed),
+        shiprocket_status_id: None,
+        shiprocket_status_label: None,
+        shipment_status: ShipmentStatus::InTransit,
         tracking_events: None,
         created_at: None,
         delivered_at: None,
@@ -117,6 +123,9 @@ async fn update_shipment_not_found_yields_not_found_status() {
         awb_code: None,
         carrier: None,
         status: None,
+        tracking_events_json: None,
+        shiprocket_status_id: None,
+        shiprocket_status_label: None,
     });
     let result = update_shipment(&txn, req).await;
     assert!(result.is_err());
@@ -133,13 +142,15 @@ async fn update_shipment_updates_status_and_sets_delivered_at_when_processed() {
         shiprocket_order_id: Some("sr_789".to_string()),
         awb_code: Some("AWB000".to_string()),
         carrier: Some("Xpress".to_string()),
-        status: Some(Status::Pending),
+        shiprocket_status_id: None,
+        shiprocket_status_label: None,
+        shipment_status: ShipmentStatus::Pending,
         tracking_events: None,
         created_at: Some(Utc::now()),
         delivered_at: None,
     };
     let updated = shipments::Model {
-        status: Some(Status::Processed),
+        shipment_status: ShipmentStatus::Delivered,
         delivered_at: Some(Utc::now()),
         ..existing.clone()
     };
@@ -159,7 +170,10 @@ async fn update_shipment_updates_status_and_sets_delivered_at_when_processed() {
         shiprocket_order_id: None,
         awb_code: None,
         carrier: None,
-        status: Some("processed".to_string()),
+        status: Some("delivered".to_string()),
+        tracking_events_json: None,
+        shiprocket_status_id: None,
+        shiprocket_status_label: None,
     });
 
     let result = update_shipment(&txn, req).await;
@@ -168,7 +182,7 @@ async fn update_shipment_updates_status_and_sets_delivered_at_when_processed() {
     assert_eq!(res.items.len(), 1);
     let s = &res.items[0];
     assert_eq!(s.order_id, 300);
-    assert_eq!(s.status, "processed");
+    assert_eq!(s.status, "delivered");
 }
 
 #[tokio::test]

@@ -76,6 +76,8 @@ async fn place_order_minimal(
     let ship = shipping_addresses::ActiveModel {
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
@@ -361,6 +363,10 @@ async fn integration_admin_mark_shipped_creates_shipment() {
             order_id,
             awb_code: Some("AWB123".to_string()),
             carrier: Some("DHL".to_string()),
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await
@@ -438,6 +444,10 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
             order_id,
             awb_code: Some("AWB1".to_string()),
             carrier: Some("Carrier1".to_string()),
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await
@@ -449,6 +459,10 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
             order_id,
             awb_code: Some("AWB2".to_string()),
             carrier: Some("Carrier2".to_string()),
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await
@@ -514,6 +528,10 @@ async fn integration_admin_mark_delivered_transitions_to_delivered() {
             order_id,
             awb_code: Some("AWB".to_string()),
             carrier: Some("Carrier".to_string()),
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await
@@ -595,6 +613,10 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
             order_id,
             awb_code: Some("FULL-AWB".to_string()),
             carrier: Some("FullCarrier".to_string()),
+            shiprocket_book: None,
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
         }),
     )
     .await

@@ -51,5 +51,9 @@ export function getStatusLabel(
   statuses: { statusId: string; statusName: string }[]
 ): string {
   const s = statuses.find((x) => x.statusId === statusId);
-  return s ? s.statusName : statusId;
+  return s ? formatOrderStatusName(s.statusName) : statusId;
+}
+
+export function formatOrderStatusName(statusName: string): string {
+  return statusName.trim().toLowerCase() === "processing" ? "processing order" : statusName;
 }

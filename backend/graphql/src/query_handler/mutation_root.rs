@@ -1,3 +1,4 @@
+use super::query_root;
 use super::Context;
 use crate::resolvers::{
     cart::{
@@ -142,6 +143,7 @@ use crate::resolvers::{
         self,
         schema::{DeleteUserInput, NewUser, RecordSecurityAuditEventInput, UpdateUserInput, User},
     },
+    utils::parse_i64,
     weaves::{
         self,
         schema::{DeleteWeaveInput, NewWeave, SearchWeaveInput, Weave, WeaveMutation},
@@ -443,10 +445,19 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Cancels the order (status → `cancelled`). Admins may cancel any order; customers only their own.
     #[instrument(err, ret)]
     async fn delete_order(context: &Context, order_id: String) -> FieldResult<Vec<Order>> {
-        require_admin(context)?;
-        orders::handlers::delete_order(order_id)
+        let acting_user_id = if context.is_admin() {
+            None
+        } else {
+            let uid = require_jwt(context)?;
+            Some(
+                crate::resolvers::utils::parse_i64(uid, "user_id")
+                    .map_err(|e| e.into_field_error())?,
+            )
+        };
+        orders::handlers::delete_order(order_id, acting_user_id)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -662,6 +673,19 @@ impl MutationRoot {
     ) -> FieldResult<Vec<Shipment>> {
         require_admin(context)?;
         shipments::handlers::update_shipment(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Customer: refresh shipment rows from Shiprocket track-by-AWB (configure Shiprocket webhooks for automatic updates).
+    #[instrument(err, ret)]
+    async fn sync_order_shipments_from_shiprocket(
+        context: &Context,
+        order_id: String,
+    ) -> FieldResult<Vec<Shipment>> {
+        query_root::ensure_customer_can_access_order(context, order_id.trim()).await?;
+        let oid = parse_i64(order_id.trim(), "order_id").map_err(|e| e.into_field_error())?;
+        shipments::handlers::sync_order_shipments_from_shiprocket(oid)
             .await
             .map_err(|e| e.into_field_error())
     }

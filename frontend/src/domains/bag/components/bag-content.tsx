@@ -12,6 +12,9 @@ type BagContentProps = {
   selectedLines: CartLine[];
   selectedSubtotal: number;
   selectedCount: number;
+  shippingAmount: number;
+  shippingLoading: boolean;
+  shippingNote?: string | null;
   allSelected: boolean;
   catalogSizes: CatalogSize[];
   openSizeForId: string | null;
@@ -34,6 +37,9 @@ export function BagContent({
   selectedLines,
   selectedSubtotal,
   selectedCount,
+  shippingAmount,
+  shippingLoading,
+  shippingNote,
   allSelected,
   catalogSizes,
   openSizeForId,
@@ -97,6 +103,9 @@ export function BagContent({
             cartLines={selectedLines}
             cartSubtotal={selectedSubtotal}
             cartCount={selectedCount}
+            shippingAmount={shippingAmount}
+            shippingLoading={shippingLoading}
+            shippingNote={shippingNote}
             onCheckout={onCheckout}
           />
         </div>

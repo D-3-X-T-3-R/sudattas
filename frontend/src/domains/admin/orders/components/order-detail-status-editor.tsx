@@ -9,7 +9,7 @@ import {
 } from "@/lib/admin-order-detail";
 import { cn } from "@/lib/utils";
 import { filterStatusesForTransition } from "@/domains/admin/orders/order-status-transitions";
-import { getStatusLabel } from "@/domains/admin/orders/utils";
+import { formatOrderStatusName, getStatusLabel } from "@/domains/admin/orders/utils";
 
 function formatStatusMutationError(err: unknown): string {
   if (!(err instanceof Error)) return "Could not update status.";
@@ -43,11 +43,37 @@ export function OrderDetailStatusEditor({
 
   const statusMutation = useMutation({
     mutationFn: async (newStatusId: string) => {
-      await updateAdminOrderStatus(order, newStatusId);
+      const target = statuses.find((s) => s.statusId === newStatusId);
+      const normalizedName = target?.statusName?.trim().toLowerCase() ?? "";
+      const shouldBookShiprocket =
+        normalizedName === "shipped" ||
+        normalizedName === "in transit" ||
+        normalizedName.includes("shipped");
+      await updateAdminOrderStatus(order, newStatusId, {
+        shiprocketBook: shouldBookShiprocket,
+      });
+    },
+    onMutate: (newStatusId) => {
+      console.info("[orders-flow][admin-ui] status mutation started", {
+        orderId: order.orderId,
+        fromStatusId: order.statusId,
+        toStatusId: newStatusId,
+      });
     },
     onSuccess: () => {
+      console.info("[orders-flow][admin-ui] status mutation success", {
+        orderId: order.orderId,
+        newStatusId: statusDraft,
+      });
       queryClient.invalidateQueries({ queryKey: ["admin", "order", orderIdParam] });
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
+    onError: (err) => {
+      console.error("[orders-flow][admin-ui] status mutation failed", {
+        orderId: order.orderId,
+        attemptedStatusId: statusDraft,
+        error: err instanceof Error ? err.message : String(err),
+      });
     },
   });
 
@@ -78,7 +104,7 @@ export function OrderDetailStatusEditor({
                 <>
                   {selectableStatuses.map((s) => (
                     <option key={s.statusId} value={s.statusId}>
-                      {s.statusName}
+                      {formatOrderStatusName(s.statusName)}
                     </option>
                   ))}
                   {!selectableStatuses.some((s) => s.statusId === order.statusId) ? (
@@ -102,7 +128,7 @@ export function OrderDetailStatusEditor({
           <span className="font-medium text-[var(--color-ink)]">
             {getStatusLabel(order.statusId, statuses)}
           </span>
-          . Typical flow: pending → confirmed → processing → shipped → delivered. Only valid next
+          . Typical flow: pending → confirmed → processing order → shipped → delivered. Only valid next
           steps are listed.
         </p>
         {statusMutation.isError && (

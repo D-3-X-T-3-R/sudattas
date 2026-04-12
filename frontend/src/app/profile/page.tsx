@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { SiteHeader } from "@/components/site-header";
 import { RouteFailureBanner } from "@/components/route-failure-banner";
@@ -18,28 +18,38 @@ import type {
 } from "@/domains/profile/components/profile-authenticated-content";
 import type { AddressFormState } from "@/domains/profile/types";
 
+function flowLog(message: string, meta?: Record<string, unknown>) {
+  if (meta) {
+    console.info(`[orders-flow][customer-ui] ${message}`, meta);
+    return;
+  }
+  console.info(`[orders-flow][customer-ui] ${message}`);
+}
+
 type AuthenticatedSectionProps = {
   routeFailure: RouteFailureUi | null;
   loadAccountData: () => Promise<void>;
   openLogin: (returnTo?: string) => void;
   displayName: string;
   displayEmail: string;
+  loginMethodLabel: string;
   accountProfile: AccountProfileRow | null;
   error: string | null;
   loadingData: boolean;
   addresses: ShippingAddressRow[];
   orders: AccountOrderRow[];
-  expandedOrderId: string | null;
-  loadingOrderDetailId: string | null;
   orderDetailsById: Record<string, AccountOrderDetailPayload>;
   form: AddressFormState;
   setForm: Dispatch<SetStateAction<AddressFormState>>;
   canSaveAddress: boolean;
   adding: boolean;
   addAddress: () => Promise<void>;
+  updateAddress: (shippingAddressId: string) => Promise<void>;
   deleteAddress: (shippingAddressId: string) => Promise<void>;
   setDefaultAddress: (shippingAddressId: string) => Promise<void>;
-  toggleOrderDetails: (orderId: string) => Promise<void>;
+  ensureOrderDetailLoaded: (orderId: string) => Promise<void>;
+  refreshOrderDetail: (orderId: string) => Promise<void>;
+  cancelOrder: (orderId: string) => Promise<void>;
 };
 
 type UseAccountDataLoaderArgs = {
@@ -49,7 +59,6 @@ type UseAccountDataLoaderArgs = {
   setAccountProfile: Dispatch<SetStateAction<AccountProfileRow | null>>;
   setAddresses: Dispatch<SetStateAction<ShippingAddressRow[]>>;
   setOrders: Dispatch<SetStateAction<AccountOrderRow[]>>;
-  setExpandedOrderId: Dispatch<SetStateAction<string | null>>;
   setOrderDetailsById: Dispatch<SetStateAction<Record<string, AccountOrderDetailPayload>>>;
 };
 
@@ -60,7 +69,6 @@ function useAccountDataLoader({
   setAccountProfile,
   setAddresses,
   setOrders,
-  setExpandedOrderId,
   setOrderDetailsById,
 }: UseAccountDataLoaderArgs) {
   const loadAccountData = useCallback(async () => {
@@ -76,7 +84,6 @@ function useAccountDataLoader({
       setAccountProfile(profileData ?? null);
       setAddresses(addrData ?? []);
       setOrders(orderData ?? []);
-      setExpandedOrderId(null);
       setOrderDetailsById({});
     } catch (e) {
       setRouteFailure(toRouteFailureUi("account", e));
@@ -87,7 +94,6 @@ function useAccountDataLoader({
     authenticated,
     setAccountProfile,
     setAddresses,
-    setExpandedOrderId,
     setLoadingData,
     setOrderDetailsById,
     setOrders,
@@ -103,15 +109,21 @@ function useAccountDataLoader({
 
 function UnauthenticatedProfile({ openLogin }: { openLogin: (returnTo?: string) => void }) {
   return (
-    <section className="rounded-xl border border-[var(--color-line)] bg-white p-6">
-      <h1 className="text-2xl font-semibold text-[var(--color-ink)]">Your Profile</h1>
-      <p className="mt-2 text-sm text-[var(--color-muted)]">
-        Sign in to see your account, saved addresses, and order history.
+    <section className="rounded-[28px] border border-white/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(249,246,240,0.92))] p-8 shadow-[0_28px_80px_rgba(8,32,26,0.12)] backdrop-blur-xl sm:rounded-[32px] sm:p-10">
+      <span
+        className="inline-block rounded-full border px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em]"
+        style={{ borderColor: "#C4A574", color: "#B8956A" }}
+      >
+        Account
+      </span>
+      <h1 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-semibold text-[#0A2A20] sm:text-4xl">Your Profile</h1>
+      <p className="mt-3 max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
+        Sign in to see your account, saved addresses, and order history in the premium Sudatta&apos;s dashboard.
       </p>
       <button
         type="button"
         onClick={() => openLogin("/profile")}
-        className="mt-4 rounded-full bg-[var(--color-accent-gold)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white"
+        className="mt-6 rounded-full bg-[var(--color-accent-gold)] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white"
       >
         Sign in
       </button>
@@ -126,22 +138,24 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     openLogin,
     displayName,
     displayEmail,
+    loginMethodLabel,
     accountProfile,
     error,
     loadingData,
     addresses,
     orders,
-    expandedOrderId,
-    loadingOrderDetailId,
     orderDetailsById,
     form,
     setForm,
     canSaveAddress,
     adding,
-    addAddress,
-    deleteAddress,
-    setDefaultAddress,
-    toggleOrderDetails,
+  addAddress,
+  updateAddress,
+  deleteAddress,
+  setDefaultAddress,
+    ensureOrderDetailLoaded,
+    refreshOrderDetail,
+    cancelOrder,
   } = props;
 
   return (
@@ -157,28 +171,31 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
       <ProfileAuthenticatedContent
         displayName={displayName}
         displayEmail={displayEmail}
+        loginMethodLabel={loginMethodLabel}
         accountProfile={accountProfile}
         error={error}
         loadingData={loadingData}
         addresses={addresses}
         orders={orders}
-        expandedOrderId={expandedOrderId}
-        loadingOrderDetailId={loadingOrderDetailId}
         orderDetailsById={orderDetailsById}
         form={form}
         setForm={setForm}
         canSaveAddress={canSaveAddress}
         adding={adding}
         addAddress={addAddress}
+        updateAddress={updateAddress}
         deleteAddress={deleteAddress}
         setDefaultAddress={setDefaultAddress}
-        toggleOrderDetails={toggleOrderDetails}
+        ensureOrderDetailLoaded={ensureOrderDetailLoaded}
+        refreshOrderDetail={refreshOrderDetail}
+        cancelOrder={cancelOrder}
         onSignOut={() => void signOut({ callbackUrl: "/" })}
       />
     </>
   );
 }
 
+// eslint-disable-next-line max-lines-per-function
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const { openLogin } = useStorefrontLogin();
@@ -187,14 +204,15 @@ export default function ProfilePage() {
   const [addresses, setAddresses] = useState<ShippingAddressRow[]>([]);
   const [orders, setOrders] = useState<AccountOrderRow[]>([]);
   const [accountProfile, setAccountProfile] = useState<AccountProfileRow | null>(null);
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [loadingOrderDetailId, setLoadingOrderDetailId] = useState<string | null>(null);
+  const orderDetailsRef = useRef<Record<string, AccountOrderDetailPayload>>({});
   const [orderDetailsById, setOrderDetailsById] = useState<Record<string, AccountOrderDetailPayload>>({});
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [routeFailure, setRouteFailure] = useState<RouteFailureUi | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<AddressFormState>({
+    recipientName: "",
+    phoneNumber: "",
     country: "India",
     stateRegion: "",
     city: "",
@@ -205,9 +223,12 @@ export default function ProfilePage() {
   const authenticated = status === "authenticated", loadingSession = status === "loading";
   const displayName = accountProfile?.fullName?.trim() || session?.user?.name?.trim() || "Member";
   const displayEmail = accountProfile?.email?.trim() || session?.user?.email?.trim() || "No email linked";
+  const loginMethodLabel = useMemo(() => (session?.idToken ? "Google" : "Email"), [session?.idToken]);
 
   const canSaveAddress = useMemo(() => {
     const parsed = addressInputSchema.safeParse({
+      recipientName: form.recipientName.trim() || null,
+      phoneNumber: form.phoneNumber.trim() || null,
       country: form.country.trim(),
       stateRegion: form.stateRegion.trim(),
       city: form.city.trim(),
@@ -225,9 +246,94 @@ export default function ProfilePage() {
     setAccountProfile,
     setAddresses,
     setOrders,
-    setExpandedOrderId,
     setOrderDetailsById,
   });
+
+  /** Keep ref aligned with state during render so child effects (e.g. ensureOrderDetailLoaded) never see stale cache after loadAccountData clears details. */
+  orderDetailsRef.current = orderDetailsById;
+
+  const orderDetailFetchRef = useRef<Set<string>>(new Set());
+
+  const fetchOrderDetail = useCallback(
+    async (orderId: string, forceRefresh: boolean) => {
+      if (!forceRefresh && orderDetailsRef.current[orderId]) return;
+      if (orderDetailFetchRef.current.has(orderId)) return;
+      orderDetailFetchRef.current.add(orderId);
+      flowLog("fetching order detail", { orderId, forceRefresh });
+      setRouteFailure(null);
+      try {
+        const detail = await fetchApiEnvelope<AccountOrderDetailPayload>(
+          `/api/account/orders/${encodeURIComponent(orderId)}`,
+          { cache: "no-store" }
+        );
+        if (detail) {
+          const eventTypes = (detail.events ?? []).map((e) => (e.eventType ?? "").trim().toLowerCase());
+          flowLog("order detail received", {
+            orderId,
+            statusName: detail.statusName,
+            paymentState: detail.paymentState,
+            fulfillmentState: detail.fulfillmentState,
+            refundInitiated: eventTypes.includes("refund_initiated"),
+            refundProcessed: eventTypes.includes("refund_recorded"),
+            refundFailed: eventTypes.includes("refund_failed"),
+          });
+          setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
+        }
+      } catch (e) {
+        flowLog("order detail fetch failed", {
+          orderId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        setRouteFailure(toRouteFailureUi("account", e));
+      } finally {
+        orderDetailFetchRef.current.delete(orderId);
+      }
+    },
+    []
+  );
+
+  const ensureOrderDetailLoaded = useCallback(
+    async (orderId: string) => {
+      await fetchOrderDetail(orderId, false);
+    },
+    [fetchOrderDetail]
+  );
+
+  const refreshOrderDetail = useCallback(
+    async (orderId: string) => {
+      await fetchOrderDetail(orderId, true);
+    },
+    [fetchOrderDetail]
+  );
+
+  const cancelOrder = useCallback(
+    async (orderId: string) => {
+      setRouteFailure(null);
+      flowLog("cancel order requested by customer", { orderId });
+      try {
+        const res = await fetchApiEnvelope<{ orderId: string; statusId: string }>(
+          `/api/account/orders/${encodeURIComponent(orderId)}/cancel`,
+          { method: "POST" }
+        );
+        flowLog("cancel order API success", {
+          orderId,
+          updatedStatusId: res?.statusId ?? null,
+        });
+        await loadAccountData();
+        flowLog("account data refreshed after cancel", { orderId });
+        announce("Order cancelled.");
+      } catch (e) {
+        flowLog("cancel order failed", {
+          orderId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        const ui = toRouteFailureUi("account", e);
+        setRouteFailure(ui);
+        announce(ui.message, "assertive");
+      }
+    },
+    [announce, loadAccountData]
+  );
 
   const addAddress = async () => {
     if (!canSaveAddress || adding) return;
@@ -236,6 +342,8 @@ export default function ProfilePage() {
     setRouteFailure(null);
     try {
       const parsed = addressInputSchema.safeParse({
+        recipientName: form.recipientName.trim() || null,
+        phoneNumber: form.phoneNumber.trim() || null,
         country: form.country.trim(),
         stateRegion: form.stateRegion.trim(),
         city: form.city.trim(),
@@ -252,9 +360,72 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input: { ...parsed.data, isDefault: addresses.length === 0 } }),
       });
-      setForm({ country: "India", stateRegion: "", city: "", postalCode: "", road: "", apartmentNoOrName: "" });
+      setForm({
+        recipientName: "",
+        phoneNumber: "",
+        country: "India",
+        stateRegion: "",
+        city: "",
+        postalCode: "",
+        road: "",
+        apartmentNoOrName: "",
+      });
       await loadAccountData();
       announce("Address saved successfully.");
+    } catch (e) {
+      const ui = toRouteFailureUi("account", e);
+      setRouteFailure(ui);
+      announce(ui.message, "assertive");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const updateAddress = async (shippingAddressId: string) => {
+    if (!canSaveAddress || adding) return;
+    const row = addresses.find((a) => a.shippingAddressId === shippingAddressId);
+    if (!row) return;
+    setAdding(true);
+    setError(null);
+    setRouteFailure(null);
+    try {
+      const parsed = addressInputSchema.safeParse({
+        recipientName: form.recipientName.trim() || null,
+        phoneNumber: form.phoneNumber.trim() || null,
+        country: form.country.trim(),
+        stateRegion: form.stateRegion.trim(),
+        city: form.city.trim(),
+        postalCode: form.postalCode.replace(/\D/g, "").slice(0, 6),
+        road: form.road.trim(),
+        apartmentNoOrName: form.apartmentNoOrName.trim() || null,
+      });
+      if (!parsed.success) {
+        setError(parsed.error.issues[0]?.message ?? "Invalid address.");
+        return;
+      }
+      await fetchApiEnvelope<ShippingAddressRow>("/api/account/addresses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: {
+            shippingAddressId,
+            ...parsed.data,
+            isDefault: Boolean(row.isDefault),
+          },
+        }),
+      });
+      setForm({
+        recipientName: "",
+        phoneNumber: "",
+        country: "India",
+        stateRegion: "",
+        city: "",
+        postalCode: "",
+        road: "",
+        apartmentNoOrName: "",
+      });
+      await loadAccountData();
+      announce("Address updated successfully.");
     } catch (e) {
       const ui = toRouteFailureUi("account", e);
       setRouteFailure(ui);
@@ -298,6 +469,8 @@ export default function ProfilePage() {
             postalCode: row.postalCode,
             road: row.road ?? "",
             apartmentNoOrName: row.apartmentNoOrName ?? null,
+            recipientName: row.recipientName ?? null,
+            phoneNumber: row.phoneNumber ?? null,
             isDefault: true,
           },
         }),
@@ -311,29 +484,10 @@ export default function ProfilePage() {
     }
   };
 
-  const toggleOrderDetails = async (orderId: string) => {
-    if (expandedOrderId === orderId) {
-      setExpandedOrderId(null);
-      return;
-    }
-    setExpandedOrderId(orderId);
-    if (orderDetailsById[orderId]) return;
-    setLoadingOrderDetailId(orderId);
-    setRouteFailure(null);
-    try {
-      const detail = await fetchApiEnvelope<AccountOrderDetailPayload>(`/api/account/orders/${encodeURIComponent(orderId)}`, { cache: "no-store" });
-      if (detail) setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
-    } catch (e) {
-      setRouteFailure(toRouteFailureUi("account", e));
-    } finally {
-      setLoadingOrderDetailId((prev) => (prev === orderId ? null : prev));
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <div className="min-h-screen w-full min-w-0 bg-[#F4EFE6] text-[var(--foreground)]">
       <SiteHeader />
-      <main className="mx-auto max-w-5xl px-4 py-8">
+      <main className="mx-auto max-w-7xl px-4 pt-3 pb-8 sm:px-6 sm:pt-4 lg:px-8">
         {loadingSession ? (
           <p className="text-sm text-[var(--color-muted)]">Loading profile...</p>
         ) : !authenticated ? (
@@ -345,22 +499,24 @@ export default function ProfilePage() {
             openLogin={openLogin}
             displayName={displayName}
             displayEmail={displayEmail}
+            loginMethodLabel={loginMethodLabel}
             accountProfile={accountProfile}
             error={error}
             loadingData={loadingData}
             addresses={addresses}
             orders={orders}
-            expandedOrderId={expandedOrderId}
-            loadingOrderDetailId={loadingOrderDetailId}
             orderDetailsById={orderDetailsById}
             form={form}
             setForm={setForm}
             canSaveAddress={canSaveAddress}
             adding={adding}
             addAddress={addAddress}
+            updateAddress={updateAddress}
             deleteAddress={deleteAddress}
             setDefaultAddress={setDefaultAddress}
-            toggleOrderDetails={toggleOrderDetails}
+            ensureOrderDetailLoaded={ensureOrderDetailLoaded}
+            refreshOrderDetail={refreshOrderDetail}
+            cancelOrder={cancelOrder}
           />
         )}
       </main>
