@@ -81,7 +81,7 @@ describe("useRazorpayCheckout async reconciliation", () => {
     const { result } = renderHook(() => useRazorpayCheckout());
 
     await act(async () => {
-      await result.current.runCheckout({ shippingAddressId: "10" });
+      await result.current.runCheckout({ shippingAddressId: "10", selectedCartLineIds: ["c1"] });
     });
 
     for (let i = 0; i < 4; i += 1) {
@@ -93,5 +93,16 @@ describe("useRazorpayCheckout async reconciliation", () => {
 
     expect(result.current.paymentMessage).toContain("Payment paid");
     expect(result.current.paymentMessage).toContain("Order state: processing");
+  });
+
+  it("blocks checkout when no cart lines are selected", async () => {
+    const { result } = renderHook(() => useRazorpayCheckout());
+
+    await act(async () => {
+      await result.current.runCheckout({ shippingAddressId: "10", selectedCartLineIds: [] });
+    });
+
+    expect(result.current.paymentMessage).toContain("Select at least one bag item");
+    expect(mocks.fetchApiEnvelope).not.toHaveBeenCalled();
   });
 });

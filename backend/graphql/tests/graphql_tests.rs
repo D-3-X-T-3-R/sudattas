@@ -422,6 +422,174 @@ async fn test_admin_mutation_requires_admin_authorization() {
 }
 
 #[tokio::test]
+async fn test_capture_payment_requires_privileged_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { capturePayment(input: { intentId: "1", razorpayPaymentId: "pay_1" }) { intentId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "capturePayment should reject customer auth"
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("privileged authorization required"));
+}
+
+#[tokio::test]
+async fn test_apply_coupon_requires_customer_login() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: Some("redis://127.0.0.1".to_string()),
+        auth: Some(AuthSource::Session("guest_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: Some("guest-session".to_string()),
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("none".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { applyCoupon(input: { code: "TEST10", orderAmountPaise: "10000" }) { code } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "applyCoupon should reject guest session auth"
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("login required"));
+}
+
+#[tokio::test]
+async fn test_validate_coupon_requires_customer_login() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: Some("redis://127.0.0.1".to_string()),
+        auth: Some(AuthSource::Session("guest_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: Some("guest-session".to_string()),
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("none".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"{ validateCoupon(input: { code: "TEST10", orderAmountPaise: "10000" }) { code } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "validateCoupon should reject guest session auth"
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("login required"));
+}
+
+#[tokio::test]
+async fn test_order_internal_mutations_require_privileged_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+    };
+
+    let cases = [
+        r#"mutation { createOrderEvent(input: { orderId: "1", eventType: "created", actorType: "system" }) { eventId } }"#,
+        r#"mutation { createOrderDetails(orderDetails: { orderDetails: [{ orderId: "1", variantId: "1", quantity: "1", pricePaise: "1000" }] }) { orderDetailId } }"#,
+        r#"mutation { updateOrderDetail(orderDetail: { orderDetailId: "1", orderId: "1", variantId: "1", quantity: "2", pricePaise: "1000" }) { orderDetailId } }"#,
+    ];
+
+    for query in cases {
+        let (_res, errors) =
+            juniper::execute(query, None, &schema(), &juniper::Variables::new(), &ctx)
+                .await
+                .unwrap();
+
+        assert!(
+            !errors.is_empty(),
+            "privileged mutation should reject customer auth"
+        );
+        let err = format!("{:?}", errors[0]).to_lowercase();
+        assert!(err.contains("privileged authorization required"));
+    }
+}
+
+#[tokio::test]
+async fn test_search_inventory_item_requires_admin() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"{ searchInventoryItem(input: {}) { inventoryId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "searchInventoryItem should reject customer auth"
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"));
+}
+
+#[tokio::test]
 async fn test_search_user_requires_admin_authorization() {
     let ctx = Context {
         jwks: JWKSet { keys: vec![] },
@@ -522,6 +690,96 @@ async fn test_search_order_rejects_cross_user_access_for_customer() {
     );
     let err = format!("{:?}", errors[0]).to_lowercase();
     assert!(err.contains("own orders"));
+}
+
+#[tokio::test]
+async fn test_update_user_rejects_cross_user_access_for_customer() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::InternalCustomer("42".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("internal".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { updateUser(input: { userId: "99", fullName: "Wrong" }) { userId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(!errors.is_empty(), "cross-user updateUser should fail");
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("own profile"));
+}
+
+#[tokio::test]
+async fn test_create_user_rejects_session_auth() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: Some("redis://127.0.0.1".to_string()),
+        auth: Some(AuthSource::Session("0".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: Some("guest-session".to_string()),
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("none".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { createUser(input: { username: "guest", email: "guest@example.com", authProvider: "google", googleSub: "sub_1" }) { userId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(!errors.is_empty(), "guest session createUser should fail");
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("verified customer") || err.contains("internal auth"));
+}
+
+#[tokio::test]
+async fn test_get_presigned_upload_url_requires_admin() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::InternalCustomer("42".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("internal".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"{ getPresignedUploadUrl(input: { productId: "1", filename: "test.png", contentType: "image/png" }) { uploadUrl } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(!errors.is_empty(), "non-admin presign should fail");
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"));
 }
 
 // =============================================================================

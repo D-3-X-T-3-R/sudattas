@@ -11,6 +11,8 @@ pub struct Model {
     pub order_id: i64,
     #[sea_orm(unique)]
     pub order_number: Option<String>,
+    #[sea_orm(column_name = "PublicOrderRef", unique)]
+    pub public_order_ref: String,
     #[sea_orm(column_name = "UserID")]
     pub user_id: i64,
     #[sea_orm(column_name = "OrderDate")]
@@ -37,6 +39,7 @@ pub struct Model {
     pub applied_coupon_id: Option<i64>,
     pub applied_coupon_code: Option<String>,
     pub applied_discount_paise: Option<i32>,
+    pub refund_settlement_status: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -55,6 +58,8 @@ pub enum Relation {
     OrderDetails,
     #[sea_orm(has_many = "super::order_events::Entity")]
     OrderEvents,
+    #[sea_orm(has_one = "super::order_inventory_restores::Entity")]
+    OrderInventoryRestores,
     #[sea_orm(
         belongs_to = "super::order_status::Entity",
         from = "Column::StatusId",
@@ -65,6 +70,8 @@ pub enum Relation {
     OrderStatus,
     #[sea_orm(has_many = "super::payment_intents::Entity")]
     PaymentIntents,
+    #[sea_orm(has_many = "super::refund_attempts::Entity")]
+    RefundAttempts,
     #[sea_orm(has_many = "super::refunds::Entity")]
     Refunds,
     #[sea_orm(has_many = "super::shipments::Entity")]
@@ -111,6 +118,12 @@ impl Related<super::order_events::Entity> for Entity {
     }
 }
 
+impl Related<super::order_inventory_restores::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OrderInventoryRestores.def()
+    }
+}
+
 impl Related<super::order_status::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::OrderStatus.def()
@@ -120,6 +133,12 @@ impl Related<super::order_status::Entity> for Entity {
 impl Related<super::payment_intents::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::PaymentIntents.def()
+    }
+}
+
+impl Related<super::refund_attempts::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::RefundAttempts.def()
     }
 }
 

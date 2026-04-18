@@ -33,6 +33,7 @@ type OrderRow = {
   totalAmountPaise: string;
   totalAmountFormatted: string;
   statusId: string;
+  refundSettlementStatus?: string | null;
   orderDetails?: OrderDetailRow[];
 };
 
@@ -70,6 +71,7 @@ type OrderEventRow = {
 type AccountOrderDetailResponse = {
   order: OrderRow;
   statusName: string;
+  refundSettlementStatus?: string | null;
   paymentIntents: PaymentIntentRow[];
   shipments: ShipmentRow[];
   events: OrderEventRow[];
@@ -85,6 +87,7 @@ const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
     totalAmountPaise
     totalAmountFormatted
     statusId
+    refundSettlementStatus
     orderDetails {
       orderDetailId
       variantId
@@ -341,9 +344,12 @@ export async function GET(
   const shipments = shipmentResult.data?.getShipment ?? [];
   const events = eventsResult.data?.getOrderEvents ?? [];
 
+  const refundSettlementStatus =
+    order.refundSettlementStatus?.trim() || null;
   const payload: AccountOrderDetailResponse = {
     order,
     statusName,
+    refundSettlementStatus,
     paymentIntents,
     shipments,
     events,

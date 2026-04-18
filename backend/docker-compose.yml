@@ -7,6 +7,8 @@ services:
     build: ./database
     image: sudattas-mysql:local
     container_name: sudattas-mysql
+    # Large mysqldump lines (e.g. BLOBs) exceed default packet size; restore/import needs this.
+    command: --max_allowed_packet=1073741824
     ports:
       - "3306:3306"
     environment:

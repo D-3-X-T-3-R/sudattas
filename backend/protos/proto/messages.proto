@@ -294,6 +294,7 @@ message PlaceOrderRequest{
     int64 shipping_address_id = 1;
     int64 user_id = 2;
     optional string coupon_code = 3;
+    repeated int64 selected_cart_ids = 4;
 }
 
 // Checkout shipping estimate for bag/checkout preview (no order mutation).
@@ -301,6 +302,7 @@ message EstimateCheckoutShippingRequest {
     int64 shipping_address_id = 1;
     int64 user_id = 2;
     optional string coupon_code = 3;
+    repeated int64 selected_cart_ids = 4;
 }
 
 message EstimateCheckoutShippingResponse {
@@ -383,6 +385,10 @@ message OrderResponse {
     int64 shipping_address_id = 4;
     int64 total_amount_paise = 5;
     int64 status_id = 6;
+    // Immutable provider-safe reference (e.g. Shiprocket order_id); never reuse numeric order_id alone.
+    string public_order_ref = 7;
+    // Durable settlement snapshot: refund_pending | refund_processed | refund_failed | refund_not_applicable
+    optional string refund_settlement_status = 8;
 }
 
 message OrdersResponse {

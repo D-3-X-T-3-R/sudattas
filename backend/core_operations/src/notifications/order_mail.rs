@@ -9,6 +9,7 @@ use tonic::Status;
 #[derive(Debug, Clone)]
 pub struct OrderMailSnapshot {
     pub order_id: i64,
+    pub public_order_ref: String,
     pub order_number: Option<String>,
     pub order_date_rfc3339: String,
     pub customer_email: String,
@@ -46,6 +47,19 @@ pub fn parse_abandoned_cart_email(payload: &Value) -> Option<String> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(String::from)
+}
+
+fn customer_visible_order_number(s: &OrderMailSnapshot) -> String {
+    let pref = s.public_order_ref.trim();
+    if !pref.is_empty() {
+        return pref.to_string();
+    }
+    s.order_number
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(String::from)
+        .unwrap_or_else(|| s.order_id.to_string())
 }
 
 pub fn format_inr_paise(paise: i64) -> String {
@@ -178,6 +192,7 @@ pub async fn load_order_mail_snapshot(
 
     Ok(Some(OrderMailSnapshot {
         order_id: order.order_id,
+        public_order_ref: order.public_order_ref.clone(),
         order_number: order.order_number.clone(),
         order_date_rfc3339: order.order_date.to_rfc3339(),
         customer_email: email,
@@ -192,10 +207,7 @@ pub async fn load_order_mail_snapshot(
 
 pub fn build_payment_captured_email(s: &OrderMailSnapshot) -> (String, String, String) {
     let store = store_display_name();
-    let oid = s
-        .order_number
-        .clone()
-        .unwrap_or_else(|| s.order_id.to_string());
+    let oid = customer_visible_order_number(s);
     let subject = format!("Order received — order #{oid} ({store})");
     let total = format_inr_paise(s.grand_total_paise);
     let url = storefront_url();
@@ -264,10 +276,7 @@ pub fn build_payment_captured_email(s: &OrderMailSnapshot) -> (String, String, S
 }
 
 pub fn build_shipped_email(s: &OrderMailSnapshot) -> (String, String, String) {
-    let oid = s
-        .order_number
-        .clone()
-        .unwrap_or_else(|| s.order_id.to_string());
+    let oid = customer_visible_order_number(s);
     let subject = format!("Your order #{oid} has shipped");
     let text = format!(
         "Hi {},\n\nOrder #{} is on its way. Status: {}.\n\n{}\n",
@@ -286,10 +295,7 @@ pub fn build_shipped_email(s: &OrderMailSnapshot) -> (String, String, String) {
 }
 
 pub fn build_delivered_email(s: &OrderMailSnapshot) -> (String, String, String) {
-    let oid = s
-        .order_number
-        .clone()
-        .unwrap_or_else(|| s.order_id.to_string());
+    let oid = customer_visible_order_number(s);
     let subject = format!("Your order #{oid} was delivered");
     let text = format!(
         "Hi {},\n\nOrder #{} shows as delivered. Thank you for shopping with us!\n\n{}",
@@ -306,10 +312,7 @@ pub fn build_delivered_email(s: &OrderMailSnapshot) -> (String, String, String) 
 }
 
 pub fn build_refunded_email(s: &OrderMailSnapshot) -> (String, String, String) {
-    let oid = s
-        .order_number
-        .clone()
-        .unwrap_or_else(|| s.order_id.to_string());
+    let oid = customer_visible_order_number(s);
     let subject = format!("Refund update — order #{oid}");
     let text = format!(
         "Hi {},\n\nOrder #{} has been updated to refunded status. If you have questions, contact support.\n\n{}",

@@ -15,6 +15,7 @@ fn order_confirmed(id: i64, status_id: i64, grand_total_minor: i64) -> orders::M
     orders::Model {
         order_id: id,
         order_number: Some(format!("ORD-{}", id)),
+        public_order_ref: format!("SUD-20990101-R{id:010}"),
         user_id: 1,
         order_date: chrono::Utc::now(),
         shipping_address_id: 1,
@@ -32,6 +33,7 @@ fn order_confirmed(id: i64, status_id: i64, grand_total_minor: i64) -> orders::M
         applied_coupon_id: None,
         applied_coupon_code: None,
         applied_discount_paise: None,
+        refund_settlement_status: None,
     }
 }
 

@@ -83,6 +83,7 @@ pub async fn create_refund(
     let grand_total = order.grand_total_minor;
     let total_refunded: i64 = refunds::Entity::find()
         .filter(refunds::Column::OrderId.eq(req.order_id))
+        .filter(refunds::Column::Status.eq(RefundStatus::Processed))
         .all(txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?

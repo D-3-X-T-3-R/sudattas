@@ -16,13 +16,12 @@ pub async fn validate_coupon(
     }))
 }
 
-/// Core validation logic reused by both validate and apply.
-/// If `apply` is true the usage_count will be incremented inside the caller.
+/// Core validation logic reused by both validate and apply-preview.
 pub async fn check_coupon(
     txn: &DatabaseTransaction,
     code: &str,
     order_amount_paise: i64,
-    _apply: bool,
+    _preview_only: bool,
 ) -> Result<CouponResponse, TonicStatus> {
     let coupon = coupons::Entity::find()
         .filter(coupons::Column::Code.eq(code))

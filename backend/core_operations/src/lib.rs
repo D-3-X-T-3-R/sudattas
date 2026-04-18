@@ -1,13 +1,35 @@
 use core_db_entities::{get_db, CoreDatabaseConnection};
 use handlers::db_errors::map_db_error_to_status;
+use handlers::shipments::load_shipment_for_order;
+use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 // Phase 1 additions
 pub mod auth;
+pub mod cancellation_saga;
 pub mod money;
 pub mod observability;
 pub mod razorpay;
 pub mod services;
+
+static DOTENV_LOADED: OnceLock<()> = OnceLock::new();
+
+pub fn load_env_once() {
+    DOTENV_LOADED.get_or_init(|| {
+        let candidates = [
+            PathBuf::from("..").join(".env"),
+            PathBuf::from(".env"),
+            PathBuf::from("backend").join(".env"),
+        ];
+        for candidate in candidates {
+            if candidate.exists() {
+                let _ = dotenvy::from_path(candidate);
+                break;
+            }
+        }
+    });
+}
 
 use proto::proto::core::{
     grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkOrderDeliveredRequest,
@@ -654,14 +676,26 @@ impl GrpcServices for MyGRPCServices {
             .ok_or_else(|| Status::failed_precondition("database not initialized"))?;
         let mut inner = request.into_inner();
         if inner.shiprocket_book == Some(true) {
-            let booked = integrations::shiprocket::book_shipment_for_order(db, inner.order_id)
+            let lookup_txn = db.begin().await.map_err(map_db_error_to_status)?;
+            let existing = load_shipment_for_order(&lookup_txn, inner.order_id, false).await?;
+            lookup_txn
+                .rollback()
                 .await
-                .map_err(|e| Status::failed_precondition(e.to_string()))?;
-            inner.awb_code = Some(booked.awb_code);
-            inner.carrier = Some(booked.courier_name);
-            inner.shiprocket_order_id = Some(booked.shiprocket_shipment_id);
-            inner.shiprocket_status_id = booked.shiprocket_status_id;
-            inner.shiprocket_status_label = booked.shiprocket_status_label;
+                .map_err(map_db_error_to_status)?;
+            if let Some(existing) = existing.filter(|shipment| shipment.awb_code.is_some()) {
+                inner.awb_code = existing.awb_code;
+                inner.carrier = existing.carrier;
+                inner.shiprocket_order_id = existing.shiprocket_order_id;
+            } else {
+                let booked = integrations::shiprocket::book_shipment_for_order(db, inner.order_id)
+                    .await
+                    .map_err(|e| Status::failed_precondition(e.to_string()))?;
+                inner.awb_code = Some(booked.awb_code);
+                inner.carrier = Some(booked.courier_name);
+                inner.shiprocket_order_id = Some(booked.shiprocket_shipment_id);
+                inner.shiprocket_status_id = booked.shiprocket_status_id;
+                inner.shiprocket_status_label = booked.shiprocket_status_label;
+            }
         }
         let txn = db.begin().await.map_err(map_db_error_to_status)?;
         let res = handlers::orders::admin_mark_order_shipped(&txn, Request::new(inner)).await?;

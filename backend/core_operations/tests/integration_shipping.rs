@@ -295,7 +295,7 @@ async fn integration_place_order_uses_expected_shipping_address() {
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -306,6 +306,7 @@ async fn integration_place_order_uses_expected_shipping_address() {
     )
     .await
     .expect("create_cart_item should succeed");
+    let cart_id = cart_res.into_inner().items[0].cart_id;
 
     let place_res = place_order(
         &txn,
@@ -313,6 +314,7 @@ async fn integration_place_order_uses_expected_shipping_address() {
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![cart_id],
         }),
     )
     .await

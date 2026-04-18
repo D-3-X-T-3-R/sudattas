@@ -31,7 +31,7 @@ async fn ensure_pending_and_place_order_setup(
     txn: &sea_orm::DatabaseTransaction,
     now_tag: i64,
     cart_total_paise: i64,
-) -> (i64, i64, i64) {
+) -> (i64, i64, i64, i64) {
     let pending = order_status::Entity::find()
         .filter(order_status::Column::StatusName.eq("pending"))
         .one(txn)
@@ -144,7 +144,7 @@ async fn ensure_pending_and_place_order_setup(
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -155,8 +155,9 @@ async fn ensure_pending_and_place_order_setup(
     )
     .await
     .expect("create_cart_item");
+    let cart_id = cart_res.into_inner().items[0].cart_id;
 
-    (user_id, shipping_id, cart_total_paise)
+    (user_id, shipping_id, cart_total_paise, cart_id)
 }
 
 /// CP1 – create_coupon + place_order with valid coupon applies discount to grand_total_minor and order snapshot.
@@ -170,7 +171,7 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
 
     let now_tag = Utc::now().timestamp_millis();
     let cart_total = 2_000_i64;
-    let (user_id, shipping_id, _) =
+    let (user_id, shipping_id, _, cart_id) =
         ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP1_{}", now_tag);
@@ -196,6 +197,7 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: Some(code.clone()),
+            selected_cart_ids: vec![cart_id],
         }),
     )
     .await
@@ -230,7 +232,7 @@ async fn integration_expired_coupon_ignored_at_checkout() {
 
     let now_tag = Utc::now().timestamp_millis();
     let cart_total = 2_000_i64;
-    let (user_id, shipping_id, _) =
+    let (user_id, shipping_id, _, cart_id) =
         ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP2_EXP_{}", now_tag);
@@ -256,6 +258,7 @@ async fn integration_expired_coupon_ignored_at_checkout() {
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: Some(code),
+            selected_cart_ids: vec![cart_id],
         }),
     )
     .await
@@ -278,10 +281,10 @@ async fn integration_expired_coupon_ignored_at_checkout() {
     txn.rollback().await.ok();
 }
 
-/// CP3 – apply_coupon increments usage_count for the coupon row on success.
+/// CP3 – apply_coupon is preview-only and does not increment usage_count.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_apply_coupon_increments_usage_count() {
+async fn integration_apply_coupon_is_preview_only() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -322,15 +325,15 @@ async fn integration_apply_coupon_increments_usage_count() {
         .await
         .expect("query coupon")
         .expect("coupon exists");
-    assert_eq!(coupon.usage_count, Some(1));
+    assert_eq!(coupon.usage_count, Some(0));
 
     txn.rollback().await.ok();
 }
 
-/// CP4 – Coupon with usage_limit = 1: first apply_coupon succeeds, second returns invalid/limit-reached.
+/// CP4 – Coupon with usage_limit = 1: repeated apply_coupon previews stay valid until payment finalization.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_coupon_usage_limit_second_apply_invalid() {
+async fn integration_coupon_usage_limit_preview_does_not_burn_limit() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -376,9 +379,17 @@ async fn integration_coupon_usage_limit_second_apply_invalid() {
     .expect("second apply_coupon returns Ok (handler does not error)");
     let result = second.into_inner().items[0].clone();
     assert!(
-        !result.is_valid,
-        "second apply should return is_valid false when usage limit reached"
+        result.is_valid,
+        "preview should not consume coupon capacity"
     );
+
+    let coupon = coupons::Entity::find()
+        .filter(coupons::Column::Code.eq(&code))
+        .one(&txn)
+        .await
+        .expect("query coupon")
+        .expect("coupon exists");
+    assert_eq!(coupon.usage_count, Some(0));
 
     txn.rollback().await.ok();
 }
@@ -394,7 +405,7 @@ async fn integration_coupon_min_order_not_met_not_applied() {
 
     let now_tag = Utc::now().timestamp_millis();
     let cart_total = 500_i64;
-    let (user_id, shipping_id, _) =
+    let (user_id, shipping_id, _, cart_id) =
         ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP5_MIN_{}", now_tag);
@@ -420,6 +431,7 @@ async fn integration_coupon_min_order_not_met_not_applied() {
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: Some(code),
+            selected_cart_ids: vec![cart_id],
         }),
     )
     .await

@@ -1,18 +1,13 @@
-use crate::handlers::cart::delete_cart_item;
+use crate::cancellation_saga;
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
+use crate::handlers::orders::order_response;
 use crate::money::paise_to_decimal;
 use crate::order_state_machine;
-use chrono::Utc;
-use core_db_entities::entity::{order_details, order_status, orders};
-use proto::proto::core::{
-    CreateOrderEventRequest, DeleteCartItemRequest, OrderResponse, OrdersResponse,
-    UpdateOrderRequest,
-};
-use sea_orm::DbBackend;
+use core_db_entities::entity::{order_status, orders};
+use proto::proto::core::{CreateOrderEventRequest, OrdersResponse, UpdateOrderRequest};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait,
-    QueryFilter, Statement,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter,
 };
 use tonic::{Request, Response, Status};
 
@@ -42,11 +37,12 @@ pub async fn update_order(
     let orders = orders::ActiveModel {
         order_id: ActiveValue::Set(req.order_id),
         user_id: ActiveValue::Set(req.user_id),
-        order_date: ActiveValue::Set(Utc::now()),
+        order_date: ActiveValue::Set(existing.order_date),
         shipping_address_id: ActiveValue::Set(req.shipping_address_id),
         total_amount: ActiveValue::Set(Some(paise_to_decimal(req.total_amount_paise))),
         status_id: ActiveValue::Set(req.status_id),
         order_number: ActiveValue::NotSet,
+        public_order_ref: ActiveValue::NotSet,
         payment_status: ActiveValue::NotSet,
         payment_method: ActiveValue::NotSet,
         currency: ActiveValue::NotSet,
@@ -59,6 +55,7 @@ pub async fn update_order(
         applied_coupon_id: ActiveValue::NotSet,
         applied_coupon_code: ActiveValue::NotSet,
         applied_discount_paise: ActiveValue::NotSet,
+        refund_settlement_status: ActiveValue::NotSet,
     };
 
     match orders.update(txn).await {
@@ -70,22 +67,8 @@ pub async fn update_order(
                 .await
                 .map_err(map_db_error_to_status)?;
             if let Some(ref c) = cancelled {
-                if model.status_id == c.status_id {
-                    let details = order_details::Entity::find()
-                        .filter(order_details::Column::OrderId.eq(model.order_id))
-                        .all(txn)
-                        .await
-                        .map_err(map_db_error_to_status)?;
-                    for d in &details {
-                        let _ = txn
-                            .execute(Statement::from_sql_and_values(
-                                DbBackend::MySql,
-                                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable + ? WHERE VariantID = ?"#,
-                                [d.quantity.into(), d.variant_id.into()],
-                            ))
-                            .await
-                            .map_err(map_db_error_to_status)?;
-                    }
+                if model.status_id == c.status_id && prev_status_id != c.status_id {
+                    cancellation_saga::restore_inventory_once(txn, model.order_id).await?;
                 }
             }
 
@@ -115,40 +98,10 @@ pub async fn update_order(
                     }),
                 )
                 .await;
-
-                // Matches Paid transition via order_state_machine (webhook): clear cart when marked paid
-                // through GraphQL update_order — that path does not call transition_order_status.
-                if to_name == "confirmed" {
-                    if let Err(e) = delete_cart_item(
-                        txn,
-                        Request::new(DeleteCartItemRequest {
-                            user_id: Some(model.user_id),
-                            cart_id: None,
-                            session_id: None,
-                        }),
-                    )
-                    .await
-                    {
-                        tracing::warn!(
-                            error = %e.message(),
-                            order_id = model.order_id,
-                            user_id = model.user_id,
-                            "clear cart after update_order to confirmed failed (non-fatal)"
-                        );
-                    }
-                }
             }
 
-            let total_amount_paise = model.grand_total_minor;
             let response = OrdersResponse {
-                items: vec![OrderResponse {
-                    order_id: model.order_id,
-                    user_id: model.user_id,
-                    order_date: model.order_date.to_string(),
-                    shipping_address_id: model.shipping_address_id,
-                    total_amount_paise,
-                    status_id: model.status_id,
-                }],
+                items: vec![order_response::from_model(&model)],
             };
             Ok(Response::new(response))
         }

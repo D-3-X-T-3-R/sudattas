@@ -143,7 +143,7 @@ async fn place_order_minimal(
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -154,6 +154,7 @@ async fn place_order_minimal(
     )
     .await
     .expect("create_cart_item");
+    let cart_id = cart_res.into_inner().items[0].cart_id;
 
     let place_res = place_order(
         txn,
@@ -161,6 +162,7 @@ async fn place_order_minimal(
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![cart_id],
         }),
     )
     .await

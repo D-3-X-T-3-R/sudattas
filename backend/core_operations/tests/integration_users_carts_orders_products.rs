@@ -14,7 +14,7 @@ use integration_common::test_db_url;
 
 use core_db_entities::entity::{
     cart, inventory, order_details, order_status, product_categories, product_variants, products,
-    sea_orm_active_enums::PaymentStatus, shipping_addresses, user_roles,
+    shipping_addresses, user_roles,
 };
 use core_operations::procedures::orders::place_order;
 use proto::proto::core::{
@@ -27,6 +27,7 @@ use sea_orm::{
 };
 use tonic::{Code, Request};
 
+#[allow(dead_code)]
 async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
     if let Ok(Some(id)) = core_operations::order_state_machine::get_status_id(txn, name).await {
         return id;
@@ -43,7 +44,7 @@ async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> 
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_payment() {
+async fn integration_place_order_happy_path_removes_only_selected_items_after_creation() {
     use core_db_entities::entity::{inventory as inventory_entity, orders};
 
     let db = Database::connect(&test_db_url())
@@ -177,7 +178,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
     .expect("insert Inventory");
 
     // Add item to cart via handler.
-    let _cart_res = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -188,6 +189,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
     )
     .await
     .expect("create_cart_item should succeed");
+    let selected_cart_id = cart_res.into_inner().items[0].cart_id;
 
     // Place order – integrates users, cart, products, orders, inventory, and order_events/outbox.
     let result = place_order(
@@ -196,6 +198,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![selected_cart_id],
         }),
     )
     .await;
@@ -250,30 +253,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
         "quantity_available should be decremented by ordered quantity"
     );
 
-    // Cart still has items until payment succeeds (pending order + Razorpay).
-    let remaining_cart = cart::Entity::find()
-        .filter(cart::Column::UserId.eq(user_id))
-        .all(&txn)
-        .await
-        .expect("query Cart for user");
-    assert!(
-        !remaining_cart.is_empty(),
-        "cart should remain after place_order until paid"
-    );
-
-    let _ = ensure_order_status(&txn, "confirmed").await;
-    core_operations::order_state_machine::transition_order_status(
-        &txn,
-        order.order_id,
-        core_operations::order_state_machine::OrderState::Paid,
-        "payment_captured",
-        "system",
-        Some("test payment"),
-        Some(PaymentStatus::Captured),
-    )
-    .await
-    .expect("transition to paid");
-
+    // Purchased selected rows are removed immediately after successful order creation.
     let remaining_cart = cart::Entity::find()
         .filter(cart::Column::UserId.eq(user_id))
         .all(&txn)
@@ -281,7 +261,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
         .expect("query Cart for user");
     assert!(
         remaining_cart.is_empty(),
-        "cart should be cleared after order becomes Paid"
+        "selected cart rows should be removed after successful order creation"
     );
 
     // Roll back to keep test non-destructive.
@@ -421,7 +401,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     .expect("insert Inventory");
 
     // Add cart item with quantity > available stock.
-    let _cart_res = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -432,6 +412,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     )
     .await
     .expect("create_cart_item should succeed");
+    let selected_cart_id = cart_res.into_inner().items[0].cart_id;
 
     let result = place_order(
         &txn,
@@ -439,6 +420,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![selected_cart_id],
         }),
     )
     .await;
@@ -555,16 +537,16 @@ async fn integration_place_order_empty_cart_fails() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![],
         }),
     )
     .await;
 
-    let err = result.expect_err("place_order should fail when cart is empty");
+    let err = result.expect_err("place_order should fail when nothing is selected");
     assert_eq!(err.code(), Code::FailedPrecondition);
     assert!(
-        err.message().to_lowercase().contains("cart")
-            && err.message().to_lowercase().contains("empty"),
-        "error should mention empty cart, got: {}",
+        err.message().to_lowercase().contains("selected"),
+        "error should mention missing selected cart items, got: {}",
         err.message()
     );
 
@@ -750,6 +732,7 @@ async fn integration_cart_add_get_update_then_place_order() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![cart_id],
         }),
     )
     .await
@@ -939,7 +922,7 @@ async fn integration_place_order_multiple_items_two_variants() {
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_a = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -950,7 +933,7 @@ async fn integration_place_order_multiple_items_two_variants() {
     )
     .await
     .expect("create_cart_item A");
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_b = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -961,6 +944,10 @@ async fn integration_place_order_multiple_items_two_variants() {
     )
     .await
     .expect("create_cart_item B");
+    let selected_cart_ids = vec![
+        cart_a.into_inner().items[0].cart_id,
+        cart_b.into_inner().items[0].cart_id,
+    ];
 
     let place_res = place_order(
         &txn,
@@ -968,6 +955,7 @@ async fn integration_place_order_multiple_items_two_variants() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids,
         }),
     )
     .await
@@ -1129,7 +1117,7 @@ async fn integration_place_order_then_search_order() {
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -1140,6 +1128,7 @@ async fn integration_place_order_then_search_order() {
     )
     .await
     .expect("create_cart_item should succeed");
+    let selected_cart_id = cart_res.into_inner().items[0].cart_id;
 
     let place_res = place_order(
         &txn,
@@ -1147,6 +1136,7 @@ async fn integration_place_order_then_search_order() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![selected_cart_id],
         }),
     )
     .await

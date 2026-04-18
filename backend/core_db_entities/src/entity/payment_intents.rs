@@ -23,6 +23,8 @@ pub struct Model {
     pub expires_at: DateTimeUtc,
     pub gateway_fee_paise: Option<i32>,
     pub gateway_tax_paise: Option<i32>,
+    #[sea_orm(unique)]
+    pub active_order_id: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

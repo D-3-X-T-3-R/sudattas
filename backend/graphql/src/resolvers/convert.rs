@@ -43,6 +43,8 @@ pub fn order_response_to_gql(o: OrderResponse) -> Order {
         total_amount_paise: o.total_amount_paise,
         total_amount_formatted: money.formatted,
         status_id: o.status_id.to_string(),
+        public_order_ref: o.public_order_ref,
+        refund_settlement_status: o.refund_settlement_status,
     }
 }
 

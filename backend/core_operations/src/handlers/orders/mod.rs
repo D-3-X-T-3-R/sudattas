@@ -1,6 +1,9 @@
 pub mod create_order;
 pub use create_order::*;
 
+pub mod order_response;
+pub mod public_order_ref;
+
 pub mod search_order;
 pub use search_order::*;
 

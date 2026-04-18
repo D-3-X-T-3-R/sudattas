@@ -30,6 +30,12 @@ pub(crate) async fn place_order(
         user_id: to_i64(Some(user_id)),
         shipping_address_id: to_i64(order.shipping_address_id),
         coupon_code: order.coupon_code,
+        selected_cart_ids: order
+            .selected_cart_ids
+            .unwrap_or_default()
+            .into_iter()
+            .map(|id| parse_i64(&id, "selected_cart_id"))
+            .collect::<Result<Vec<_>, _>>()?,
     });
 
     if let Some(key) = idempotency_key {
@@ -60,6 +66,12 @@ pub(crate) async fn estimate_checkout_shipping(
             shipping_address_id: parse_i64(&input.shipping_address_id, "shipping_address_id")?,
             user_id: parse_i64(&user_id, "user_id")?,
             coupon_code: input.coupon_code,
+            selected_cart_ids: input
+                .selected_cart_ids
+                .unwrap_or_default()
+                .into_iter()
+                .map(|id| parse_i64(&id, "selected_cart_id"))
+                .collect::<Result<Vec<_>, _>>()?,
         })
         .await?;
     let row = response.into_inner();

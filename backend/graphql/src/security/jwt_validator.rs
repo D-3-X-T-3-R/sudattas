@@ -33,9 +33,9 @@ pub enum TokenParseError {
 
 #[instrument]
 pub fn validate_token(b64_token: &str, jwks: &JWKSet) -> Result<Claims, TokenParseError> {
-    tracing::info!("Validating token {}", b64_token);
-
-    let b64_token = b64_token.split("Bearer ").collect::<Vec<&str>>()[1];
+    let b64_token = b64_token.strip_prefix("Bearer ").ok_or_else(|| {
+        TokenParseError::TokenParse("Authorization header must use Bearer".to_string())
+    })?;
 
     let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
     validation.leeway = 5;

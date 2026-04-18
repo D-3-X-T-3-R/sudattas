@@ -156,12 +156,18 @@ export default function BagPage() {
         setShippingNote(status === "authenticated" ? "Select address to calculate shipping." : "Sign in to calculate shipping.");
         return;
       }
+      const selectedCartLineIds = [...selectedLineIds];
+      if (selectedCartLineIds.length === 0) {
+        setShippingAmount(0);
+        setShippingNote("Select at least one bag item to calculate shipping.");
+        return;
+      }
       setShippingLoading(true);
       try {
         const row = await fetchApiEnvelope<ShippingEstimate>("/api/checkout/shipping-estimate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shippingAddressId: selectedAddressId }),
+          body: JSON.stringify({ shippingAddressId: selectedAddressId, selectedCartLineIds }),
           signal: controller.signal,
         });
         const paise = Number.parseInt(row.shippingAmountPaise, 10);
@@ -184,7 +190,7 @@ export default function BagPage() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [status, selectedAddressId, cartSignature, cartLines.length]);
+  }, [status, selectedAddressId, cartSignature, cartLines.length, selectedLineIds]);
 
   const allSelected = cartLines.length > 0 && selectedLineIds.size === cartLines.length;
   const selectedLines = useMemo(
@@ -295,6 +301,7 @@ export default function BagPage() {
     }
     void runCheckout({
       shippingAddressId: selectedAddressId,
+      selectedCartLineIds: [...selectedLineIds],
       onSuccess: ({ orderId }) => router.push(`/checkout/success?orderId=${encodeURIComponent(orderId)}`),
       onFailure: ({ orderId, reason }) => {
         const params = new URLSearchParams();

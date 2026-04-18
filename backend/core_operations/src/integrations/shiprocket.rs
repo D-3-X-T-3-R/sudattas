@@ -1,7 +1,9 @@
-//! Shiprocket REST API: auth, create adhoc order, assign AWB (used when admin marks shipped with `shiprocket_book`).
+//! Shiprocket REST API: auth, quote, create adhoc order, assign AWB, pickup scheduling,
+//! and cancellation.
 
+use crate::load_env_once;
 use core_db_entities::entity::{order_details, orders, shipping_addresses, users};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Mutex;
@@ -26,6 +28,8 @@ pub enum ShiprocketError {
     UserNotFound(i64),
     #[error("order {0} has no line items")]
     NoLineItems(i64),
+    #[error("order {0} is missing PublicOrderRef (database migration required)")]
+    MissingPublicOrderRef(i64),
     #[error(
         "customer phone is required for Shiprocket; no valid phone on shipping address or user {0}"
     )]
@@ -67,6 +71,7 @@ impl Config {
     }
 
     fn from_env_prefix(prefix: &str, default_pickup_location: &str) -> Option<Self> {
+        load_env_once();
         let email = std::env::var(format!("{prefix}_EMAIL"))
             .ok()?
             .trim()
@@ -134,6 +139,7 @@ impl Config {
 pub struct ShiprocketBooking {
     pub awb_code: String,
     pub courier_name: String,
+    pub shiprocket_order_id: Option<String>,
     /// Shiprocket shipment id (string) — stored in `Shipments.shiprocket_order_id`.
     pub shiprocket_shipment_id: String,
     pub shiprocket_status_id: Option<i32>,
@@ -210,6 +216,27 @@ fn first_shipment_id(v: &Value) -> Option<i64> {
                 .and_then(|p| p.get("shipment_id"))
                 .and_then(|x| x.as_str())
                 .and_then(|s| s.parse().ok())
+        })
+}
+
+fn first_order_id(v: &Value) -> Option<String> {
+    v.pointer("/payload/order_id")
+        .and_then(|x| x.as_i64())
+        .map(|x| x.to_string())
+        .or_else(|| {
+            v.pointer("/payload/order_id")
+                .and_then(|x| x.as_str())
+                .map(str::to_string)
+        })
+        .or_else(|| {
+            v.get("order_id")
+                .and_then(|x| x.as_i64())
+                .map(|x| x.to_string())
+        })
+        .or_else(|| {
+            v.get("order_id")
+                .and_then(|x| x.as_str())
+                .map(str::to_string)
         })
 }
 
@@ -448,10 +475,24 @@ pub async fn best_courier_quote_for_checkout(
 }
 
 /// Load order + address + user + lines, create Shiprocket order, assign AWB, return tracking fields.
-pub async fn book_shipment_for_order(
-    db: &DatabaseConnection,
+pub async fn book_shipment_for_order<C>(
+    db: &C,
     order_id: i64,
-) -> Result<ShiprocketBooking, ShiprocketError> {
+) -> Result<ShiprocketBooking, ShiprocketError>
+where
+    C: ConnectionTrait,
+{
+    book_shipment_for_order_with_preferred_courier(db, order_id, None).await
+}
+
+pub async fn book_shipment_for_order_with_preferred_courier<C>(
+    db: &C,
+    order_id: i64,
+    preferred_courier_id: Option<i64>,
+) -> Result<ShiprocketBooking, ShiprocketError>
+where
+    C: ConnectionTrait,
+{
     let order = orders::Entity::find_by_id(order_id)
         .one(db)
         .await?
@@ -535,11 +576,11 @@ pub async fn book_shipment_for_order(
         addr_line1
     };
 
-    let order_ref = order
-        .order_number
-        .clone()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| format!("SUD-{}", order.order_id));
+    let order_ref = order.public_order_ref.trim();
+    if order_ref.is_empty() {
+        return Err(ShiprocketError::MissingPublicOrderRef(order_id));
+    }
+    let order_ref = order_ref.to_string();
 
     let order_date = order.order_date.format("%Y-%m-%d %H:%M").to_string();
 
@@ -620,7 +661,9 @@ pub async fn book_shipment_for_order(
 
     let mut assign_map = serde_json::Map::new();
     assign_map.insert("shipment_id".to_string(), json!(shipment_id));
-    let selected_courier_id = if let Some(cid) = cfg.courier_id {
+    let selected_courier_id = if let Some(cid) = preferred_courier_id {
+        Some(cid)
+    } else if let Some(cid) = cfg.courier_id {
         Some(cid)
     } else {
         let delivery_pin = address.postal_code.trim().to_string();
@@ -677,10 +720,77 @@ pub async fn book_shipment_for_order(
     Ok(ShiprocketBooking {
         awb_code,
         courier_name,
+        shiprocket_order_id: first_order_id(&create_json),
         shiprocket_shipment_id: shipment_id.to_string(),
         shiprocket_status_id: sr_id,
         shiprocket_status_label: sr_label,
     })
+}
+
+pub async fn schedule_pickup_for_shipment(
+    shiprocket_shipment_id: &str,
+    pickup_at: chrono::DateTime<chrono::Utc>,
+) -> Result<(), ShiprocketError> {
+    let shipment_id = shiprocket_shipment_id.trim().parse::<i64>().map_err(|_| {
+        ShiprocketError::CreateOrderFailed("invalid shiprocket shipment id".to_string())
+    })?;
+    let cfg = Config::from_env().ok_or(ShiprocketError::NotConfigured)?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()?;
+    let token = bearer_token(&client, &cfg).await?;
+    let url = format!("{}/courier/generate/pickup", cfg.api_base);
+    let res = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .json(&json!({
+            "shipment_id": [shipment_id],
+            "pickup_date": pickup_at.format("%Y-%m-%d").to_string(),
+        }))
+        .send()
+        .await?;
+    let status = res.status();
+    let text = res.text().await.unwrap_or_default();
+    if !status.is_success() {
+        // Shiprocket returns 400 when pickup is already queued (idempotent retry / dashboard).
+        if status == reqwest::StatusCode::BAD_REQUEST
+            && text.to_lowercase().contains("already in pickup queue")
+        {
+            return Ok(());
+        }
+        return Err(ShiprocketError::CreateOrderFailed(format!(
+            "pickup scheduling failed HTTP {status}: {text}"
+        )));
+    }
+    Ok(())
+}
+
+pub async fn cancel_shiprocket_order(shiprocket_order_id: &str) -> Result<(), ShiprocketError> {
+    let order_id = shiprocket_order_id.trim().parse::<i64>().map_err(|_| {
+        ShiprocketError::CreateOrderFailed("invalid shiprocket order id".to_string())
+    })?;
+    let cfg = Config::from_env().ok_or(ShiprocketError::NotConfigured)?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()?;
+    let token = bearer_token(&client, &cfg).await?;
+    let url = format!("{}/orders/cancel", cfg.api_base);
+    let res = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .json(&json!({ "ids": [order_id] }))
+        .send()
+        .await?;
+    let status = res.status();
+    let text = res.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(ShiprocketError::CreateOrderFailed(format!(
+            "cancel order failed HTTP {status}: {text}"
+        )));
+    }
+    Ok(())
 }
 
 /// Latest tracking snapshot from Shiprocket `GET /courier/track/awb/{awb}` (used for refresh + webhook fallback).

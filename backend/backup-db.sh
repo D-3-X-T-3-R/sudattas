@@ -51,7 +51,7 @@ BACKUP_FILE="$BACKUP_DIR/db-backup-$TIMESTAMP.sql"
 
 echo "Creating backup from container '$DB_CONTAINER_NAME' into '$BACKUP_FILE'..."
 if docker exec -e MYSQL_PWD="$DB_PASSWORD" "$DB_CONTAINER_NAME" \
-  mysqldump --set-gtid-purged=OFF -h"$MYSQL_HOST" -u"$DB_USER" "$DB_NAME" > "$BACKUP_FILE" 2>&1; then
+  mysqldump --set-gtid-purged=OFF --max_allowed_packet=1073741824 -h"$MYSQL_HOST" -u"$DB_USER" "$DB_NAME" > "$BACKUP_FILE" 2>&1; then
   if [[ -s "$BACKUP_FILE" ]]; then
     echo "Backup created successfully: '$BACKUP_FILE'."
     exit 0

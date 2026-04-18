@@ -3,7 +3,6 @@
 //! Defines allowed order status transitions and a single function to apply them,
 //! update the order, and emit order_events.
 
-use crate::handlers::cart::delete_cart_item;
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::outbox::{
@@ -11,7 +10,7 @@ use crate::handlers::outbox::{
 };
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use core_db_entities::entity::{order_status, orders};
-use proto::proto::core::{CreateOrderEventRequest, DeleteCartItemRequest};
+use proto::proto::core::CreateOrderEventRequest;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
     QueryFilter,
@@ -30,6 +29,7 @@ pub enum OrderState {
     Shipped,
     Delivered,
     Cancelled,
+    CancelPendingLogistics,
     Refunded,
     NeedsReview,
 }
@@ -43,6 +43,7 @@ impl OrderState {
             OrderState::Shipped => "shipped",
             OrderState::Delivered => "delivered",
             OrderState::Cancelled => "cancelled",
+            OrderState::CancelPendingLogistics => "cancel_pending_logistics",
             OrderState::Refunded => "refunded",
             OrderState::NeedsReview => "needs_review",
         }
@@ -59,11 +60,21 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
         ),
         (
             Paid,
-            [Processing, Cancelled, Refunded].into_iter().collect(),
+            [
+                Processing,
+                Cancelled,
+                CancelPendingLogistics,
+                Refunded,
+                NeedsReview,
+            ]
+            .into_iter()
+            .collect(),
         ),
         (
             Processing,
-            [Shipped, Cancelled, Refunded].into_iter().collect(),
+            [Shipped, Cancelled, CancelPendingLogistics, Refunded]
+                .into_iter()
+                .collect(),
         ),
         (
             Shipped,
@@ -72,9 +83,19 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
         (Delivered, [Refunded].into_iter().collect()),
         (
             NeedsReview,
-            [PendingPayment, Paid, Cancelled, Refunded]
-                .into_iter()
-                .collect(),
+            [
+                PendingPayment,
+                Paid,
+                Cancelled,
+                CancelPendingLogistics,
+                Refunded,
+            ]
+            .into_iter()
+            .collect(),
+        ),
+        (
+            CancelPendingLogistics,
+            [Cancelled, Refunded, NeedsReview].into_iter().collect(),
         ),
         (Cancelled, [Refunded].into_iter().collect()),
         (Refunded, HashSet::new()),
@@ -240,27 +261,6 @@ pub async fn transition_order_status(
         let _ = enqueue_outbox_event(txn, evt, "order", &order_id.to_string(), payload).await;
     }
 
-    // Cart is cleared only after payment succeeds (Paid), not at place_order — same txn as Paid transition.
-    if to_state == OrderState::Paid && from_state != OrderState::Paid {
-        if let Err(e) = delete_cart_item(
-            txn,
-            Request::new(DeleteCartItemRequest {
-                user_id: Some(user_id),
-                cart_id: None,
-                session_id: None,
-            }),
-        )
-        .await
-        {
-            tracing::warn!(
-                error = %e.message(),
-                order_id,
-                user_id,
-                "clear cart after payment failed (non-fatal)"
-            );
-        }
-    }
-
     Ok(())
 }
 
@@ -272,6 +272,7 @@ fn status_name_to_state(name: &str) -> OrderState {
         "shipped" => OrderState::Shipped,
         "delivered" => OrderState::Delivered,
         "cancelled" => OrderState::Cancelled,
+        "cancel_pending_logistics" => OrderState::CancelPendingLogistics,
         "refunded" => OrderState::Refunded,
         "needs_review" => OrderState::NeedsReview,
         _ => OrderState::NeedsReview, // unknown -> treat as needs_review for safety
@@ -304,6 +305,7 @@ mod tests {
         assert!(can_transition(OrderState::Paid, OrderState::Processing));
         assert!(can_transition(OrderState::Paid, OrderState::Cancelled));
         assert!(can_transition(OrderState::Paid, OrderState::Refunded));
+        assert!(can_transition(OrderState::Paid, OrderState::NeedsReview));
         assert!(!can_transition(
             OrderState::Paid,
             OrderState::PendingPayment
@@ -329,6 +331,14 @@ mod tests {
     #[test]
     fn cancelled_can_transition_to_refunded() {
         assert!(can_transition(OrderState::Cancelled, OrderState::Refunded));
+    }
+
+    #[test]
+    fn paid_can_transition_to_cancel_pending_logistics() {
+        assert!(can_transition(
+            OrderState::Paid,
+            OrderState::CancelPendingLogistics
+        ));
     }
 
     #[test]

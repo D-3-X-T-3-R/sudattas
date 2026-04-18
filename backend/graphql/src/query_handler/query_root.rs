@@ -75,6 +75,12 @@ fn require_jwt(context: &Context) -> Result<&str, juniper::FieldError> {
     })
 }
 
+fn require_customer_actor(context: &Context) -> Result<&str, juniper::FieldError> {
+    context.jwt_user_id().ok_or_else(|| {
+        juniper::FieldError::new("Login required for this operation", juniper::Value::null())
+    })
+}
+
 fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
     if context.is_admin() {
         Ok(())
@@ -166,10 +172,21 @@ impl QueryRoot {
     // Cart
     #[instrument(err, ret)]
     async fn get_cart_items(
+        context: &Context,
         user_id: Option<String>,
         session_id: Option<String>,
     ) -> FieldResult<Vec<Cart>> {
-        cart::handlers::get_cart_items(user_id, session_id)
+        let (resolved_user_id, resolved_session_id) = if context.is_admin() {
+            (user_id, session_id)
+        } else if let Some(uid) = context.jwt_user_id() {
+            (Some(uid.to_string()), None)
+        } else if matches!(&context.auth, Some(super::AuthSource::Session(_))) {
+            (None, context.guest_session_id().map(|sid| sid.to_string()))
+        } else {
+            (user_id, session_id)
+        };
+
+        cart::handlers::get_cart_items(resolved_user_id, resolved_session_id)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -291,7 +308,7 @@ impl QueryRoot {
         let customer_user_id = if context.is_admin() {
             None
         } else {
-            Some(require_jwt(context)?.to_string())
+            Some(require_customer_actor(context)?.to_string())
         };
 
         if let (Some(uid), Some(order_id)) = (&customer_user_id, input.order_id.as_deref()) {
@@ -363,7 +380,8 @@ impl QueryRoot {
 
     // Coupons
     #[instrument(err, ret)]
-    async fn validate_coupon(input: ValidateCoupon) -> FieldResult<Vec<Coupon>> {
+    async fn validate_coupon(context: &Context, input: ValidateCoupon) -> FieldResult<Vec<Coupon>> {
+        let _ = require_customer_actor(context)?;
         coupons::handlers::validate_coupon(input)
             .await
             .map_err(|e| e.into_field_error())
@@ -379,7 +397,11 @@ impl QueryRoot {
 
     // Inventory
     #[instrument(err, ret)]
-    async fn search_inventory_item(input: SearchInventoryItem) -> FieldResult<Vec<InventoryItem>> {
+    async fn search_inventory_item(
+        context: &Context,
+        input: SearchInventoryItem,
+    ) -> FieldResult<Vec<InventoryItem>> {
+        require_admin(context)?;
         inventory::handlers::search_inventory_item(input)
             .await
             .map_err(|e| e.into_field_error())
@@ -398,8 +420,10 @@ impl QueryRoot {
     // Product Images — R2 presigned upload
     #[instrument(err, ret)]
     async fn get_presigned_upload_url(
+        context: &Context,
         input: GetPresignedUploadUrl,
     ) -> FieldResult<Vec<PresignedUploadUrl>> {
+        require_admin(context)?;
         product_images::handlers::get_presigned_upload_url(input)
             .await
             .map_err(|e| e.into_field_error())

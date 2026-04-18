@@ -37,6 +37,80 @@ pub fn record_inventory_update_failure_total() {
     ::metrics::counter!("inventory_update_failure_total", 1);
 }
 
+/// Checkout/payment verification failed after the user returned from Razorpay.
+pub fn record_payment_verification_failed_total(reason: &'static str) {
+    ::metrics::counter!("payment_verification_failed_total", 1, "reason" => reason);
+}
+
+/// Shiprocket booking failure while auto-fulfilling a paid order.
+pub fn record_shiprocket_booking_failure_total(reason: &'static str) {
+    ::metrics::counter!("shiprocket_booking_failed_total", 1, "reason" => reason);
+}
+
+/// Shiprocket cancellation attempt failed and the order moved to retry state.
+pub fn record_shiprocket_cancel_failure_total(reason: &'static str) {
+    ::metrics::counter!("shiprocket_cancel_failed_total", 1, "reason" => reason);
+}
+
+/// Razorpay refund creation failed.
+pub fn record_refund_failure_total(reason: &'static str) {
+    ::metrics::counter!("refund_failure_total", 1, "reason" => reason);
+}
+
+/// Background stale-order expiry batch failed.
+pub fn record_stale_order_expiry_failure_total() {
+    ::metrics::counter!("stale_order_expiry_failure_total", 1);
+}
+
+/// Background cancel-pending-logistics batch failed.
+pub fn record_cancel_pending_logistics_failure_total() {
+    ::metrics::counter!("cancel_pending_logistics_failure_total", 1);
+}
+
+/// Background outbox/email backlog processing failed.
+pub fn record_outbox_worker_failure_total() {
+    ::metrics::counter!("outbox_worker_failure_total", 1);
+}
+
+/// Count of orders still stuck in pending beyond the operator threshold.
+pub fn record_stuck_pending_orders_gauge(count: f64) {
+    ::metrics::gauge!("stuck_pending_orders", count);
+}
+
+/// Count of orders waiting for logistics cancellation retries.
+pub fn record_cancel_pending_logistics_backlog_gauge(count: f64) {
+    ::metrics::gauge!("cancel_pending_logistics_backlog", count);
+}
+
+/// Orders with recorded gateway refund failure (needs ops follow-up).
+pub fn record_refund_failed_orders_gauge(count: f64) {
+    ::metrics::gauge!("refund_failed_orders", count);
+}
+
+/// Count of outbox/email events that are still pending delivery.
+pub fn record_outbox_backlog_gauge(count: f64) {
+    ::metrics::gauge!("outbox_backlog", count);
+}
+
+/// Count of active payment intents that remain pending past the intended expiry window.
+pub fn record_stuck_payment_intents_gauge(count: f64) {
+    ::metrics::gauge!("stuck_payment_intents", count);
+}
+
+/// Emit a structured operational event without secrets/tokens.
+pub fn log_operational_event(event: &'static str, fields: &[(&str, String)]) {
+    let rendered = fields
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    if rendered.is_empty() {
+        tracing::info!(event, "operational event");
+    } else {
+        tracing::info!(event, fields = %rendered, "operational event");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,5 +157,26 @@ mod tests {
     fn record_inventory_update_failure_does_not_panic() {
         install_test_recorder();
         record_inventory_update_failure_total();
+    }
+
+    #[test]
+    fn record_additional_launch_metrics_do_not_panic() {
+        install_test_recorder();
+        record_payment_verification_failed_total("invalid_signature");
+        record_shiprocket_booking_failure_total("provider_unavailable");
+        record_shiprocket_cancel_failure_total("provider_unavailable");
+        record_refund_failure_total("gateway_error");
+        record_stale_order_expiry_failure_total();
+        record_cancel_pending_logistics_failure_total();
+        record_outbox_worker_failure_total();
+        record_stuck_pending_orders_gauge(2.0);
+        record_cancel_pending_logistics_backlog_gauge(3.0);
+        record_refund_failed_orders_gauge(1.0);
+        record_outbox_backlog_gauge(4.0);
+        record_stuck_payment_intents_gauge(1.0);
+        log_operational_event(
+            "order_placed",
+            &[("order_id", "42".to_string()), ("user_id", "9".to_string())],
+        );
     }
 }

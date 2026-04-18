@@ -5,7 +5,7 @@ use crate::integrations::shiprocket_status::{
     map_shiprocket_id_to_shipment_status, shiprocket_status_label_for_id,
 };
 use chrono::Utc;
-use core_db_entities::entity::shipments;
+use core_db_entities::entity::{orders, shipments};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
     QueryFilter, QueryOrder,
@@ -119,7 +119,21 @@ pub async fn find_shipment_for_shiprocket_event(
         }
     }
     if let Some(ref_id) = order_ref {
-        if let Some(order_id) = parse_local_order_id_from_ref(&ref_id) {
+        let mut resolved_order_id = parse_local_order_id_from_ref(&ref_id);
+        if resolved_order_id.is_none() {
+            let pref = ref_id.trim().to_ascii_uppercase();
+            if !pref.is_empty() {
+                if let Some(row) = orders::Entity::find()
+                    .filter(orders::Column::PublicOrderRef.eq(pref))
+                    .one(txn)
+                    .await
+                    .map_err(map_db_error_to_status)?
+                {
+                    resolved_order_id = Some(row.order_id);
+                }
+            }
+        }
+        if let Some(order_id) = resolved_order_id {
             if let Some(m) = shipments::Entity::find()
                 .filter(shipments::Column::OrderId.eq(order_id))
                 .order_by_desc(shipments::Column::ShipmentId)

@@ -11,14 +11,26 @@ pub struct Model {
     pub shipment_id: i64,
     pub order_id: i64,
     pub shiprocket_order_id: Option<String>,
+    pub shiprocket_external_order_id: Option<String>,
     pub awb_code: Option<String>,
     pub carrier: Option<String>,
+    pub selected_courier_id: Option<i64>,
+    pub selected_courier_name: Option<String>,
+    pub quoted_shipping_cost: Option<i64>,
+    pub quoted_shipping_quote_payload: Option<Json>,
     pub shiprocket_status_id: Option<i32>,
     pub shiprocket_status_label: Option<String>,
     pub shipment_status: ShipmentStatus,
     pub tracking_events: Option<Json>,
     pub created_at: Option<DateTimeUtc>,
     pub delivered_at: Option<DateTimeUtc>,
+    pub pickup_scheduled_for: Option<DateTimeUtc>,
+    pub logistics_status: Option<String>,
+    pub can_customer_cancel: i8,
+    #[sea_orm(unique)]
+    pub razorpay_refund_id: Option<String>,
+    pub refund_status: Option<String>,
+    pub refund_initiated_at: Option<DateTimeUtc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

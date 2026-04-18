@@ -1,11 +1,31 @@
 pub use sea_orm;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
+use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tracing::info;
 
 pub type CoreDatabaseConnection = sea_orm::DatabaseConnection;
 
 pub mod entity;
+
+static DOTENV_LOADED: OnceLock<()> = OnceLock::new();
+
+fn load_env_once() {
+    DOTENV_LOADED.get_or_init(|| {
+        let candidates = [
+            PathBuf::from("..").join(".env"),
+            PathBuf::from(".env"),
+            PathBuf::from("backend").join(".env"),
+        ];
+        for candidate in candidates {
+            if candidate.exists() {
+                let _ = dotenvy::from_path(candidate);
+                break;
+            }
+        }
+    });
+}
 
 /// Create a database connection pool using `DATABASE_URL` and optional pool settings.
 ///
@@ -21,6 +41,7 @@ pub mod entity;
 /// | `DB_IDLE_TIMEOUT_SEC`   | 600     | Idle connection TTL (s)              |
 /// | `DB_MAX_LIFETIME_SEC`   | 1800    | Max connection lifetime (s)          |
 pub async fn get_db() -> Result<DatabaseConnection, DbErr> {
+    load_env_once();
     let conn_str = std::env::var("DATABASE_URL")
         .map_err(|_| DbErr::Custom("DATABASE_URL not set".to_string()))?;
 
@@ -49,6 +70,7 @@ pub async fn get_db() -> Result<DatabaseConnection, DbErr> {
 }
 
 fn env_u32(key: &str, default: u32) -> u32 {
+    load_env_once();
     std::env::var(key)
         .ok()
         .and_then(|v| v.parse().ok())
@@ -56,6 +78,7 @@ fn env_u32(key: &str, default: u32) -> u32 {
 }
 
 fn env_u64(key: &str, default: u64) -> u64 {
+    load_env_once();
     std::env::var(key)
         .ok()
         .and_then(|v| v.parse().ok())

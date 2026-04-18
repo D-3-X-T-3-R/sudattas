@@ -9,14 +9,15 @@ use crate::money::{paise_checked_add, paise_checked_mul};
 
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
-    payment_intents::create_payment_intent, products::get_products_by_id,
+    orders::order_response, payment_intents::create_payment_intent, products::get_products_by_id,
+    shipments::upsert_quote_selection,
 };
 use crate::order_state_machine;
 
 use core_db_entities::entity::prelude::IdempotencyKeys;
 use core_db_entities::entity::{
-    idempotency_keys, orders, product_variants, sea_orm_active_enums::Status as IdempotencyStatus,
-    shipping_addresses,
+    cart, idempotency_keys, orders, product_variants,
+    sea_orm_active_enums::Status as IdempotencyStatus, shipping_addresses,
 };
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
@@ -25,15 +26,77 @@ use proto::proto::core::{
 };
 use sea_orm::DbBackend;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, Statement,
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, Set,
+    Statement,
 };
 
 use chrono::Utc;
 use sea_orm::DatabaseTransaction;
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
+
+fn map_shipping_quote_error(error: ShiprocketError) -> Status {
+    let message = match error {
+        ShiprocketError::NotConfigured => {
+            "Live shipping quote is unavailable because shipping is not configured"
+        }
+        _ => "Live shipping quote is unavailable for this checkout",
+    };
+    Status::unavailable(message)
+}
+
+#[allow(clippy::result_large_err)]
+fn validate_selected_cart_ids(selected_cart_ids: &[i64]) -> Result<Vec<i64>, Status> {
+    if selected_cart_ids.is_empty() {
+        return Err(Status::failed_precondition(
+            "Cannot place order: no selected cart items provided",
+        ));
+    }
+
+    let mut seen = HashSet::new();
+    let mut normalized = Vec::with_capacity(selected_cart_ids.len());
+    for cart_id in selected_cart_ids {
+        if *cart_id <= 0 {
+            return Err(Status::invalid_argument(format!(
+                "Invalid selected cart item id {}",
+                cart_id
+            )));
+        }
+        if !seen.insert(*cart_id) {
+            return Err(Status::invalid_argument(format!(
+                "Duplicate selected cart item id {}",
+                cart_id
+            )));
+        }
+        normalized.push(*cart_id);
+    }
+    Ok(normalized)
+}
+
+#[allow(clippy::result_large_err)]
+fn pick_selected_cart_items(
+    cart_items: Vec<proto::proto::core::CartItemResponse>,
+    selected_cart_ids: &[i64],
+) -> Result<Vec<proto::proto::core::CartItemResponse>, Status> {
+    let mut by_cart_id = cart_items
+        .into_iter()
+        .map(|item| (item.cart_id, item))
+        .collect::<HashMap<_, _>>();
+
+    let mut selected_items = Vec::with_capacity(selected_cart_ids.len());
+    for cart_id in selected_cart_ids {
+        let item = by_cart_id.remove(cart_id).ok_or_else(|| {
+            Status::invalid_argument(format!(
+                "Selected cart item {} was not found in the current cart",
+                cart_id
+            ))
+        })?;
+        selected_items.push(item);
+    }
+    Ok(selected_items)
+}
 
 pub async fn place_order(
     txn: &DatabaseTransaction,
@@ -47,6 +110,22 @@ pub async fn place_order(
         .map(|s| s.to_string());
 
     let req = request.into_inner();
+    let selected_cart_ids = validate_selected_cart_ids(&req.selected_cart_ids)?;
+    crate::observability::log_operational_event(
+        "order_place_requested",
+        &[
+            ("user_id", req.user_id.to_string()),
+            ("shipping_address_id", req.shipping_address_id.to_string()),
+            (
+                "selected_cart_ids",
+                selected_cart_ids
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(","),
+            ),
+        ],
+    );
 
     // If an idempotency key is present, check for an existing Processed/Pending result.
     // For Processed we must distinguish replay (same payload) from conflict (different payload):
@@ -62,38 +141,17 @@ pub async fn place_order(
         {
             match existing.status {
                 IdempotencyStatus::Processed => {
-                    let replay_cart = get_cart_items(
-                        txn,
-                        Request::new(GetCartItemsRequest {
-                            user_id: Some(req.user_id),
-                            session_id: None,
-                        }),
-                    )
-                    .await?
-                    .into_inner()
-                    .items;
-                    if !replay_cart.is_empty() {
-                        let cart_snapshot: Vec<_> = replay_cart
-                            .iter()
-                            .map(|item| {
-                                json!({
-                                    "variant_id": item.variant_id,
-                                    "quantity": item.quantity,
-                                })
-                            })
-                            .collect();
-                        let payload_json = json!({
-                            "user_id": req.user_id,
-                            "shipping_address_id": req.shipping_address_id,
-                            "coupon_code": req.coupon_code,
-                            "cart": cart_snapshot,
-                        });
-                        let incoming_hash = compute_request_hash(&payload_json.to_string());
-                        if existing.request_hash != incoming_hash {
-                            return Err(Status::already_exists(
-                                "Idempotency key reuse with different payload",
-                            ));
-                        }
+                    let payload_json = json!({
+                        "user_id": req.user_id,
+                        "shipping_address_id": req.shipping_address_id,
+                        "coupon_code": req.coupon_code,
+                        "selected_cart_ids": selected_cart_ids,
+                    });
+                    let incoming_hash = compute_request_hash(&payload_json.to_string());
+                    if existing.request_hash != incoming_hash {
+                        return Err(Status::already_exists(
+                            "Idempotency key reuse with different payload",
+                        ));
                     }
                     let order_id: i64 = existing
                         .response_ref
@@ -114,16 +172,8 @@ pub async fn place_order(
                         user_id = existing_order.user_id,
                         "place_order idempotent replay – returning existing order"
                     );
-                    let total_amount_paise = existing_order.grand_total_minor;
                     return Ok(Response::new(OrdersResponse {
-                        items: vec![proto::proto::core::OrderResponse {
-                            order_id: existing_order.order_id,
-                            user_id: existing_order.user_id,
-                            order_date: existing_order.order_date.to_string(),
-                            shipping_address_id: existing_order.shipping_address_id,
-                            total_amount_paise,
-                            status_id: existing_order.status_id,
-                        }],
+                        items: vec![order_response::from_model(&existing_order)],
                     }));
                 }
                 IdempotencyStatus::Pending => {
@@ -155,11 +205,7 @@ pub async fn place_order(
     .into_inner()
     .items;
 
-    if cart_items.is_empty() {
-        return Err(Status::failed_precondition(
-            "Cannot place order: cart is empty",
-        ));
-    }
+    let cart_items = pick_selected_cart_items(cart_items, &selected_cart_ids)?;
 
     let (variant_quantity_map, variant_ids): (HashMap<i64, i64>, Vec<i64>) = cart_items
         .iter()
@@ -198,6 +244,7 @@ pub async fn place_order(
         "user_id": req.user_id,
         "shipping_address_id": req.shipping_address_id,
         "coupon_code": req.coupon_code,
+        "selected_cart_ids": selected_cart_ids,
         "cart": cart_snapshot,
     });
     let request_hash = compute_request_hash(&payload_json.to_string());
@@ -351,20 +398,20 @@ pub async fn place_order(
         match best_courier_quote_for_checkout(delivery_postcode.as_str(), total_paise, total_units)
             .await
         {
-            Ok(v) => v,
-            Err(ShiprocketError::NotConfigured) => None,
-            Err(e) => {
-                warn!(
-                    "checkout shipping quote failed; falling back to zero shipping: {}",
-                    e
-                );
-                None
+            Ok(Some(quote)) => quote,
+            Ok(None) => {
+                warn!("checkout shipping quote unavailable without courier result");
+                return Err(Status::unavailable(
+                    "Live shipping quote is unavailable for this checkout",
+                ));
+            }
+            Err(error) => {
+                warn!("checkout shipping quote failed: {}", error);
+                return Err(map_shipping_quote_error(error));
             }
         };
-    let shipping_minor = shipping_quote
-        .as_ref()
-        .map(|q| q.shipping_amount_minor.max(0))
-        .unwrap_or(0);
+    let shipping_minor = shipping_quote.shipping_amount_minor.max(0);
+    let shipping_quote = Some(shipping_quote);
     let grand_total_paise = paise_checked_add(total_paise, shipping_minor)
         .map_err(|e| Status::internal(format!("Overflow computing grand total in paise: {}", e)))?;
 
@@ -419,9 +466,28 @@ pub async fn place_order(
 
     info!(
         order_id = create_order.order_id,
+        public_order_ref = %create_order.public_order_ref,
         user_id = create_order.user_id,
         "place_order created order"
     );
+
+    upsert_quote_selection(
+        txn,
+        create_order.order_id,
+        shipping_quote.as_ref().map(|q| q.courier_id).unwrap_or_default(),
+        shipping_quote
+            .as_ref()
+            .map(|q| q.courier_name.as_str())
+            .unwrap_or(""),
+        shipping_minor,
+        &json!({
+            "courier_id": shipping_quote.as_ref().map(|q| q.courier_id),
+            "courier_name": shipping_quote.as_ref().map(|q| q.courier_name.clone()),
+            "shipping_amount_minor": shipping_minor,
+            "estimated_delivery_days": shipping_quote.as_ref().and_then(|q| q.estimated_delivery_days),
+        }),
+    )
+    .await?;
 
     let mut order_details: Vec<CreateOrderDetailRequest> = Vec::new();
 
@@ -462,7 +528,7 @@ pub async fn place_order(
 
     // Auto-create a pending payment intent: backend creates Razorpay order via API (server-authoritative).
     let amount_paise = grand_total_paise;
-    if let Err(e) = create_payment_intent(
+    let payment_intent = create_payment_intent(
         txn,
         tonic::Request::new(CreatePaymentIntentRequest {
             order_id: create_order.order_id,
@@ -472,13 +538,18 @@ pub async fn place_order(
             razorpay_order_id: None, // Backend will call Razorpay Orders API and store returned id.
         }),
     )
-    .await
-    {
-        log::warn!(
-            "Failed to create payment intent for order {}: {}",
-            create_order.order_id,
-            e
-        );
+    .await?
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .ok_or_else(|| Status::internal("create_payment_intent returned no payment intent"))?;
+
+    if payment_intent.razorpay_order_id.starts_with("rzp_pending_") {
+        return Err(Status::unavailable(format!(
+            "Failed to create payment intent for order {}",
+            create_order.order_id
+        )));
     }
 
     // Emit audit event: order placed
@@ -506,9 +577,26 @@ pub async fn place_order(
     )
     .await;
 
-    // Order confirmation email and cart clear happen when the order becomes Paid (webhook /
-    // transition_order_status or admin update to confirmed), not here — so cancelling Razorpay
-    // leaves the cart intact.
+    let selected_snapshot_condition =
+        cart_items.iter().fold(Condition::any(), |condition, item| {
+            condition.add(
+                Condition::all()
+                    .add(cart::Column::CartId.eq(item.cart_id))
+                    .add(cart::Column::VariantId.eq(item.variant_id))
+                    .add(cart::Column::Quantity.eq(item.quantity)),
+            )
+        });
+    let delete_result = cart::Entity::delete_many()
+        .filter(cart::Column::UserId.eq(req.user_id))
+        .filter(selected_snapshot_condition)
+        .exec(txn)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+    if delete_result.rows_affected != cart_items.len() as u64 {
+        return Err(Status::internal(
+            "Selected cart items changed during checkout; please refresh your cart and try again",
+        ));
+    }
 
     // If we have an idempotency key, mark this operation as completed and store
     // the created order_id as the response_ref so replays can return it.

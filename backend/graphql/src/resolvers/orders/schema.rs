@@ -12,6 +12,10 @@ pub struct Order {
     pub total_amount_formatted: String,
     pub status_id: String,
     pub order_id: String,
+    /// Immutable external reference (Shiprocket channel id format); not the internal numeric id.
+    pub public_order_ref: String,
+    /// refund_pending | refund_processed | refund_failed | refund_not_applicable (from Orders.refund_settlement_status).
+    pub refund_settlement_status: Option<String>,
 }
 
 #[graphql_object]
@@ -52,6 +56,14 @@ impl Order {
         &self.order_id
     }
 
+    async fn public_order_ref(&self) -> &String {
+        &self.public_order_ref
+    }
+
+    async fn refund_settlement_status(&self) -> Option<&String> {
+        self.refund_settlement_status.as_ref()
+    }
+
     async fn order_details(&self) -> FieldResult<Vec<OrderDetails>> {
         crate::resolvers::order_details::handlers::search_order_detail(SearchOrderDetails {
             order_id: Some(self.order_id.to_string()),
@@ -74,6 +86,8 @@ pub struct NewOrder {
     pub shipping_address_id: String,
     /// Optional coupon code to apply a discount at checkout
     pub coupon_code: Option<String>,
+    /// Explicit cart line ids selected in the bag. Checkout never falls back to the full cart.
+    pub selected_cart_ids: Option<Vec<String>>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -81,6 +95,7 @@ pub struct NewOrder {
 pub struct EstimateCheckoutShippingInput {
     pub shipping_address_id: String,
     pub coupon_code: Option<String>,
+    pub selected_cart_ids: Option<Vec<String>>,
 }
 
 #[derive(Default, Debug, Clone)]

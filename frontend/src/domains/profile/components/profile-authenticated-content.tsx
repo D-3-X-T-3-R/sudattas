@@ -74,6 +74,8 @@ export type AccountOrderDetailPayload = {
     orderDetails?: AccountOrderDetailRow[];
   };
   statusName: string;
+  /** From Orders.refund_settlement_status (GraphQL). */
+  refundSettlementStatus?: string | null;
   paymentIntents: Array<{
     intentId: string;
     amountPaise: string;
@@ -202,6 +204,10 @@ function refundTrackingStateForOrder(
   statusName: string | undefined,
   detail: AccountOrderDetailPayload | undefined
 ): RefundTrackingState {
+  const rs = detail?.refundSettlementStatus?.trim().toLowerCase();
+  if (rs === "refund_failed") return "failed";
+  if (rs === "refund_processed") return "processed";
+  if (rs === "refund_pending") return "initiated";
   const status = (statusName ?? "").trim().toLowerCase();
   const events = detail?.events ?? [];
   const eventTypes = events.map((e) => (e.eventType ?? "").trim().toLowerCase());
@@ -211,6 +217,26 @@ function refundTrackingStateForOrder(
   if (status.includes("refund")) return "processed";
   if (status.includes("cancel")) return "initiated";
   return "none";
+}
+
+function customerOrderStatusHeadline(
+  statusName: string | undefined,
+  detail: AccountOrderDetailPayload | undefined
+): string {
+  const base = (statusName ?? "").trim();
+  const sn = base.toLowerCase();
+  if (sn.includes("cancel_pending")) return "Cancellation in progress · awaiting courier";
+  const paid =
+    (detail?.paymentState ?? "").toLowerCase().includes("paid") ||
+    (detail?.paymentState ?? "").toLowerCase().includes("captured");
+  const refundState = refundTrackingStateForOrder(statusName, detail);
+  if ((sn.includes("cancelled") || sn.includes("canceled")) && paid) {
+    if (refundState === "failed") return "Cancelled · refund failed";
+    if (refundState === "initiated") return "Cancelled · refund processing";
+    if (refundState === "processed" || sn.includes("refund")) return "Cancelled · refunded";
+    return "Cancelled · settlement updating";
+  }
+  return base || statusName?.trim() || "";
 }
 
 function OrderTrackingPanel({ fulfillmentState }: { fulfillmentState: string | undefined }) {
@@ -352,7 +378,20 @@ function isExternalProductImage(src: string | undefined): boolean {
   }
 }
 
-function singleOrderLineItemPresentation(order: AccountOrderRow, line: AccountOrderDetailRow) {
+/** Line-item row label: single line keeps short copy; multi-line orders show position (Option A). */
+function orderLabelForLineItem(orderId: string, lineIndex: number, lineTotal: number): string {
+  if (lineTotal > 1) {
+    return `Order #${orderId} \u2022 Item ${lineIndex} of ${lineTotal}`;
+  }
+  return `Order #${orderId}`;
+}
+
+function singleOrderLineItemPresentation(
+  order: AccountOrderRow,
+  line: AccountOrderDetailRow,
+  lineIndex: number,
+  lineTotal: number
+) {
   const dateStr = formatOrderDateShort(order.orderDate);
   const name = line.productDetails?.[0]?.name?.trim() || "Item";
   const formatted = line.productDetails?.[0]?.formatted?.trim();
@@ -361,8 +400,8 @@ function singleOrderLineItemPresentation(order: AccountOrderRow, line: AccountOr
   const price = line.priceFormatted || formatInrFromPaise(line.pricePaise);
   return {
     title: name,
-    orderLabel: `Order #${order.orderId}`,
-    detailLine: bits.join(" â€¢ "),
+    orderLabel: orderLabelForLineItem(order.orderId, lineIndex, lineTotal),
+    detailLine: bits.join(" \u2022 "),
     price,
   };
 }
@@ -390,7 +429,7 @@ function orderLinePresentation(order: AccountOrderRow, detail: AccountOrderDetai
   return {
     title,
     orderLabel: `Order #${order.orderId}`,
-    detailLine: bits.join(" â€¢ "),
+    detailLine: bits.join(" \u2022 "),
     price,
   };
 }
@@ -619,16 +658,33 @@ export function ProfileAuthenticatedContent({
       order: AccountOrderRow;
       detail: AccountOrderDetailPayload | undefined;
       line: AccountOrderDetailRow | undefined;
+      lineIndex: number;
+      lineTotal: number;
     }> = [];
     for (const o of sortedOrders) {
       const detail = orderDetailsById[o.orderId];
       const lines = detail?.order?.orderDetails;
       if (lines && lines.length > 0) {
-        for (const line of lines) {
-          out.push({ key: `${o.orderId}-${line.orderDetailId}`, order: o, detail, line });
-        }
+        const lineTotal = lines.length;
+        lines.forEach((line, idx) => {
+          out.push({
+            key: `${o.orderId}-${line.orderDetailId}`,
+            order: o,
+            detail,
+            line,
+            lineIndex: idx + 1,
+            lineTotal,
+          });
+        });
       } else {
-        out.push({ key: `${o.orderId}-pending`, order: o, detail, line: undefined });
+        out.push({
+          key: `${o.orderId}-pending`,
+          order: o,
+          detail,
+          line: undefined,
+          lineIndex: 0,
+          lineTotal: 0,
+        });
       }
     }
     return out;
@@ -808,8 +864,10 @@ export function ProfileAuthenticatedContent({
                 ) : (
                   <div className="space-y-5 pb-2">
                     {orderListEntries.map((entry, index) => {
-                      const { key, order: o, detail, line } = entry;
-                      const pres = line ? singleOrderLineItemPresentation(o, line) : orderLinePresentation(o, detail);
+                      const { key, order: o, detail, line, lineIndex, lineTotal } = entry;
+                      const pres = line
+                        ? singleOrderLineItemPresentation(o, line, lineIndex, lineTotal)
+                        : orderLinePresentation(o, detail);
                       const thumbUrl = line ? lineThumbnailUrl(line) : firstOrderLineThumbnailUrl(detail);
                       const isFirstForOrder =
                         orderListEntries.findIndex((e) => e.order.orderId === o.orderId) === index;
@@ -841,7 +899,9 @@ export function ProfileAuthenticatedContent({
                             <p className="mt-2 text-sm leading-relaxed text-[#615A50]">{pres.detailLine}</p>
                             <p className="mt-3 text-lg font-semibold text-[#0F3D2E]">{pres.price}</p>
                             {o.statusName ? (
-                              <p className="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-[#8B816D]">{o.statusName}</p>
+                              <p className="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-[#8B816D]">
+                                {customerOrderStatusHeadline(o.statusName, detail)}
+                              </p>
                             ) : null}
                             {showCancel ? (
                               <button
@@ -850,7 +910,7 @@ export function ProfileAuthenticatedContent({
                                 disabled={cancellingOrderId === o.orderId}
                                 className="mt-3 rounded-full border border-[#C45C5C]/45 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A34A4A] transition hover:bg-[#fff5f5] disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                {cancellingOrderId === o.orderId ? "Cancellingâ€¦" : "Cancel order"}
+                                {cancellingOrderId === o.orderId ? "Cancelling..." : "Cancel order"}
                               </button>
                             ) : null}
                           </div>
@@ -1203,14 +1263,14 @@ export function ProfileAuthenticatedContent({
                     Track refund
                   </button>
                   <Link
-                    href="/terms"
+                    href="/returns-exchanges"
                     className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#A37D34]"
                   >
                     Return policy
                   </Link>
                 </div>
                 <p className="mt-4 text-xs leading-6 text-[#615A50]">
-                  Cancellation is auto-allowed only before shipped status. For post-shipment requests, contact support with your order ID.
+                  Cancellation remains available until pickup is completed. After pickup completion, delivery exceptions and returns are handled through courier updates and support review.
                 </p>
               </section>
 
@@ -1393,9 +1453,7 @@ export function ProfileAuthenticatedContent({
             Wait! We&apos;re sad to see you go.
           </h2>
           <p className="text-center text-sm leading-[1.7] text-[#5C5650] sm:text-[0.9375rem]">
-            Each piece at Sudatta&apos;s is carefully prepared to ensure it reaches you in perfect condition. If there&apos;s a specific reason for your
-            cancellationâ€”like a change in size or a delivery timing concernâ€”please let us know. We&apos;d love the chance to make it right before we halt
-            the process.
+            {`Each piece at Sudatta's is carefully prepared to ensure it reaches you in perfect condition. If there's a specific reason for your cancellation\u2014like a change in size or a delivery timing concern\u2014please let us know. We'd love the chance to make it right before we halt the process.`}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
             <button

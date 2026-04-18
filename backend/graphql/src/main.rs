@@ -234,7 +234,10 @@ async fn main() {
     };
     info!(
         rate_limit_per_minute,
-        webhook_limit_per_minute, trust_proxy_headers, "Rate limiter configured"
+        webhook_limit_per_minute,
+        trust_proxy_headers,
+        enforce_webhook_secrets = startup.enforce_webhook_secrets,
+        "Rate limiter configured"
     );
 
     let cors = warp::cors()
@@ -458,6 +461,19 @@ async fn main() {
                     }
                 }
 
+                let resolved_guest_session_id = session_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .or_else(|| {
+                        x_guest_session_id
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(str::to_string)
+                    });
+
                 Ok::<Context, Rejection>(Context {
                     jwks,
                     redis_url,
@@ -465,7 +481,7 @@ async fn main() {
                     request_id,
                     idempotency_key,
                     client_action: x_client_action,
-                    guest_session_id: x_guest_session_id,
+                    guest_session_id: resolved_guest_session_id,
                     jwt_subject,
                     admin_authorized,
                     admin_resolution_source,

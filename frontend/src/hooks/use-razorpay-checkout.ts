@@ -92,12 +92,18 @@ export function useRazorpayCheckout() {
 
   const runCheckout = useCallback(async (input?: {
     shippingAddressId?: string;
+    selectedCartLineIds?: string[];
     onSuccess?: (payload: { orderId: string; paymentState: string; orderUiState: string }) => void;
     onFailure?: (payload: { orderId: string; reason?: string }) => void;
   }) => {
     const shippingAddressId = input?.shippingAddressId?.trim();
+    const selectedCartLineIds = (input?.selectedCartLineIds ?? []).map((id) => id.trim()).filter(Boolean);
     if (!shippingAddressId) {
       setPaymentMessageWithAnnounce("Select a shipping address first.", "assertive");
+      return;
+    }
+    if (selectedCartLineIds.length === 0) {
+      setPaymentMessageWithAnnounce("Select at least one bag item to checkout.", "assertive");
       return;
     }
 
@@ -121,7 +127,7 @@ export function useRazorpayCheckout() {
       }>("/api/checkout/place-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shippingAddressId, idempotencyKey: placeOrderKey }),
+        body: JSON.stringify({ shippingAddressId, selectedCartLineIds, idempotencyKey: placeOrderKey }),
       });
 
       const raw = start?.paymentIntent;
@@ -146,7 +152,6 @@ export function useRazorpayCheckout() {
         currency: intent.currency || "INR",
         order_id: intent.razorpayOrderId,
         name: "Sudatta's",
-        description: "Test payment (₹100)",
         handler: async function (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;

@@ -537,6 +537,8 @@ pub struct PlaceOrderRequest {
     pub user_id: i64,
     #[prost(string, optional, tag = "3")]
     pub coupon_code: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, repeated, tag = "4")]
+    pub selected_cart_ids: ::prost::alloc::vec::Vec<i64>,
 }
 /// Checkout shipping estimate for bag/checkout preview (no order mutation).
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -549,6 +551,8 @@ pub struct EstimateCheckoutShippingRequest {
     pub user_id: i64,
     #[prost(string, optional, tag = "3")]
     pub coupon_code: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, repeated, tag = "4")]
+    pub selected_cart_ids: ::prost::alloc::vec::Vec<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -707,6 +711,12 @@ pub struct OrderResponse {
     pub total_amount_paise: i64,
     #[prost(int64, tag = "6")]
     pub status_id: i64,
+    /// Immutable provider-safe reference (e.g. Shiprocket order_id); never reuse numeric order_id alone.
+    #[prost(string, tag = "7")]
+    pub public_order_ref: ::prost::alloc::string::String,
+    /// Durable settlement snapshot: refund_pending | refund_processed | refund_failed | refund_not_applicable
+    #[prost(string, optional, tag = "8")]
+    pub refund_settlement_status: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
