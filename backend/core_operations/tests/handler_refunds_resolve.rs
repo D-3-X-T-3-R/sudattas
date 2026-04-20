@@ -5,7 +5,9 @@ mod integration_common;
 use core_db_entities::entity::order_status;
 use core_db_entities::entity::orders;
 use core_db_entities::entity::refunds;
-use core_db_entities::entity::sea_orm_active_enums::Status as RefundStatus;
+use core_db_entities::entity::sea_orm_active_enums::{
+    FulfillmentStatus, Status as RefundStatus,
+};
 use proto::proto::core::{CreateRefundRequest, ResolveNeedsReviewRequest};
 use sea_orm::entity::prelude::Decimal;
 use sea_orm::{DatabaseBackend, MockDatabase, TransactionTrait};
@@ -18,6 +20,7 @@ fn order_confirmed(id: i64, status_id: i64, grand_total_minor: i64) -> orders::M
         public_order_ref: format!("SUD-20990101-R{id:010}"),
         user_id: 1,
         order_date: chrono::Utc::now(),
+        created_at: chrono::Utc::now(),
         shipping_address_id: 1,
         total_amount: Some(Decimal::new(grand_total_minor, 2)),
         status_id,
@@ -26,14 +29,18 @@ fn order_confirmed(id: i64, status_id: i64, grand_total_minor: i64) -> orders::M
         currency: Some("INR".to_string()),
         updated_at: None,
         subtotal_minor: grand_total_minor,
+        items_total_minor_before_discount: Some(grand_total_minor),
         shipping_minor: Some(0),
+        shipping_charge_minor: Some(0),
         tax_total_minor: Some(0),
         discount_total_minor: Some(0),
+        items_total_minor_after_discount: Some(grand_total_minor),
         grand_total_minor,
         applied_coupon_id: None,
         applied_coupon_code: None,
         applied_discount_paise: None,
         refund_settlement_status: None,
+        fulfillment_status: FulfillmentStatus::NotCreated,
     }
 }
 

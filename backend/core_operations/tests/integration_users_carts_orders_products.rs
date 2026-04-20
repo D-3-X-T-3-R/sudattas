@@ -199,6 +199,7 @@ async fn integration_place_order_happy_path_removes_only_selected_items_after_cr
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![selected_cart_id],
+            payment_mode: None,
         }),
     )
     .await;
@@ -421,6 +422,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![selected_cart_id],
+            payment_mode: None,
         }),
     )
     .await;
@@ -538,6 +540,7 @@ async fn integration_place_order_empty_cart_fails() {
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![],
+            payment_mode: None,
         }),
     )
     .await;
@@ -733,6 +736,7 @@ async fn integration_cart_add_get_update_then_place_order() {
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await
@@ -956,6 +960,7 @@ async fn integration_place_order_multiple_items_two_variants() {
             user_id,
             coupon_code: None,
             selected_cart_ids,
+            payment_mode: None,
         }),
     )
     .await
@@ -1137,6 +1142,7 @@ async fn integration_place_order_then_search_order() {
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![selected_cart_id],
+            payment_mode: None,
         }),
     )
     .await

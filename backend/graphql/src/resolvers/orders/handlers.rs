@@ -1,14 +1,14 @@
 use proto::proto::core::{
-    AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateOrderRequest,
-    DeleteOrderRequest, EstimateCheckoutShippingRequest, PlaceOrderRequest, SearchOrderRequest,
-    SearchOrderStatusRequest, UpdateOrderRequest,
+    AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CancelOrderItemsRequest,
+    CreateOrderRequest, DeleteOrderRequest, EstimateCheckoutShippingRequest, PlaceOrderRequest,
+    SearchOrderRequest, SearchOrderStatusRequest, UpdateOrderRequest,
 };
 use tracing::instrument;
 
 use super::schema::{
     AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CheckoutShippingEstimate,
-    CreateOrderInput, EstimateCheckoutShippingInput, NewOrder, Order, OrderMutation, OrderStatus,
-    SearchOrder,
+    CancelOrderItemsInput, CreateOrderInput, EstimateCheckoutShippingInput, NewOrder, Order,
+    OrderMutation, OrderStatus, SearchOrder,
 };
 use crate::resolvers::{
     convert,
@@ -36,6 +36,7 @@ pub(crate) async fn place_order(
             .into_iter()
             .map(|id| parse_i64(&id, "selected_cart_id"))
             .collect::<Result<Vec<_>, _>>()?,
+        payment_mode: order.payment_mode,
     });
 
     if let Some(key) = idempotency_key {
@@ -137,6 +138,34 @@ pub(crate) async fn delete_order(
     let response = client
         .delete_order(DeleteOrderRequest {
             order_id: parse_i64(&order_id, "order_id")?,
+            acting_user_id,
+        })
+        .await
+        .map_err(crate::resolvers::error::map_err)?;
+
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::order_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn cancel_order_items(
+    input: CancelOrderItemsInput,
+    acting_user_id: Option<i64>,
+) -> Result<Vec<Order>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let order_detail_ids = input
+        .order_detail_ids
+        .into_iter()
+        .map(|id| parse_i64(&id, "order_detail_id"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let response = client
+        .cancel_order_items(CancelOrderItemsRequest {
+            order_id: parse_i64(&input.order_id, "order_id")?,
+            order_detail_ids,
             acting_user_id,
         })
         .await

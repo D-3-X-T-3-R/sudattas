@@ -164,6 +164,7 @@ async fn place_order_minimal(
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await

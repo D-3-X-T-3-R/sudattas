@@ -187,6 +187,7 @@ async fn integration_selected_subset_creates_order_for_only_selected_lines() {
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![selected_cart_id],
+            payment_mode: None,
         }),
     )
     .await
@@ -273,6 +274,7 @@ async fn integration_selected_subset_coupon_logic_uses_only_selected_lines() {
             user_id,
             coupon_code: Some(code.clone()),
             selected_cart_ids: vec![selected_cart_id],
+            payment_mode: None,
         }),
     )
     .await
@@ -330,6 +332,7 @@ async fn integration_selected_checkout_rejects_empty_or_invalid_selection() {
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![],
+            payment_mode: None,
         }),
     )
     .await
@@ -344,6 +347,7 @@ async fn integration_selected_checkout_rejects_empty_or_invalid_selection() {
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![cart_id, cart_id + 999_999],
+            payment_mode: None,
         }),
     )
     .await
@@ -389,6 +393,7 @@ async fn integration_selected_checkout_rejects_out_of_stock_selected_line() {
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![selected_cart_id],
+            payment_mode: None,
         }),
     )
     .await

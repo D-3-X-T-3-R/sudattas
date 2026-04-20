@@ -1,10 +1,9 @@
-use crate::cancellation_saga;
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::handlers::orders::order_response;
-use crate::handlers::orders::update_order;
-use crate::handlers::shipments::cancel_order_via_logistics;
-use core_db_entities::entity::{order_status, orders};
-use proto::proto::core::{DeleteOrderRequest, OrdersResponse, UpdateOrderRequest};
+use crate::handlers::orders::{cancel_order_items, order_response};
+use chrono::Utc;
+use core_db_entities::entity::{order_details, orders};
+use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
+use proto::proto::core::{CancelOrderItemsRequest, DeleteOrderRequest, OrdersResponse};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
@@ -31,47 +30,37 @@ pub async fn delete_order(
         }
     }
 
-    if let Some(cancelled) =
-        cancel_order_via_logistics(txn, req.order_id, req.acting_user_id).await?
-    {
-        return Ok(Response::new(OrdersResponse {
-            items: vec![cancelled],
-        }));
+    if existing.fulfillment_status != FulfillmentStatus::NotCreated {
+        return Err(Status::failed_precondition(
+            "Cancellation window closed. You can refuse delivery.",
+        ));
     }
 
-    let cancelled_row = order_status::Entity::find()
-        .filter(order_status::Column::StatusName.eq("cancelled"))
-        .one(txn)
-        .await
-        .map_err(map_db_error_to_status)?
-        .ok_or_else(|| Status::internal("Cancelled status not configured"))?;
-    let refunded_row = order_status::Entity::find()
-        .filter(order_status::Column::StatusName.eq("refunded"))
-        .one(txn)
+    if !crate::order_policy::is_within_cancel_window(existing.created_at, Utc::now()) {
+        return Err(Status::failed_precondition(
+            "Cancellation window closed. You can refuse delivery.",
+        ));
+    }
+
+    let active_details = order_details::Entity::find()
+        .filter(order_details::Column::OrderId.eq(req.order_id))
+        .filter(order_details::Column::ItemStatus.eq("active"))
+        .all(txn)
         .await
         .map_err(map_db_error_to_status)?;
-
-    if existing.status_id == cancelled_row.status_id
-        || refunded_row
-            .as_ref()
-            .is_some_and(|row| existing.status_id == row.status_id)
-    {
+    if active_details.is_empty() {
         return Ok(Response::new(OrdersResponse {
             items: vec![order_response::from_model(&existing)],
         }));
     }
 
-    let resp = update_order(
+    cancel_order_items(
         txn,
-        Request::new(UpdateOrderRequest {
-            order_id: existing.order_id,
-            user_id: existing.user_id,
-            shipping_address_id: existing.shipping_address_id,
-            total_amount_paise: existing.grand_total_minor,
-            status_id: cancelled_row.status_id,
+        Request::new(CancelOrderItemsRequest {
+            order_id: req.order_id,
+            order_detail_ids: active_details.into_iter().map(|d| d.order_detail_id).collect(),
+            acting_user_id: req.acting_user_id,
         }),
     )
-    .await?;
-    cancellation_saga::run_full_order_settlement(txn, req.order_id).await?;
-    Ok(resp)
+    .await
 }

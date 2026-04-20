@@ -1,6 +1,15 @@
 import { PolicyPageShell } from "@/components/policy-page-shell";
 
 export default function ShippingPolicyPage() {
+  const pickupDelayHours = Number.parseInt(
+    (process.env.PICKUP_DELAY_HOURS ?? "48").trim(),
+    10
+  );
+  const normalizedPickupDelayHours =
+    Number.isFinite(pickupDelayHours) && pickupDelayHours > 0
+      ? pickupDelayHours
+      : 48;
+
   return (
     <PolicyPageShell
       eyebrow="Shipping Policy"
@@ -10,8 +19,8 @@ export default function ShippingPolicyPage() {
         {
           heading: "Dispatch timeline",
           body: [
-            "Paid orders move into our fulfillment workflow immediately after payment verification. Your selected courier is preserved from checkout so the quoted logistics promise is the one used for shipment booking.",
-            "Orders typically move to Ready To Ship shortly after payment confirmation. Pickup is then scheduled within the next 48 hours unless we contact you for an address or availability clarification.",
+            "Paid orders enter a cancellation window before shipment booking. This enables clean full or partial cancellation without courier-side update dependencies.",
+            `After the cancellation window closes, shipment is booked and pickup is scheduled with a ${normalizedPickupDelayHours}-hour operational delay unless we contact you for an address or availability clarification.`,
           ],
         },
         {

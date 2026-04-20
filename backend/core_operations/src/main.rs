@@ -3,6 +3,7 @@ use core_operations::{
     check_auth,
     procedures::{
         cancel_pending_logistics::process_cancel_pending_logistics,
+        create_shipments_after_cancel_window::process_create_shipments_after_cancel_window,
         outbox_worker::process_pending_outbox_events,
         stale_order_expiry::expire_stale_pending_orders,
     },
@@ -38,7 +39,7 @@ async fn query_count(
 async fn refresh_backlog_metrics(db: &core_db_entities::CoreDatabaseConnection) {
     let stuck_pending = query_count(
         db,
-        "SELECT COUNT(*) AS count FROM Orders o JOIN OrderStatus s ON s.StatusID = o.StatusID WHERE s.StatusName = 'pending' AND o.updated_at < (UTC_TIMESTAMP() - INTERVAL 15 MINUTE)",
+        "SELECT COUNT(*) AS count FROM Orders o JOIN OrderStatus s ON s.StatusID = o.StatusID WHERE s.StatusName IN ('active_sale','pending') AND o.updated_at < (UTC_TIMESTAMP() - INTERVAL 15 MINUTE)",
     )
     .await
     .unwrap_or(0.0);
@@ -261,6 +262,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         log::info!(
             "cancel pending logistics worker: disabled via CANCEL_PENDING_LOGISTICS_DISABLE_WORKER"
+        );
+    }
+
+    let delayed_shipment_worker_disabled = std::env::var("DELAYED_SHIPMENT_CREATION_DISABLE_WORKER")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !delayed_shipment_worker_disabled {
+        let db = get_db().await.map_err(|e| {
+            format!("delayed shipment creation worker: database connect failed: {e}")
+        })?;
+        let poll_sec = std::env::var("DELAYED_SHIPMENT_CREATION_POLL_INTERVAL_SEC")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(60);
+        let batch_limit = std::env::var("DELAYED_SHIPMENT_CREATION_BATCH_LIMIT")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(25);
+        log::info!(
+            "delayed shipment creation worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
+        );
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
+            loop {
+                interval.tick().await;
+                match process_create_shipments_after_cancel_window(&db, batch_limit).await {
+                    Ok(n) if n > 0 => {
+                        log::info!(
+                            "delayed shipment creation worker: created {n} shipment(s)"
+                        );
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        observability::record_shiprocket_booking_failure_total(
+                            "delayed_shipment_worker",
+                        );
+                        log::warn!(
+                            "delayed shipment creation worker: batch failed: {}",
+                            e.message()
+                        );
+                    }
+                }
+                refresh_backlog_metrics(&db).await;
+            }
+        });
+    } else {
+        log::info!(
+            "delayed shipment creation worker: disabled via DELAYED_SHIPMENT_CREATION_DISABLE_WORKER"
         );
     }
 

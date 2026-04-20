@@ -90,9 +90,11 @@ export function useRazorpayCheckout() {
     return null;
   }, []);
 
+  // eslint-disable-next-line max-lines-per-function
   const runCheckout = useCallback(async (input?: {
     shippingAddressId?: string;
     selectedCartLineIds?: string[];
+    paymentMode?: "prepaid" | "cod";
     onSuccess?: (payload: { orderId: string; paymentState: string; orderUiState: string }) => void;
     onFailure?: (payload: { orderId: string; reason?: string }) => void;
   }) => {
@@ -107,13 +109,18 @@ export function useRazorpayCheckout() {
       return;
     }
 
+    const paymentMode: "prepaid" | "cod" =
+      input?.paymentMode === "cod" ? "cod" : "prepaid";
+
     setPaymentMessageWithAnnounce(null);
     setPaymentLoading(true);
     try {
       const placeOrderKey = `checkout-place-${crypto.randomUUID()}`;
       const start = await fetchApiEnvelope<{
+        checkoutMode?: "prepaid" | "cod";
         order: {
           orderId: string;
+          paymentMethod?: string | null;
         };
         paymentIntent: {
           intentId?: string;
@@ -122,16 +129,41 @@ export function useRazorpayCheckout() {
           orderId: string;
           amountPaise: string;
           currency: string;
-        };
-        idempotency: { placeOrderKey: string; verifyKey: string };
+        } | null;
+        idempotency: { placeOrderKey: string; verifyKey?: string | null };
       }>("/api/checkout/place-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shippingAddressId, selectedCartLineIds, idempotencyKey: placeOrderKey }),
+        body: JSON.stringify({
+          shippingAddressId,
+          selectedCartLineIds,
+          idempotencyKey: placeOrderKey,
+          paymentMode,
+        }),
       });
 
+      const orderId = start?.order?.orderId;
+      if (!orderId) {
+        setPaymentMessageWithAnnounce("Order creation failed. Please retry.", "assertive");
+        return;
+      }
+
+      if ((start?.checkoutMode ?? "").toLowerCase() === "cod") {
+        const successPayload = {
+          orderId,
+          paymentState: "cod_pending",
+          orderUiState: "processing",
+        };
+        if (input?.onSuccess) {
+          input.onSuccess(successPayload);
+          return;
+        }
+        setPaymentMessageWithAnnounce("Order placed with Cash on Delivery.");
+        return;
+      }
+
       const raw = start?.paymentIntent;
-        if (!raw?.razorpayKeyId || !raw?.razorpayOrderId) {
+      if (!raw?.razorpayKeyId || !raw?.razorpayOrderId) {
         setPaymentMessageWithAnnounce(
           "No Razorpay key/order returned. Please retry in a moment."
         );
@@ -144,7 +176,7 @@ export function useRazorpayCheckout() {
       }
       const intent = parsed.data;
       await loadRazorpayScript();
-      const orderId = intent.orderId;
+      const paymentOrderId = intent.orderId;
       const verifyKey = start?.idempotency?.verifyKey;
       const options = {
         key: intent.razorpayKeyId,
@@ -247,7 +279,7 @@ export function useRazorpayCheckout() {
             ? (failure as { error: { description: string } }).error.description
             : "Payment failed or was closed.";
         if (input?.onFailure) {
-          input.onFailure({ orderId, reason });
+          input.onFailure({ orderId: paymentOrderId, reason });
           return;
         }
         setPaymentMessageWithAnnounce("Payment failed or was closed.", "assertive");

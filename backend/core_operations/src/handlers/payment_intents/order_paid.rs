@@ -1,9 +1,5 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::order_state_machine::{self, OrderState};
-use crate::{
-    handlers::order_events::create_order_event,
-    handlers::shipments::ensure_shiprocket_booking_for_paid_order,
-};
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use core_db_entities::entity::{coupon_redemptions, coupons, orders};
@@ -103,26 +99,10 @@ pub async fn finalize_order_paid(
         }
     }
 
-    if let Err(error) = ensure_shiprocket_booking_for_paid_order(txn, order_id).await {
-        crate::observability::record_shiprocket_booking_failure_total("post_payment_booking");
-        let _ = create_order_event(
-            txn,
-            tonic::Request::new(proto::proto::core::CreateOrderEventRequest {
-                order_id,
-                event_type: "shipment_booking_failed".to_string(),
-                from_status: None,
-                to_status: None,
-                actor_type: "system".to_string(),
-                message: Some(error.message().to_string()),
-            }),
-        )
-        .await;
-    } else {
-        crate::observability::log_operational_event(
-            "payment_finalized_paid",
-            &[("order_id", order_id.to_string())],
-        );
-    }
+    crate::observability::log_operational_event(
+        "payment_finalized_paid",
+        &[("order_id", order_id.to_string())],
+    );
 
     Ok(())
 }

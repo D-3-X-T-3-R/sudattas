@@ -48,12 +48,20 @@ pub async fn expire_stale_pending_orders(
 ) -> Result<u64, Status> {
     let txn = db.begin().await.map_err(map_db_error_to_status)?;
     let pending_status_id = order_status::Entity::find()
-        .filter(order_status::Column::StatusName.eq("pending"))
+        .filter(order_status::Column::StatusName.eq("active_sale"))
         .one(&txn)
         .await
         .map_err(map_db_error_to_status)?
         .map(|row| row.status_id)
-        .ok_or_else(|| Status::internal("OrderStatus 'pending' not found"))?;
+        .or(
+            order_status::Entity::find()
+                .filter(order_status::Column::StatusName.eq("pending"))
+                .one(&txn)
+                .await
+                .map_err(map_db_error_to_status)?
+                .map(|row| row.status_id),
+        )
+        .ok_or_else(|| Status::internal("OrderStatus 'active_sale' not found"))?;
 
     let claimed_intent_ids = claim_expired_pending_intent_ids(&txn, batch_limit).await?;
     if claimed_intent_ids.is_empty() {

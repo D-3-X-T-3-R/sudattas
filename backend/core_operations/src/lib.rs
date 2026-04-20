@@ -10,6 +10,7 @@ pub mod auth;
 pub mod cancellation_saga;
 pub mod money;
 pub mod observability;
+pub mod order_policy;
 pub mod razorpay;
 pub mod services;
 
@@ -35,6 +36,7 @@ use proto::proto::core::{
     grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkOrderDeliveredRequest,
     AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse,
     AdminUpdateReviewStatusRequest, AdminUpdateReviewStatusResponse, ApplyCouponRequest,
+    CancelOrderItemsRequest,
     CapturePaymentRequest, CartItemsResponse, CategoriesResponse, ColorsResponse,
     ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse, CreateCartItemRequest,
     CreateCategoryRequest, CreateColorRequest, CreateCouponRequest, CreateEventLogRequest,
@@ -57,6 +59,7 @@ use proto::proto::core::{
     EstimateCheckoutShippingResponse, EventLogsResponse, FabricsResponse, GetCartItemsRequest,
     GetOrderEventsRequest, GetPaymentIntentRequest, GetPresignedUploadUrlRequest,
     GetProductsByIdRequest, GetRelatedProductsRequest, GetShipmentRequest,
+    GetRefundsRequest,
     GetShippingAddressRequest, GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse,
     GetUserPiiExportRequest, GetUserPiiExportResponse, IngestWebhookRequest,
     InventoryItemsResponse, InventoryLogsResponse, NewsletterSubscribersResponse,
@@ -747,6 +750,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::delete_order(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn cancel_order_items(
+        &self,
+        request: Request<CancelOrderItemsRequest>,
+    ) -> Result<Response<OrdersResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::cancel_order_items(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2274,6 +2293,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::refunds::create_refund(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_refunds(
+        &self,
+        request: Request<GetRefundsRequest>,
+    ) -> Result<Response<RefundsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::refunds::get_refunds(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

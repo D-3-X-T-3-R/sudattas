@@ -5,6 +5,23 @@ export default async function CheckoutSuccessPage({
 }: {
   searchParams: Promise<{ orderId?: string }>;
 }) {
+  const cancelWindowHours = Number.parseInt(
+    (process.env.CANCEL_WINDOW_HOURS ?? "12").trim(),
+    10
+  );
+  const pickupDelayHours = Number.parseInt(
+    (process.env.PICKUP_DELAY_HOURS ?? "48").trim(),
+    10
+  );
+  const normalizedCancelWindowHours =
+    Number.isFinite(cancelWindowHours) && cancelWindowHours > 0
+      ? cancelWindowHours
+      : 12;
+  const normalizedPickupDelayHours =
+    Number.isFinite(pickupDelayHours) && pickupDelayHours > 0
+      ? pickupDelayHours
+      : 48;
+
   const params = await searchParams;
   const orderId = params.orderId?.trim() ?? "";
 
@@ -28,11 +45,11 @@ export default async function CheckoutSuccessPage({
         <div className="mt-6 grid gap-3 rounded-[22px] border border-[#0F3D2E]/8 bg-white/65 p-4 text-sm leading-6 text-[#615A50] sm:grid-cols-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A37D34]">Next step</p>
-            <p className="mt-2">We book the quoted courier after payment and schedule pickup within the next 48 hours.</p>
+            <p className="mt-2">We book shipment after the cancellation window and schedule pickup with a {normalizedPickupDelayHours}-hour delay.</p>
           </div>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A37D34]">Cancellation window</p>
-            <p className="mt-2">Cancellation stays available until pickup is completed. After that, courier return handling applies.</p>
+            <p className="mt-2">Cancellation stays available for {normalizedCancelWindowHours} hours from order creation. After that, you can refuse delivery.</p>
           </div>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A37D34]">Need help?</p>

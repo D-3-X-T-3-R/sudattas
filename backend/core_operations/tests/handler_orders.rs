@@ -1,6 +1,7 @@
 //! Unit tests for order handlers using SeaORM MockDatabase.
 
 use core_db_entities::entity::{order_details, order_status, orders, shipments};
+use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateOrderRequest,
     DeleteOrderRequest, OrdersResponse, UpdateOrderRequest,
@@ -20,6 +21,7 @@ async fn create_order_inserts_and_returns_created_model() {
         public_order_ref: "SUD-20990101-PLACEHOLDER".to_string(),
         user_id: 7,
         order_date: now,
+        created_at: now,
         shipping_address_id: 11,
         total_amount: Some(Decimal::new(10_000, 2)),
         status_id: 2,
@@ -28,14 +30,18 @@ async fn create_order_inserts_and_returns_created_model() {
         currency: Some("INR".to_string()),
         updated_at: None,
         subtotal_minor: 8_000,
+        items_total_minor_before_discount: Some(8_000),
         shipping_minor: Some(1_000),
+        shipping_charge_minor: Some(1_000),
         tax_total_minor: Some(500),
         discount_total_minor: Some(500),
+        items_total_minor_after_discount: Some(7_500),
         grand_total_minor: 9_000,
         applied_coupon_id: Some(1),
         applied_coupon_code: Some("SAVE10".to_string()),
         applied_discount_paise: Some(1_000),
         refund_settlement_status: None,
+        fulfillment_status: FulfillmentStatus::NotCreated,
     };
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
@@ -113,6 +119,7 @@ async fn update_order_illegal_state_transition_returns_invalid_argument() {
         public_order_ref: "SUD-20990101-HUPDILL01".to_string(),
         user_id: 7,
         order_date: now,
+        created_at: now,
         shipping_address_id: 11,
         total_amount: Some(Decimal::new(10_000, 2)),
         status_id: 1, // from_status_id
@@ -121,14 +128,18 @@ async fn update_order_illegal_state_transition_returns_invalid_argument() {
         currency: Some("INR".to_string()),
         updated_at: None,
         subtotal_minor: 8_000,
+        items_total_minor_before_discount: Some(8_000),
         shipping_minor: Some(1_000),
+        shipping_charge_minor: Some(1_000),
         tax_total_minor: Some(500),
         discount_total_minor: Some(500),
+        items_total_minor_after_discount: Some(7_500),
         grand_total_minor: 9_000,
         applied_coupon_id: None,
         applied_coupon_code: None,
         applied_discount_paise: None,
         refund_settlement_status: None,
+        fulfillment_status: FulfillmentStatus::NotCreated,
     };
 
     let from_status = order_status::Model {
@@ -177,6 +188,7 @@ async fn update_order_preserves_original_order_date() {
         public_order_ref: "SUD-20990101-HUPDILL02".to_string(),
         user_id: 7,
         order_date: original_order_date,
+        created_at: original_order_date,
         shipping_address_id: 11,
         total_amount: Some(Decimal::new(10_000, 2)),
         status_id: 1,
@@ -185,14 +197,18 @@ async fn update_order_preserves_original_order_date() {
         currency: Some("INR".to_string()),
         updated_at: None,
         subtotal_minor: 8_000,
+        items_total_minor_before_discount: Some(8_000),
         shipping_minor: Some(1_000),
+        shipping_charge_minor: Some(1_000),
         tax_total_minor: Some(500),
         discount_total_minor: Some(500),
+        items_total_minor_after_discount: Some(7_500),
         grand_total_minor: 9_000,
         applied_coupon_id: None,
         applied_coupon_code: None,
         applied_discount_paise: None,
         refund_settlement_status: None,
+        fulfillment_status: FulfillmentStatus::NotCreated,
     };
 
     let from_status = order_status::Model {
@@ -274,6 +290,7 @@ async fn delete_order_acting_user_mismatch_yields_not_found() {
         public_order_ref: "SUD-20990101-HDELMIS01".to_string(),
         user_id: 3,
         order_date: now,
+        created_at: now,
         shipping_address_id: 20,
         total_amount: Some(Decimal::new(5_000, 2)),
         status_id: 1,
@@ -282,14 +299,18 @@ async fn delete_order_acting_user_mismatch_yields_not_found() {
         currency: Some("INR".to_string()),
         updated_at: None,
         subtotal_minor: 4_000,
+        items_total_minor_before_discount: Some(4_000),
         shipping_minor: Some(1_000),
+        shipping_charge_minor: Some(1_000),
         tax_total_minor: None,
         discount_total_minor: None,
+        items_total_minor_after_discount: Some(4_000),
         grand_total_minor: 5_000,
         applied_coupon_id: None,
         applied_coupon_code: None,
         applied_discount_paise: None,
         refund_settlement_status: None,
+        fulfillment_status: FulfillmentStatus::NotCreated,
     };
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
@@ -318,6 +339,7 @@ async fn delete_order_when_already_cancelled_returns_snapshot() {
         public_order_ref: "SUD-20990101-HDELCAN01".to_string(),
         user_id: 3,
         order_date: now,
+        created_at: now,
         shipping_address_id: 20,
         total_amount: Some(Decimal::new(5_000, 2)),
         status_id: cancelled_sid,
@@ -326,14 +348,18 @@ async fn delete_order_when_already_cancelled_returns_snapshot() {
         currency: Some("INR".to_string()),
         updated_at: None,
         subtotal_minor: 4_000,
+        items_total_minor_before_discount: Some(4_000),
         shipping_minor: Some(1_000),
+        shipping_charge_minor: Some(1_000),
         tax_total_minor: None,
         discount_total_minor: None,
+        items_total_minor_after_discount: Some(4_000),
         grand_total_minor: 5_000,
         applied_coupon_id: None,
         applied_coupon_code: None,
         applied_discount_paise: None,
         refund_settlement_status: None,
+        fulfillment_status: FulfillmentStatus::NotCreated,
     };
     let st = order_status::Model {
         status_id: cancelled_sid,

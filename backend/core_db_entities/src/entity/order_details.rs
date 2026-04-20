@@ -20,16 +20,21 @@ pub struct Model {
         nullable
     )]
     pub price: Option<Decimal>,
+    pub line_total_minor: i64,
     pub unit_price_minor: i32,
     pub discount_minor: Option<i32>,
     pub tax_minor: Option<i32>,
     pub sku: Option<String>,
     pub title: Option<String>,
     pub line_attrs: Option<Json>,
+    pub item_status: String,
+    pub cancelled_at: Option<DateTimeUtc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::order_inventory_restore_items::Entity")]
+    OrderInventoryRestoreItems,
     #[sea_orm(
         belongs_to = "super::orders::Entity",
         from = "Column::OrderId",
@@ -48,15 +53,28 @@ pub enum Relation {
     ProductVariants,
 }
 
-impl Related<super::orders::Entity> for Entity {
+impl Related<super::order_inventory_restore_items::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Orders.def()
+        Relation::OrderInventoryRestoreItems.def()
     }
 }
 
 impl Related<super::product_variants::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ProductVariants.def()
+    }
+}
+
+impl Related<super::orders::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::order_inventory_restore_items::Relation::Orders.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(
+            super::order_inventory_restore_items::Relation::OrderDetails
+                .def()
+                .rev(),
+        )
     }
 }
 

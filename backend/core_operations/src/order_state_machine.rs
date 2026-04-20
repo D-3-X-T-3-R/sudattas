@@ -29,6 +29,7 @@ pub enum OrderState {
     Shipped,
     Delivered,
     Cancelled,
+    PartiallyCancelled,
     CancelPendingLogistics,
     Refunded,
     NeedsReview,
@@ -37,12 +38,13 @@ pub enum OrderState {
 impl OrderState {
     pub fn as_status_name(self) -> &'static str {
         match self {
-            OrderState::PendingPayment => "pending",
+            OrderState::PendingPayment => "active_sale",
             OrderState::Paid => "confirmed",
             OrderState::Processing => "processing",
             OrderState::Shipped => "shipped",
             OrderState::Delivered => "delivered",
             OrderState::Cancelled => "cancelled",
+            OrderState::PartiallyCancelled => "partially_cancelled",
             OrderState::CancelPendingLogistics => "cancel_pending_logistics",
             OrderState::Refunded => "refunded",
             OrderState::NeedsReview => "needs_review",
@@ -56,13 +58,16 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
     vec![
         (
             PendingPayment,
-            [Paid, NeedsReview, Cancelled].into_iter().collect(),
+            [Paid, NeedsReview, Cancelled, PartiallyCancelled]
+                .into_iter()
+                .collect(),
         ),
         (
             Paid,
             [
                 Processing,
                 Cancelled,
+                PartiallyCancelled,
                 CancelPendingLogistics,
                 Refunded,
                 NeedsReview,
@@ -72,7 +77,13 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
         ),
         (
             Processing,
-            [Shipped, Cancelled, CancelPendingLogistics, Refunded]
+            [
+                Shipped,
+                Cancelled,
+                PartiallyCancelled,
+                CancelPendingLogistics,
+                Refunded,
+            ]
                 .into_iter()
                 .collect(),
         ),
@@ -82,10 +93,25 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
         ),
         (Delivered, [Refunded].into_iter().collect()),
         (
+            PartiallyCancelled,
+            [
+                PartiallyCancelled,
+                Processing,
+                Shipped,
+                Delivered,
+                Cancelled,
+                Refunded,
+                NeedsReview,
+            ]
+            .into_iter()
+            .collect(),
+        ),
+        (
             NeedsReview,
             [
                 PendingPayment,
                 Paid,
+                PartiallyCancelled,
                 Cancelled,
                 CancelPendingLogistics,
                 Refunded,
@@ -95,7 +121,9 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
         ),
         (
             CancelPendingLogistics,
-            [Cancelled, Refunded, NeedsReview].into_iter().collect(),
+            [Cancelled, PartiallyCancelled, Refunded, NeedsReview]
+                .into_iter()
+                .collect(),
         ),
         (Cancelled, [Refunded].into_iter().collect()),
         (Refunded, HashSet::new()),
@@ -266,12 +294,14 @@ pub async fn transition_order_status(
 
 fn status_name_to_state(name: &str) -> OrderState {
     match name {
+        "active_sale" => OrderState::PendingPayment,
         "pending" => OrderState::PendingPayment,
         "confirmed" => OrderState::Paid,
         "processing" => OrderState::Processing,
         "shipped" => OrderState::Shipped,
         "delivered" => OrderState::Delivered,
         "cancelled" => OrderState::Cancelled,
+        "partially_cancelled" => OrderState::PartiallyCancelled,
         "cancel_pending_logistics" => OrderState::CancelPendingLogistics,
         "refunded" => OrderState::Refunded,
         "needs_review" => OrderState::NeedsReview,

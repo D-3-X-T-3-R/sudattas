@@ -38,6 +38,7 @@ pub async fn update_order(
         order_id: ActiveValue::Set(req.order_id),
         user_id: ActiveValue::Set(req.user_id),
         order_date: ActiveValue::Set(existing.order_date),
+        created_at: ActiveValue::Set(existing.created_at),
         shipping_address_id: ActiveValue::Set(req.shipping_address_id),
         total_amount: ActiveValue::Set(Some(paise_to_decimal(req.total_amount_paise))),
         status_id: ActiveValue::Set(req.status_id),
@@ -48,14 +49,18 @@ pub async fn update_order(
         currency: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
         subtotal_minor: ActiveValue::NotSet,
+        items_total_minor_before_discount: ActiveValue::NotSet,
         shipping_minor: ActiveValue::NotSet,
+        shipping_charge_minor: ActiveValue::NotSet,
         tax_total_minor: ActiveValue::NotSet,
         discount_total_minor: ActiveValue::NotSet,
+        items_total_minor_after_discount: ActiveValue::NotSet,
         grand_total_minor: ActiveValue::NotSet,
         applied_coupon_id: ActiveValue::NotSet,
         applied_coupon_code: ActiveValue::NotSet,
         applied_discount_paise: ActiveValue::NotSet,
         refund_settlement_status: ActiveValue::NotSet,
+        fulfillment_status: ActiveValue::NotSet,
     };
 
     match orders.update(txn).await {

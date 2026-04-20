@@ -9,8 +9,11 @@ pub struct OrderDetails {
     pub variant_id: String,
     pub quantity: String,
     pub price_paise: i64,
+    pub line_total_minor: i64,
     pub price_formatted: String,
     pub order_detail_id: String,
+    pub item_status: String,
+    pub cancelled_at: Option<String>,
 }
 
 #[graphql_object]
@@ -37,6 +40,10 @@ impl OrderDetails {
         &self.price_formatted
     }
 
+    async fn line_total_minor(&self) -> String {
+        self.line_total_minor.to_string()
+    }
+
     /// Money type: amount_paise, currency, formatted.
     async fn price_money(&self) -> Money {
         money_from_paise(self.price_paise, Some("INR"))
@@ -44,6 +51,14 @@ impl OrderDetails {
 
     async fn order_detail_id(&self) -> &String {
         &self.order_detail_id
+    }
+
+    async fn item_status(&self) -> &String {
+        &self.item_status
+    }
+
+    async fn cancelled_at(&self) -> Option<&String> {
+        self.cancelled_at.as_ref()
     }
 
     async fn product_details(&self) -> FieldResult<Vec<Product>> {

@@ -40,7 +40,12 @@ pub async fn create_refund(
     let status_name = status_row.status_name.as_str();
     let refundable = matches!(
         status_name,
-        "confirmed" | "processing" | "shipped" | "delivered" | "cancelled"
+        "confirmed"
+            | "processing"
+            | "shipped"
+            | "delivered"
+            | "partially_cancelled"
+            | "cancelled"
     );
     if !refundable {
         return Err(Status::failed_precondition(format!(
@@ -123,7 +128,7 @@ pub async fn create_refund(
     }))
 }
 
-fn model_to_response(m: &refunds::Model) -> RefundResponse {
+pub(crate) fn model_to_response(m: &refunds::Model) -> RefundResponse {
     RefundResponse {
         refund_id: m.refund_id,
         order_id: m.order_id,
@@ -136,5 +141,9 @@ fn model_to_response(m: &refunds::Model) -> RefundResponse {
             .map(|s| format!("{:?}", s).to_lowercase())
             .unwrap_or_else(|| "processed".to_string()),
         created_at: m.created_at.map(|t| t.to_string()).unwrap_or_default(),
+        line_items_refunded_json: m
+            .line_items_refunded
+            .as_ref()
+            .and_then(|v| serde_json::to_string(v).ok()),
     }
 }

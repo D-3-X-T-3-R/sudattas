@@ -14,6 +14,7 @@ pub use super::newsletter_subscribers::Entity as NewsletterSubscribers;
 pub use super::occasions::Entity as Occasions;
 pub use super::order_details::Entity as OrderDetails;
 pub use super::order_events::Entity as OrderEvents;
+pub use super::order_inventory_restore_items::Entity as OrderInventoryRestoreItems;
 pub use super::order_inventory_restores::Entity as OrderInventoryRestores;
 pub use super::order_status::Entity as OrderStatus;
 pub use super::orders::Entity as Orders;

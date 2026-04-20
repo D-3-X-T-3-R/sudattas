@@ -38,6 +38,22 @@ pub enum DiscountType {
     FixedAmount,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "fulfillment_status")]
+pub enum FulfillmentStatus {
+    #[sea_orm(string_value = "not_created")]
+    NotCreated,
+    #[sea_orm(string_value = "booked")]
+    Booked,
+    #[sea_orm(string_value = "pickup_completed")]
+    PickupCompleted,
+    #[sea_orm(string_value = "in_transit")]
+    InTransit,
+    #[sea_orm(string_value = "delivered")]
+    Delivered,
+    #[sea_orm(string_value = "rto")]
+    Rto,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "payment_status")]
 pub enum PaymentStatus {
     #[sea_orm(string_value = "pending")]

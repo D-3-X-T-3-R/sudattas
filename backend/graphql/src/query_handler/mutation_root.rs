@@ -59,8 +59,8 @@ use crate::resolvers::{
     orders::{
         self,
         schema::{
-            AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CreateOrderInput, NewOrder,
-            Order, OrderMutation,
+            AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
+            CreateOrderInput, NewOrder, Order, OrderMutation,
         },
     },
     payment_intents::{
@@ -564,6 +564,26 @@ impl MutationRoot {
             )
         };
         orders::handlers::delete_order(order_id, acting_user_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Cancels specific order lines. Updates order status to partially_cancelled/cancelled and runs unified settlement.
+    #[instrument(err, ret)]
+    async fn cancel_order_items(
+        context: &Context,
+        input: CancelOrderItemsInput,
+    ) -> FieldResult<Vec<Order>> {
+        let acting_user_id = if context.is_admin() {
+            None
+        } else {
+            let uid = require_jwt(context)?;
+            Some(
+                crate::resolvers::utils::parse_i64(uid, "user_id")
+                    .map_err(|e| e.into_field_error())?,
+            )
+        };
+        orders::handlers::cancel_order_items(input, acting_user_id)
             .await
             .map_err(|e| e.into_field_error())
     }

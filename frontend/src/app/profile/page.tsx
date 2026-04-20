@@ -50,6 +50,7 @@ type AuthenticatedSectionProps = {
   ensureOrderDetailLoaded: (orderId: string) => Promise<void>;
   refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
+  cancelOrderItems: (orderId: string, orderDetailIds: string[]) => Promise<void>;
 };
 
 type UseAccountDataLoaderArgs = {
@@ -156,6 +157,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     ensureOrderDetailLoaded,
     refreshOrderDetail,
     cancelOrder,
+    cancelOrderItems,
   } = props;
 
   return (
@@ -189,6 +191,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         ensureOrderDetailLoaded={ensureOrderDetailLoaded}
         refreshOrderDetail={refreshOrderDetail}
         cancelOrder={cancelOrder}
+        cancelOrderItems={cancelOrderItems}
         onSignOut={() => void signOut({ callbackUrl: "/" })}
       />
     </>
@@ -325,6 +328,41 @@ export default function ProfilePage() {
       } catch (e) {
         flowLog("cancel order failed", {
           orderId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        const ui = toRouteFailureUi("account", e);
+        setRouteFailure(ui);
+        announce(ui.message, "assertive");
+      }
+    },
+    [announce, loadAccountData]
+  );
+
+  const cancelOrderItems = useCallback(
+    async (orderId: string, orderDetailIds: string[]) => {
+      if (!orderDetailIds.length) return;
+      setRouteFailure(null);
+      flowLog("cancel order items requested by customer", { orderId, orderDetailIds });
+      try {
+        const res = await fetchApiEnvelope<{ orderId: string; statusId: string }>(
+          `/api/account/orders/${encodeURIComponent(orderId)}/cancel-items`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderDetailIds }),
+          }
+        );
+        flowLog("cancel order items API success", {
+          orderId,
+          orderDetailIds,
+          updatedStatusId: res?.statusId ?? null,
+        });
+        await loadAccountData();
+        announce("Item cancelled.");
+      } catch (e) {
+        flowLog("cancel order items failed", {
+          orderId,
+          orderDetailIds,
           error: e instanceof Error ? e.message : String(e),
         });
         const ui = toRouteFailureUi("account", e);
@@ -517,6 +555,7 @@ export default function ProfilePage() {
             ensureOrderDetailLoaded={ensureOrderDetailLoaded}
             refreshOrderDetail={refreshOrderDetail}
             cancelOrder={cancelOrder}
+            cancelOrderItems={cancelOrderItems}
           />
         )}
       </main>

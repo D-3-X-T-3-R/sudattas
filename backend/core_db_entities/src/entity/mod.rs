@@ -16,6 +16,7 @@ pub mod newsletter_subscribers;
 pub mod occasions;
 pub mod order_details;
 pub mod order_events;
+pub mod order_inventory_restore_items;
 pub mod order_inventory_restores;
 pub mod order_status;
 pub mod orders;

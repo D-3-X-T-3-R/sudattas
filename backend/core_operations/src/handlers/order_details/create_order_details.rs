@@ -21,6 +21,7 @@ pub async fn create_order_details(
             variant_id: ActiveValue::Set(details.variant_id),
             quantity: ActiveValue::Set(details.quantity),
             price: ActiveValue::Set(Some(paise_to_decimal(details.price_paise))),
+            line_total_minor: ActiveValue::Set(details.price_paise),
             unit_price_minor: ActiveValue::Set(details.unit_price_minor.unwrap_or(0)),
             discount_minor: details
                 .discount_minor
@@ -45,6 +46,8 @@ pub async fn create_order_details(
                 .unwrap_or(ActiveValue::NotSet)
                 .into(),
             line_attrs: ActiveValue::NotSet,
+            item_status: ActiveValue::Set("active".to_string()),
+            cancelled_at: ActiveValue::Set(None),
         };
 
         match create_order_detail.insert(txn).await {
@@ -55,6 +58,9 @@ pub async fn create_order_details(
                     variant_id: model.variant_id,
                     quantity: model.quantity,
                     price_paise: model.price.as_ref().map(decimal_to_paise).unwrap_or(0),
+                    line_total_minor: model.line_total_minor,
+                    item_status: model.item_status,
+                    cancelled_at: model.cancelled_at.map(|v| v.to_rfc3339()),
                 });
             }
             Err(e) => {

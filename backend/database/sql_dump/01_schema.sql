@@ -280,6 +280,7 @@ CREATE TABLE `Orders` (
     `PublicOrderRef` VARCHAR(48) NOT NULL COMMENT 'Immutable external ref: SUD-YYYYMMDD-SUFFIX',
     `UserID` BIGINT NOT NULL,
     `OrderDate` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `ShippingAddressID` BIGINT NOT NULL,
     `TotalAmount` DECIMAL(10,2) NULL COMMENT 'Legacy field, do not use; use *_minor columns instead',
     `StatusID` BIGINT NOT NULL,
@@ -288,13 +289,18 @@ CREATE TABLE `Orders` (
     `currency` VARCHAR(3) DEFAULT 'INR',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `subtotal_minor` BIGINT NOT NULL,
+    `items_total_minor_before_discount` BIGINT NULL DEFAULT NULL,
     `shipping_minor` BIGINT NULL DEFAULT 0,
+    `shipping_charge_minor` BIGINT NULL DEFAULT NULL,
     `tax_total_minor` BIGINT NULL DEFAULT 0,
     `discount_total_minor` BIGINT NULL DEFAULT 0,
+    `items_total_minor_after_discount` BIGINT NULL DEFAULT NULL,
     `grand_total_minor` BIGINT NOT NULL,
     `applied_coupon_id` BIGINT NULL DEFAULT NULL,
     `applied_coupon_code` VARCHAR(64) NULL DEFAULT NULL,
     `applied_discount_paise` INT NULL DEFAULT NULL,
+    `refund_settlement_status` VARCHAR(32) NULL DEFAULT NULL COMMENT 'refund_pending|refund_processed|refund_failed|refund_not_applicable',
+    `fulfillment_status` ENUM('not_created','booked','pickup_completed','in_transit','delivered','rto') NOT NULL DEFAULT 'not_created',
     PRIMARY KEY (`OrderID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
     FOREIGN KEY (`ShippingAddressID`) REFERENCES `ShippingAddresses`(`ShippingAddressID`),
@@ -373,17 +379,21 @@ CREATE TABLE `OrderDetails` (
     `VariantID` bigint NOT NULL,
     `Quantity` bigint NOT NULL,
     `Price` decimal(10,2) NULL COMMENT 'Legacy field, do not use; use unit_price_minor instead',
+    `line_total_minor` BIGINT NOT NULL DEFAULT 0 COMMENT 'Immutable line total captured at checkout',
     `unit_price_minor` INT NOT NULL,
     `discount_minor` INT NULL DEFAULT NULL,
     `tax_minor` INT NULL DEFAULT NULL,
     `sku` VARCHAR(255) NULL DEFAULT NULL,
     `title` VARCHAR(512) NULL DEFAULT NULL,
     `line_attrs` JSON NULL DEFAULT NULL,
+    `item_status` VARCHAR(16) NOT NULL DEFAULT 'active',
+    `cancelled_at` TIMESTAMP NULL,
     PRIMARY KEY (`OrderDetailID`),
     FOREIGN KEY (`OrderID`) REFERENCES `Orders`(`OrderID`),
     FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
     INDEX `idx_order_details_order_id` (`OrderID`),
-    INDEX `idx_order_details_variant` (`VariantID`)
+    INDEX `idx_order_details_variant` (`VariantID`),
+    INDEX `idx_order_details_order_item_status` (`OrderID`, `item_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Reviews` (Enhanced with moderation)
@@ -760,12 +770,14 @@ ALTER TABLE `Orders`
 
 -- Insert default order statuses
 INSERT INTO `OrderStatus` (`StatusName`) VALUES
+('active_sale'),
 ('pending'),
 ('confirmed'),
 ('processing'),
 ('shipped'),
 ('delivered'),
 ('cancelled'),
+('partially_cancelled'),
 ('cancel_pending_logistics'),
 ('refunded'),
 ('needs_review')

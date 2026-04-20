@@ -40,6 +40,7 @@ export type AccountOrderRow = {
   totalAmountFormatted: string;
   statusId: string;
   statusName: string;
+  cancelWindowHours?: number;
 };
 
 export type AccountProfileRow = {
@@ -56,6 +57,9 @@ export type AccountOrderDetailRow = {
   variantId: string;
   quantity: string;
   pricePaise: string;
+  lineTotalMinor?: string;
+  itemStatus?: string;
+  cancelledAt?: string | null;
   priceFormatted: string;
   productDetails?: Array<{
     productId?: string;
@@ -106,6 +110,14 @@ export type AccountOrderDetailPayload = {
   }>;
   fulfillmentState: string;
   paymentState: string;
+  refundSummary?: {
+    itemRefundMinor: number;
+    shippingRefundMinor: number;
+    totalRefundMinor: number;
+    totalRefundFormatted: string;
+    itemRefundFormatted: string;
+    shippingRefundFormatted: string;
+  };
 };
 
 type ProfileNavId = "profile" | "orders" | "addresses" | "settings" | "support";
@@ -225,6 +237,7 @@ function customerOrderStatusHeadline(
 ): string {
   const base = (statusName ?? "").trim();
   const sn = base.toLowerCase();
+  if (sn.includes("partially_cancelled")) return "Partially cancelled";
   if (sn.includes("cancel_pending")) return "Cancellation in progress · awaiting courier";
   const paid =
     (detail?.paymentState ?? "").toLowerCase().includes("paid") ||
@@ -444,14 +457,26 @@ function sortOrdersLatestFirst(list: AccountOrderRow[]): AccountOrderRow[] {
 }
 
 /** Hide cancel when status is clearly terminal or past fulfilment; server still enforces rules. */
-function orderMayBeCancelledByCustomer(statusName: string | undefined): boolean {
+function orderWithinCancelWindow(orderDateRaw: string, cancelWindowHours: number): boolean {
+  const createdAt = Date.parse(orderDateRaw);
+  if (Number.isNaN(createdAt)) return false;
+  const deadline = createdAt + cancelWindowHours * 60 * 60 * 1000;
+  return Date.now() < deadline;
+}
+
+/** Hide cancel when status is clearly terminal or window has elapsed; server still enforces rules. */
+function orderMayBeCancelledByCustomer(
+  statusName: string | undefined,
+  orderDate: string,
+  cancelWindowHours: number
+): boolean {
   const s = (statusName ?? "").toLowerCase();
-  if (s.includes("cancel")) return false;
+  if (s.includes("cancel") && !s.includes("partially_cancelled")) return false;
   if (s.includes("deliver")) return false;
   if (s.includes("ship")) return false;
   if (s.includes("transit")) return false;
   if (s.includes("refund")) return false;
-  return true;
+  return orderWithinCancelWindow(orderDate, cancelWindowHours);
 }
 
 function UserIcon(props: SVGProps<SVGSVGElement>) {
@@ -568,6 +593,7 @@ type ProfileAuthenticatedContentProps = {
   ensureOrderDetailLoaded: (orderId: string) => Promise<void>;
   refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
+  cancelOrderItems: (orderId: string, orderDetailIds: string[]) => Promise<void>;
   onSignOut: () => void;
 };
 
@@ -631,13 +657,16 @@ export function ProfileAuthenticatedContent({
   ensureOrderDetailLoaded,
   refreshOrderDetail,
   cancelOrder,
+  cancelOrderItems,
   onSignOut,
 }: ProfileAuthenticatedContentProps) {
   const [activeNav, setActiveNav] = useState<ProfileNavId>("profile");
   const [emailHint, setEmailHint] = useState(false);
   const [loginHint, setLoginHint] = useState(false);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [cancellingItemKey, setCancellingItemKey] = useState<string | null>(null);
   const [cancelDialogOrderId, setCancelDialogOrderId] = useState<string | null>(null);
+  const [cancelDialogItem, setCancelDialogItem] = useState<{ orderId: string; orderDetailId: string } | null>(null);
   const [refreshingOrderId, setRefreshingOrderId] = useState<string | null>(null);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [supportCategory, setSupportCategory] = useState<SupportCategory>("order");
@@ -710,9 +739,22 @@ export function ProfileAuthenticatedContent({
   }, [activeNav, sortedOrders, orderDetailsById]);
 
   const confirmCancelOrder = async () => {
+    if (cancelDialogItem) {
+      const { orderId, orderDetailId } = cancelDialogItem;
+      const key = `${orderId}:${orderDetailId}`;
+      console.info("[orders-flow][customer-ui] cancel line dialog confirmed", { orderId, orderDetailId });
+      setCancelDialogItem(null);
+      setCancellingItemKey(key);
+      try {
+        await cancelOrderItems(orderId, [orderDetailId]);
+      } finally {
+        setCancellingItemKey(null);
+      }
+      return;
+    }
     const id = cancelDialogOrderId;
     if (!id) return;
-    console.info("[orders-flow][customer-ui] cancel dialog confirmed", { orderId: id });
+    console.info("[orders-flow][customer-ui] cancel order dialog confirmed", { orderId: id });
     setCancelDialogOrderId(null);
     setCancellingOrderId(id);
     try {
@@ -865,14 +907,33 @@ export function ProfileAuthenticatedContent({
                   <div className="space-y-5 pb-2">
                     {orderListEntries.map((entry, index) => {
                       const { key, order: o, detail, line, lineIndex, lineTotal } = entry;
+                      const cancelWindowHours = Math.max(1, Number(o.cancelWindowHours ?? 12));
                       const pres = line
                         ? singleOrderLineItemPresentation(o, line, lineIndex, lineTotal)
                         : orderLinePresentation(o, detail);
                       const thumbUrl = line ? lineThumbnailUrl(line) : firstOrderLineThumbnailUrl(detail);
                       const isFirstForOrder =
                         orderListEntries.findIndex((e) => e.order.orderId === o.orderId) === index;
+                      const orderCanCancel = orderMayBeCancelledByCustomer(
+                        o.statusName,
+                        o.orderDate,
+                        cancelWindowHours
+                      );
+                      const activeLineCount = (detail?.order?.orderDetails ?? []).filter(
+                        (row) => !((row.itemStatus ?? "").toLowerCase().includes("cancel"))
+                      ).length;
+                      const showFullOrderCancel = isFirstForOrder && orderCanCancel && activeLineCount > 1;
                       const showCancel =
-                        isFirstForOrder && orderMayBeCancelledByCustomer(o.statusName);
+                        !!line &&
+                        !((line.itemStatus ?? "").toLowerCase().includes("cancel")) &&
+                        orderCanCancel;
+                      const itemCancelDisabled =
+                        !showCancel ||
+                        cancellingOrderId === o.orderId ||
+                        cancellingItemKey === `${o.orderId}:${line?.orderDetailId ?? ""}`;
+                      const orderCancelDisabled =
+                        cancellingOrderId === o.orderId ||
+                        cancellingItemKey?.startsWith(`${o.orderId}:`) === true;
                       const ship = primaryShipmentForOrder(detail);
                       const refundTrackingState = refundTrackingStateForOrder(o.statusName, detail);
                       const showRefundTracking = refundTrackingState !== "none";
@@ -903,15 +964,50 @@ export function ProfileAuthenticatedContent({
                                 {customerOrderStatusHeadline(o.statusName, detail)}
                               </p>
                             ) : null}
-                            {showCancel ? (
+                            {line && (line.itemStatus ?? "").toLowerCase().includes("cancel") ? (
+                              <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#A34A4A]">Cancelled</p>
+                            ) : showCancel ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setCancelDialogItem({
+                                    orderId: o.orderId,
+                                    orderDetailId: line.orderDetailId,
+                                  })
+                                }
+                                disabled={itemCancelDisabled}
+                                className="mt-3 rounded-full border border-[#C45C5C]/45 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A34A4A] transition hover:bg-[#fff5f5] disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {cancellingItemKey === `${o.orderId}:${line.orderDetailId}`
+                                  ? "Cancelling..."
+                                  : "Cancel item"}
+                              </button>
+                            ) : line ? (
+                              <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8B816D]">
+                                Cancellation window closed. You can refuse delivery.
+                              </p>
+                            ) : null}
+                            {showFullOrderCancel ? (
                               <button
                                 type="button"
                                 onClick={() => setCancelDialogOrderId(o.orderId)}
-                                disabled={cancellingOrderId === o.orderId}
-                                className="mt-3 rounded-full border border-[#C45C5C]/45 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A34A4A] transition hover:bg-[#fff5f5] disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={orderCancelDisabled}
+                                className="mt-2 rounded-full border border-[#A34A4A]/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7A2F2F] transition hover:bg-[#fff4f4] disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                {cancellingOrderId === o.orderId ? "Cancelling..." : "Cancel order"}
+                                {cancellingOrderId === o.orderId ? "Cancelling..." : "Cancel full order"}
                               </button>
+                            ) : null}
+                            {isFirstForOrder && detail?.refundSummary ? (
+                              <p className="mt-2 text-xs text-[#615A50]">
+                                {refundTrackingState === "processed"
+                                  ? "Refunded"
+                                  : refundTrackingState === "failed"
+                                    ? "Refund issue (expected)"
+                                    : "Estimated refund"}: {detail.refundSummary.totalRefundFormatted}
+                                {detail.refundSummary.shippingRefundMinor > 0
+                                  ? ` (items ${detail.refundSummary.itemRefundFormatted} + shipping ${detail.refundSummary.shippingRefundFormatted})`
+                                  : ` (items ${detail.refundSummary.itemRefundFormatted})`}
+                              </p>
                             ) : null}
                           </div>
                           <div className="flex shrink-0 flex-col items-stretch gap-2 sm:min-w-[180px]">
@@ -1270,7 +1366,7 @@ export function ProfileAuthenticatedContent({
                   </Link>
                 </div>
                 <p className="mt-4 text-xs leading-6 text-[#615A50]">
-                  Cancellation remains available until pickup is completed. After pickup completion, delivery exceptions and returns are handled through courier updates and support review.
+                  Cancellation is available only within the configured cancellation window after order creation. After the window closes, you can refuse delivery and support will assist with return/refund updates.
                 </p>
               </section>
 
@@ -1439,9 +1535,12 @@ export function ProfileAuthenticatedContent({
     <section>
       {mainShell}
       <Dialog
-        open={!!cancelDialogOrderId}
+        open={!!cancelDialogOrderId || !!cancelDialogItem}
         onOpenChange={(open) => {
-          if (!open) setCancelDialogOrderId(null);
+          if (!open) {
+            setCancelDialogOrderId(null);
+            setCancelDialogItem(null);
+          }
         }}
       >
         <DialogContent
@@ -1453,7 +1552,9 @@ export function ProfileAuthenticatedContent({
             Wait! We&apos;re sad to see you go.
           </h2>
           <p className="text-center text-sm leading-[1.7] text-[#5C5650] sm:text-[0.9375rem]">
-            {`Each piece at Sudatta's is carefully prepared to ensure it reaches you in perfect condition. If there's a specific reason for your cancellation\u2014like a change in size or a delivery timing concern\u2014please let us know. We'd love the chance to make it right before we halt the process.`}
+            {cancelDialogItem
+              ? "Only this item will be cancelled. Shipping will not be refunded unless all items in this order are cancelled."
+              : `Each piece at Sudatta's is carefully prepared to ensure it reaches you in perfect condition. If there's a specific reason for your cancellation\u2014like a change in size or a delivery timing concern\u2014please let us know. We'd love the chance to make it right before we halt the process.`}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
             <button
@@ -1468,7 +1569,7 @@ export function ProfileAuthenticatedContent({
               type="button"
               className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#2C2620]/18 bg-[#F0E8DE] px-4 py-3.5 text-sm font-semibold text-[#2C2620] transition hover:bg-[#E8DFD2]"
               onClick={() => void confirmCancelOrder()}
-              disabled={!cancelDialogOrderId}
+              disabled={!cancelDialogOrderId && !cancelDialogItem}
             >
               <X className="h-5 w-5 shrink-0 opacity-80" strokeWidth={2} aria-hidden />
               Continue with Cancellation

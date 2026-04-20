@@ -11,7 +11,7 @@ mod integration_common;
 
 use chrono::{Duration, Utc};
 use core_db_entities::entity::sea_orm_active_enums::{
-    PaymentStatus, Status as PaymentIntentStatus,
+    FulfillmentStatus, PaymentStatus, Status as PaymentIntentStatus,
 };
 use core_db_entities::entity::{
     cart, coupon_redemptions, coupons, inventory, order_status, orders, payment_intents,
@@ -188,6 +188,7 @@ async fn seed_order_with_line(
         order_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(user_id),
         order_date: ActiveValue::Set(Utc::now()),
+        created_at: ActiveValue::Set(Utc::now()),
         shipping_address_id: ActiveValue::Set(seed_address(txn, user_id, tag).await),
         total_amount: ActiveValue::Set(Some(rust_decimal::Decimal::new(1000, 2))),
         status_id: ActiveValue::Set(pending.status_id),
@@ -198,14 +199,18 @@ async fn seed_order_with_line(
         currency: ActiveValue::Set(Some("INR".to_string())),
         updated_at: ActiveValue::Set(Some(Utc::now())),
         subtotal_minor: ActiveValue::Set(1_000),
+        items_total_minor_before_discount: ActiveValue::Set(Some(1_000)),
         shipping_minor: ActiveValue::Set(Some(0)),
+        shipping_charge_minor: ActiveValue::Set(Some(0)),
         tax_total_minor: ActiveValue::Set(Some(0)),
         discount_total_minor: ActiveValue::Set(Some(if coupon_id.is_some() { 100 } else { 0 })),
+        items_total_minor_after_discount: ActiveValue::Set(Some(if coupon_id.is_some() { 900 } else { 1_000 })),
         grand_total_minor: ActiveValue::Set(if coupon_id.is_some() { 900 } else { 1_000 }),
         applied_coupon_id: ActiveValue::Set(coupon_id),
         applied_coupon_code: ActiveValue::Set(coupon_id.map(|_| format!("LASTSLOT_{tag}"))),
         applied_discount_paise: ActiveValue::Set(coupon_id.map(|_| 100)),
         refund_settlement_status: ActiveValue::NotSet,
+        fulfillment_status: ActiveValue::Set(FulfillmentStatus::NotCreated),
     }
     .insert(txn)
     .await
@@ -252,7 +257,7 @@ async fn integration_stale_expiry_two_workers_claim_rows_once() {
     let setup = db.begin().await.expect("begin");
     let unique = Utc::now().timestamp_micros();
     let user_id = seed_user(&setup, "expiry_claim").await;
-    let _pending = ensure_order_status_row(&setup, "pending").await;
+    let active_sale = ensure_order_status_row(&setup, "active_sale").await;
     let cancelled = ensure_order_status_row(&setup, "cancelled").await;
     let variant_id = seed_variant(&setup, "expiry_claim", 1_000, 4).await;
     let inventory_row = inventory::Entity::find()
@@ -264,6 +269,14 @@ async fn integration_stale_expiry_two_workers_claim_rows_once() {
 
     let (order_id, _) =
         seed_order_with_line(&setup, "expiry_claim", user_id, variant_id, 2, None).await;
+    orders::ActiveModel {
+        order_id: ActiveValue::Set(order_id),
+        status_id: ActiveValue::Set(active_sale.status_id),
+        ..Default::default()
+    }
+    .update(&setup)
+    .await
+    .expect("set order active_sale");
     let intent = payment_intents::ActiveModel {
         intent_id: ActiveValue::NotSet,
         razorpay_order_id: ActiveValue::Set(format!("order_expiry_claim_{unique}")),
@@ -338,6 +351,7 @@ async fn integration_duplicate_payment_intent_race_returns_single_active_intent(
         order_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(user_id),
         order_date: ActiveValue::Set(Utc::now()),
+        created_at: ActiveValue::Set(Utc::now()),
         shipping_address_id: ActiveValue::Set(seed_address(&setup, user_id, "pi_race").await),
         total_amount: ActiveValue::Set(Some(rust_decimal::Decimal::new(1000, 2))),
         status_id: ActiveValue::Set(ensure_order_status_row(&setup, "pending").await.status_id),
@@ -348,14 +362,18 @@ async fn integration_duplicate_payment_intent_race_returns_single_active_intent(
         currency: ActiveValue::Set(Some("INR".to_string())),
         updated_at: ActiveValue::Set(Some(Utc::now())),
         subtotal_minor: ActiveValue::Set(1_000),
+        items_total_minor_before_discount: ActiveValue::Set(Some(1_000)),
         shipping_minor: ActiveValue::Set(Some(0)),
+        shipping_charge_minor: ActiveValue::Set(Some(0)),
         tax_total_minor: ActiveValue::Set(Some(0)),
         discount_total_minor: ActiveValue::Set(Some(0)),
+        items_total_minor_after_discount: ActiveValue::Set(Some(1_000)),
         grand_total_minor: ActiveValue::Set(1_000),
         applied_coupon_id: ActiveValue::Set(None),
         applied_coupon_code: ActiveValue::Set(None),
         applied_discount_paise: ActiveValue::Set(None),
         refund_settlement_status: ActiveValue::NotSet,
+        fulfillment_status: ActiveValue::Set(FulfillmentStatus::NotCreated),
     }
     .insert(&setup)
     .await

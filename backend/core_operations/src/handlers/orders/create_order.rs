@@ -6,6 +6,7 @@ use crate::handlers::orders::public_order_ref::{
 use crate::money::paise_to_decimal;
 use chrono::Utc;
 use core_db_entities::entity::orders;
+use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
 use proto::proto::core::{CreateOrderRequest, OrdersResponse};
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
 use tonic::{Request, Response, Status};
@@ -37,6 +38,7 @@ pub async fn create_order(
             order_id: ActiveValue::NotSet,
             user_id: ActiveValue::Set(user_id),
             order_date: ActiveValue::Set(order_date),
+            created_at: ActiveValue::Set(order_date),
             shipping_address_id: ActiveValue::Set(shipping_address_id),
             total_amount: ActiveValue::Set(Some(paise_to_decimal(total_amount_paise))),
             status_id: ActiveValue::Set(status_id),
@@ -49,10 +51,12 @@ pub async fn create_order(
             subtotal_minor: subtotal_minor
                 .map(ActiveValue::Set)
                 .unwrap_or(ActiveValue::NotSet),
+            items_total_minor_before_discount: ActiveValue::NotSet,
             shipping_minor: shipping_minor
                 .map(ActiveValue::Set)
                 .unwrap_or(ActiveValue::NotSet)
                 .into(),
+            shipping_charge_minor: ActiveValue::NotSet,
             tax_total_minor: tax_total_minor
                 .map(ActiveValue::Set)
                 .unwrap_or(ActiveValue::NotSet)
@@ -61,6 +65,7 @@ pub async fn create_order(
                 .map(ActiveValue::Set)
                 .unwrap_or(ActiveValue::NotSet)
                 .into(),
+            items_total_minor_after_discount: ActiveValue::NotSet,
             grand_total_minor: grand_total_minor
                 .map(ActiveValue::Set)
                 .unwrap_or(ActiveValue::NotSet),
@@ -78,6 +83,7 @@ pub async fn create_order(
                 .unwrap_or(ActiveValue::NotSet)
                 .into(),
             refund_settlement_status: ActiveValue::NotSet,
+            fulfillment_status: ActiveValue::Set(FulfillmentStatus::NotCreated),
         };
 
         match order.insert(txn).await {

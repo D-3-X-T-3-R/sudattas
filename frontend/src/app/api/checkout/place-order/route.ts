@@ -9,6 +9,7 @@ type PlaceOrderRow = {
   totalAmountPaise: string;
   totalAmountFormatted: string;
   statusId: string;
+  paymentMethod?: string | null;
 };
 
 type PaymentIntentRow = {
@@ -27,6 +28,7 @@ const PLACE_ORDER_MUTATION = `mutation PlaceOrder($order: NewOrder!) {
     totalAmountPaise
     totalAmountFormatted
     statusId
+    paymentMethod
   }
 }`;
 
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
     couponCode?: string;
     idempotencyKey?: string;
     selectedCartLineIds?: unknown;
+    paymentMode?: string;
   };
 
   const shippingAddressId = String(body.shippingAddressId ?? "").trim();
@@ -65,6 +68,11 @@ export async function POST(request: Request) {
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
   }
 
+  const normalizedPaymentMode = (body.paymentMode ?? "prepaid").trim().toLowerCase();
+  if (normalizedPaymentMode !== "prepaid" && normalizedPaymentMode !== "cod") {
+    return apiError("paymentMode must be prepaid or cod", 400, "VALIDATION_ERROR");
+  }
+
   const placeOrderKey =
     body.idempotencyKey?.trim() || `checkout-place-${crypto.randomUUID()}`;
   const verifyKey = `checkout-verify-${crypto.randomUUID()}`;
@@ -77,6 +85,7 @@ export async function POST(request: Request) {
         shippingAddressId,
         couponCode: body.couponCode?.trim() || null,
         selectedCartIds: selectedCartLineIds,
+        paymentMode: normalizedPaymentMode,
       },
     },
     { "Idempotency-Key": placeOrderKey }
@@ -91,6 +100,26 @@ export async function POST(request: Request) {
   const order = placeOrderResult.data?.placeOrder?.[0];
   if (!order?.orderId) {
     return apiError("Order was not created", 400, "GRAPHQL_ERROR");
+  }
+
+  const resolvedPaymentMode = (order.paymentMethod ?? normalizedPaymentMode).toLowerCase();
+  if (resolvedPaymentMode === "cod") {
+    return Response.json({
+      ok: true,
+      data: {
+        order,
+        checkoutMode: "cod",
+        paymentIntent: null,
+        idempotency: {
+          placeOrderKey,
+          verifyKey: null,
+        },
+      },
+      errorCode: null,
+      message: null,
+      fieldErrors: null,
+      retryable: false,
+    });
   }
 
   const paymentResult = await callGraphqlAsCustomer<{ getPaymentIntent?: PaymentIntentRow[] }>(
@@ -126,6 +155,7 @@ export async function POST(request: Request) {
     ok: true,
     data: {
       order,
+      checkoutMode: "prepaid",
       paymentIntent: normalizedIntent,
       idempotency: {
         placeOrderKey,

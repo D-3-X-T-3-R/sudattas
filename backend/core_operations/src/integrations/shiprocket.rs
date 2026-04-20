@@ -535,6 +535,7 @@ where
 
     let lines = order_details::Entity::find()
         .filter(order_details::Column::OrderId.eq(order_id))
+        .filter(order_details::Column::ItemStatus.eq("active"))
         .all(db)
         .await?;
     if lines.is_empty() {
@@ -606,9 +607,28 @@ where
         })
         .collect();
 
-    let sub_total_rupees = (order.grand_total_minor as f64) / 100.0;
+    let active_items_minor: i64 = lines
+        .iter()
+        .map(|l| {
+            if l.line_total_minor > 0 {
+                l.line_total_minor
+            } else {
+                i64::from(l.unit_price_minor) * l.quantity.max(0)
+            }
+        })
+        .sum();
+    let sub_total_rupees = (active_items_minor.max(0) as f64) / 100.0;
     let total_units: i64 = lines.iter().map(|l| l.quantity.max(1)).sum();
-    let payment_method = "Prepaid";
+    let booking_weight_kg = cfg.default_weight_kg.max(0.05) * (total_units.max(1) as f64);
+    let payment_method = if order
+        .payment_method
+        .as_deref()
+        .is_some_and(|m| m.eq_ignore_ascii_case("cod"))
+    {
+        "COD"
+    } else {
+        "Prepaid"
+    };
 
     let body = json!({
         "order_id": order_ref,
@@ -631,7 +651,7 @@ where
         "length": cfg.length_cm,
         "breadth": cfg.breadth_cm,
         "height": cfg.height_cm,
-        "weight": estimate_checkout_weight_kg(&cfg, total_units),
+        "weight": booking_weight_kg,
     });
 
     let token = bearer_token(&client, &cfg).await?;

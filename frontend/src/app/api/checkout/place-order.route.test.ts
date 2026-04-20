@@ -60,6 +60,7 @@ describe("checkout place-order idempotency", () => {
           shippingAddressId: "10",
           couponCode: null,
           selectedCartIds: ["c1", "c2"],
+          paymentMode: "prepaid",
         },
       },
       { "Idempotency-Key": "place-key-1" }

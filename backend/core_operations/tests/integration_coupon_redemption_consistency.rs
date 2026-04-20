@@ -216,6 +216,7 @@ async fn seed_coupon_checkout_order(
             user_id,
             coupon_code: Some(coupon_code.clone()),
             selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await

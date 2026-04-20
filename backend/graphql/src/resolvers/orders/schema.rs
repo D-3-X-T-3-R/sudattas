@@ -16,6 +16,8 @@ pub struct Order {
     pub public_order_ref: String,
     /// refund_pending | refund_processed | refund_failed | refund_not_applicable (from Orders.refund_settlement_status).
     pub refund_settlement_status: Option<String>,
+    /// "prepaid" | "cod" (nullable for historical rows)
+    pub payment_method: Option<String>,
 }
 
 #[graphql_object]
@@ -64,6 +66,10 @@ impl Order {
         self.refund_settlement_status.as_ref()
     }
 
+    async fn payment_method(&self) -> Option<&String> {
+        self.payment_method.as_ref()
+    }
+
     async fn order_details(&self) -> FieldResult<Vec<OrderDetails>> {
         crate::resolvers::order_details::handlers::search_order_detail(SearchOrderDetails {
             order_id: Some(self.order_id.to_string()),
@@ -88,6 +94,8 @@ pub struct NewOrder {
     pub coupon_code: Option<String>,
     /// Explicit cart line ids selected in the bag. Checkout never falls back to the full cart.
     pub selected_cart_ids: Option<Vec<String>>,
+    /// "prepaid" (default) or "cod"
+    pub payment_mode: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -209,4 +217,11 @@ pub struct AdminMarkOrderShippedInput {
 #[graphql(description = "Admin: mark order delivered")]
 pub struct AdminMarkOrderDeliveredInput {
     pub order_id: String,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Customer/admin cancel selected order lines")]
+pub struct CancelOrderItemsInput {
+    pub order_id: String,
+    pub order_detail_ids: Vec<String>,
 }

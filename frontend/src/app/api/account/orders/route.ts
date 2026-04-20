@@ -52,6 +52,15 @@ export async function GET() {
   }
   flowLog("loading orders list", { userId });
 
+  const cancelWindowHours = Number.parseInt(
+    (process.env.CANCEL_WINDOW_HOURS ?? "12").trim(),
+    10
+  );
+  const normalizedCancelWindowHours =
+    Number.isFinite(cancelWindowHours) && cancelWindowHours > 0
+      ? cancelWindowHours
+      : 12;
+
   const [ordersResult, statusesResult] = await Promise.all([
     callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(userId, ORDERS_QUERY, {
       search: { userId, limit: "100" },
@@ -94,6 +103,7 @@ export async function GET() {
   const orders = (ordersResult.data?.searchOrder ?? []).map((order) => ({
     ...order,
     statusName: statusNameById.get(order.statusId) ?? order.statusId,
+    cancelWindowHours: normalizedCancelWindowHours,
   }));
   const mismatchedOrder = orders.find((order) => order.userId !== userId);
   if (mismatchedOrder) {

@@ -271,6 +271,7 @@ async fn place_and_pay_live_order(db: &DatabaseConnection, tag: i64) -> Result<(
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![cart_item.cart_id],
+            payment_mode: None,
         }),
     )
     .await

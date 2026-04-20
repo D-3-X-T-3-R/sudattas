@@ -198,6 +198,7 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
             user_id,
             coupon_code: Some(code.clone()),
             selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await
@@ -259,6 +260,7 @@ async fn integration_expired_coupon_ignored_at_checkout() {
             user_id,
             coupon_code: Some(code),
             selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await
@@ -432,6 +434,7 @@ async fn integration_coupon_min_order_not_met_not_applied() {
             user_id,
             coupon_code: Some(code),
             selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await

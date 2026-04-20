@@ -320,7 +320,7 @@ async fn process_shiprocket_shipment_updates(
                 "shiprocket webhook: cancellation/RTO detected, starting cancel+refund flow"
             );
             auto_transition_order_to_cancelled(txn, order_id).await;
-            if let Err(e) = cancellation_saga::run_full_order_settlement(txn, order_id).await {
+            if let Err(e) = cancellation_saga::run_order_settlement(txn, order_id).await {
                 warn!(
                     order_id,
                     error = ?e,

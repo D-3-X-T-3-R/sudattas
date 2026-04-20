@@ -10,7 +10,6 @@ use crate::money::{paise_checked_add, paise_checked_mul};
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
     orders::order_response, payment_intents::create_payment_intent, products::get_products_by_id,
-    shipments::upsert_quote_selection,
 };
 use crate::order_state_machine;
 
@@ -98,6 +97,93 @@ fn pick_selected_cart_items(
     Ok(selected_items)
 }
 
+#[derive(Debug, Clone)]
+struct FrozenLinePricing {
+    variant_id: i64,
+    quantity: i64,
+    unit_price_minor: i64,
+    gross_line_minor: i64,
+    discount_minor: i64,
+    net_line_minor: i64,
+    title: String,
+}
+
+fn allocate_discount_across_lines(
+    gross_line_totals_minor: &[i64],
+    requested_discount_minor: i64,
+) -> Vec<i64> {
+    if gross_line_totals_minor.is_empty() {
+        return Vec::new();
+    }
+
+    let safe_lines: Vec<i64> = gross_line_totals_minor
+        .iter()
+        .map(|v| (*v).max(0))
+        .collect();
+    let gross_total_minor: i64 = safe_lines.iter().sum();
+    if gross_total_minor <= 0 {
+        return vec![0; safe_lines.len()];
+    }
+
+    let discount_minor = requested_discount_minor.clamp(0, gross_total_minor);
+    if discount_minor == 0 {
+        return vec![0; safe_lines.len()];
+    }
+
+    let discount_i128 = i128::from(discount_minor);
+    let gross_total_i128 = i128::from(gross_total_minor);
+
+    let mut discounts = vec![0_i64; safe_lines.len()];
+    let mut floors_sum = 0_i64;
+    let mut remainders: Vec<(usize, i128)> = Vec::with_capacity(safe_lines.len());
+
+    for (idx, line_minor) in safe_lines.iter().enumerate() {
+        let line_i128 = i128::from(*line_minor);
+        let numerator = discount_i128.saturating_mul(line_i128);
+        let floor_share = (numerator / gross_total_i128) as i64;
+        let remainder = numerator % gross_total_i128;
+        discounts[idx] = floor_share;
+        floors_sum += floor_share;
+        remainders.push((idx, remainder));
+    }
+
+    let mut remainder_to_distribute = discount_minor.saturating_sub(floors_sum);
+    if remainder_to_distribute <= 0 {
+        return discounts;
+    }
+
+    remainders.sort_by(|(idx_a, rem_a), (idx_b, rem_b)| {
+        rem_b.cmp(rem_a).then_with(|| idx_a.cmp(idx_b))
+    });
+
+    for (idx, _) in remainders {
+        if remainder_to_distribute == 0 {
+            break;
+        }
+        discounts[idx] += 1;
+        remainder_to_distribute -= 1;
+    }
+
+    discounts
+}
+
+fn apply_frozen_line_discounts(lines: &mut [FrozenLinePricing], requested_discount_minor: i64) -> i64 {
+    let gross_lines: Vec<i64> = lines.iter().map(|l| l.gross_line_minor.max(0)).collect();
+    let discounts = allocate_discount_across_lines(&gross_lines, requested_discount_minor);
+    let mut applied_discount_minor = 0_i64;
+    for (line, discount_minor) in lines.iter_mut().zip(discounts.into_iter()) {
+        let clamped = discount_minor.clamp(0, line.gross_line_minor.max(0));
+        line.discount_minor = clamped;
+        line.net_line_minor = line.gross_line_minor.saturating_sub(clamped).max(0);
+        applied_discount_minor = applied_discount_minor.saturating_add(clamped);
+    }
+    applied_discount_minor
+}
+
+fn qualifies_for_free_shipping(items_total_after_discount_minor: i64, threshold_minor: i64) -> bool {
+    items_total_after_discount_minor >= threshold_minor
+}
+
 pub async fn place_order(
     txn: &DatabaseTransaction,
     request: Request<PlaceOrderRequest>,
@@ -111,6 +197,18 @@ pub async fn place_order(
 
     let req = request.into_inner();
     let selected_cart_ids = validate_selected_cart_ids(&req.selected_cart_ids)?;
+    let normalized_payment_mode = req
+        .payment_mode
+        .as_deref()
+        .unwrap_or("prepaid")
+        .trim()
+        .to_lowercase();
+    if normalized_payment_mode != "prepaid" && normalized_payment_mode != "cod" {
+        return Err(Status::invalid_argument(
+            "payment_mode must be either 'prepaid' or 'cod'",
+        ));
+    }
+    let is_cod_checkout = normalized_payment_mode == "cod";
     crate::observability::log_operational_event(
         "order_place_requested",
         &[
@@ -146,6 +244,7 @@ pub async fn place_order(
                         "shipping_address_id": req.shipping_address_id,
                         "coupon_code": req.coupon_code,
                         "selected_cart_ids": selected_cart_ids,
+                        "payment_mode": normalized_payment_mode.as_str(),
                     });
                     let incoming_hash = compute_request_hash(&payload_json.to_string());
                     if existing.request_hash != incoming_hash {
@@ -245,6 +344,7 @@ pub async fn place_order(
         "shipping_address_id": req.shipping_address_id,
         "coupon_code": req.coupon_code,
         "selected_cart_ids": selected_cart_ids,
+        "payment_mode": normalized_payment_mode.as_str(),
         "cart": cart_snapshot,
     });
     let request_hash = compute_request_hash(&payload_json.to_string());
@@ -293,7 +393,8 @@ pub async fn place_order(
         }
     }
 
-    // Compute the gross amount in paise (integer minor units) to avoid float drift.
+    // Compute immutable line snapshots and gross amount in paise.
+    let mut frozen_lines: Vec<FrozenLinePricing> = Vec::with_capacity(cart_items.len());
     let mut gross_paise: i64 = 0;
     for item in &cart_items {
         let variant = variants_by_id.get(&item.variant_id).ok_or_else(|| {
@@ -315,6 +416,15 @@ pub async fn place_order(
         gross_paise = paise_checked_add(gross_paise, line_paise).map_err(|e| {
             Status::internal(format!("Overflow computing order total in paise: {}", e))
         })?;
+        frozen_lines.push(FrozenLinePricing {
+            variant_id: item.variant_id,
+            quantity: item.quantity,
+            unit_price_minor: unit_paise,
+            gross_line_minor: line_paise,
+            discount_minor: 0,
+            net_line_minor: line_paise,
+            title: product.name.clone(),
+        });
     }
 
     // Apply coupon if provided, deriving the discounted total in paise and coupon snapshot.
@@ -374,7 +484,10 @@ pub async fn place_order(
         (gross_paise, None)
     };
 
-    let discount_total_minor = gross_paise - total_paise;
+    let requested_discount_total_minor = gross_paise.saturating_sub(total_paise);
+    let applied_discount_total_minor =
+        apply_frozen_line_discounts(&mut frozen_lines, requested_discount_total_minor);
+    let items_total_minor_after_discount = gross_paise.saturating_sub(applied_discount_total_minor);
     let total_units: i64 = cart_items.iter().map(|item| item.quantity.max(1)).sum();
 
     let shipping_address = shipping_addresses::Entity::find_by_id(req.shipping_address_id)
@@ -394,25 +507,39 @@ pub async fn place_order(
     }
     let delivery_postcode = shipping_address.postal_code.trim().to_string();
 
-    let shipping_quote =
-        match best_courier_quote_for_checkout(delivery_postcode.as_str(), total_paise, total_units)
+    let free_shipping_threshold_minor = crate::order_policy::free_shipping_threshold_minor();
+    let qualifies_free_shipping =
+        qualifies_for_free_shipping(items_total_minor_after_discount, free_shipping_threshold_minor);
+    let shipping_quote = if qualifies_free_shipping {
+        None
+    } else {
+        Some(
+            match best_courier_quote_for_checkout(
+                delivery_postcode.as_str(),
+                items_total_minor_after_discount,
+                total_units,
+            )
             .await
-        {
-            Ok(Some(quote)) => quote,
-            Ok(None) => {
-                warn!("checkout shipping quote unavailable without courier result");
-                return Err(Status::unavailable(
-                    "Live shipping quote is unavailable for this checkout",
-                ));
-            }
-            Err(error) => {
-                warn!("checkout shipping quote failed: {}", error);
-                return Err(map_shipping_quote_error(error));
-            }
-        };
-    let shipping_minor = shipping_quote.shipping_amount_minor.max(0);
-    let shipping_quote = Some(shipping_quote);
-    let grand_total_paise = paise_checked_add(total_paise, shipping_minor)
+            {
+                Ok(Some(quote)) => quote,
+                Ok(None) => {
+                    warn!("checkout shipping quote unavailable without courier result");
+                    return Err(Status::unavailable(
+                        "Live shipping quote is unavailable for this checkout",
+                    ));
+                }
+                Err(error) => {
+                    warn!("checkout shipping quote failed: {}", error);
+                    return Err(map_shipping_quote_error(error));
+                }
+            },
+        )
+    };
+    let shipping_minor = shipping_quote
+        .as_ref()
+        .map(|q| q.shipping_amount_minor.max(0))
+        .unwrap_or(0);
+    let grand_total_paise = paise_checked_add(items_total_minor_after_discount, shipping_minor)
         .map_err(|e| Status::internal(format!("Overflow computing grand total in paise: {}", e)))?;
 
     // Reserve inventory before creating the order so that on insufficient stock we fail without creating any order.
@@ -435,10 +562,13 @@ pub async fn place_order(
         }
     }
 
-    let pending_status_id = order_state_machine::get_status_id(txn, "pending")
+    let pending_status_id = order_state_machine::get_status_id(txn, "active_sale")
         .await
         .map_err(|e| Status::internal(e.to_string()))?
-        .ok_or_else(|| Status::internal("OrderStatus 'pending' not found"))?;
+        .or(order_state_machine::get_status_id(txn, "pending")
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?)
+        .ok_or_else(|| Status::internal("OrderStatus 'active_sale' not found"))?;
 
     let create_order = create_order(
         txn,
@@ -450,7 +580,7 @@ pub async fn place_order(
             subtotal_minor: Some(gross_paise),
             shipping_minor: Some(shipping_minor),
             tax_total_minor: Some(0),
-            discount_total_minor: Some(discount_total_minor),
+            discount_total_minor: Some(applied_discount_total_minor),
             grand_total_minor: Some(grand_total_paise),
             applied_coupon_id: coupon_snapshot.as_ref().map(|s| s.0),
             applied_coupon_code: coupon_snapshot.as_ref().map(|s| s.1.clone()),
@@ -468,53 +598,58 @@ pub async fn place_order(
         order_id = create_order.order_id,
         public_order_ref = %create_order.public_order_ref,
         user_id = create_order.user_id,
+        payment_mode = %normalized_payment_mode,
         "place_order created order"
     );
 
-    upsert_quote_selection(
-        txn,
-        create_order.order_id,
-        shipping_quote.as_ref().map(|q| q.courier_id).unwrap_or_default(),
-        shipping_quote
-            .as_ref()
-            .map(|q| q.courier_name.as_str())
-            .unwrap_or(""),
-        shipping_minor,
-        &json!({
-            "courier_id": shipping_quote.as_ref().map(|q| q.courier_id),
-            "courier_name": shipping_quote.as_ref().map(|q| q.courier_name.clone()),
-            "shipping_amount_minor": shipping_minor,
-            "estimated_delivery_days": shipping_quote.as_ref().and_then(|q| q.estimated_delivery_days),
-        }),
-    )
-    .await?;
+    txn.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        r#"UPDATE Orders
+           SET payment_method = ?,
+               payment_status = 'pending',
+               updated_at = UTC_TIMESTAMP()
+           WHERE OrderID = ?"#,
+        [normalized_payment_mode.clone().into(), create_order.order_id.into()],
+    ))
+    .await
+    .map_err(|e| Status::internal(e.to_string()))?;
+
+    // Freeze phase-1 pricing snapshots with explicit columns used by refund and audit logic.
+    txn.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        r#"UPDATE Orders
+           SET items_total_minor_before_discount = ?,
+               items_total_minor_after_discount = ?,
+               shipping_charge_minor = ?,
+               updated_at = UTC_TIMESTAMP()
+           WHERE OrderID = ?"#,
+        [
+            gross_paise.into(),
+            items_total_minor_after_discount.into(),
+            shipping_minor.into(),
+            create_order.order_id.into(),
+        ],
+    ))
+    .await
+    .map_err(|e| Status::internal(e.to_string()))?;
 
     let mut order_details: Vec<CreateOrderDetailRequest> = Vec::new();
 
-    for item in &cart_items {
-        let variant = variants_by_id.get(&item.variant_id).ok_or_else(|| {
-            Status::invalid_argument(format!("Variant {} not found", item.variant_id))
-        })?;
-        let product = products_by_id.get(&variant.product_id).ok_or_else(|| {
-            Status::internal(format!(
-                "Product {} for variant {} not found",
-                variant.product_id, item.variant_id
-            ))
-        })?;
-        let quantity = item.quantity;
-        let unit_price_paise =
-            product.price_paise + i64::from(variant.additional_price.unwrap_or(0));
-        let line_total_paise = paise_checked_mul(unit_price_paise, quantity).unwrap_or(0);
+    for line in &frozen_lines {
+        let unit_price_minor = i32::try_from(line.unit_price_minor)
+            .map_err(|_| Status::internal("unit_price_minor overflow"))?;
+        let line_discount_minor = i32::try_from(line.discount_minor)
+            .map_err(|_| Status::internal("line discount overflow"))?;
         order_details.push(CreateOrderDetailRequest {
             order_id: create_order.order_id,
-            variant_id: item.variant_id,
-            quantity,
-            price_paise: line_total_paise,
-            unit_price_minor: Some(unit_price_paise as i32),
-            discount_minor: None,
+            variant_id: line.variant_id,
+            quantity: line.quantity,
+            price_paise: line.net_line_minor,
+            unit_price_minor: Some(unit_price_minor),
+            discount_minor: Some(line_discount_minor),
             tax_minor: None,
             sku: None,
-            title: Some(product.name.clone()),
+            title: Some(line.title.clone()),
         })
     }
 
@@ -526,30 +661,60 @@ pub async fn place_order(
     .into_inner()
     .items;
 
-    // Auto-create a pending payment intent: backend creates Razorpay order via API (server-authoritative).
-    let amount_paise = grand_total_paise;
-    let payment_intent = create_payment_intent(
-        txn,
-        tonic::Request::new(CreatePaymentIntentRequest {
-            order_id: create_order.order_id,
-            user_id: req.user_id,
-            amount_paise,
-            currency: Some("INR".to_string()),
-            razorpay_order_id: None, // Backend will call Razorpay Orders API and store returned id.
-        }),
-    )
-    .await?
-    .into_inner()
-    .items
-    .into_iter()
-    .next()
-    .ok_or_else(|| Status::internal("create_payment_intent returned no payment intent"))?;
+    if !is_cod_checkout {
+        // Auto-create a pending payment intent: backend creates Razorpay order via API (server-authoritative).
+        let amount_paise = grand_total_paise;
+        let payment_intent = create_payment_intent(
+            txn,
+            tonic::Request::new(CreatePaymentIntentRequest {
+                order_id: create_order.order_id,
+                user_id: req.user_id,
+                amount_paise,
+                currency: Some("INR".to_string()),
+                razorpay_order_id: None, // Backend will call Razorpay Orders API and store returned id.
+            }),
+        )
+        .await?
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .ok_or_else(|| Status::internal("create_payment_intent returned no payment intent"))?;
 
-    if payment_intent.razorpay_order_id.starts_with("rzp_pending_") {
-        return Err(Status::unavailable(format!(
-            "Failed to create payment intent for order {}",
-            create_order.order_id
-        )));
+        if payment_intent.razorpay_order_id.starts_with("rzp_pending_") {
+            return Err(Status::unavailable(format!(
+                "Failed to create payment intent for order {}",
+                create_order.order_id
+            )));
+        }
+    } else {
+        // COD orders are accepted immediately without creating a Razorpay payment intent.
+        let confirmed_status_id = order_state_machine::get_status_id(txn, "confirmed")
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .ok_or_else(|| Status::internal("OrderStatus 'confirmed' not found"))?;
+        txn.execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            r#"UPDATE Orders
+               SET StatusID = ?,
+                   updated_at = UTC_TIMESTAMP()
+               WHERE OrderID = ?"#,
+            [confirmed_status_id.into(), create_order.order_id.into()],
+        ))
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+        let _ = create_order_event(
+            txn,
+            tonic::Request::new(CreateOrderEventRequest {
+                order_id: create_order.order_id,
+                event_type: "cod_order_confirmed".to_string(),
+                from_status: Some("active_sale".to_string()),
+                to_status: Some("confirmed".to_string()),
+                actor_type: "customer".to_string(),
+                message: Some("COD order accepted and awaiting fulfillment".to_string()),
+            }),
+        )
+        .await;
     }
 
     // Emit audit event: order placed
@@ -618,7 +783,74 @@ pub async fn place_order(
         }
     }
 
+    let persisted_order = orders::Entity::find_by_id(create_order.order_id)
+        .one(txn)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?
+        .ok_or_else(|| Status::internal("Created order not found"))?;
+
     Ok(Response::new(OrdersResponse {
-        items: vec![create_order],
+        items: vec![order_response::from_model(&persisted_order)],
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        allocate_discount_across_lines, apply_frozen_line_discounts, qualifies_for_free_shipping,
+        FrozenLinePricing,
+    };
+
+    #[test]
+    fn allocates_coupon_discount_across_multiple_lines_deterministically() {
+        let gross_lines = vec![3_000, 2_000, 1_000];
+        let discounts = allocate_discount_across_lines(&gross_lines, 1_000);
+        assert_eq!(discounts, vec![500, 333, 167]);
+    }
+
+    #[test]
+    fn allocation_rounding_is_deterministic_with_equal_remainders() {
+        let gross_lines = vec![100, 100, 100];
+        let d1 = allocate_discount_across_lines(&gross_lines, 1);
+        let d2 = allocate_discount_across_lines(&gross_lines, 1);
+        assert_eq!(d1, d2);
+        assert_eq!(d1, vec![1, 0, 0]);
+    }
+
+    #[test]
+    fn lines_plus_shipping_match_grand_total_after_discount_allocation() {
+        let mut lines = vec![
+            FrozenLinePricing {
+                variant_id: 1,
+                quantity: 1,
+                unit_price_minor: 2_000,
+                gross_line_minor: 2_000,
+                discount_minor: 0,
+                net_line_minor: 2_000,
+                title: "A".to_string(),
+            },
+            FrozenLinePricing {
+                variant_id: 2,
+                quantity: 1,
+                unit_price_minor: 1_000,
+                gross_line_minor: 1_000,
+                discount_minor: 0,
+                net_line_minor: 1_000,
+                title: "B".to_string(),
+            },
+        ];
+        let applied_discount = apply_frozen_line_discounts(&mut lines, 333);
+        assert_eq!(applied_discount, 333);
+        let items_after_discount: i64 = lines.iter().map(|l| l.net_line_minor).sum();
+        let shipping_charge = 149;
+        let grand_total = items_after_discount + shipping_charge;
+        assert_eq!(items_after_discount, 2_667);
+        assert_eq!(grand_total, 2_816);
+    }
+
+    #[test]
+    fn free_shipping_threshold_is_evaluated_on_post_discount_items_total() {
+        assert!(!qualifies_for_free_shipping(9_999, 10_000));
+        assert!(qualifies_for_free_shipping(10_000, 10_000));
+    }
 }

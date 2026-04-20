@@ -45,6 +45,7 @@ pub fn order_response_to_gql(o: OrderResponse) -> Order {
         status_id: o.status_id.to_string(),
         public_order_ref: o.public_order_ref,
         refund_settlement_status: o.refund_settlement_status,
+        payment_method: o.payment_method,
     }
 }
 
@@ -84,7 +85,10 @@ pub fn order_detail_response_to_gql(o: OrderDetailResponse) -> OrderDetails {
         variant_id: o.variant_id.to_string(),
         quantity: o.quantity.to_string(),
         price_paise: o.price_paise,
+        line_total_minor: o.line_total_minor,
         price_formatted: money.formatted,
+        item_status: o.item_status,
+        cancelled_at: o.cancelled_at,
     }
 }
 

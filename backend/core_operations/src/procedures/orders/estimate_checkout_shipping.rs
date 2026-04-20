@@ -192,24 +192,38 @@ pub async fn estimate_checkout_shipping(
     let delivery_postcode = shipping_address.postal_code.trim().to_string();
     let total_units: i64 = cart_items.iter().map(|item| item.quantity.max(1)).sum();
 
-    let quote =
-        match best_courier_quote_for_checkout(delivery_postcode.as_str(), total_paise, total_units)
+    let free_shipping_threshold_minor = crate::order_policy::free_shipping_threshold_minor();
+    let qualifies_free_shipping = total_paise >= free_shipping_threshold_minor;
+    let quote = if qualifies_free_shipping {
+        None
+    } else {
+        Some(
+            match best_courier_quote_for_checkout(
+                delivery_postcode.as_str(),
+                total_paise,
+                total_units,
+            )
             .await
-        {
-            Ok(Some(value)) => value,
-            Ok(None) => {
-                warn!("checkout shipping estimate quote unavailable without courier result");
-                return Err(Status::unavailable(
-                    "Live shipping quote is unavailable for this checkout",
-                ));
-            }
-            Err(error) => {
-                warn!("checkout shipping estimate quote failed: {}", error);
-                return Err(map_shipping_quote_error(error));
-            }
-        };
+            {
+                Ok(Some(value)) => value,
+                Ok(None) => {
+                    warn!("checkout shipping estimate quote unavailable without courier result");
+                    return Err(Status::unavailable(
+                        "Live shipping quote is unavailable for this checkout",
+                    ));
+                }
+                Err(error) => {
+                    warn!("checkout shipping estimate quote failed: {}", error);
+                    return Err(map_shipping_quote_error(error));
+                }
+            },
+        )
+    };
 
-    let shipping_amount_paise = quote.shipping_amount_minor.max(0);
+    let shipping_amount_paise = quote
+        .as_ref()
+        .map(|q| q.shipping_amount_minor.max(0))
+        .unwrap_or(0);
     let order_total_paise = paise_checked_add(total_paise, shipping_amount_paise)
         .map_err(|e| Status::internal(format!("Overflow computing order total: {}", e)))?;
 
@@ -217,8 +231,8 @@ pub async fn estimate_checkout_shipping(
 
     Ok(Response::new(EstimateCheckoutShippingResponse {
         shipping_amount_paise,
-        courier_name: Some(quote.courier_name.clone()),
-        estimated_delivery_days: quote.estimated_delivery_days,
+        courier_name: quote.as_ref().map(|q| q.courier_name.clone()),
+        estimated_delivery_days: quote.as_ref().and_then(|q| q.estimated_delivery_days),
         item_subtotal_paise: total_paise,
         order_total_paise,
         quote_available: true,

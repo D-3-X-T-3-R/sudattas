@@ -17,12 +17,15 @@ pub async fn update_order_detail(
         variant_id: ActiveValue::Set(req.variant_id),
         quantity: ActiveValue::Set(req.quantity),
         price: ActiveValue::Set(Some(paise_to_decimal(req.price_paise))),
+        line_total_minor: ActiveValue::Set(req.price_paise),
         unit_price_minor: ActiveValue::NotSet,
         discount_minor: ActiveValue::NotSet,
         tax_minor: ActiveValue::NotSet,
         sku: ActiveValue::NotSet,
         title: ActiveValue::NotSet,
         line_attrs: ActiveValue::NotSet,
+        item_status: ActiveValue::NotSet,
+        cancelled_at: ActiveValue::NotSet,
     };
     match order_details.update(txn).await {
         Ok(model) => {
@@ -33,6 +36,9 @@ pub async fn update_order_detail(
                     variant_id: model.variant_id,
                     quantity: model.quantity,
                     price_paise: model.price.as_ref().map(decimal_to_paise).unwrap_or(0),
+                    line_total_minor: model.line_total_minor,
+                    item_status: model.item_status,
+                    cancelled_at: model.cancelled_at.map(|v| v.to_rfc3339()),
                 }],
             };
             Ok(Response::new(response))

@@ -109,6 +109,11 @@ describe("GET /api/account/orders/[orderId]", () => {
             },
           ],
         },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          getRefunds: [],
+        },
       });
 
     const res = await GET(new Request("http://localhost/api/account/orders/7"), {
@@ -135,4 +140,3 @@ describe("GET /api/account/orders/[orderId]", () => {
     expect(json.data.events.some((e) => e.eventType === "refund_initiated")).toBe(true);
   });
 });
-

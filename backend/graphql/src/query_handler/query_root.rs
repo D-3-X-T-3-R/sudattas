@@ -41,6 +41,10 @@ use crate::resolvers::{
         self,
         schema::{ProductMood, SearchProductMoodInput},
     },
+    refunds::{
+        self,
+        schema::{GetRefund, Refund},
+    },
     reviews::{
         self,
         schema::{Review, SearchReview},
@@ -434,6 +438,22 @@ impl QueryRoot {
     async fn get_order_events(context: &Context, order_id: String) -> FieldResult<Vec<OrderEvent>> {
         ensure_customer_can_access_order(context, order_id.as_str()).await?;
         order_events::handlers::get_order_events(order_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    // Refunds
+    #[instrument(err, ret)]
+    async fn get_refunds(context: &Context, input: GetRefund) -> FieldResult<Vec<Refund>> {
+        if let Some(order_id) = input.order_id.as_deref() {
+            ensure_customer_can_access_order(context, order_id).await?;
+        } else if !context.is_admin() {
+            return Err(juniper::FieldError::new(
+                "order_id is required for customer refund lookups",
+                juniper::Value::null(),
+            ));
+        }
+        refunds::handlers::get_refunds(input)
             .await
             .map_err(|e| e.into_field_error())
     }

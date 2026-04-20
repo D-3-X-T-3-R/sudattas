@@ -11,5 +11,6 @@ pub fn from_model(model: &orders::Model) -> OrderResponse {
         status_id: model.status_id,
         public_order_ref: model.public_order_ref.clone(),
         refund_settlement_status: model.refund_settlement_status.clone(),
+        payment_method: model.payment_method.clone(),
     }
 }

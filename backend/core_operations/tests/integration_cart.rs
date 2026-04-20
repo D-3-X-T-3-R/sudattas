@@ -310,6 +310,7 @@ async fn integration_guest_cart_not_used_for_place_order() {
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![guest_cart_id],
+            payment_mode: None,
         }),
     )
     .await;
@@ -535,6 +536,7 @@ async fn integration_place_order_removes_only_selected_user_cart_items() {
             user_id,
             coupon_code: None,
             selected_cart_ids: selected_cart_ids.clone(),
+            payment_mode: None,
         }),
     )
     .await
