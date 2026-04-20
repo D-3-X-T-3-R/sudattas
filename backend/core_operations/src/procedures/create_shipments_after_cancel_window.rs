@@ -16,4 +16,3 @@ pub async fn process_create_shipments_after_cancel_window(
         .map_err(|e| Status::internal(e.to_string()))?;
     Ok(processed)
 }
-

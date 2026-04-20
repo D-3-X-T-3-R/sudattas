@@ -62,40 +62,44 @@ pub async fn finalize_order_paid(
             order_id: ActiveValue::Set(order_id),
             redeemed_at: ActiveValue::Set(Some(Utc::now())),
         };
-        match redemption.insert(txn).await {
-            Ok(_) => {}
-            Err(err) if is_duplicate_redemption(&err) => {}
+        let inserted_redemption = match redemption.insert(txn).await {
+            Ok(_) => true,
+            Err(err) if is_duplicate_redemption(&err) => false,
             Err(err) => return Err(map_db_error_to_status(err)),
-        }
+        };
 
-        let usage_update = txn
-            .execute(Statement::from_sql_and_values(
-                sea_orm::DbBackend::MySql,
-                r#"UPDATE Coupons
-                   SET usage_count = COALESCE(usage_count, 0) + 1
-                   WHERE coupon_id = ?
-                     AND (usage_limit IS NULL OR COALESCE(usage_count, 0) < usage_limit)"#,
-                [coupon_id.into()],
-            ))
-            .await
-            .map_err(map_db_error_to_status)?;
-        if usage_update.rows_affected() == 0 {
-            coupon_redemptions::Entity::delete_many()
-                .filter(coupon_redemptions::Column::CouponId.eq(coupon_id))
-                .filter(coupon_redemptions::Column::OrderId.eq(order_id))
-                .exec(txn)
+        // Exactly-once guard: only the request that inserts a new redemption row
+        // may increment usage_count. Replay/duplicate finalize calls must be no-op.
+        if inserted_redemption {
+            let usage_update = txn
+                .execute(Statement::from_sql_and_values(
+                    sea_orm::DbBackend::MySql,
+                    r#"UPDATE Coupons
+                       SET usage_count = COALESCE(usage_count, 0) + 1
+                       WHERE coupon_id = ?
+                         AND (usage_limit IS NULL OR COALESCE(usage_count, 0) < usage_limit)"#,
+                    [coupon_id.into()],
+                ))
                 .await
                 .map_err(map_db_error_to_status)?;
-            order_state_machine::transition_order_status(
-                txn,
-                order_id,
-                OrderState::NeedsReview,
-                "coupon_usage_limit_contended",
-                "system",
-                Some("Coupon usage limit exhausted during payment finalization"),
-                Some(PaymentStatus::NeedsReview),
-            )
-            .await?;
+            if usage_update.rows_affected() == 0 {
+                coupon_redemptions::Entity::delete_many()
+                    .filter(coupon_redemptions::Column::CouponId.eq(coupon_id))
+                    .filter(coupon_redemptions::Column::OrderId.eq(order_id))
+                    .exec(txn)
+                    .await
+                    .map_err(map_db_error_to_status)?;
+                order_state_machine::transition_order_status(
+                    txn,
+                    order_id,
+                    OrderState::NeedsReview,
+                    "coupon_usage_limit_contended",
+                    "system",
+                    Some("Coupon usage limit exhausted during payment finalization"),
+                    Some(PaymentStatus::NeedsReview),
+                )
+                .await?;
+            }
         }
     }
 

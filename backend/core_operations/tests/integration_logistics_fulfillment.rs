@@ -196,7 +196,10 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
         .and(warp::header::optional::<String>("x-refund-idempotency"))
         .and(with_state.clone())
         .map(
-            |_payment_id: String, body: serde_json::Value, idempotency: Option<String>, state: Arc<Mutex<MockState>>| {
+            |_payment_id: String,
+             body: serde_json::Value,
+             idempotency: Option<String>,
+             state: Arc<Mutex<MockState>>| {
                 let mut guard = state.lock().expect("lock");
                 guard.refund_calls += 1;
                 if let Some(amount) = body.get("amount").and_then(|v| v.as_i64()) {
@@ -635,10 +638,7 @@ async fn order_refund_settlement_status(
     row.try_get("", "refund_settlement_status").ok()
 }
 
-async fn make_order_eligible_for_delayed_booking(
-    db: &sea_orm::DatabaseConnection,
-    order_id: i64,
-) {
+async fn make_order_eligible_for_delayed_booking(db: &sea_orm::DatabaseConnection, order_id: i64) {
     let rewind_txn = db.begin().await.expect("rewind txn");
     rewind_txn
         .execute(Statement::from_sql_and_values(
@@ -651,10 +651,7 @@ async fn make_order_eligible_for_delayed_booking(
     rewind_txn.commit().await.expect("commit rewind");
 }
 
-async fn ensure_delayed_shipment_booked(
-    db: &sea_orm::DatabaseConnection,
-    order_id: i64,
-) {
+async fn ensure_delayed_shipment_booked(db: &sea_orm::DatabaseConnection, order_id: i64) {
     make_order_eligible_for_delayed_booking(db, order_id).await;
     for _ in 0..20 {
         process_create_shipments_after_cancel_window(db, 500)
@@ -1170,7 +1167,10 @@ async fn integration_partial_cancel_refunds_items_then_shipping_on_full_cancel()
     )
     .await
     .expect("cancel first line");
-    first_cancel_txn.commit().await.expect("commit first cancel");
+    first_cancel_txn
+        .commit()
+        .await
+        .expect("commit first cancel");
 
     let second_cancel_txn = db.begin().await.expect("cancel second txn");
     cancel_order_items(
@@ -1183,10 +1183,16 @@ async fn integration_partial_cancel_refunds_items_then_shipping_on_full_cancel()
     )
     .await
     .expect("cancel second line");
-    second_cancel_txn.commit().await.expect("commit second cancel");
+    second_cancel_txn
+        .commit()
+        .await
+        .expect("commit second cancel");
 
     let guard = state.lock().expect("lock");
-    assert_eq!(guard.refund_calls, 2, "partial then full should trigger two settlements");
+    assert_eq!(
+        guard.refund_calls, 2,
+        "partial then full should trigger two settlements"
+    );
     assert_eq!(
         guard.refund_amounts,
         vec![2000, frozen_order_total - 2000],
@@ -1231,7 +1237,10 @@ async fn integration_partial_duplicate_line_cancel_does_not_double_refund() {
     assert!(replay.is_err(), "duplicate line cancel should be rejected");
 
     let guard = state.lock().expect("lock");
-    assert_eq!(guard.refund_calls, 1, "duplicate cancel must not trigger extra refund");
+    assert_eq!(
+        guard.refund_calls, 1,
+        "duplicate cancel must not trigger extra refund"
+    );
 }
 
 #[tokio::test]
@@ -1248,10 +1257,7 @@ async fn integration_delayed_shipment_worker_books_only_after_cancel_window() {
         0,
         "shipment must not be created at order placement/payment verification"
     );
-    assert_eq!(
-        order_fulfillment_status(&db, order_id).await,
-        "not_created"
-    );
+    assert_eq!(order_fulfillment_status(&db, order_id).await, "not_created");
 
     process_create_shipments_after_cancel_window(&db, 500)
         .await
@@ -1473,7 +1479,10 @@ async fn integration_cod_partial_cancel_has_no_refund_attempt_and_books_remainin
     .expect("partial COD cancel should succeed");
     cancel_txn.commit().await.expect("commit cancel");
 
-    assert_eq!(order_status_name(&db, order_id).await, "partially_cancelled");
+    assert_eq!(
+        order_status_name(&db, order_id).await,
+        "partially_cancelled"
+    );
     assert_eq!(refund_attempt_count(&db, order_id).await, 0);
     assert_eq!(
         order_refund_settlement_status(&db, order_id).await,

@@ -152,9 +152,8 @@ fn allocate_discount_across_lines(
         return discounts;
     }
 
-    remainders.sort_by(|(idx_a, rem_a), (idx_b, rem_b)| {
-        rem_b.cmp(rem_a).then_with(|| idx_a.cmp(idx_b))
-    });
+    remainders
+        .sort_by(|(idx_a, rem_a), (idx_b, rem_b)| rem_b.cmp(rem_a).then_with(|| idx_a.cmp(idx_b)));
 
     for (idx, _) in remainders {
         if remainder_to_distribute == 0 {
@@ -167,7 +166,10 @@ fn allocate_discount_across_lines(
     discounts
 }
 
-fn apply_frozen_line_discounts(lines: &mut [FrozenLinePricing], requested_discount_minor: i64) -> i64 {
+fn apply_frozen_line_discounts(
+    lines: &mut [FrozenLinePricing],
+    requested_discount_minor: i64,
+) -> i64 {
     let gross_lines: Vec<i64> = lines.iter().map(|l| l.gross_line_minor.max(0)).collect();
     let discounts = allocate_discount_across_lines(&gross_lines, requested_discount_minor);
     let mut applied_discount_minor = 0_i64;
@@ -180,7 +182,10 @@ fn apply_frozen_line_discounts(lines: &mut [FrozenLinePricing], requested_discou
     applied_discount_minor
 }
 
-fn qualifies_for_free_shipping(items_total_after_discount_minor: i64, threshold_minor: i64) -> bool {
+fn qualifies_for_free_shipping(
+    items_total_after_discount_minor: i64,
+    threshold_minor: i64,
+) -> bool {
     items_total_after_discount_minor >= threshold_minor
 }
 
@@ -508,8 +513,10 @@ pub async fn place_order(
     let delivery_postcode = shipping_address.postal_code.trim().to_string();
 
     let free_shipping_threshold_minor = crate::order_policy::free_shipping_threshold_minor();
-    let qualifies_free_shipping =
-        qualifies_for_free_shipping(items_total_minor_after_discount, free_shipping_threshold_minor);
+    let qualifies_free_shipping = qualifies_for_free_shipping(
+        items_total_minor_after_discount,
+        free_shipping_threshold_minor,
+    );
     let shipping_quote = if qualifies_free_shipping {
         None
     } else {
@@ -609,7 +616,10 @@ pub async fn place_order(
                payment_status = 'pending',
                updated_at = UTC_TIMESTAMP()
            WHERE OrderID = ?"#,
-        [normalized_payment_mode.clone().into(), create_order.order_id.into()],
+        [
+            normalized_payment_mode.clone().into(),
+            create_order.order_id.into(),
+        ],
     ))
     .await
     .map_err(|e| Status::internal(e.to_string()))?;

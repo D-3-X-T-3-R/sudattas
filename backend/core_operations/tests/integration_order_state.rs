@@ -19,7 +19,7 @@ use core_db_entities::entity::{
 use core_operations::procedures::orders::place_order;
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateCartItemRequest,
-    CreateUserRequest, PlaceOrderRequest, UpdateOrderRequest,
+    CreateUserRequest, DeleteOrderRequest, PlaceOrderRequest, UpdateOrderRequest,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
@@ -105,7 +105,8 @@ async fn place_order_minimal(
         name: ActiveValue::Set("Order State Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live shipping quote dependency.
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(cat.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -238,7 +239,7 @@ async fn integration_order_cancel_restores_inventory() {
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, shipping_id, variant_id, total_paise) =
+    let (order_id, user_id, _shipping_id, variant_id, _total_paise) =
         place_order_minimal(&txn, now_tag).await;
 
     let inv_before = inventory::Entity::find()
@@ -249,20 +250,15 @@ async fn integration_order_cancel_restores_inventory() {
         .expect("inventory exists");
     let qty_before = inv_before.quantity_available.unwrap_or(0);
 
-    let cancelled_id = ensure_order_status(&txn, "cancelled").await;
-
-    let _ = core_operations::handlers::orders::update_order(
+    let _ = core_operations::handlers::orders::delete_order(
         &txn,
-        Request::new(UpdateOrderRequest {
+        Request::new(DeleteOrderRequest {
             order_id,
-            user_id,
-            shipping_address_id: shipping_id,
-            total_amount_paise: total_paise,
-            status_id: cancelled_id,
+            acting_user_id: Some(user_id),
         }),
     )
     .await
-    .expect("update_order to cancelled should succeed");
+    .expect("delete_order should cancel and restore inventory");
 
     let inv_after = inventory::Entity::find()
         .filter(inventory::Column::VariantId.eq(Some(variant_id)))
@@ -571,7 +567,7 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
     let (order_id, user_id, shipping_id, _variant_id, total_paise) =
         place_order_minimal(&txn, now_tag).await;
 
-    let pending_id = ensure_order_status(&txn, "pending").await;
+    let active_sale_id = ensure_order_status(&txn, "active_sale").await;
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
     let processing_id = ensure_order_status(&txn, "processing").await;
     let _shipped_id = ensure_order_status(&txn, "shipped").await;
@@ -582,7 +578,7 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
         .await
         .expect("query order")
         .expect("order exists");
-    assert_eq!(order.status_id, pending_id);
+    assert_eq!(order.status_id, active_sale_id);
 
     let _ = core_operations::handlers::orders::update_order(
         &txn,

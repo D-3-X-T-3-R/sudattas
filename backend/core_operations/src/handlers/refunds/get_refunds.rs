@@ -48,4 +48,3 @@ pub async fn get_refunds(
         items: rows.iter().map(model_to_response).collect(),
     }))
 }
-

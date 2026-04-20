@@ -16,14 +16,14 @@ use core_db_entities::entity::{
     coupon_redemptions, coupons, inventory, order_status, orders, payment_intents,
     product_categories, product_variants, products, shipping_addresses, user_roles,
 };
-use core_operations::handlers::payment_intents::verify_razorpay_payment;
+use core_operations::handlers::payment_intents::{create_payment_intent, verify_razorpay_payment};
 use core_operations::handlers::webhooks::ingest_webhook;
 use core_operations::procedures::orders::place_order;
 use hmac::{Hmac, Mac};
 use integration_common::test_db_url;
 use proto::proto::core::{
-    CreateCartItemRequest, CreateCouponRequest, CreateUserRequest, IngestWebhookRequest,
-    PlaceOrderRequest, VerifyRazorpayPaymentRequest,
+    CreateCartItemRequest, CreateCouponRequest, CreatePaymentIntentRequest, CreateUserRequest,
+    IngestWebhookRequest, PlaceOrderRequest, VerifyRazorpayPaymentRequest,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
@@ -40,6 +40,7 @@ struct CouponOrderSetup {
     coupon_code: String,
     payment_intent_id: i64,
     razorpay_order_id: String,
+    amount_paise: i64,
 }
 
 async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
@@ -131,7 +132,8 @@ async fn seed_coupon_checkout_order(
         name: ActiveValue::Set("Coupon Consistency Saree".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(2_000),
+        // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live quote dependency.
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -216,7 +218,8 @@ async fn seed_coupon_checkout_order(
             user_id,
             coupon_code: Some(coupon_code.clone()),
             selected_cart_ids: vec![cart_id],
-            payment_mode: None,
+            // Keep this fixture independent from live Razorpay order creation.
+            payment_mode: Some("cod".to_string()),
         }),
     )
     .await
@@ -227,8 +230,28 @@ async fn seed_coupon_checkout_order(
     .next()
     .expect("placed order");
 
+    let order = orders::Entity::find_by_id(placed.order_id)
+        .one(txn)
+        .await
+        .expect("query order")
+        .expect("order exists");
+    let seeded_razorpay_order_id = format!("order_coupon_consistency_{}", placed.order_id);
+    let _ = create_payment_intent(
+        txn,
+        Request::new(CreatePaymentIntentRequest {
+            order_id: placed.order_id,
+            user_id,
+            amount_paise: order.grand_total_minor,
+            currency: Some(order.currency.clone().unwrap_or_else(|| "INR".to_string())),
+            razorpay_order_id: Some(seeded_razorpay_order_id.clone()),
+        }),
+    )
+    .await
+    .expect("seed payment intent");
+
     let payment_intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(placed.order_id))
+        .filter(payment_intents::Column::RazorpayOrderId.eq(&seeded_razorpay_order_id))
         .one(txn)
         .await
         .expect("query payment_intents")
@@ -240,6 +263,7 @@ async fn seed_coupon_checkout_order(
         coupon_code,
         payment_intent_id: payment_intent.intent_id,
         razorpay_order_id: payment_intent.razorpay_order_id.clone(),
+        amount_paise: i64::from(payment_intent.amount_paise),
     }
 }
 
@@ -341,7 +365,7 @@ async fn integration_coupon_redemption_recorded_once_on_webhook_capture_and_repl
                 "entity": {
                     "id": payment_id,
                     "order_id": setup.razorpay_order_id,
-                    "amount": 1_500,
+                    "amount": setup.amount_paise,
                     "currency": "INR"
                 }
             }
@@ -448,7 +472,7 @@ async fn integration_coupon_redemption_stays_exactly_once_across_verify_retry_an
                 "entity": {
                     "id": payment_id,
                     "order_id": setup.razorpay_order_id,
-                    "amount": 1_500,
+                    "amount": setup.amount_paise,
                     "currency": "INR"
                 }
             }

@@ -204,7 +204,11 @@ async fn seed_order_with_line(
         shipping_charge_minor: ActiveValue::Set(Some(0)),
         tax_total_minor: ActiveValue::Set(Some(0)),
         discount_total_minor: ActiveValue::Set(Some(if coupon_id.is_some() { 100 } else { 0 })),
-        items_total_minor_after_discount: ActiveValue::Set(Some(if coupon_id.is_some() { 900 } else { 1_000 })),
+        items_total_minor_after_discount: ActiveValue::Set(Some(if coupon_id.is_some() {
+            900
+        } else {
+            1_000
+        })),
         grand_total_minor: ActiveValue::Set(if coupon_id.is_some() { 900 } else { 1_000 }),
         applied_coupon_id: ActiveValue::Set(coupon_id),
         applied_coupon_code: ActiveValue::Set(coupon_id.map(|_| format!("LASTSLOT_{tag}"))),

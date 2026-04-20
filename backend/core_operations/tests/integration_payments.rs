@@ -54,6 +54,14 @@ fn compute_razorpay_signature(order_id: &str, payment_id: &str, secret: &str) ->
     hex::encode(mac.finalize().into_bytes())
 }
 
+fn restore_env_var(name: &str, previous: Option<String>) {
+    if let Some(value) = previous {
+        std::env::set_var(name, value);
+    } else {
+        std::env::remove_var(name);
+    }
+}
+
 async fn place_order_setup(
     txn: &sea_orm::DatabaseTransaction,
     now_tag: i64,
@@ -210,7 +218,8 @@ async fn integration_place_order_creates_payment_intent() {
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let cart_total = 3_000_i64;
+    // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR so tests do not depend on live shipping quote.
+    let cart_total = 150_000_i64;
     let (_user_id, order_id) = place_order_setup(&txn, now_tag, cart_total).await;
 
     let intents = payment_intents::Entity::find()
@@ -237,6 +246,7 @@ async fn integration_place_order_creates_payment_intent() {
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_verify_razorpay_payment_success_updates_intent() {
     const TEST_SECRET: &str = "itest_razorpay_secret";
+    let original_secret = std::env::var("RAZORPAY_KEY_SECRET").ok();
 
     let db = Database::connect(&test_db_url())
         .await
@@ -244,7 +254,7 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 2_000).await;
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000).await;
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
 
     let intents = payment_intents::Entity::find()
@@ -297,6 +307,7 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
         "verify should promote order to Paid (confirmed)"
     );
 
+    restore_env_var("RAZORPAY_KEY_SECRET", original_secret);
     txn.rollback().await.ok();
 }
 
@@ -305,6 +316,7 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_verify_razorpay_payment_invalid_signature_no_update() {
     const TEST_SECRET: &str = "itest_razorpay_secret_p3";
+    let original_secret = std::env::var("RAZORPAY_KEY_SECRET").ok();
 
     let db = Database::connect(&test_db_url())
         .await
@@ -312,7 +324,7 @@ async fn integration_verify_razorpay_payment_invalid_signature_no_update() {
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 1_500).await;
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000).await;
 
     let intents = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
@@ -349,6 +361,7 @@ async fn integration_verify_razorpay_payment_invalid_signature_no_update() {
     assert_eq!(unchanged.status, PaymentIntentStatus::Pending);
     assert!(unchanged.razorpay_payment_id.is_none());
 
+    restore_env_var("RAZORPAY_KEY_SECRET", original_secret);
     txn.rollback().await.ok();
 }
 
@@ -362,7 +375,7 @@ async fn integration_stale_unpaid_order_expiry_restores_inventory() {
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 2_000).await;
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000).await;
 
     let intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))

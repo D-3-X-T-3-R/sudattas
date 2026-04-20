@@ -1,14 +1,14 @@
 use crate::cancellation_saga;
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::orders::order_response;
-use core_db_entities::entity::{order_details, order_status, orders};
+use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
+use core_db_entities::entity::{order_details, order_status, orders};
 use proto::proto::core::{CancelOrderItemsRequest, OrdersResponse};
 use sea_orm::{
-    sea_query::LockType, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend,
-    EntityTrait, QueryFilter, PaginatorTrait, QuerySelect, Statement,
+    sea_query::LockType, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend, EntityTrait,
+    PaginatorTrait, QueryFilter, QuerySelect, Statement,
 };
-use chrono::Utc;
 use std::collections::HashSet;
 use tonic::{Request, Response, Status};
 

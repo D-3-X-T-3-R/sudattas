@@ -89,4 +89,60 @@ describe("checkout place-order idempotency", () => {
     expect(body.message).toContain("selectedCartLineIds");
     expect(mocks.callGraphqlAsCustomer).not.toHaveBeenCalled();
   });
+
+  it("rejects missing shippingAddressId", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("44");
+
+    const req = new Request("http://localhost/api/checkout/place-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selectedCartLineIds: ["c1"] }),
+    });
+
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.errorCode).toBe("VALIDATION_ERROR");
+    expect(body.message).toContain("shippingAddressId");
+    expect(mocks.callGraphqlAsCustomer).not.toHaveBeenCalled();
+  });
+
+  it("returns COD payload without fetching payment intent", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("44");
+    mocks.callGraphqlAsCustomer.mockResolvedValueOnce({
+      data: {
+        placeOrder: [
+          {
+            orderId: "200",
+            totalAmountPaise: "10000",
+            totalAmountFormatted: "Rs 100.00",
+            statusId: "1",
+            paymentMethod: "cod",
+          },
+        ],
+      },
+    });
+
+    const req = new Request("http://localhost/api/checkout/place-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shippingAddressId: "10",
+        selectedCartLineIds: ["c1"],
+        paymentMode: "cod",
+        idempotencyKey: "place-key-cod-1",
+      }),
+    });
+
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.data.checkoutMode).toBe("cod");
+    expect(body.data.order.totalAmountPaise).toBe("10000");
+    expect(body.data.paymentIntent).toBeNull();
+    expect(mocks.callGraphqlAsCustomer).toHaveBeenCalledTimes(1);
+  });
 });

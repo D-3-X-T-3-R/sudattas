@@ -138,7 +138,8 @@ async fn integration_place_order_happy_path_removes_only_selected_items_after_cr
         name: ActiveValue::Set("Integration Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live shipping quote dependency.
+        price_paise: ActiveValue::Set(60_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -214,8 +215,8 @@ async fn integration_place_order_happy_path_removes_only_selected_items_after_cr
         "order uses expected shipping address"
     );
     assert_eq!(
-        order.total_amount_paise, 2_000,
-        "2 items * ₹10.00 (1000 paise) each"
+        order.total_amount_paise, 120_000,
+        "2 items * 60000 paise each"
     );
 
     // Order persisted with matching totals.
@@ -227,7 +228,7 @@ async fn integration_place_order_happy_path_removes_only_selected_items_after_cr
         .expect("order row should exist");
     assert_eq!(db_order.user_id, user_id);
     assert_eq!(
-        db_order.grand_total_minor, 2_000,
+        db_order.grand_total_minor, 120_000,
         "grand_total_minor should match computed total"
     );
 
@@ -362,7 +363,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
         name: ActiveValue::Set("Integration Product Insufficient".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        price_paise: ActiveValue::Set(50_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -641,7 +642,7 @@ async fn integration_cart_add_get_update_then_place_order() {
         name: ActiveValue::Set("Cart Update Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        price_paise: ActiveValue::Set(50_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -742,14 +743,14 @@ async fn integration_cart_add_get_update_then_place_order() {
     .await
     .expect("place_order should succeed");
     let order = &place_res.into_inner().items[0];
-    assert_eq!(order.total_amount_paise, 3_000, "3 * 1000 paise");
+    assert_eq!(order.total_amount_paise, 150_000, "3 * 50000 paise");
 
     let db_order = orders::Entity::find_by_id(order.order_id)
         .one(&txn)
         .await
         .expect("query order")
         .expect("order exists");
-    assert_eq!(db_order.grand_total_minor, 3_000);
+    assert_eq!(db_order.grand_total_minor, 150_000);
 
     let inv_after = inventory_entity::Entity::find()
         .filter(inventory_entity::Column::VariantId.eq(Some(variant.variant_id)))
@@ -847,7 +848,7 @@ async fn integration_place_order_multiple_items_two_variants() {
         name: ActiveValue::Set("Product A".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        price_paise: ActiveValue::Set(60_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -867,7 +868,7 @@ async fn integration_place_order_multiple_items_two_variants() {
         name: ActiveValue::Set("Product B".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(2_000),
+        price_paise: ActiveValue::Set(40_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -966,8 +967,11 @@ async fn integration_place_order_multiple_items_two_variants() {
     .await
     .expect("place_order should succeed");
     let order = &place_res.into_inner().items[0];
-    let expected_total = 2 * 1_000 + 2_000;
-    assert_eq!(order.total_amount_paise, expected_total, "2*A + 1*B = 4000");
+    let expected_total = 2 * 60_000 + 40_000;
+    assert_eq!(
+        order.total_amount_paise, expected_total,
+        "2*A + 1*B = 160000"
+    );
 
     let db_order = orders::Entity::find_by_id(order.order_id)
         .one(&txn)
@@ -1084,7 +1088,7 @@ async fn integration_place_order_then_search_order() {
         name: ActiveValue::Set("Search Order Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),

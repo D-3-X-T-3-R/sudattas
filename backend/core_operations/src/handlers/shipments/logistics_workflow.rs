@@ -128,7 +128,10 @@ async fn recompute_cod_payable_before_booking(
         return Ok(());
     }
 
-    let active_items_minor: i64 = row.try_get("", "active_items_minor").unwrap_or(0_i64).max(0);
+    let active_items_minor: i64 = row
+        .try_get("", "active_items_minor")
+        .unwrap_or(0_i64)
+        .max(0);
     let active_qty: i64 = row.try_get("", "active_qty").unwrap_or(0_i64).max(0);
     let postcode: String = row.try_get("", "postal_code").unwrap_or_default();
     let prior_shipping_minor: i64 = row
@@ -648,9 +651,7 @@ pub async fn create_shipments_after_cancel_window_batch(
         .query_all(Statement::from_sql_and_values(
             DbBackend::MySql,
             eligibility_sql,
-            [
-                i64::try_from(batch_limit).unwrap_or(i64::MAX).into(),
-            ],
+            [i64::try_from(batch_limit).unwrap_or(i64::MAX).into()],
         ))
         .await
         .map_err(map_db_error_to_status)?;

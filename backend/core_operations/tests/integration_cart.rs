@@ -92,7 +92,8 @@ async fn integration_cart_delete_one_item_returns_remaining() {
         name: ActiveValue::Set("C1 Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(100),
+        // Keep selected subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live quote dependency.
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -411,7 +412,8 @@ async fn integration_place_order_removes_only_selected_user_cart_items() {
         name: ActiveValue::Set("C3 Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(100),
+        // Keep selected subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live quote dependency.
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),

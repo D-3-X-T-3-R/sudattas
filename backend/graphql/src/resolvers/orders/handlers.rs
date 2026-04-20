@@ -6,8 +6,8 @@ use proto::proto::core::{
 use tracing::instrument;
 
 use super::schema::{
-    AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CheckoutShippingEstimate,
-    CancelOrderItemsInput, CreateOrderInput, EstimateCheckoutShippingInput, NewOrder, Order,
+    AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
+    CheckoutShippingEstimate, CreateOrderInput, EstimateCheckoutShippingInput, NewOrder, Order,
     OrderMutation, OrderStatus, SearchOrder,
 };
 use crate::resolvers::{

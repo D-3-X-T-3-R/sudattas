@@ -651,7 +651,8 @@ pub async fn restored_items_count_for_order(
 #[cfg(test)]
 mod tests {
     use super::{
-        compute_target_refund_minor, line_total_minor_from_detail, remaining_after_processed_refunds,
+        compute_target_refund_minor, line_total_minor_from_detail,
+        remaining_after_processed_refunds,
     };
     use core_db_entities::entity::order_details;
     use sea_orm::prelude::DateTimeUtc;

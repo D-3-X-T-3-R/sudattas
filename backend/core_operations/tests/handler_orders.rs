@@ -1,7 +1,7 @@
 //! Unit tests for order handlers using SeaORM MockDatabase.
 
-use core_db_entities::entity::{order_details, order_status, orders, shipments};
 use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
+use core_db_entities::entity::{order_details, order_status, orders, shipments};
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateOrderRequest,
     DeleteOrderRequest, OrdersResponse, UpdateOrderRequest,

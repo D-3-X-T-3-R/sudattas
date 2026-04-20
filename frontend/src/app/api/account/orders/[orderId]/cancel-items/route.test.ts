@@ -45,6 +45,24 @@ describe("POST /api/account/orders/[orderId]/cancel-items", () => {
     expect(json.errorCode).toBe("VALIDATION_ERROR");
   });
 
+  it("returns unauthorized when canonical user id is missing", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue(null);
+
+    const res = await POST(
+      new Request("http://localhost/api/account/orders/7/cancel-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderDetailIds: ["91"] }),
+      }),
+      { params: Promise.resolve({ orderId: "7" }) }
+    );
+    const json = (await res.json()) as { errorCode: string };
+
+    expect(res.status).toBe(401);
+    expect(json.errorCode).toBe("UNAUTHORIZED");
+    expect(mocks.callGraphqlAsCustomer).not.toHaveBeenCalled();
+  });
+
   it("forwards cancelOrderItems mutation and returns success payload", async () => {
     mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("104");
     mocks.callGraphqlAsCustomer.mockResolvedValue({
@@ -71,5 +89,26 @@ describe("POST /api/account/orders/[orderId]/cancel-items", () => {
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
     expect(json.data).toEqual({ orderId: "7", statusId: "10" });
+  });
+
+  it("maps failed_precondition GraphQL error to 409", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("104");
+    mocks.callGraphqlAsCustomer.mockResolvedValue({
+      errors: [{ message: "failed_precondition: cancellation window closed" }],
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/account/orders/7/cancel-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderDetailIds: ["91"] }),
+      }),
+      { params: Promise.resolve({ orderId: "7" }) }
+    );
+    const json = (await res.json()) as { errorCode: string; message: string };
+
+    expect(res.status).toBe(409);
+    expect(json.errorCode).toBe("GRAPHQL_ERROR");
+    expect(json.message).toContain("failed_precondition");
   });
 });

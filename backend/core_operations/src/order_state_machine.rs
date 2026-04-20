@@ -84,8 +84,8 @@ fn allowed_transitions() -> Vec<(OrderState, HashSet<OrderState>)> {
                 CancelPendingLogistics,
                 Refunded,
             ]
-                .into_iter()
-                .collect(),
+            .into_iter()
+            .collect(),
         ),
         (
             Shipped,

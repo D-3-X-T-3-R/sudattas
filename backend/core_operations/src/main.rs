@@ -265,9 +265,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let delayed_shipment_worker_disabled = std::env::var("DELAYED_SHIPMENT_CREATION_DISABLE_WORKER")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
+    let delayed_shipment_worker_disabled =
+        std::env::var("DELAYED_SHIPMENT_CREATION_DISABLE_WORKER")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
     if !delayed_shipment_worker_disabled {
         let db = get_db().await.map_err(|e| {
             format!("delayed shipment creation worker: database connect failed: {e}")
@@ -291,9 +292,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 interval.tick().await;
                 match process_create_shipments_after_cancel_window(&db, batch_limit).await {
                     Ok(n) if n > 0 => {
-                        log::info!(
-                            "delayed shipment creation worker: created {n} shipment(s)"
-                        );
+                        log::info!("delayed shipment creation worker: created {n} shipment(s)");
                     }
                     Ok(_) => {}
                     Err(e) => {

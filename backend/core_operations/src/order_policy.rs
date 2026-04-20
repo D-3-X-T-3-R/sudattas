@@ -27,4 +27,3 @@ pub fn cancel_window_deadline(order_created_at: DateTime<Utc>) -> DateTime<Utc> 
 pub fn is_within_cancel_window(order_created_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
     now < cancel_window_deadline(order_created_at)
 }
-

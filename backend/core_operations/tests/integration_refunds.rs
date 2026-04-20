@@ -106,7 +106,8 @@ async fn place_order_minimal(
         name: ActiveValue::Set("Refund Test Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(5_000),
+        // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live quote dependency.
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(cat.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),

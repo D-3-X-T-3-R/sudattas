@@ -5,9 +5,7 @@ mod integration_common;
 use core_db_entities::entity::order_status;
 use core_db_entities::entity::orders;
 use core_db_entities::entity::refunds;
-use core_db_entities::entity::sea_orm_active_enums::{
-    FulfillmentStatus, Status as RefundStatus,
-};
+use core_db_entities::entity::sea_orm_active_enums::{FulfillmentStatus, Status as RefundStatus};
 use proto::proto::core::{CreateRefundRequest, ResolveNeedsReviewRequest};
 use sea_orm::entity::prelude::Decimal;
 use sea_orm::{DatabaseBackend, MockDatabase, TransactionTrait};

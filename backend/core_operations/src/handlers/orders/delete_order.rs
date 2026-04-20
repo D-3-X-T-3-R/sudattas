@@ -1,8 +1,8 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::orders::{cancel_order_items, order_response};
 use chrono::Utc;
-use core_db_entities::entity::{order_details, orders};
 use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
+use core_db_entities::entity::{order_details, orders};
 use proto::proto::core::{CancelOrderItemsRequest, DeleteOrderRequest, OrdersResponse};
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
@@ -58,7 +58,10 @@ pub async fn delete_order(
         txn,
         Request::new(CancelOrderItemsRequest {
             order_id: req.order_id,
-            order_detail_ids: active_details.into_iter().map(|d| d.order_detail_id).collect(),
+            order_detail_ids: active_details
+                .into_iter()
+                .map(|d| d.order_detail_id)
+                .collect(),
             acting_user_id: req.acting_user_id,
         }),
     )

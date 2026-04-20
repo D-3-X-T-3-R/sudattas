@@ -16,12 +16,14 @@ use core_db_entities::entity::{
     cart, coupons, inventory, order_details, order_status, orders, payment_intents,
     product_categories, product_variants, products, shipping_addresses, user_roles,
 };
+use core_operations::handlers::orders::{cancel_order_items, delete_order};
 use core_operations::procedures::orders::place_order;
 use proto::proto::core::{
-    CreateCartItemRequest, CreateCouponRequest, CreateUserRequest, PlaceOrderRequest,
+    CancelOrderItemsRequest, CreateCartItemRequest, CreateCouponRequest, CreateUserRequest,
+    DeleteOrderRequest, PlaceOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, QueryOrder,
     TransactionTrait,
 };
 use tonic::{Code, Request};
@@ -176,9 +178,10 @@ async fn integration_selected_subset_creates_order_for_only_selected_lines() {
     let now_tag = Utc::now().timestamp_millis();
     let (user_id, shipping_id) = create_checkout_user(&txn, now_tag).await;
     let (selected_variant_id, selected_cart_id) =
-        create_variant_with_cart_item(&txn, now_tag, user_id, "A", 1_000, 10, 2).await;
+        // Keep selected subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live quote coupling.
+        create_variant_with_cart_item(&txn, now_tag, user_id, "A", 60_000, 10, 2).await;
     let (unselected_variant_id, unselected_cart_id) =
-        create_variant_with_cart_item(&txn, now_tag, user_id, "B", 2_000, 10, 1).await;
+        create_variant_with_cart_item(&txn, now_tag, user_id, "B", 20_000, 10, 1).await;
 
     let place_res = place_order(
         &txn,
@@ -195,8 +198,8 @@ async fn integration_selected_subset_creates_order_for_only_selected_lines() {
     let order = place_res.into_inner().items[0].clone();
 
     assert_eq!(
-        order.total_amount_paise, 2_000,
-        "only the selected 2 x 1000 line is charged"
+        order.total_amount_paise, 120_000,
+        "only the selected 2 x 60000 line is charged"
     );
 
     let detail_rows = order_details::Entity::find()
@@ -218,7 +221,7 @@ async fn integration_selected_subset_creates_order_for_only_selected_lines() {
         .await
         .expect("query payment_intents")
         .expect("payment intent exists");
-    assert_eq!(payment_intent.amount_paise, 2_000);
+    assert_eq!(payment_intent.amount_paise, 120_000);
 
     let remaining_cart = cart::Entity::find()
         .filter(cart::Column::UserId.eq(user_id))
@@ -247,8 +250,8 @@ async fn integration_selected_subset_coupon_logic_uses_only_selected_lines() {
     let now_tag = Utc::now().timestamp_millis();
     let (user_id, shipping_id) = create_checkout_user(&txn, now_tag).await;
     let (_selected_variant_id, selected_cart_id) =
-        create_variant_with_cart_item(&txn, now_tag, user_id, "CouponA", 600, 10, 1).await;
-    let _ = create_variant_with_cart_item(&txn, now_tag, user_id, "CouponB", 600, 10, 1).await;
+        create_variant_with_cart_item(&txn, now_tag, user_id, "CouponA", 120_000, 10, 1).await;
+    let _ = create_variant_with_cart_item(&txn, now_tag, user_id, "CouponB", 120_000, 10, 1).await;
 
     let code = format!("SELCP_{}", now_tag);
     let _ = core_operations::handlers::coupons::create_coupon(
@@ -256,8 +259,8 @@ async fn integration_selected_subset_coupon_logic_uses_only_selected_lines() {
         Request::new(CreateCouponRequest {
             code: code.clone(),
             discount_type: "fixed_amount".to_string(),
-            discount_value: 500,
-            min_order_value_paise: Some(1_000),
+            discount_value: 50_000,
+            min_order_value_paise: Some(200_000),
             usage_limit: Some(10),
             max_uses_per_customer: None,
             starts_at: (Utc::now() - Duration::hours(1)).to_rfc3339(),
@@ -282,7 +285,7 @@ async fn integration_selected_subset_coupon_logic_uses_only_selected_lines() {
     let order = place_res.into_inner().items[0].clone();
 
     assert_eq!(
-        order.total_amount_paise, 600,
+        order.total_amount_paise, 120_000,
         "coupon should not apply because selected subset is below min order"
     );
 
@@ -307,6 +310,175 @@ async fn integration_selected_subset_coupon_logic_uses_only_selected_lines() {
         coupon_row.usage_count,
         Some(0),
         "usage should not increment before payment or on non-applicable subset"
+    );
+
+    txn.rollback().await.ok();
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_selected_subset_coupon_allocation_rounding_is_deterministic() {
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let (user_id, shipping_id) = create_checkout_user(&txn, now_tag).await;
+    let (variant_a, cart_a) =
+        create_variant_with_cart_item(&txn, now_tag, user_id, "RoundA", 120_003, 10, 1).await;
+    let (variant_b, cart_b) =
+        create_variant_with_cart_item(&txn, now_tag, user_id, "RoundB", 80_002, 10, 1).await;
+    let (variant_c, cart_c) =
+        create_variant_with_cart_item(&txn, now_tag, user_id, "RoundC", 60_001, 10, 1).await;
+
+    let code = format!("SELROUND_{}", now_tag);
+    let _ = core_operations::handlers::coupons::create_coupon(
+        &txn,
+        Request::new(CreateCouponRequest {
+            code: code.clone(),
+            discount_type: "fixed_amount".to_string(),
+            discount_value: 10_001,
+            min_order_value_paise: Some(1),
+            usage_limit: Some(20),
+            max_uses_per_customer: None,
+            starts_at: (Utc::now() - Duration::hours(1)).to_rfc3339(),
+            ends_at: Some((Utc::now() + Duration::days(1)).to_rfc3339()),
+        }),
+    )
+    .await
+    .expect("create_coupon");
+
+    let first = place_order(
+        &txn,
+        Request::new(PlaceOrderRequest {
+            shipping_address_id: shipping_id,
+            user_id,
+            coupon_code: Some(code.clone()),
+            selected_cart_ids: vec![cart_a, cart_b, cart_c],
+            payment_mode: None,
+        }),
+    )
+    .await
+    .expect("first place_order should succeed")
+    .into_inner()
+    .items[0]
+        .clone();
+
+    let first_order = orders::Entity::find_by_id(first.order_id)
+        .one(&txn)
+        .await
+        .expect("query first order")
+        .expect("first order exists");
+    let first_details = order_details::Entity::find()
+        .filter(order_details::Column::OrderId.eq(first.order_id))
+        .order_by_asc(order_details::Column::VariantId)
+        .all(&txn)
+        .await
+        .expect("query first order details");
+    assert_eq!(
+        first_details.len(),
+        3,
+        "all selected lines should be present"
+    );
+
+    let first_sum_line_totals: i64 = first_details.iter().map(|row| row.line_total_minor).sum();
+    let first_shipping = first_order.shipping_charge_minor.unwrap_or(0);
+    assert_eq!(
+        first_order.items_total_minor_before_discount,
+        Some(260_006),
+        "before-discount snapshot must match selected lines"
+    );
+    assert_eq!(first_order.discount_total_minor, Some(10_001));
+    assert_eq!(
+        first_order.items_total_minor_after_discount,
+        Some(first_sum_line_totals),
+        "after-discount snapshot must equal persisted line totals"
+    );
+    assert_eq!(
+        first_sum_line_totals + first_shipping,
+        first_order.grand_total_minor,
+        "sum(line_total_minor) + shipping_charge_minor must equal grand_total_minor"
+    );
+
+    let cart_a_replay = core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: Some(user_id),
+            session_id: None,
+            variant_id: variant_a,
+            quantity: 1,
+        }),
+    )
+    .await
+    .expect("recreate cart A")
+    .into_inner()
+    .items[0]
+        .cart_id;
+    let cart_b_replay = core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: Some(user_id),
+            session_id: None,
+            variant_id: variant_b,
+            quantity: 1,
+        }),
+    )
+    .await
+    .expect("recreate cart B")
+    .into_inner()
+    .items[0]
+        .cart_id;
+    let cart_c_replay = core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: Some(user_id),
+            session_id: None,
+            variant_id: variant_c,
+            quantity: 1,
+        }),
+    )
+    .await
+    .expect("recreate cart C")
+    .into_inner()
+    .items[0]
+        .cart_id;
+
+    let second = place_order(
+        &txn,
+        Request::new(PlaceOrderRequest {
+            shipping_address_id: shipping_id,
+            user_id,
+            coupon_code: Some(code),
+            selected_cart_ids: vec![cart_a_replay, cart_b_replay, cart_c_replay],
+            payment_mode: None,
+        }),
+    )
+    .await
+    .expect("second place_order should succeed")
+    .into_inner()
+    .items[0]
+        .clone();
+
+    let second_details = order_details::Entity::find()
+        .filter(order_details::Column::OrderId.eq(second.order_id))
+        .order_by_asc(order_details::Column::VariantId)
+        .all(&txn)
+        .await
+        .expect("query second order details");
+    assert_eq!(second_details.len(), 3);
+
+    let first_allocation: Vec<(i64, i64)> = first_details
+        .iter()
+        .map(|row| (row.variant_id, row.line_total_minor))
+        .collect();
+    let second_allocation: Vec<(i64, i64)> = second_details
+        .iter()
+        .map(|row| (row.variant_id, row.line_total_minor))
+        .collect();
+    assert_eq!(
+        first_allocation, second_allocation,
+        "discount allocation with rounding remainder must be deterministic for identical inputs"
     );
 
     txn.rollback().await.ok();
@@ -383,8 +555,8 @@ async fn integration_selected_checkout_rejects_out_of_stock_selected_line() {
     let now_tag = Utc::now().timestamp_millis();
     let (user_id, shipping_id) = create_checkout_user(&txn, now_tag).await;
     let (_variant_id, selected_cart_id) =
-        create_variant_with_cart_item(&txn, now_tag, user_id, "LowStock", 1_200, 1, 2).await;
-    let _ = create_variant_with_cart_item(&txn, now_tag, user_id, "Safe", 800, 10, 1).await;
+        create_variant_with_cart_item(&txn, now_tag, user_id, "LowStock", 120_000, 1, 2).await;
+    let _ = create_variant_with_cart_item(&txn, now_tag, user_id, "Safe", 90_000, 10, 1).await;
 
     let result = place_order(
         &txn,
@@ -419,6 +591,91 @@ async fn integration_selected_checkout_rejects_out_of_stock_selected_line() {
         remaining_cart.len(),
         2,
         "all cart rows should remain for retry"
+    );
+
+    txn.rollback().await.ok();
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_selected_checkout_rejects_cross_user_cancellation_attempts() {
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let (owner_user_id, owner_shipping_id) = create_checkout_user(&txn, now_tag).await;
+    let (_variant_id, owner_cart_id) =
+        create_variant_with_cart_item(&txn, now_tag, owner_user_id, "OwnerItem", 150_000, 10, 1)
+            .await;
+
+    let place_res = place_order(
+        &txn,
+        Request::new(PlaceOrderRequest {
+            shipping_address_id: owner_shipping_id,
+            user_id: owner_user_id,
+            coupon_code: None,
+            selected_cart_ids: vec![owner_cart_id],
+            payment_mode: None,
+        }),
+    )
+    .await
+    .expect("owner place_order should succeed");
+    let order_id = place_res.into_inner().items[0].order_id;
+
+    let detail_id = order_details::Entity::find()
+        .filter(order_details::Column::OrderId.eq(order_id))
+        .one(&txn)
+        .await
+        .expect("query order detail")
+        .expect("order detail exists")
+        .order_detail_id;
+
+    let (other_user_id, _other_shipping_id) = create_checkout_user(&txn, now_tag + 1).await;
+
+    let partial_err = cancel_order_items(
+        &txn,
+        Request::new(CancelOrderItemsRequest {
+            order_id,
+            acting_user_id: Some(other_user_id),
+            order_detail_ids: vec![detail_id],
+        }),
+    )
+    .await
+    .expect_err("cross-user partial cancel should fail");
+    assert!(
+        partial_err.code() == tonic::Code::PermissionDenied
+            || partial_err.code() == tonic::Code::NotFound,
+        "expected permission/not-found error, got {:?}",
+        partial_err.code()
+    );
+
+    let full_err = delete_order(
+        &txn,
+        Request::new(DeleteOrderRequest {
+            order_id,
+            acting_user_id: Some(other_user_id),
+        }),
+    )
+    .await
+    .expect_err("cross-user full cancel should fail");
+    assert!(
+        full_err.code() == tonic::Code::PermissionDenied
+            || full_err.code() == tonic::Code::NotFound,
+        "expected permission/not-found error, got {:?}",
+        full_err.code()
+    );
+
+    let order_row = orders::Entity::find_by_id(order_id)
+        .one(&txn)
+        .await
+        .expect("query order")
+        .expect("order exists");
+    let active_sale_id = ensure_order_status(&txn, "active_sale").await;
+    assert_eq!(
+        order_row.status_id, active_sale_id,
+        "unauthorized cancellation attempts must not mutate order state"
     );
 
     txn.rollback().await.ok();
