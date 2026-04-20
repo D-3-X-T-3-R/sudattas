@@ -18,6 +18,10 @@ pub struct Order {
     pub refund_settlement_status: Option<String>,
     /// "prepaid" | "cod" (nullable for historical rows)
     pub payment_method: Option<String>,
+    pub cancel_window_ends_at: Option<String>,
+    pub earliest_booking_at: Option<String>,
+    pub pickup_target_at: Option<String>,
+    pub fulfillment_status: Option<String>,
 }
 
 #[graphql_object]
@@ -68,6 +72,22 @@ impl Order {
 
     async fn payment_method(&self) -> Option<&String> {
         self.payment_method.as_ref()
+    }
+
+    async fn cancel_window_ends_at(&self) -> Option<&String> {
+        self.cancel_window_ends_at.as_ref()
+    }
+
+    async fn earliest_booking_at(&self) -> Option<&String> {
+        self.earliest_booking_at.as_ref()
+    }
+
+    async fn pickup_target_at(&self) -> Option<&String> {
+        self.pickup_target_at.as_ref()
+    }
+
+    async fn fulfillment_status(&self) -> Option<&String> {
+        self.fulfillment_status.as_ref()
     }
 
     async fn order_details(&self) -> FieldResult<Vec<OrderDetails>> {
@@ -224,4 +244,41 @@ pub struct AdminMarkOrderDeliveredInput {
 pub struct CancelOrderItemsInput {
     pub order_id: String,
     pub order_detail_ids: Vec<String>,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Admin: update preferred pickup target timestamp")]
+pub struct UpdatePickupTargetInput {
+    pub order_id: String,
+    pub pickup_target_at: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct PickupTargetUpdateResult {
+    pub order_id: String,
+    pub pickup_target_at: String,
+    pub pickup_target_reason: Option<String>,
+    pub pickup_target_set_by: Option<String>,
+    pub pickup_target_updated_at: String,
+}
+
+#[graphql_object]
+#[graphql(description = "Updated pickup target metadata")]
+impl PickupTargetUpdateResult {
+    async fn order_id(&self) -> &String {
+        &self.order_id
+    }
+    async fn pickup_target_at(&self) -> &String {
+        &self.pickup_target_at
+    }
+    async fn pickup_target_reason(&self) -> Option<&String> {
+        self.pickup_target_reason.as_ref()
+    }
+    async fn pickup_target_set_by(&self) -> Option<&String> {
+        self.pickup_target_set_by.as_ref()
+    }
+    async fn pickup_target_updated_at(&self) -> &String {
+        &self.pickup_target_updated_at
+    }
 }

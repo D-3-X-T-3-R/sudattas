@@ -54,6 +54,7 @@ service GRPCServices {
     rpc EstimateCheckoutShipping(EstimateCheckoutShippingRequest) returns (EstimateCheckoutShippingResponse);
     rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);
     rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);
+    rpc UpdatePickupTarget(UpdatePickupTargetRequest) returns (UpdatePickupTargetResponse);
     rpc SearchOrderStatus(SearchOrderStatusRequest) returns (OrderStatusesResponse);
 
     // OrderDetails

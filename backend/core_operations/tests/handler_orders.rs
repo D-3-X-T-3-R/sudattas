@@ -1,7 +1,7 @@
 //! Unit tests for order handlers using SeaORM MockDatabase.
 
 use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
-use core_db_entities::entity::{order_details, order_status, orders, shipments};
+use core_db_entities::entity::{order_details, order_status, orders};
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateOrderRequest,
     DeleteOrderRequest, OrdersResponse, UpdateOrderRequest,
@@ -22,6 +22,12 @@ async fn create_order_inserts_and_returns_created_model() {
         user_id: 7,
         order_date: now,
         created_at: now,
+        cancel_window_ends_at: None,
+        earliest_booking_at: None,
+        pickup_target_at: None,
+        pickup_target_reason: None,
+        pickup_target_set_by: None,
+        pickup_target_updated_at: None,
         shipping_address_id: 11,
         total_amount: Some(Decimal::new(10_000, 2)),
         status_id: 2,
@@ -45,10 +51,16 @@ async fn create_order_inserts_and_returns_created_model() {
     };
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_exec_results(vec![MockExecResult {
-            last_insert_id: 1,
-            rows_affected: 1,
-        }])
+        .append_exec_results(vec![
+            MockExecResult {
+                last_insert_id: 1,
+                rows_affected: 1,
+            },
+            MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            },
+        ])
         .append_query_results(vec![vec![model]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
@@ -120,6 +132,12 @@ async fn update_order_illegal_state_transition_returns_invalid_argument() {
         user_id: 7,
         order_date: now,
         created_at: now,
+        cancel_window_ends_at: Some(now + chrono::Duration::hours(1)),
+        earliest_booking_at: None,
+        pickup_target_at: None,
+        pickup_target_reason: None,
+        pickup_target_set_by: None,
+        pickup_target_updated_at: None,
         shipping_address_id: 11,
         total_amount: Some(Decimal::new(10_000, 2)),
         status_id: 1, // from_status_id
@@ -189,6 +207,12 @@ async fn update_order_preserves_original_order_date() {
         user_id: 7,
         order_date: original_order_date,
         created_at: original_order_date,
+        cancel_window_ends_at: None,
+        earliest_booking_at: None,
+        pickup_target_at: None,
+        pickup_target_reason: None,
+        pickup_target_set_by: None,
+        pickup_target_updated_at: None,
         shipping_address_id: 11,
         total_amount: Some(Decimal::new(10_000, 2)),
         status_id: 1,
@@ -291,6 +315,12 @@ async fn delete_order_acting_user_mismatch_yields_not_found() {
         user_id: 3,
         order_date: now,
         created_at: now,
+        cancel_window_ends_at: None,
+        earliest_booking_at: None,
+        pickup_target_at: None,
+        pickup_target_reason: None,
+        pickup_target_set_by: None,
+        pickup_target_updated_at: None,
         shipping_address_id: 20,
         total_amount: Some(Decimal::new(5_000, 2)),
         status_id: 1,
@@ -340,6 +370,12 @@ async fn delete_order_when_already_cancelled_returns_snapshot() {
         user_id: 3,
         order_date: now,
         created_at: now,
+        cancel_window_ends_at: None,
+        earliest_booking_at: None,
+        pickup_target_at: None,
+        pickup_target_reason: None,
+        pickup_target_set_by: None,
+        pickup_target_updated_at: None,
         shipping_address_id: 20,
         total_amount: Some(Decimal::new(5_000, 2)),
         status_id: cancelled_sid,
@@ -361,16 +397,16 @@ async fn delete_order_when_already_cancelled_returns_snapshot() {
         refund_settlement_status: None,
         fulfillment_status: FulfillmentStatus::NotCreated,
     };
-    let st = order_status::Model {
-        status_id: cancelled_sid,
-        status_name: "cancelled".to_string(),
-    };
+    let mut cancel_window_row = std::collections::BTreeMap::new();
+    cancel_window_row.insert(
+        "cancel_window_ends_at",
+        (now + chrono::Duration::hours(1)).into(),
+    );
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
         .append_query_results(vec![vec![model.clone()]])
-        .append_query_results(vec![Vec::<shipments::Model>::new()])
-        .append_query_results(vec![vec![st]])
-        .append_query_results(vec![Vec::<order_status::Model>::new()])
+        .append_query_results(vec![vec![cancel_window_row]])
+        .append_query_results(vec![Vec::<order_details::Model>::new()])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
@@ -387,7 +423,7 @@ async fn delete_order_when_already_cancelled_returns_snapshot() {
 }
 
 #[tokio::test]
-async fn admin_mark_order_shipped_order_not_found_propagates_not_found() {
+async fn admin_mark_order_shipped_order_not_found_returns_booking_precondition() {
     use core_operations::handlers::orders::admin_mark_shipped::admin_mark_order_shipped;
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
@@ -407,7 +443,12 @@ async fn admin_mark_order_shipped_order_not_found_propagates_not_found() {
     let result = admin_mark_order_shipped(&txn, req).await;
     assert!(result.is_err());
     let status = result.unwrap_err();
-    assert_eq!(status.code(), tonic::Code::NotFound);
+    assert_eq!(status.code(), tonic::Code::FailedPrecondition);
+    assert!(
+        status.message().contains("Shipment is not booked yet"),
+        "unexpected message: {}",
+        status.message()
+    );
 }
 
 #[tokio::test]

@@ -1,6 +1,5 @@
 use core_db_entities::{get_db, CoreDatabaseConnection};
 use handlers::db_errors::map_db_error_to_status;
-use handlers::shipments::load_shipment_for_order;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -80,14 +79,14 @@ use proto::proto::core::{
     SyncProductImagesRequest, TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest,
     UpdateColorRequest, UpdateCouponRequest, UpdateEventLogRequest, UpdateFabricRequest,
     UpdateInventoryItemRequest, UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest,
-    UpdateOccasionRequest, UpdateOrderDetailRequest, UpdateOrderRequest, UpdateProductImageRequest,
-    UpdateProductMoodRequest, UpdateProductRequest, UpdateProductVariantRequest,
-    UpdateReviewRequest, UpdateShipmentRequest, UpdateShippingAddressRequest,
-    UpdateShippingMethodRequest, UpdateSizeRequest, UpdateTransactionRequest,
-    UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UpdateWeaveRequest,
-    UserActivitiesResponse, UserRolesResponse, UsersResponse, ValidateCouponRequest,
-    VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse, WeavesResponse,
-    WebhookEventsResponse, WishlistItemsResponse,
+    UpdateOccasionRequest, UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
+    UpdatePickupTargetResponse, UpdateProductImageRequest, UpdateProductMoodRequest,
+    UpdateProductRequest, UpdateProductVariantRequest, UpdateReviewRequest, UpdateShipmentRequest,
+    UpdateShippingAddressRequest, UpdateShippingMethodRequest, UpdateSizeRequest,
+    UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest,
+    UpdateWeaveRequest, UserActivitiesResponse, UserRolesResponse, UsersResponse,
+    ValidateCouponRequest, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
+    WeavesResponse, WebhookEventsResponse, WishlistItemsResponse,
 };
 
 use sea_orm::TransactionTrait;
@@ -671,35 +670,14 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<AdminMarkOrderShippedRequest>,
     ) -> Result<Response<AdminMarkOrderShippedResponse>, Status> {
-        let db = self
+        let txn = self
             .db
             .as_ref()
-            .ok_or_else(|| Status::failed_precondition("database not initialized"))?;
-        let mut inner = request.into_inner();
-        if inner.shiprocket_book == Some(true) {
-            let lookup_txn = db.begin().await.map_err(map_db_error_to_status)?;
-            let existing = load_shipment_for_order(&lookup_txn, inner.order_id, false).await?;
-            lookup_txn
-                .rollback()
-                .await
-                .map_err(map_db_error_to_status)?;
-            if let Some(existing) = existing.filter(|shipment| shipment.awb_code.is_some()) {
-                inner.awb_code = existing.awb_code;
-                inner.carrier = existing.carrier;
-                inner.shiprocket_order_id = existing.shiprocket_order_id;
-            } else {
-                let booked = integrations::shiprocket::book_shipment_for_order(db, inner.order_id)
-                    .await
-                    .map_err(|e| Status::failed_precondition(e.to_string()))?;
-                inner.awb_code = Some(booked.awb_code);
-                inner.carrier = Some(booked.courier_name);
-                inner.shiprocket_order_id = Some(booked.shiprocket_shipment_id);
-                inner.shiprocket_status_id = booked.shiprocket_status_id;
-                inner.shiprocket_status_label = booked.shiprocket_status_label;
-            }
-        }
-        let txn = db.begin().await.map_err(map_db_error_to_status)?;
-        let res = handlers::orders::admin_mark_order_shipped(&txn, Request::new(inner)).await?;
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::admin_mark_order_shipped(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -716,6 +694,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::admin_mark_order_delivered(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn update_pickup_target(
+        &self,
+        request: Request<UpdatePickupTargetRequest>,
+    ) -> Result<Response<UpdatePickupTargetResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::update_pickup_target(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

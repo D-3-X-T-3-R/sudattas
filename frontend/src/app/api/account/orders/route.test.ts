@@ -58,6 +58,7 @@ describe("GET /api/account/orders", () => {
               orderId: "67",
               userId: "104",
               orderDate: "2026-04-18T20:33:31Z",
+              cancelWindowEndsAt: "2026-04-19T08:33:31Z",
               totalAmountPaise: "90735",
               totalAmountFormatted: "Rs 907.35",
               statusId: "2",
@@ -77,6 +78,7 @@ describe("GET /api/account/orders", () => {
       data: Array<{
         orderId: string;
         userId: string;
+        cancelWindowEndsAt?: string | null;
         totalAmountPaise: string;
         statusId: string;
         statusName: string;
@@ -90,6 +92,7 @@ describe("GET /api/account/orders", () => {
     expect(json.data[0]).toMatchObject({
       orderId: "67",
       userId: "104",
+      cancelWindowEndsAt: "2026-04-19T08:33:31Z",
       totalAmountPaise: "90735",
       statusId: "2",
       statusName: "processing order",

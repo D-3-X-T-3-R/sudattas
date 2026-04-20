@@ -6,7 +6,9 @@ use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::ShipmentStatus;
 use core_db_entities::entity::shipments;
 use proto::proto::core::{CreateShipmentRequest, ShipmentResponse, ShipmentsResponse};
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ConnectionTrait, DatabaseTransaction, DbBackend, Statement,
+};
 use tonic::{Request, Response, Status as TonicStatus};
 
 fn derive_line_status(req: &CreateShipmentRequest) -> ShipmentStatus {
@@ -44,6 +46,8 @@ pub async fn create_shipment(
     request: Request<CreateShipmentRequest>,
 ) -> Result<Response<ShipmentsResponse>, TonicStatus> {
     let req = request.into_inner();
+    super::logistics_workflow::validate_order_can_be_booked(txn, req.order_id, Utc::now(), true)
+        .await?;
 
     let line_status = derive_line_status(&req);
     let sr_id = req.shiprocket_status_id;
@@ -70,17 +74,27 @@ pub async fn create_shipment(
         created_at: ActiveValue::Set(Some(Utc::now())),
         delivered_at: ActiveValue::Set(None),
         pickup_scheduled_for: ActiveValue::Set(None),
-        logistics_status: ActiveValue::Set(None),
-        can_customer_cancel: ActiveValue::Set(1),
+        logistics_status: ActiveValue::Set(Some("booked".to_string())),
+        can_customer_cancel: ActiveValue::Set(0),
         razorpay_refund_id: ActiveValue::Set(None),
         refund_status: ActiveValue::Set(None),
         refund_initiated_at: ActiveValue::Set(None),
     };
 
     match shipment.insert(txn).await {
-        Ok(model) => Ok(Response::new(ShipmentsResponse {
-            items: vec![model_to_response(model)],
-        })),
+        Ok(model) => {
+            txn.execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "UPDATE Orders SET fulfillment_status = 'booked', updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
+                [req.order_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+
+            Ok(Response::new(ShipmentsResponse {
+                items: vec![model_to_response(model)],
+            }))
+        }
         Err(e) => Err(map_db_error_to_status(e)),
     }
 }

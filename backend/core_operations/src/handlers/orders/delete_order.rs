@@ -4,7 +4,10 @@ use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
 use core_db_entities::entity::{order_details, orders};
 use proto::proto::core::{CancelOrderItemsRequest, DeleteOrderRequest, OrdersResponse};
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
+use sea_orm::{
+    sea_query::LockType, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend, EntityTrait,
+    QueryFilter, QuerySelect, Statement,
+};
 use tonic::{Request, Response, Status};
 
 /// Cancels an order (status → `cancelled`) using the same rules and side effects as [update_order].
@@ -19,6 +22,7 @@ pub async fn delete_order(
     let req = request.into_inner();
 
     let existing = orders::Entity::find_by_id(req.order_id)
+        .lock(LockType::Update)
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?;
@@ -36,7 +40,26 @@ pub async fn delete_order(
         ));
     }
 
-    if !crate::order_policy::is_within_cancel_window(existing.created_at, Utc::now()) {
+    let cancel_window_row = txn
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            r#"SELECT COALESCE(cancel_window_ends_at, DATE_ADD(created_at, INTERVAL ? HOUR)) AS cancel_window_ends_at
+               FROM Orders
+               WHERE OrderID = ?
+               LIMIT 1"#,
+            [
+                crate::order_policy::cancel_window_hours().into(),
+                req.order_id.into(),
+            ],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| Status::not_found("Order not found"))?;
+    let cancel_window_ends_at: chrono::DateTime<Utc> = cancel_window_row
+        .try_get("", "cancel_window_ends_at")
+        .map_err(|e| Status::internal(e.to_string()))?;
+
+    if !crate::order_policy::is_before_deadline(Utc::now(), cancel_window_ends_at) {
         return Err(Status::failed_precondition(
             "Cancellation window closed. You can refuse delivery.",
         ));

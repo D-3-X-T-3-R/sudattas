@@ -36,6 +36,7 @@ export type AccountOrderRow = {
   orderId: string;
   userId: string;
   orderDate: string;
+  cancelWindowEndsAt?: string | null;
   totalAmountPaise: string;
   totalAmountFormatted: string;
   statusId: string;
@@ -457,10 +458,20 @@ function sortOrdersLatestFirst(list: AccountOrderRow[]): AccountOrderRow[] {
 }
 
 /** Hide cancel when status is clearly terminal or past fulfilment; server still enforces rules. */
-function orderWithinCancelWindow(orderDateRaw: string, cancelWindowHours: number): boolean {
-  const createdAt = Date.parse(orderDateRaw);
-  if (Number.isNaN(createdAt)) return false;
-  const deadline = createdAt + cancelWindowHours * 60 * 60 * 1000;
+function orderWithinCancelWindow(
+  orderDateRaw: string,
+  cancelWindowHours: number,
+  cancelWindowEndsAt?: string | null
+): boolean {
+  const explicitDeadline = cancelWindowEndsAt ? Date.parse(cancelWindowEndsAt) : Number.NaN;
+  const deadline = Number.isNaN(explicitDeadline)
+    ? (() => {
+        const createdAt = Date.parse(orderDateRaw);
+        if (Number.isNaN(createdAt)) return Number.NaN;
+        return createdAt + cancelWindowHours * 60 * 60 * 1000;
+      })()
+    : explicitDeadline;
+  if (Number.isNaN(deadline)) return false;
   return Date.now() < deadline;
 }
 
@@ -468,7 +479,8 @@ function orderWithinCancelWindow(orderDateRaw: string, cancelWindowHours: number
 function orderMayBeCancelledByCustomer(
   statusName: string | undefined,
   orderDate: string,
-  cancelWindowHours: number
+  cancelWindowHours: number,
+  cancelWindowEndsAt?: string | null
 ): boolean {
   const s = (statusName ?? "").toLowerCase();
   if (s.includes("cancel") && !s.includes("partially_cancelled")) return false;
@@ -476,7 +488,7 @@ function orderMayBeCancelledByCustomer(
   if (s.includes("ship")) return false;
   if (s.includes("transit")) return false;
   if (s.includes("refund")) return false;
-  return orderWithinCancelWindow(orderDate, cancelWindowHours);
+  return orderWithinCancelWindow(orderDate, cancelWindowHours, cancelWindowEndsAt);
 }
 
 function UserIcon(props: SVGProps<SVGSVGElement>) {
@@ -917,7 +929,8 @@ export function ProfileAuthenticatedContent({
                       const orderCanCancel = orderMayBeCancelledByCustomer(
                         o.statusName,
                         o.orderDate,
-                        cancelWindowHours
+                        cancelWindowHours,
+                        o.cancelWindowEndsAt
                       );
                       const activeLineCount = (detail?.order?.orderDetails ?? []).filter(
                         (row) => !((row.itemStatus ?? "").toLowerCase().includes("cancel"))

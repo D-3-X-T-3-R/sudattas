@@ -8,16 +8,20 @@ use core_db_entities::entity::{
     inventory, order_status, orders, payment_intents, product_categories, product_variants,
     products, shipping_addresses, user_roles, users,
 };
-use core_operations::handlers::orders::{cancel_order_items, delete_order};
+use core_operations::handlers::orders::{
+    admin_mark_order_shipped, cancel_order_items, delete_order, update_pickup_target,
+};
 use core_operations::handlers::payment_intents::verify_razorpay_payment;
+use core_operations::handlers::shipments::create_shipment;
 use core_operations::handlers::webhooks::ingest_webhook;
 use core_operations::procedures::create_shipments_after_cancel_window::process_create_shipments_after_cancel_window;
 use core_operations::procedures::orders::place_order;
 use hmac::{Hmac, Mac};
 use integration_common::test_db_url;
 use proto::proto::core::{
-    CancelOrderItemsRequest, CreateCartItemRequest, DeleteOrderRequest, IngestWebhookRequest,
-    PlaceOrderRequest, VerifyRazorpayPaymentRequest,
+    AdminMarkOrderShippedRequest, CancelOrderItemsRequest, CreateCartItemRequest,
+    CreateShipmentRequest, DeleteOrderRequest, IngestWebhookRequest, PlaceOrderRequest,
+    UpdatePickupTargetRequest, VerifyRazorpayPaymentRequest,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, EntityTrait,
@@ -643,12 +647,49 @@ async fn make_order_eligible_for_delayed_booking(db: &sea_orm::DatabaseConnectio
     rewind_txn
         .execute(Statement::from_sql_and_values(
             sea_orm::DbBackend::MySql,
-            "UPDATE Orders SET created_at = UTC_TIMESTAMP() - INTERVAL 13 HOUR WHERE OrderID = ?",
+            r#"UPDATE Orders
+               SET cancel_window_ends_at = UTC_TIMESTAMP() - INTERVAL 1 MINUTE,
+                   earliest_booking_at = UTC_TIMESTAMP() - INTERVAL 1 MINUTE,
+                   updated_at = UTC_TIMESTAMP()
+               WHERE OrderID = ?"#,
             [order_id.into()],
         ))
         .await
-        .expect("rewind created_at");
+        .expect("set booking eligibility");
     rewind_txn.commit().await.expect("commit rewind");
+}
+
+async fn order_fulfillment_timestamps(
+    db: &sea_orm::DatabaseConnection,
+    order_id: i64,
+) -> (
+    chrono::DateTime<Utc>,
+    chrono::DateTime<Utc>,
+    chrono::DateTime<Utc>,
+    chrono::DateTime<Utc>,
+) {
+    let txn = db.begin().await.expect("begin timestamp query");
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT created_at, cancel_window_ends_at, earliest_booking_at, pickup_target_at
+               FROM Orders
+               WHERE OrderID = ?"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("query order timestamps")
+        .expect("order row");
+    txn.rollback().await.ok();
+    (
+        row.try_get("", "created_at").expect("created_at"),
+        row.try_get("", "cancel_window_ends_at")
+            .expect("cancel_window_ends_at"),
+        row.try_get("", "earliest_booking_at")
+            .expect("earliest_booking_at"),
+        row.try_get("", "pickup_target_at")
+            .expect("pickup_target_at"),
+    )
 }
 
 async fn ensure_delayed_shipment_booked(db: &sea_orm::DatabaseConnection, order_id: i64) {
@@ -1275,6 +1316,248 @@ async fn integration_delayed_shipment_worker_books_only_after_cancel_window() {
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_order_creation_sets_cancel_booking_and_pickup_timestamps() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18118, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18118);
+    let (order_id, _user_id, _inventory_marker) =
+        place_order_without_payment_verification(&db, 18118, tag, Some("prepaid")).await;
+
+    let (created_at, cancel_window_ends_at, earliest_booking_at, pickup_target_at) =
+        order_fulfillment_timestamps(&db, order_id).await;
+    assert_eq!(
+        cancel_window_ends_at, earliest_booking_at,
+        "earliest_booking_at should be initialized from cancel_window_ends_at"
+    );
+
+    let expected_cancel_minutes = core_operations::order_policy::cancel_window_hours() * 60;
+    let actual_cancel_minutes = (cancel_window_ends_at - created_at).num_minutes();
+    assert!(
+        (actual_cancel_minutes - expected_cancel_minutes).abs() <= 1,
+        "cancel_window_ends_at should be created_at + CANCEL_WINDOW_HOURS (expected ~{expected_cancel_minutes}m, got {actual_cancel_minutes}m)"
+    );
+
+    let expected_pickup_minutes = core_operations::order_policy::pickup_delay_hours() * 60;
+    let actual_pickup_minutes = (pickup_target_at - created_at).num_minutes();
+    assert!(
+        (actual_pickup_minutes - expected_pickup_minutes).abs() <= 1,
+        "pickup_target_at should be created_at + PICKUP_DELAY_HOURS (expected ~{expected_pickup_minutes}m, got {actual_pickup_minutes}m)"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_admin_pickup_target_update_does_not_create_shipment_or_reopen_cancel_window() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18119, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18119);
+    let (order_id, user_id, _inventory_marker) =
+        place_order_without_payment_verification(&db, 18119, tag, Some("cod")).await;
+    let detail_ids = split_order_into_two_lines(&db, order_id).await;
+    assert_eq!(detail_ids.len(), 2);
+
+    let moved_earlier = Utc::now() - chrono::Duration::hours(2);
+    let update_txn = db.begin().await.expect("update pickup target txn");
+    let update_resp = update_pickup_target(
+        &update_txn,
+        Request::new(UpdatePickupTargetRequest {
+            order_id,
+            pickup_target_at: moved_earlier.to_rfc3339(),
+            reason: Some("ops_pullin".to_string()),
+            actor_id: Some("admin:fulfillment".to_string()),
+        }),
+    )
+    .await
+    .expect("update pickup target earlier")
+    .into_inner();
+    update_txn.commit().await.expect("commit pickup update");
+
+    assert_eq!(update_resp.order_id, order_id);
+    assert_eq!(
+        update_resp.pickup_target_reason.as_deref(),
+        Some("ops_pullin")
+    );
+    assert_eq!(
+        update_resp.pickup_target_set_by.as_deref(),
+        Some("admin:fulfillment")
+    );
+    assert_eq!(
+        shipment_count(&db, order_id).await,
+        0,
+        "updating pickup target should not create shipment rows"
+    );
+
+    let cancel_txn = db.begin().await.expect("cancel txn");
+    cancel_order_items(
+        &cancel_txn,
+        Request::new(CancelOrderItemsRequest {
+            order_id,
+            order_detail_ids: vec![detail_ids[0]],
+            acting_user_id: Some(user_id),
+        }),
+    )
+    .await
+    .expect("pickup target change must not block valid in-window cancel");
+    cancel_txn.commit().await.expect("commit cancel");
+    assert_eq!(
+        order_status_name(&db, order_id).await,
+        "partially_cancelled"
+    );
+
+    let second_order_tag = unique_tag(19119);
+    let (locked_order_id, locked_user_id, _inventory_marker) =
+        place_order_without_payment_verification(&db, 18119, second_order_tag, Some("cod")).await;
+
+    let close_window_txn = db.begin().await.expect("close window txn");
+    close_window_txn
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "UPDATE Orders SET cancel_window_ends_at = UTC_TIMESTAMP() - INTERVAL 1 MINUTE WHERE OrderID = ?",
+            [locked_order_id.into()],
+        ))
+        .await
+        .expect("close cancel window");
+    close_window_txn
+        .commit()
+        .await
+        .expect("commit close window");
+
+    let moved_later = Utc::now() + chrono::Duration::hours(72);
+    let update_later_txn = db.begin().await.expect("update later txn");
+    update_pickup_target(
+        &update_later_txn,
+        Request::new(UpdatePickupTargetRequest {
+            order_id: locked_order_id,
+            pickup_target_at: moved_later.to_rfc3339(),
+            reason: Some("ops_delay".to_string()),
+            actor_id: Some("admin:fulfillment".to_string()),
+        }),
+    )
+    .await
+    .expect("update pickup target later");
+    update_later_txn
+        .commit()
+        .await
+        .expect("commit pickup target later");
+
+    let blocked_cancel_txn = db.begin().await.expect("blocked cancel txn");
+    let blocked = delete_order(
+        &blocked_cancel_txn,
+        Request::new(DeleteOrderRequest {
+            order_id: locked_order_id,
+            acting_user_id: Some(locked_user_id),
+        }),
+    )
+    .await
+    .expect_err("pickup_target update must not reopen cancel window");
+    assert_eq!(blocked.code(), tonic::Code::FailedPrecondition);
+    blocked_cancel_txn.rollback().await.ok();
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_manual_shipment_paths_use_shared_booking_validation() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18120, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18120);
+    let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18120, tag).await;
+
+    let prewindow_manual_txn = db.begin().await.expect("manual create prewindow txn");
+    let prewindow_manual = create_shipment(
+        &prewindow_manual_txn,
+        Request::new(CreateShipmentRequest {
+            order_id,
+            shiprocket_order_id: Some("manual_prewindow".to_string()),
+            awb_code: Some("AWB-MANUAL-PRE".to_string()),
+            carrier: Some("ManualCarrier".to_string()),
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
+        }),
+    )
+    .await
+    .expect_err("manual shipment creation must fail before earliest_booking_at");
+    assert_eq!(prewindow_manual.code(), tonic::Code::FailedPrecondition);
+    prewindow_manual_txn.rollback().await.ok();
+
+    let prewindow_admin_txn = db.begin().await.expect("admin shipped prewindow txn");
+    let prewindow_admin = admin_mark_order_shipped(
+        &prewindow_admin_txn,
+        Request::new(AdminMarkOrderShippedRequest {
+            order_id,
+            awb_code: None,
+            carrier: None,
+            shiprocket_book: Some(true),
+            shiprocket_order_id: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
+        }),
+    )
+    .await
+    .expect_err("admin booking must fail before earliest_booking_at");
+    assert_eq!(prewindow_admin.code(), tonic::Code::FailedPrecondition);
+    prewindow_admin_txn.rollback().await.ok();
+
+    make_order_eligible_for_delayed_booking(&db, order_id).await;
+
+    let manual_txn = db.begin().await.expect("manual create txn");
+    create_shipment(
+        &manual_txn,
+        Request::new(CreateShipmentRequest {
+            order_id,
+            shiprocket_order_id: Some("manual_after_window".to_string()),
+            awb_code: Some("AWB-MANUAL-OK".to_string()),
+            carrier: Some("ManualCarrier".to_string()),
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
+        }),
+    )
+    .await
+    .expect("manual path should pass shared validator after booking window opens");
+    manual_txn.commit().await.expect("commit manual create");
+
+    assert_eq!(shipment_count(&db, order_id).await, 1);
+    assert_eq!(
+        order_fulfillment_status(&db, order_id).await,
+        "booked",
+        "manual shipment creation must update fulfillment_status via shared path"
+    );
+
+    let replay_txn = db.begin().await.expect("manual replay txn");
+    let replay = create_shipment(
+        &replay_txn,
+        Request::new(CreateShipmentRequest {
+            order_id,
+            shiprocket_order_id: Some("manual_replay".to_string()),
+            awb_code: Some("AWB-MANUAL-REPLAY".to_string()),
+            carrier: Some("ManualCarrier".to_string()),
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
+        }),
+    )
+    .await
+    .expect_err("existing shipment must fail shared validator");
+    assert_eq!(replay.code(), tonic::Code::FailedPrecondition);
+    replay_txn.rollback().await.ok();
+
+    let cancel_txn = db.begin().await.expect("cancel booked txn");
+    let cancel_err = delete_order(
+        &cancel_txn,
+        Request::new(DeleteOrderRequest {
+            order_id,
+            acting_user_id: Some(user_id),
+        }),
+    )
+    .await
+    .expect_err("booked orders must stay non-cancellable");
+    assert_eq!(cancel_err.code(), tonic::Code::FailedPrecondition);
+    cancel_txn.rollback().await.ok();
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_delayed_worker_duplicate_run_does_not_create_duplicate_shipment() {
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18113, state.clone()).await;
@@ -1352,11 +1635,11 @@ async fn integration_cancel_after_window_is_blocked() {
     rewind_txn
         .execute(Statement::from_sql_and_values(
             sea_orm::DbBackend::MySql,
-            "UPDATE Orders SET created_at = UTC_TIMESTAMP() - INTERVAL 13 HOUR WHERE OrderID = ?",
+            "UPDATE Orders SET cancel_window_ends_at = UTC_TIMESTAMP() - INTERVAL 1 MINUTE WHERE OrderID = ?",
             [order_id.into()],
         ))
         .await
-        .expect("rewind created_at");
+        .expect("rewind cancel window");
     rewind_txn.commit().await.expect("commit rewind");
 
     let cancel_txn = db.begin().await.expect("cancel txn");
@@ -1397,16 +1680,7 @@ async fn integration_delayed_worker_books_only_active_items_after_partial_cancel
     .expect("partial cancel should succeed");
     cancel_txn.commit().await.expect("commit partial cancel");
 
-    let rewind_txn = db.begin().await.expect("rewind txn");
-    rewind_txn
-        .execute(Statement::from_sql_and_values(
-            sea_orm::DbBackend::MySql,
-            "UPDATE Orders SET created_at = UTC_TIMESTAMP() - INTERVAL 13 HOUR WHERE OrderID = ?",
-            [order_id.into()],
-        ))
-        .await
-        .expect("rewind created_at");
-    rewind_txn.commit().await.expect("commit rewind");
+    make_order_eligible_for_delayed_booking(&db, order_id).await;
 
     process_create_shipments_after_cancel_window(&db, 25)
         .await

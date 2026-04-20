@@ -19,6 +19,12 @@ pub struct Model {
     #[sea_orm(column_name = "OrderDate")]
     pub order_date: DateTimeUtc,
     pub created_at: DateTimeUtc,
+    pub cancel_window_ends_at: Option<DateTimeUtc>,
+    pub earliest_booking_at: Option<DateTimeUtc>,
+    pub pickup_target_at: Option<DateTimeUtc>,
+    pub pickup_target_reason: Option<String>,
+    pub pickup_target_set_by: Option<String>,
+    pub pickup_target_updated_at: Option<DateTimeUtc>,
     #[sea_orm(column_name = "ShippingAddressID")]
     pub shipping_address_id: i64,
     #[sea_orm(

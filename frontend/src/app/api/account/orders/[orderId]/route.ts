@@ -33,6 +33,10 @@ type OrderRow = {
   orderId: string;
   userId: string;
   orderDate: string;
+  cancelWindowEndsAt?: string | null;
+  earliestBookingAt?: string | null;
+  pickupTargetAt?: string | null;
+  fulfillmentStatus?: string | null;
   totalAmountPaise: string;
   totalAmountFormatted: string;
   statusId: string;
@@ -107,6 +111,10 @@ const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
     orderId
     userId
     orderDate
+    cancelWindowEndsAt
+    earliestBookingAt
+    pickupTargetAt
+    fulfillmentStatus
     totalAmountPaise
     totalAmountFormatted
     statusId

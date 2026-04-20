@@ -8,7 +8,9 @@ use chrono::Utc;
 use core_db_entities::entity::orders;
 use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
 use proto::proto::core::{CreateOrderRequest, OrdersResponse};
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ConnectionTrait, DatabaseTransaction, DbBackend, Statement,
+};
 use tonic::{Request, Response, Status};
 
 pub async fn create_order(
@@ -39,6 +41,12 @@ pub async fn create_order(
             user_id: ActiveValue::Set(user_id),
             order_date: ActiveValue::Set(order_date),
             created_at: ActiveValue::Set(order_date),
+            cancel_window_ends_at: ActiveValue::NotSet,
+            earliest_booking_at: ActiveValue::NotSet,
+            pickup_target_at: ActiveValue::NotSet,
+            pickup_target_reason: ActiveValue::NotSet,
+            pickup_target_set_by: ActiveValue::NotSet,
+            pickup_target_updated_at: ActiveValue::NotSet,
             shipping_address_id: ActiveValue::Set(shipping_address_id),
             total_amount: ActiveValue::Set(Some(paise_to_decimal(total_amount_paise))),
             status_id: ActiveValue::Set(status_id),
@@ -88,6 +96,34 @@ pub async fn create_order(
 
         match order.insert(txn).await {
             Ok(model) => {
+                txn.execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    r#"UPDATE Orders
+                       SET cancel_window_ends_at = COALESCE(
+                               cancel_window_ends_at,
+                               DATE_ADD(created_at, INTERVAL ? HOUR)
+                           ),
+                           earliest_booking_at = COALESCE(
+                               earliest_booking_at,
+                               COALESCE(cancel_window_ends_at, DATE_ADD(created_at, INTERVAL ? HOUR))
+                           ),
+                           pickup_target_at = COALESCE(
+                               pickup_target_at,
+                               DATE_ADD(created_at, INTERVAL ? HOUR)
+                           ),
+                           pickup_target_set_by = COALESCE(pickup_target_set_by, 'system'),
+                           pickup_target_reason = COALESCE(pickup_target_reason, 'order_created'),
+                           pickup_target_updated_at = COALESCE(pickup_target_updated_at, UTC_TIMESTAMP())
+                       WHERE OrderID = ?"#,
+                    [
+                        crate::order_policy::cancel_window_hours().into(),
+                        crate::order_policy::cancel_window_hours().into(),
+                        crate::order_policy::pickup_delay_hours().into(),
+                        model.order_id.into(),
+                    ],
+                ))
+                .await
+                .map_err(map_db_error_to_status)?;
                 let response = OrdersResponse {
                     items: vec![order_response::from_model(&model)],
                 };

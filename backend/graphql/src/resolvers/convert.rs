@@ -46,6 +46,10 @@ pub fn order_response_to_gql(o: OrderResponse) -> Order {
         public_order_ref: o.public_order_ref,
         refund_settlement_status: o.refund_settlement_status,
         payment_method: o.payment_method,
+        cancel_window_ends_at: o.cancel_window_ends_at,
+        earliest_booking_at: o.earliest_booking_at,
+        pickup_target_at: o.pickup_target_at,
+        fulfillment_status: o.fulfillment_status,
     }
 }
 

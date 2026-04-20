@@ -16,6 +16,7 @@ type OrderRow = {
   orderId: string;
   userId: string;
   orderDate: string;
+  cancelWindowEndsAt?: string | null;
   totalAmountPaise: string;
   totalAmountFormatted: string;
   statusId: string;
@@ -26,6 +27,7 @@ const ORDERS_QUERY = `query AccountOrders($search: SearchOrder!) {
     orderId
     userId
     orderDate
+    cancelWindowEndsAt
     totalAmountPaise
     totalAmountFormatted
     statusId

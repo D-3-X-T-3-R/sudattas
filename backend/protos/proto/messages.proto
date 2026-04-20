@@ -387,6 +387,21 @@ message AdminMarkOrderDeliveredResponse {
     int64 order_id = 1;
 }
 
+message UpdatePickupTargetRequest {
+    int64 order_id = 1;
+    string pickup_target_at = 2; // RFC3339
+    optional string reason = 3;
+    optional string actor_id = 4;
+}
+
+message UpdatePickupTargetResponse {
+    int64 order_id = 1;
+    string pickup_target_at = 2; // RFC3339
+    optional string pickup_target_reason = 3;
+    optional string pickup_target_set_by = 4;
+    string pickup_target_updated_at = 5; // RFC3339
+}
+
 message OrderResponse {
     int64 order_id = 1;
     int64 user_id = 2;
@@ -400,6 +415,10 @@ message OrderResponse {
     optional string refund_settlement_status = 8;
     // "prepaid" | "cod" (nullable for historical rows)
     optional string payment_method = 9;
+    optional string cancel_window_ends_at = 10;
+    optional string earliest_booking_at = 11;
+    optional string pickup_target_at = 12;
+    optional string fulfillment_status = 13;
 }
 
 message OrdersResponse {

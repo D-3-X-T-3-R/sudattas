@@ -5,7 +5,8 @@ use chrono::{DateTime, Utc};
 use core_db_entities::entity::orders;
 use proto::proto::core::{OrdersResponse, SearchOrderRequest};
 use sea_orm::{
-    ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect, QueryTrait,
+    ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend, EntityTrait, QueryFilter,
+    QuerySelect, QueryTrait, Statement,
 };
 use tonic::{Request, Response, Status};
 
@@ -45,10 +46,38 @@ pub async fn search_order(
         .await
     {
         Ok(models) => {
-            let items = models
-                .into_iter()
-                .map(|model| order_response::from_model(&model))
-                .collect();
+            let mut items = Vec::with_capacity(models.len());
+            for model in models {
+                let mut row = order_response::from_model(&model);
+                if let Some(extra) = txn
+                    .query_one(Statement::from_sql_and_values(
+                        DbBackend::MySql,
+                        r#"SELECT cancel_window_ends_at,
+                                  earliest_booking_at,
+                                  pickup_target_at
+                           FROM Orders
+                           WHERE OrderID = ?
+                           LIMIT 1"#,
+                        [model.order_id.into()],
+                    ))
+                    .await
+                    .map_err(map_db_error_to_status)?
+                {
+                    row.cancel_window_ends_at = extra
+                        .try_get::<DateTime<Utc>>("", "cancel_window_ends_at")
+                        .ok()
+                        .map(|v| v.to_rfc3339());
+                    row.earliest_booking_at = extra
+                        .try_get::<DateTime<Utc>>("", "earliest_booking_at")
+                        .ok()
+                        .map(|v| v.to_rfc3339());
+                    row.pickup_target_at = extra
+                        .try_get::<DateTime<Utc>>("", "pickup_target_at")
+                        .ok()
+                        .map(|v| v.to_rfc3339());
+                }
+                items.push(row);
+            }
 
             Ok(Response::new(OrdersResponse { items }))
         }

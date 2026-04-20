@@ -1,14 +1,14 @@
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CancelOrderItemsRequest,
     CreateOrderRequest, DeleteOrderRequest, EstimateCheckoutShippingRequest, PlaceOrderRequest,
-    SearchOrderRequest, SearchOrderStatusRequest, UpdateOrderRequest,
+    SearchOrderRequest, SearchOrderStatusRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
 };
 use tracing::instrument;
 
 use super::schema::{
     AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
     CheckoutShippingEstimate, CreateOrderInput, EstimateCheckoutShippingInput, NewOrder, Order,
-    OrderMutation, OrderStatus, SearchOrder,
+    OrderMutation, OrderStatus, PickupTargetUpdateResult, SearchOrder, UpdatePickupTargetInput,
 };
 use crate::resolvers::{
     convert,
@@ -268,4 +268,28 @@ pub(crate) async fn admin_mark_order_delivered(
         })
         .await?;
     Ok(true)
+}
+
+#[instrument]
+pub(crate) async fn update_pickup_target(
+    input: UpdatePickupTargetInput,
+    actor_id: Option<String>,
+) -> Result<PickupTargetUpdateResult, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .update_pickup_target(UpdatePickupTargetRequest {
+            order_id: parse_i64(&input.order_id, "order_id")?,
+            pickup_target_at: input.pickup_target_at,
+            reason: input.reason,
+            actor_id,
+        })
+        .await?;
+    let row = response.into_inner();
+    Ok(PickupTargetUpdateResult {
+        order_id: row.order_id.to_string(),
+        pickup_target_at: row.pickup_target_at,
+        pickup_target_reason: row.pickup_target_reason,
+        pickup_target_set_by: row.pickup_target_set_by,
+        pickup_target_updated_at: row.pickup_target_updated_at,
+    })
 }

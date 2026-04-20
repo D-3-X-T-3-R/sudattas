@@ -5,13 +5,13 @@ use crate::handlers::orders::update_order;
 use crate::integrations::shiprocket::{self, ShiprocketBooking};
 use crate::money::paise_to_decimal;
 use crate::order_state_machine;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use core_db_entities::entity::orders;
 use proto::proto::core::{CreateOrderEventRequest, UpdateOrderRequest};
 use sea_orm::{ConnectionTrait, DatabaseTransaction, DbBackend, EntityTrait, Statement};
 use serde_json::Value;
 use tonic::{Request, Status as TonicStatus};
-use tracing::warn;
+use tracing::{info, warn};
 
 #[derive(Debug, Clone)]
 pub struct ShipmentLogisticsRecord {
@@ -29,6 +29,15 @@ pub struct ShipmentLogisticsRecord {
     pub can_customer_cancel: bool,
     pub razorpay_refund_id: Option<String>,
     pub refund_status: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BookingValidation {
+    pub order_id: i64,
+    pub payment_method: String,
+    pub order_status_name: String,
+    pub earliest_booking_at: DateTime<Utc>,
+    pub pickup_target_at: DateTime<Utc>,
 }
 
 fn bool_to_i32(value: bool) -> i32 {
@@ -96,6 +105,151 @@ fn fulfillment_status_from_logistics(logistics_status: &str) -> &'static str {
 
 fn parse_dt_utc(row: &sea_orm::QueryResult, column: &str) -> Option<DateTime<Utc>> {
     row.try_get("", column).ok()
+}
+
+fn parse_bool_like(row: &sea_orm::QueryResult, column: &str) -> bool {
+    row.try_get::<i8>("", column)
+        .map(|v| v != 0)
+        .or_else(|_| row.try_get::<bool>("", column))
+        .unwrap_or(false)
+}
+
+fn cod_status_allows_booking(status_name: &str) -> bool {
+    matches!(status_name, "confirmed" | "partially_cancelled")
+}
+
+pub async fn validate_order_can_be_booked(
+    txn: &DatabaseTransaction,
+    order_id: i64,
+    now: DateTime<Utc>,
+    for_update: bool,
+) -> Result<BookingValidation, TonicStatus> {
+    let cancel_window_hours = crate::order_policy::cancel_window_hours();
+    let pickup_delay_hours = crate::order_policy::pickup_delay_hours();
+    let sql = if for_update {
+        r#"SELECT o.OrderID,
+                  s.StatusName AS order_status_name,
+                  LOWER(COALESCE(o.payment_method, 'prepaid')) AS payment_method,
+                  COALESCE(o.payment_status, 'pending') AS payment_status,
+                  o.fulfillment_status,
+                  COALESCE(o.earliest_booking_at, COALESCE(o.cancel_window_ends_at, DATE_ADD(o.created_at, INTERVAL ? HOUR))) AS earliest_booking_at,
+                  COALESCE(o.pickup_target_at, DATE_ADD(o.created_at, INTERVAL ? HOUR)) AS pickup_target_at,
+                  EXISTS (
+                      SELECT 1
+                      FROM OrderDetails od
+                      WHERE od.OrderID = o.OrderID
+                        AND od.item_status = 'active'
+                  ) AS has_active_items
+           FROM Orders o
+           JOIN OrderStatus s ON s.StatusID = o.StatusID
+           WHERE o.OrderID = ?
+           LIMIT 1
+           FOR UPDATE"#
+    } else {
+        r#"SELECT o.OrderID,
+                  s.StatusName AS order_status_name,
+                  LOWER(COALESCE(o.payment_method, 'prepaid')) AS payment_method,
+                  COALESCE(o.payment_status, 'pending') AS payment_status,
+                  o.fulfillment_status,
+                  COALESCE(o.earliest_booking_at, COALESCE(o.cancel_window_ends_at, DATE_ADD(o.created_at, INTERVAL ? HOUR))) AS earliest_booking_at,
+                  COALESCE(o.pickup_target_at, DATE_ADD(o.created_at, INTERVAL ? HOUR)) AS pickup_target_at,
+                  EXISTS (
+                      SELECT 1
+                      FROM OrderDetails od
+                      WHERE od.OrderID = o.OrderID
+                        AND od.item_status = 'active'
+                  ) AS has_active_items
+           FROM Orders o
+           JOIN OrderStatus s ON s.StatusID = o.StatusID
+           WHERE o.OrderID = ?
+           LIMIT 1"#
+    };
+
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            sql,
+            [
+                cancel_window_hours.into(),
+                pickup_delay_hours.into(),
+                order_id.into(),
+            ],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| TonicStatus::not_found(format!("Order {} not found", order_id)))?;
+
+    let order_status_name: String = row
+        .try_get("", "order_status_name")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    let payment_method: String = row
+        .try_get("", "payment_method")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    let payment_status: String = row
+        .try_get("", "payment_status")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    let fulfillment_status: String = row
+        .try_get("", "fulfillment_status")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    let earliest_booking_at: DateTime<Utc> = row
+        .try_get("", "earliest_booking_at")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    let pickup_target_at: DateTime<Utc> = row
+        .try_get("", "pickup_target_at")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    let has_active_items = parse_bool_like(&row, "has_active_items");
+
+    if !fulfillment_status.eq_ignore_ascii_case("not_created") {
+        return Err(TonicStatus::failed_precondition(
+            "Shipment already created for this order",
+        ));
+    }
+    if order_status_name.eq_ignore_ascii_case("cancelled") {
+        return Err(TonicStatus::failed_precondition(
+            "Cancelled orders cannot be booked",
+        ));
+    }
+    if !has_active_items {
+        return Err(TonicStatus::failed_precondition(
+            "No active line items available for shipment booking",
+        ));
+    }
+    if !crate::order_policy::is_booking_open(now, earliest_booking_at) {
+        return Err(TonicStatus::failed_precondition(
+            "Booking window has not opened for this order",
+        ));
+    }
+
+    if payment_method.eq_ignore_ascii_case("prepaid")
+        && !payment_status.eq_ignore_ascii_case("captured")
+    {
+        return Err(TonicStatus::failed_precondition(
+            "Prepaid order is not captured and cannot be booked",
+        ));
+    }
+    if payment_method.eq_ignore_ascii_case("cod") && !cod_status_allows_booking(&order_status_name)
+    {
+        return Err(TonicStatus::failed_precondition(
+            "COD order is not in a bookable state",
+        ));
+    }
+
+    if load_shipment_for_order(txn, order_id, for_update)
+        .await?
+        .is_some()
+    {
+        return Err(TonicStatus::failed_precondition(
+            "Shipment already created for this order",
+        ));
+    }
+
+    Ok(BookingValidation {
+        order_id,
+        payment_method,
+        order_status_name,
+        earliest_booking_at,
+        pickup_target_at,
+    })
 }
 
 async fn recompute_cod_payable_before_booking(
@@ -383,7 +537,24 @@ pub async fn ensure_shiprocket_booking_for_paid_order(
         }
     };
 
-    let pickup_at = Utc::now() + Duration::hours(crate::order_policy::pickup_delay_hours());
+    let pickup_row = txn
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            r#"SELECT COALESCE(pickup_target_at, DATE_ADD(created_at, INTERVAL ? HOUR)) AS pickup_target_at
+               FROM Orders
+               WHERE OrderID = ?
+               LIMIT 1"#,
+            [
+                crate::order_policy::pickup_delay_hours().into(),
+                order_id.into(),
+            ],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| TonicStatus::not_found(format!("Order {} not found", order_id)))?;
+    let pickup_at: DateTime<Utc> = pickup_row
+        .try_get("", "pickup_target_at")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
     if let Err(error) =
         shiprocket::schedule_pickup_for_shipment(booking.shiprocket_shipment_id.as_str(), pickup_at)
             .await
@@ -617,102 +788,51 @@ pub async fn cancel_order_via_logistics(
     Ok(order)
 }
 
-pub async fn create_shipments_after_cancel_window_batch(
+pub async fn book_order_after_validation(
     txn: &DatabaseTransaction,
-    batch_limit: u64,
-) -> Result<u64, TonicStatus> {
-    let window_hours = crate::order_policy::cancel_window_hours();
-    let eligibility_sql = format!(
-        r#"SELECT o.OrderID
-               FROM Orders o
-               JOIN OrderStatus s ON s.StatusID = o.StatusID
-                WHERE o.fulfillment_status = 'not_created'
-                  AND s.StatusName <> 'cancelled'
-                 AND EXISTS (
-                     SELECT 1
-                     FROM OrderDetails od
-                     WHERE od.OrderID = o.OrderID
-                       AND od.item_status = 'active'
-                  )
-                  AND UTC_TIMESTAMP() >= DATE_ADD(o.created_at, INTERVAL {window_hours} HOUR)
-                  AND (
-                      (LOWER(COALESCE(o.payment_method, 'prepaid')) = 'prepaid' AND o.payment_status = 'captured')
-                      OR
-                      (
-                          LOWER(COALESCE(o.payment_method, '')) = 'cod'
-                          AND s.StatusName IN ('confirmed', 'partially_cancelled')
-                      )
-                  )
-                ORDER BY o.OrderID ASC
-                LIMIT ?
-                FOR UPDATE SKIP LOCKED"#
-    );
-    let rows = txn
-        .query_all(Statement::from_sql_and_values(
-            DbBackend::MySql,
-            eligibility_sql,
-            [i64::try_from(batch_limit).unwrap_or(i64::MAX).into()],
-        ))
-        .await
-        .map_err(map_db_error_to_status)?;
+    order_id: i64,
+    now: DateTime<Utc>,
+    event_name: &'static str,
+) -> Result<i64, TonicStatus> {
+    let validation = validate_order_can_be_booked(txn, order_id, now, true).await?;
 
-    let mut processed = 0_u64;
-    for row in rows {
-        let order_id: i64 = row.try_get("", "OrderID").map_err(map_db_error_to_status)?;
-
+    if validation.payment_method.eq_ignore_ascii_case("cod") {
         recompute_cod_payable_before_booking(txn, order_id).await?;
+    }
 
-        if let Some(existing) = load_shipment_for_order(txn, order_id, true).await? {
-            txn.execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                "UPDATE Orders SET fulfillment_status = 'booked', updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
-                [order_id.into()],
-            ))
-            .await
-            .map_err(map_db_error_to_status)?;
-            txn.execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                "UPDATE Shipments SET can_customer_cancel = 0 WHERE shipment_id = ?",
-                [existing.shipment_id.into()],
-            ))
-            .await
-            .map_err(map_db_error_to_status)?;
-            processed += 1;
-            continue;
-        }
+    let booking = shiprocket::book_shipment_for_order(txn, order_id)
+        .await
+        .map_err(|error| {
+            warn!(
+                order_id,
+                error = %error,
+                "shipment booking failed during validated booking path"
+            );
+            TonicStatus::unavailable(error.to_string())
+        })?;
 
-        let booking = match shiprocket::book_shipment_for_order(txn, order_id).await {
-            Ok(v) => v,
+    let pickup_at = validation.pickup_target_at;
+    let (shipment_status, logistics_status, pickup_for_db) =
+        match shiprocket::schedule_pickup_for_shipment(
+            booking.shiprocket_shipment_id.as_str(),
+            pickup_at,
+        )
+        .await
+        {
+            Ok(_) => ("pickup_scheduled", "booked", Some(pickup_at)),
             Err(error) => {
                 warn!(
                     order_id,
                     error = %error,
-                    "delayed shipment booking failed; will retry on next worker tick"
+                    pickup_target_at = %pickup_at,
+                    "pickup scheduling failed after shipment booking; keeping shipment in booked state"
                 );
-                continue;
+                ("awb_assigned", "booked", None)
             }
         };
 
-        let pickup_at = Utc::now() + Duration::hours(crate::order_policy::pickup_delay_hours());
-        let (shipment_status, logistics_status, pickup_for_db) =
-            match shiprocket::schedule_pickup_for_shipment(
-                booking.shiprocket_shipment_id.as_str(),
-                pickup_at,
-            )
-            .await
-            {
-                Ok(_) => ("pickup_scheduled", "booked", Some(pickup_at)),
-                Err(error) => {
-                    warn!(
-                        order_id,
-                        error = %error,
-                        "delayed pickup scheduling failed; shipment kept as booked without pickup schedule"
-                    );
-                    ("awb_assigned", "booked", None)
-                }
-            };
-
-        txn.execute(Statement::from_sql_and_values(
+    let insert_result = txn
+        .execute(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"INSERT INTO Shipments (
                    order_id,
@@ -756,28 +876,116 @@ pub async fn create_shipments_after_cancel_window_batch(
         ))
         .await
         .map_err(map_db_error_to_status)?;
+    let shipment_id = i64::try_from(insert_result.last_insert_id())
+        .map_err(|_| TonicStatus::internal("shipment id overflow"))?;
 
-        txn.execute(Statement::from_sql_and_values(
+    txn.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "UPDATE Orders SET fulfillment_status = 'booked', updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
+        [order_id.into()],
+    ))
+    .await
+    .map_err(map_db_error_to_status)?;
+
+    crate::observability::log_operational_event(
+        event_name,
+        &[
+            ("order_id", order_id.to_string()),
+            (
+                "shiprocket_shipment_id",
+                booking.shiprocket_shipment_id.clone(),
+            ),
+            ("awb_code", booking.awb_code.clone()),
+            ("pickup_target_at", pickup_at.to_rfc3339()),
+            (
+                "booking_opened_at",
+                validation.earliest_booking_at.to_rfc3339(),
+            ),
+            ("order_status_name", validation.order_status_name),
+        ],
+    );
+    info!(
+        order_id,
+        shipment_id, "validated shipment booking completed"
+    );
+
+    Ok(shipment_id)
+}
+
+pub async fn create_shipments_after_cancel_window_batch(
+    txn: &DatabaseTransaction,
+    batch_limit: u64,
+) -> Result<u64, TonicStatus> {
+    let window_hours = crate::order_policy::cancel_window_hours();
+    let eligibility_sql = format!(
+        r#"SELECT o.OrderID
+               FROM Orders o
+               JOIN OrderStatus s ON s.StatusID = o.StatusID
+                WHERE o.fulfillment_status = 'not_created'
+                  AND s.StatusName <> 'cancelled'
+                 AND EXISTS (
+                     SELECT 1
+                     FROM OrderDetails od
+                     WHERE od.OrderID = o.OrderID
+                       AND od.item_status = 'active'
+                  )
+                  AND UTC_TIMESTAMP() >= COALESCE(
+                      o.earliest_booking_at,
+                      COALESCE(o.cancel_window_ends_at, DATE_ADD(o.created_at, INTERVAL {window_hours} HOUR))
+                  )
+                ORDER BY o.OrderID ASC
+                LIMIT ?
+                FOR UPDATE SKIP LOCKED"#
+    );
+    let rows = txn
+        .query_all(Statement::from_sql_and_values(
             DbBackend::MySql,
-            "UPDATE Orders SET fulfillment_status = 'booked', updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
-            [order_id.into()],
+            eligibility_sql,
+            [i64::try_from(batch_limit).unwrap_or(i64::MAX).into()],
         ))
         .await
         .map_err(map_db_error_to_status)?;
 
-        crate::observability::log_operational_event(
+    let mut processed = 0_u64;
+    for row in rows {
+        let order_id: i64 = row.try_get("", "OrderID").map_err(map_db_error_to_status)?;
+
+        if let Some(existing) = load_shipment_for_order(txn, order_id, true).await? {
+            txn.execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "UPDATE Orders SET fulfillment_status = 'booked', updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
+                [order_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+            txn.execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "UPDATE Shipments SET can_customer_cancel = 0 WHERE shipment_id = ?",
+                [existing.shipment_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+            processed += 1;
+            continue;
+        }
+
+        match book_order_after_validation(
+            txn,
+            order_id,
+            Utc::now(),
             "shipment_booked_after_cancel_window",
-            &[
-                ("order_id", order_id.to_string()),
-                (
-                    "shiprocket_shipment_id",
-                    booking.shiprocket_shipment_id.clone(),
-                ),
-                ("awb_code", booking.awb_code.clone()),
-                ("pickup_scheduled_for", pickup_at.to_rfc3339()),
-            ],
-        );
-        processed += 1;
+        )
+        .await
+        {
+            Ok(_) => processed += 1,
+            Err(error) => {
+                warn!(
+                    order_id,
+                    error = %error,
+                    "delayed shipment booking failed; will retry on next worker tick"
+                );
+            }
+        }
     }
     Ok(processed)
 }

@@ -173,7 +173,7 @@ fn apply_frozen_line_discounts(
     let gross_lines: Vec<i64> = lines.iter().map(|l| l.gross_line_minor.max(0)).collect();
     let discounts = allocate_discount_across_lines(&gross_lines, requested_discount_minor);
     let mut applied_discount_minor = 0_i64;
-    for (line, discount_minor) in lines.iter_mut().zip(discounts.into_iter()) {
+    for (line, discount_minor) in lines.iter_mut().zip(discounts) {
         let clamped = discount_minor.clamp(0, line.gross_line_minor.max(0));
         line.discount_minor = clamped;
         line.net_line_minor = line.gross_line_minor.saturating_sub(clamped).max(0);
@@ -609,15 +609,34 @@ pub async fn place_order(
         "place_order created order"
     );
 
+    let order_created_at = orders::Entity::find_by_id(create_order.order_id)
+        .one(txn)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?
+        .map(|o| o.created_at)
+        .ok_or_else(|| Status::internal("Created order not found for timestamp policy"))?;
+    let cancel_window_ends_at = crate::order_policy::cancel_window_deadline(order_created_at);
+    let earliest_booking_at = crate::order_policy::earliest_booking_deadline(order_created_at);
+    let pickup_target_at = crate::order_policy::default_pickup_target(order_created_at);
+
     txn.execute(Statement::from_sql_and_values(
         DbBackend::MySql,
         r#"UPDATE Orders
            SET payment_method = ?,
                payment_status = 'pending',
+               cancel_window_ends_at = ?,
+               earliest_booking_at = ?,
+               pickup_target_at = ?,
+               pickup_target_set_by = 'system',
+               pickup_target_reason = COALESCE(pickup_target_reason, 'order_created'),
+               pickup_target_updated_at = UTC_TIMESTAMP(),
                updated_at = UTC_TIMESTAMP()
            WHERE OrderID = ?"#,
         [
             normalized_payment_mode.clone().into(),
+            cancel_window_ends_at.into(),
+            earliest_booking_at.into(),
+            pickup_target_at.into(),
             create_order.order_id.into(),
         ],
     ))
@@ -798,9 +817,13 @@ pub async fn place_order(
         .await
         .map_err(|e| Status::internal(e.to_string()))?
         .ok_or_else(|| Status::internal("Created order not found"))?;
+    let mut wire_order = order_response::from_model(&persisted_order);
+    wire_order.cancel_window_ends_at = Some(cancel_window_ends_at.to_rfc3339());
+    wire_order.earliest_booking_at = Some(earliest_booking_at.to_rfc3339());
+    wire_order.pickup_target_at = Some(pickup_target_at.to_rfc3339());
 
     Ok(Response::new(OrdersResponse {
-        items: vec![order_response::from_model(&persisted_order)],
+        items: vec![wire_order],
     }))
 }
 

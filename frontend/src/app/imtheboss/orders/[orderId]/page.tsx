@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ListOrdered, Package } from "lucide-react";
@@ -9,13 +9,38 @@ import { SectionHeading } from "@/components/ui/typography";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { fetchOrderStatuses } from "@/lib/admin-queries";
-import { fetchAdminOrderById, type AdminOrderDetail } from "@/lib/admin-order-detail";
+import {
+  fetchAdminOrderById,
+  updateAdminPickupTarget,
+  type AdminOrderDetail,
+} from "@/lib/admin-order-detail";
 import { OrderDetailStatusEditor } from "@/domains/admin/orders/components/order-detail-status-editor";
 import { toRouteFailureUi } from "@/lib/route-state";
 import { formatOrderDate } from "@/domains/admin/orders/utils";
 
+function toLocalDateTimeInput(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  const hour = `${d.getHours()}`.padStart(2, "0");
+  const minute = `${d.getMinutes()}`.padStart(2, "0");
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+function localDateTimeToIso(localRaw: string): string | null {
+  const trimmed = localRaw.trim();
+  if (!trimmed) return null;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 // eslint-disable-next-line max-lines-per-function
 export default function AdminOrderDetailPage() {
+  const queryClient = useQueryClient();
   const params = useParams();
   const orderId =
     typeof params?.orderId === "string"
@@ -39,6 +64,34 @@ export default function AdminOrderDetailPage() {
     queryKey: ["admin", "order", orderId],
     queryFn: () => fetchAdminOrderById(orderId),
     enabled: Boolean(orderId),
+  });
+  const [pickupTargetDraft, setPickupTargetDraft] = useState("");
+  const [pickupTargetDirty, setPickupTargetDirty] = useState(false);
+  const [pickupReasonDraft, setPickupReasonDraft] = useState("");
+  const pickupTargetValue = pickupTargetDirty
+    ? pickupTargetDraft
+    : toLocalDateTimeInput(order?.pickupTargetAt);
+
+  const pickupTargetMutation = useMutation({
+    mutationFn: async () => {
+      if (!order) throw new Error("Order not loaded");
+      const pickupTargetAt = localDateTimeToIso(pickupTargetValue);
+      if (!pickupTargetAt) {
+        throw new Error("Pickup target must be a valid date/time");
+      }
+      return updateAdminPickupTarget({
+        orderId: order.orderId,
+        pickupTargetAt,
+        reason: pickupReasonDraft.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      setPickupTargetDirty(false);
+      setPickupTargetDraft("");
+      setPickupReasonDraft("");
+      queryClient.invalidateQueries({ queryKey: ["admin", "order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
   });
 
   const errorUi = isError ? toRouteFailureUi("admin", error) : null;
@@ -144,6 +197,68 @@ export default function AdminOrderDetailPage() {
                     <dd className="mt-0.5 text-sm text-[var(--color-ink)]">{refundTrackingNote}</dd>
                   </div>
                 ) : null}
+                <div className="sm:col-span-2">
+                  <dt className="text-[var(--color-muted)]">Lifecycle timestamps</dt>
+                  <dd className="mt-0.5 space-y-1 text-sm text-[var(--color-ink)]">
+                    <p>
+                      Cancel window ends:{" "}
+                      <span className="font-mono">
+                        {order.cancelWindowEndsAt ? formatOrderDate(order.cancelWindowEndsAt) : "N/A"}
+                      </span>
+                    </p>
+                    <p>
+                      Earliest booking at:{" "}
+                      <span className="font-mono">
+                        {order.earliestBookingAt ? formatOrderDate(order.earliestBookingAt) : "N/A"}
+                      </span>
+                    </p>
+                    <p>
+                      Pickup target:{" "}
+                      <span className="font-mono">
+                        {order.pickupTargetAt ? formatOrderDate(order.pickupTargetAt) : "N/A"}
+                      </span>
+                    </p>
+                  </dd>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_auto] sm:items-end">
+                    <label className="text-xs text-[var(--color-muted)]">
+                      Pickup target
+                      <input
+                        type="datetime-local"
+                        value={pickupTargetValue}
+                        onChange={(e) => {
+                          setPickupTargetDirty(true);
+                          setPickupTargetDraft(e.target.value);
+                        }}
+                        className="mt-1 h-9 w-full rounded-md border border-[var(--color-line)] bg-white px-2 text-sm text-[var(--color-ink)]"
+                      />
+                    </label>
+                    <label className="text-xs text-[var(--color-muted)]">
+                      Reason
+                      <input
+                        type="text"
+                        value={pickupReasonDraft}
+                        onChange={(e) => setPickupReasonDraft(e.target.value)}
+                        placeholder="ops reprioritization"
+                        className="mt-1 h-9 w-full rounded-md border border-[var(--color-line)] bg-white px-2 text-sm text-[var(--color-ink)]"
+                      />
+                    </label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={pickupTargetMutation.isPending || !pickupTargetValue.trim()}
+                      onClick={() => pickupTargetMutation.mutate()}
+                    >
+                      {pickupTargetMutation.isPending ? "Updating..." : "Update pickup target"}
+                    </Button>
+                  </div>
+                  {pickupTargetMutation.isError ? (
+                    <p className="mt-2 text-xs text-rose-700">
+                      {pickupTargetMutation.error instanceof Error
+                        ? pickupTargetMutation.error.message
+                        : "Could not update pickup target"}
+                    </p>
+                  ) : null}
+                </div>
                 <div>
                   <dt className="text-[var(--color-muted)]">Shipping address ID</dt>
                   <dd className="mt-0.5 font-mono text-[var(--color-ink)]">{order.shippingAddressId}</dd>

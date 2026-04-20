@@ -5,9 +5,9 @@ const ORDER_ROOTS = [
   "searchOrderStatus",
   "updateOrder",
   "createOrder",
+  "updatePickupTarget",
 ];
 
 export async function POST(request: Request) {
   return forwardAdminGraphql(request, { allowedRoots: ORDER_ROOTS });
 }
-

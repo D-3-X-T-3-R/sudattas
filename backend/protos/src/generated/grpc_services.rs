@@ -713,6 +713,37 @@ pub struct AdminMarkOrderDeliveredResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdatePickupTargetRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+    /// RFC3339
+    #[prost(string, tag = "2")]
+    pub pickup_target_at: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub reason: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub actor_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdatePickupTargetResponse {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+    /// RFC3339
+    #[prost(string, tag = "2")]
+    pub pickup_target_at: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub pickup_target_reason: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub pickup_target_set_by: ::core::option::Option<::prost::alloc::string::String>,
+    /// RFC3339
+    #[prost(string, tag = "5")]
+    pub pickup_target_updated_at: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OrderResponse {
     #[prost(int64, tag = "1")]
     pub order_id: i64,
@@ -735,6 +766,14 @@ pub struct OrderResponse {
     /// "prepaid" | "cod" (nullable for historical rows)
     #[prost(string, optional, tag = "9")]
     pub payment_method: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "10")]
+    pub cancel_window_ends_at: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "11")]
+    pub earliest_booking_at: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "12")]
+    pub pickup_target_at: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "13")]
+    pub fulfillment_status: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -3564,6 +3603,33 @@ pub mod grpc_services_client {
                         "grpc_services.GRPCServices",
                         "AdminMarkOrderDelivered",
                     ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn update_pickup_target(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdatePickupTargetRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::UpdatePickupTargetResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/UpdatePickupTarget",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "UpdatePickupTarget"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -6491,6 +6557,13 @@ pub mod grpc_services_server {
             tonic::Response<super::AdminMarkOrderDeliveredResponse>,
             tonic::Status,
         >;
+        async fn update_pickup_target(
+            &self,
+            request: tonic::Request<super::UpdatePickupTargetRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::UpdatePickupTargetResponse>,
+            tonic::Status,
+        >;
         async fn search_order_status(
             &self,
             request: tonic::Request<super::SearchOrderStatusRequest>,
@@ -8881,6 +8954,53 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = AdminMarkOrderDeliveredSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/UpdatePickupTarget" => {
+                    #[allow(non_camel_case_types)]
+                    struct UpdatePickupTargetSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::UpdatePickupTargetRequest>
+                    for UpdatePickupTargetSvc<T> {
+                        type Response = super::UpdatePickupTargetResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::UpdatePickupTargetRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::update_pickup_target(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = UpdatePickupTargetSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

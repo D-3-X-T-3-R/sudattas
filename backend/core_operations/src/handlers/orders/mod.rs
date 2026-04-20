@@ -21,8 +21,10 @@ pub use resolve_needs_review::*;
 
 pub mod admin_mark_delivered;
 pub mod admin_mark_shipped;
+pub mod update_pickup_target;
 pub use admin_mark_delivered::*;
 pub use admin_mark_shipped::*;
+pub use update_pickup_target::*;
 
 pub mod search_order_status;
 pub use search_order_status::*;

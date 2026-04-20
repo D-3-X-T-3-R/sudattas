@@ -60,7 +60,8 @@ use crate::resolvers::{
         self,
         schema::{
             AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
-            CreateOrderInput, NewOrder, Order, OrderMutation,
+            CreateOrderInput, NewOrder, Order, OrderMutation, PickupTargetUpdateResult,
+            UpdatePickupTargetInput,
         },
     },
     payment_intents::{
@@ -628,6 +629,19 @@ impl MutationRoot {
     ) -> FieldResult<bool> {
         require_admin(context)?;
         orders::handlers::admin_mark_order_delivered(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: adjust pickup target timestamp for operations planning.
+    #[instrument(err, ret)]
+    async fn update_pickup_target(
+        context: &Context,
+        input: UpdatePickupTargetInput,
+    ) -> FieldResult<PickupTargetUpdateResult> {
+        require_admin(context)?;
+        let actor = context.user_id().map(std::string::ToString::to_string);
+        orders::handlers::update_pickup_target(input, actor)
             .await
             .map_err(|e| e.into_field_error())
     }
