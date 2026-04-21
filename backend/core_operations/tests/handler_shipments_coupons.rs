@@ -8,17 +8,36 @@ use proto::proto::core::{
     ValidateCouponRequest,
 };
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
+use std::collections::BTreeMap;
 use tonic::Request;
 
 #[tokio::test]
 async fn create_shipment_success() {
     use core_operations::handlers::shipments::create_shipment;
 
+    let mut booking_validation_row = BTreeMap::new();
+    booking_validation_row.insert("OrderID", 100_i64.into());
+    booking_validation_row.insert("order_status_name", "confirmed".into());
+    booking_validation_row.insert("payment_method", "prepaid".into());
+    booking_validation_row.insert("payment_status", "captured".into());
+    booking_validation_row.insert("fulfillment_status", "not_created".into());
+    booking_validation_row.insert("earliest_booking_at", Utc::now().into());
+    booking_validation_row.insert("pickup_target_at", Utc::now().into());
+    booking_validation_row.insert("has_active_items", 1_i8.into());
+
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_exec_results(vec![MockExecResult {
-            last_insert_id: 1,
-            rows_affected: 1,
-        }])
+        .append_query_results(vec![vec![booking_validation_row]])
+        .append_query_results(vec![Vec::<shipments::Model>::new()])
+        .append_exec_results(vec![
+            MockExecResult {
+                last_insert_id: 1,
+                rows_affected: 1,
+            },
+            MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            },
+        ])
         .append_query_results(vec![vec![shipments::Model {
             shipment_id: 1,
             order_id: 100,
@@ -32,13 +51,13 @@ async fn create_shipment_success() {
             quoted_shipping_quote_payload: None,
             shiprocket_status_id: None,
             shiprocket_status_label: None,
-            shipment_status: ShipmentStatus::InTransit,
+            shipment_status: ShipmentStatus::AwbAssigned,
             tracking_events: None,
             created_at: None,
             delivered_at: None,
             pickup_scheduled_for: None,
-            logistics_status: None,
-            can_customer_cancel: 1,
+            logistics_status: Some("booked".to_string()),
+            can_customer_cancel: 0,
             razorpay_refund_id: None,
             refund_status: None,
             refund_initiated_at: None,
@@ -66,7 +85,7 @@ async fn create_shipment_success() {
     assert_eq!(res.items[0].shiprocket_order_id.as_deref(), Some("sr_123"));
     assert_eq!(res.items[0].awb_code.as_deref(), Some("AWB456"));
     assert_eq!(res.items[0].carrier.as_deref(), Some("DTDC"));
-    assert_eq!(res.items[0].status, "in_transit");
+    assert_eq!(res.items[0].status, "awb_assigned");
 }
 
 #[tokio::test]

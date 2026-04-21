@@ -23,8 +23,8 @@ use proto::proto::core::{
     CreateRefundRequest, CreateUserRequest, PlaceOrderRequest, UpdateOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
-    TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DatabaseBackend,
+    EntityTrait, QueryFilter, Statement, TransactionTrait,
 };
 use tonic::{Code, Request};
 
@@ -40,6 +40,21 @@ async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> 
     .await
     .expect("insert OrderStatus");
     m.status_id
+}
+
+async fn make_order_booking_eligible(txn: &sea_orm::DatabaseTransaction, order_id: i64) {
+    let _ = txn
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            r#"UPDATE Orders
+               SET earliest_booking_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   cancel_window_ends_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   payment_status = 'captured'
+               WHERE OrderID = ?"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("make order booking-eligible");
 }
 
 /// Place order; return (order_id, user_id, shipping_id, total_paise).
@@ -216,6 +231,8 @@ async fn transition_order_to_delivered(
     .await
     .expect("update to processing");
 
+    make_order_booking_eligible(txn, order_id).await;
+
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         txn,
         Request::new(AdminMarkOrderShippedRequest {
@@ -276,12 +293,14 @@ async fn transition_order_to_shipped(
     .await
     .expect("update to processing");
 
+    make_order_booking_eligible(txn, order_id).await;
+
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         txn,
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
-            awb_code: None,
-            carrier: None,
+            awb_code: Some("AWBREF-SHIPPED".to_string()),
+            carrier: Some("Carrier".to_string()),
             shiprocket_book: None,
             shiprocket_order_id: None,
             shiprocket_status_id: None,

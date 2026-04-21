@@ -511,6 +511,21 @@ async fn integration_shipped_delivered_enqueue_outbox_events() {
     .await
     .expect("update to processing");
 
+    // Shipping handlers now enforce shared booking eligibility:
+    // booking window must be open and prepaid orders must be captured.
+    let _ = txn
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::MySql,
+            r#"UPDATE Orders
+               SET earliest_booking_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   cancel_window_ends_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   payment_status = 'captured'
+               WHERE OrderID = ?"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("make order booking-eligible for shipped event test");
+
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
         Request::new(AdminMarkOrderShippedRequest {

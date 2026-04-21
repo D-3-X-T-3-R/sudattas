@@ -28,6 +28,18 @@ CREATE TABLE IF NOT EXISTS RefundAttempts (
         FOREIGN KEY (order_id) REFERENCES Orders (OrderID)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-ALTER TABLE Orders
-    ADD COLUMN refund_settlement_status VARCHAR(32) NULL DEFAULT NULL
-        COMMENT 'refund_pending|refund_processed|refund_failed|refund_not_applicable';
+SET @refund_settlement_status_exists := (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'Orders'
+      AND column_name = 'refund_settlement_status'
+);
+SET @refund_settlement_status_sql := IF(
+    @refund_settlement_status_exists = 0,
+    'ALTER TABLE Orders ADD COLUMN refund_settlement_status VARCHAR(32) NULL DEFAULT NULL COMMENT ''refund_pending|refund_processed|refund_failed|refund_not_applicable''',
+    'SELECT 1'
+);
+PREPARE refund_settlement_status_stmt FROM @refund_settlement_status_sql;
+EXECUTE refund_settlement_status_stmt;
+DEALLOCATE PREPARE refund_settlement_status_stmt;

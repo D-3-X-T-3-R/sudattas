@@ -22,8 +22,8 @@ use proto::proto::core::{
     CreateUserRequest, DeleteOrderRequest, PlaceOrderRequest, UpdateOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
-    TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, EntityTrait,
+    QueryFilter, Statement, TransactionTrait,
 };
 use tonic::{Code, Request};
 
@@ -39,6 +39,21 @@ async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> 
     .await
     .expect("insert OrderStatus");
     m.status_id
+}
+
+async fn make_order_booking_eligible(txn: &sea_orm::DatabaseTransaction, order_id: i64) {
+    let _ = txn
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::MySql,
+            r#"UPDATE Orders
+               SET earliest_booking_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   cancel_window_ends_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   payment_status = 'captured'
+               WHERE OrderID = ?"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("make order booking-eligible");
 }
 
 /// Build user + shipping + one product/variant/inventory + one cart item, place order; return (order_id, user_id, shipping_id, variant_id, total_paise).
@@ -356,6 +371,8 @@ async fn integration_admin_mark_shipped_creates_shipment() {
     .await
     .expect("update to processing");
 
+    make_order_booking_eligible(&txn, order_id).await;
+
     let ship_res = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
         Request::new(AdminMarkOrderShippedRequest {
@@ -436,6 +453,8 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
     )
     .await
     .expect("update to processing");
+
+    make_order_booking_eligible(&txn, order_id).await;
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
@@ -521,6 +540,8 @@ async fn integration_admin_mark_delivered_transitions_to_delivered() {
     .await
     .expect("update to processing");
 
+    make_order_booking_eligible(&txn, order_id).await;
+
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
         Request::new(AdminMarkOrderShippedRequest {
@@ -605,6 +626,8 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
     )
     .await
     .expect("confirmed → processing");
+
+    make_order_booking_eligible(&txn, order_id).await;
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
