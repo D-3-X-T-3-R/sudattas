@@ -74,14 +74,14 @@ fn load_live_env_from_repo() {
     }
 }
 
-fn live_context() -> Option<LiveContext> {
+fn live_context() -> Result<LiveContext, String> {
     load_live_env_from_repo();
-    let enabled = std::env::var("RUN_LIVE_LOGISTICS_TESTS")
-        .ok()
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-    if !enabled {
-        return None;
+    let flag_value = std::env::var("RUN_LIVE_LOGISTICS_TESTS").ok();
+    if flag_value.as_deref() != Some("1") {
+        let current = flag_value.unwrap_or_else(|| "<unset>".to_string());
+        return Err(format!(
+            "RUN_LIVE_LOGISTICS_TESTS must be exactly '1' (current: {current})"
+        ));
     }
     for key in [
         "SHIPROCKET_EMAIL",
@@ -90,11 +90,21 @@ fn live_context() -> Option<LiveContext> {
         "RAZORPAY_KEY_ID",
         "RAZORPAY_KEY_SECRET",
     ] {
-        std::env::var(key).ok().filter(|v| !v.trim().is_empty())?;
+        let value = std::env::var(key).ok().filter(|v| !v.trim().is_empty());
+        if value.is_none() {
+            return Err(format!("missing required env: {key}"));
+        }
     }
-    Some(LiveContext {
-        db_url: test_db_url_optional()?,
-    })
+    let db_url = test_db_url_optional().ok_or_else(|| {
+        "TEST_DATABASE_URL (or DATABASE_URL fallback) is not configured".to_string()
+    })?;
+    Ok(LiveContext { db_url })
+}
+
+fn print_live_skip_message(reason: &str) {
+    eprintln!(
+        "skipping live logistics test: {reason}. To enable, set RUN_LIVE_LOGISTICS_TESTS=1 and provide required live credentials."
+    );
 }
 
 fn unique_tag() -> i64 {
@@ -929,9 +939,12 @@ async fn cleanup_live_order(
 #[tokio::test]
 #[ignore = "opt-in live logistics verification; creates a real Shiprocket order and cancels it before exit"]
 async fn live_payment_success_auto_books_shiprocket_and_cleans_up() {
-    let Some(ctx) = live_context() else {
-        eprintln!("skipping live logistics test; RUN_LIVE_LOGISTICS_TESTS or credentials missing");
-        return;
+    let ctx = match live_context() {
+        Ok(ctx) => ctx,
+        Err(reason) => {
+            print_live_skip_message(&reason);
+            return;
+        }
     };
     let db = Database::connect(&ctx.db_url).await.expect("connect");
     let tag = unique_tag();
@@ -994,9 +1007,12 @@ async fn live_payment_success_auto_books_shiprocket_and_cleans_up() {
 #[tokio::test]
 #[ignore = "opt-in live logistics verification; exercises real Razorpay test-mode refund and cancels the Shiprocket order"]
 async fn live_pre_pickup_cancel_refunds_once_and_is_idempotent() {
-    let Some(ctx) = live_context() else {
-        eprintln!("skipping live logistics test; RUN_LIVE_LOGISTICS_TESTS or credentials missing");
-        return;
+    let ctx = match live_context() {
+        Ok(ctx) => ctx,
+        Err(reason) => {
+            print_live_skip_message(&reason);
+            return;
+        }
     };
     let db = Database::connect(&ctx.db_url).await.expect("connect");
     let tag = unique_tag();

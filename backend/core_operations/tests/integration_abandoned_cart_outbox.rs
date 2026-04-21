@@ -312,6 +312,10 @@ async fn place_order_setup(
     txn: &sea_orm::DatabaseTransaction,
     now_tag: i64,
 ) -> (i64, i64, i64, i64) {
+    // Make checkout deterministic in CI/local by ensuring this test order
+    // always qualifies for free shipping and never needs a live quote.
+    std::env::set_var("FREE_SHIPPING_THRESHOLD_MINOR", "100000");
+
     let _ = ensure_order_status(txn, "pending").await;
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
