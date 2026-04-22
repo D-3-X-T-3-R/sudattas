@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_order_state -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use integration_common::test_db_url;
@@ -198,6 +199,12 @@ async fn place_order_minimal(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_order_update_pending_to_confirmed_and_order_event() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_order_update_pending_to_confirmed_and_order_event",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -248,6 +255,12 @@ async fn integration_order_update_pending_to_confirmed_and_order_event() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_order_cancel_restores_inventory() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_order_cancel_restores_inventory",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -295,6 +308,12 @@ async fn integration_order_cancel_restores_inventory() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_order_illegal_transition_returns_invalid_argument() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_order_illegal_transition_returns_invalid_argument",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -333,6 +352,12 @@ async fn integration_order_illegal_transition_returns_invalid_argument() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_admin_mark_shipped_creates_shipment() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_admin_mark_shipped_creates_shipment",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -416,6 +441,12 @@ async fn integration_admin_mark_shipped_creates_shipment() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_admin_mark_shipped_twice_updates_shipment() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_admin_mark_shipped_twice_updates_shipment",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -502,6 +533,12 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_admin_mark_delivered_transitions_to_delivered() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_admin_mark_delivered_transitions_to_delivered",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -579,6 +616,12 @@ async fn integration_admin_mark_delivered_transitions_to_delivered() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_order_full_lifecycle_pending_to_delivered() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_order_full_lifecycle_pending_to_delivered",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");

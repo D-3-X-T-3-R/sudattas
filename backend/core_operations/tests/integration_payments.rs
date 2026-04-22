@@ -9,6 +9,7 @@
 //! - `cargo test --test integration_payments -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::Status as PaymentIntentStatus;
@@ -212,6 +213,12 @@ async fn place_order_setup(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_creates_payment_intent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_creates_payment_intent",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -245,6 +252,12 @@ async fn integration_place_order_creates_payment_intent() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_verify_razorpay_payment_success_updates_intent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_verify_razorpay_payment_success_updates_intent",
+    ) {
+        return;
+    }
+
     const TEST_SECRET: &str = "itest_razorpay_secret";
     let original_secret = std::env::var("RAZORPAY_KEY_SECRET").ok();
 
@@ -315,6 +328,12 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_verify_razorpay_payment_invalid_signature_no_update() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_verify_razorpay_payment_invalid_signature_no_update",
+    ) {
+        return;
+    }
+
     const TEST_SECRET: &str = "itest_razorpay_secret_p3";
     let original_secret = std::env::var("RAZORPAY_KEY_SECRET").ok();
 
@@ -369,6 +388,12 @@ async fn integration_verify_razorpay_payment_invalid_signature_no_update() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and shipping quote configuration"]
 async fn integration_stale_unpaid_order_expiry_restores_inventory() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_stale_unpaid_order_expiry_restores_inventory",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");

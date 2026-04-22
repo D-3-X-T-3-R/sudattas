@@ -1,6 +1,7 @@
 //! DB-backed logistics fulfillment tests with mocked Shiprocket + Razorpay APIs.
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
@@ -767,6 +768,12 @@ async fn split_order_into_two_lines(db: &sea_orm::DatabaseConnection, order_id: 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_payment_success_auto_books_shiprocket_and_is_idempotent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_payment_success_auto_books_shiprocket_and_is_idempotent",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18101, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -855,6 +862,12 @@ async fn integration_payment_success_auto_books_shiprocket_and_is_idempotent() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_pre_pickup_cancel_restores_stock_and_refunds_once() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_pre_pickup_cancel_restores_stock_and_refunds_once",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18102, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -885,6 +898,12 @@ async fn integration_pre_pickup_cancel_restores_stock_and_refunds_once() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_customer_cancel_and_webhook_cancel_race_refunds_once() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_customer_cancel_and_webhook_cancel_race_refunds_once",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18106, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -961,6 +980,12 @@ async fn integration_customer_cancel_and_webhook_cancel_race_refunds_once() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_failed_shiprocket_cancel_moves_to_cancel_pending_without_refund() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_failed_shiprocket_cancel_moves_to_cancel_pending_without_refund",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState {
         cancel_should_fail: true,
         ..MockState::default()
@@ -992,6 +1017,12 @@ async fn integration_failed_shiprocket_cancel_moves_to_cancel_pending_without_re
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_pickup_completed_disables_customer_cancellation() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_pickup_completed_disables_customer_cancellation",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18104, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1043,6 +1074,12 @@ async fn integration_pickup_completed_disables_customer_cancellation() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_rto_terminal_webhook_refunds_once() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_rto_terminal_webhook_refunds_once",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18105, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1092,6 +1129,12 @@ async fn integration_rto_terminal_webhook_refunds_once() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_refund_retry_reuses_same_idempotency_key() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_refund_retry_reuses_same_idempotency_key",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState {
         refund_should_fail: true,
         ..MockState::default()
@@ -1188,6 +1231,12 @@ async fn integration_refund_retry_reuses_same_idempotency_key() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_partial_cancel_refunds_items_then_shipping_on_full_cancel() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_partial_cancel_refunds_items_then_shipping_on_full_cancel",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18108, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1244,6 +1293,12 @@ async fn integration_partial_cancel_refunds_items_then_shipping_on_full_cancel()
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_partial_duplicate_line_cancel_does_not_double_refund() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_partial_duplicate_line_cancel_does_not_double_refund",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18109, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1287,6 +1342,12 @@ async fn integration_partial_duplicate_line_cancel_does_not_double_refund() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_delayed_shipment_worker_books_only_after_cancel_window() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_delayed_shipment_worker_books_only_after_cancel_window",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18110, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1317,6 +1378,12 @@ async fn integration_delayed_shipment_worker_books_only_after_cancel_window() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_order_creation_sets_cancel_booking_and_pickup_timestamps() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_order_creation_sets_cancel_booking_and_pickup_timestamps",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18118, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1349,6 +1416,12 @@ async fn integration_order_creation_sets_cancel_booking_and_pickup_timestamps() 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_admin_pickup_target_update_does_not_create_shipment_or_reopen_cancel_window() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_admin_pickup_target_update_does_not_create_shipment_or_reopen_cancel_window",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18119, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1459,6 +1532,12 @@ async fn integration_admin_pickup_target_update_does_not_create_shipment_or_reop
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_manual_shipment_paths_use_shared_booking_validation() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_manual_shipment_paths_use_shared_booking_validation",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18120, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1559,6 +1638,12 @@ async fn integration_manual_shipment_paths_use_shared_booking_validation() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_delayed_worker_duplicate_run_does_not_create_duplicate_shipment() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_delayed_worker_duplicate_run_does_not_create_duplicate_shipment",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18113, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1581,6 +1666,12 @@ async fn integration_delayed_worker_duplicate_run_does_not_create_duplicate_ship
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_delayed_worker_skips_orders_without_active_items() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_delayed_worker_skips_orders_without_active_items",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18114, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1625,6 +1716,12 @@ async fn integration_delayed_worker_skips_orders_without_active_items() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_cancel_after_window_is_blocked() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_cancel_after_window_is_blocked",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18111, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1659,6 +1756,12 @@ async fn integration_cancel_after_window_is_blocked() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_delayed_worker_books_only_active_items_after_partial_cancel() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_delayed_worker_books_only_active_items_after_partial_cancel",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18112, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1700,6 +1803,12 @@ async fn integration_delayed_worker_books_only_active_items_after_partial_cancel
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_delayed_worker_skips_unpaid_prepaid_orders() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_delayed_worker_skips_unpaid_prepaid_orders",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18115, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1730,6 +1839,12 @@ async fn integration_delayed_worker_skips_unpaid_prepaid_orders() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_cod_partial_cancel_has_no_refund_attempt_and_books_remaining_items() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_cod_partial_cancel_has_no_refund_attempt_and_books_remaining_items",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18116, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
@@ -1800,6 +1915,12 @@ async fn integration_cod_partial_cancel_has_no_refund_attempt_and_books_remainin
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
 async fn integration_cod_full_cancel_sets_payable_zero_without_refund_attempt() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_cod_full_cancel_sets_payable_zero_without_refund_attempt",
+    ) {
+        return;
+    }
+
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18117, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");

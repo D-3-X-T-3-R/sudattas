@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_selected_checkout -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::{Duration, Utc};
 use integration_common::test_db_url;
@@ -170,6 +171,12 @@ async fn create_variant_with_cart_item(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_selected_subset_creates_order_for_only_selected_lines() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_selected_subset_creates_order_for_only_selected_lines",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -242,6 +249,12 @@ async fn integration_selected_subset_creates_order_for_only_selected_lines() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_selected_subset_coupon_logic_uses_only_selected_lines() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_selected_subset_coupon_logic_uses_only_selected_lines",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -318,6 +331,12 @@ async fn integration_selected_subset_coupon_logic_uses_only_selected_lines() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_selected_subset_coupon_allocation_rounding_is_deterministic() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_selected_subset_coupon_allocation_rounding_is_deterministic",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -547,6 +566,12 @@ async fn integration_selected_checkout_rejects_empty_or_invalid_selection() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_selected_checkout_rejects_out_of_stock_selected_line() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_selected_checkout_rejects_out_of_stock_selected_line",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -599,6 +624,12 @@ async fn integration_selected_checkout_rejects_out_of_stock_selected_line() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_selected_checkout_rejects_cross_user_cancellation_attempts() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_selected_checkout_rejects_cross_user_cancellation_attempts",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");

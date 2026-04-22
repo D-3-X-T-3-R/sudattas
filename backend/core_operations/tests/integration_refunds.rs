@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_refunds -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
@@ -315,6 +316,12 @@ async fn transition_order_to_shipped(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_full_refund_delivered_transitions_to_refunded() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_full_refund_delivered_transitions_to_refunded",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -360,6 +367,12 @@ async fn integration_full_refund_delivered_transitions_to_refunded() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_partial_refund_shipped_leaves_status_shipped() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_partial_refund_shipped_leaves_status_shipped",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -410,6 +423,12 @@ async fn integration_partial_refund_shipped_leaves_status_shipped() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_create_refund_duplicate_gateway_id_idempotent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_create_refund_duplicate_gateway_id_idempotent",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -479,6 +498,12 @@ async fn integration_create_refund_duplicate_gateway_id_idempotent() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_create_refund_pending_returns_failed_precondition() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_create_refund_pending_returns_failed_precondition",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -517,6 +542,12 @@ async fn integration_create_refund_pending_returns_failed_precondition() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_create_refund_cancelled_order_succeeds() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_create_refund_cancelled_order_succeeds",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");

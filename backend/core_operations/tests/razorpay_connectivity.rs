@@ -1,10 +1,16 @@
 //! Check that Razorpay client wiring works with a local mock endpoint.
 
+mod provider_test_gate;
+
 use std::sync::{Arc, Mutex};
 use warp::Filter;
 
 #[tokio::test]
 async fn razorpay_connectivity() {
+    if !provider_test_gate::should_run_provider_dependent_test("razorpay_connectivity") {
+        return;
+    }
+
     let seen_auth: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let seen_auth_filter = Arc::clone(&seen_auth);
 

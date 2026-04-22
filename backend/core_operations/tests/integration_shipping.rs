@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_shipping -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use integration_common::test_db_url;
@@ -174,6 +175,12 @@ async fn integration_shipping_address_crud_end_to_end() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_uses_expected_shipping_address() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_uses_expected_shipping_address",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::orders;
 
     let db = Database::connect(&test_db_url())

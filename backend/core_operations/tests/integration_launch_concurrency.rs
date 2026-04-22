@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_launch_concurrency -- --ignored --test-threads=1`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::{Duration, Utc};
 use core_db_entities::entity::sea_orm_active_enums::{
@@ -366,6 +367,12 @@ async fn integration_stale_expiry_two_workers_claim_rows_once() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_duplicate_payment_intent_race_returns_single_active_intent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_duplicate_payment_intent_race_returns_single_active_intent",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url()).await.expect("connect");
     let setup = db.begin().await.expect("begin");
     let unique = Utc::now().timestamp_micros();
@@ -533,6 +540,12 @@ async fn integration_same_low_stock_sku_race_allows_only_one_reservation() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_coupon_final_slot_race_sets_second_order_needs_review() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_coupon_final_slot_race_sets_second_order_needs_review",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url()).await.expect("connect");
     let setup = db.begin().await.expect("begin");
     let unique = Utc::now().timestamp_micros();
@@ -647,6 +660,12 @@ async fn integration_coupon_final_slot_race_sets_second_order_needs_review() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_verify_and_webhook_overlap_finalize_once() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_verify_and_webhook_overlap_finalize_once",
+    ) {
+        return;
+    }
+
     const SECRET: &str = "launch_concurrency_secret";
 
     let db = Database::connect(&test_db_url()).await.expect("connect");

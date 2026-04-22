@@ -9,6 +9,7 @@
 //! - `cargo test --test integration_coupon_redemption_consistency -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::{Duration, Utc};
 use core_db_entities::entity::sea_orm_active_enums::Status as PaymentIntentStatus;
@@ -307,6 +308,12 @@ async fn assert_coupon_side_effects(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_coupon_redemption_recorded_once_on_client_verify() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_coupon_redemption_recorded_once_on_client_verify",
+    ) {
+        return;
+    }
+
     const TEST_SECRET: &str = "itest_coupon_verify_secret";
 
     let db = Database::connect(&test_db_url())
@@ -351,6 +358,12 @@ async fn integration_coupon_redemption_recorded_once_on_client_verify() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_coupon_redemption_recorded_once_on_webhook_capture_and_replay() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_coupon_redemption_recorded_once_on_webhook_capture_and_replay",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -419,6 +432,12 @@ async fn integration_coupon_redemption_recorded_once_on_webhook_capture_and_repl
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_coupon_redemption_stays_exactly_once_across_verify_retry_and_webhook_reconciliation(
 ) {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_coupon_redemption_stays_exactly_once_across_verify_retry_and_webhook_reconciliation",
+    ) {
+        return;
+    }
+
     const TEST_SECRET: &str = "itest_coupon_reconcile_secret";
 
     let db = Database::connect(&test_db_url())

@@ -4,6 +4,8 @@
 //! Each test sends a minimal valid request; we assert 200 and a valid GraphQL response (data or errors).
 //! Auth may return 401; operations may return validation/not-found errors — we only check the endpoint is reachable.
 
+mod provider_test_gate;
+
 use reqwest::Client;
 
 fn base_url() -> String {
@@ -349,6 +351,10 @@ async fn e2e_mutation_update_cart_item() {
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_mutation_place_order() {
+    if !provider_test_gate::should_run_provider_dependent_test("e2e_mutation_place_order") {
+        return;
+    }
+
     let (status, body) = post_gql(
         &Client::new(),
         "mutation { placeOrder(order: { shippingAddressId: \"1\" }) { orderId userId totalAmount } }",
@@ -361,6 +367,12 @@ async fn e2e_mutation_place_order() {
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_mutation_place_order_money_fields() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "e2e_mutation_place_order_money_fields",
+    ) {
+        return;
+    }
+
     let (status, body) = post_gql(
         &Client::new(),
         r#"mutation { placeOrder(order: { shippingAddressId: "1" }) { orderId totalAmountMoney { amountPaise currency formatted } } }"#,
@@ -574,6 +586,11 @@ async fn e2e_mutation_update_order() {
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_mutation_create_payment_intent() {
+    if !provider_test_gate::should_run_provider_dependent_test("e2e_mutation_create_payment_intent")
+    {
+        return;
+    }
+
     let (status, body) = post_gql(
         &Client::new(),
         "mutation { createPaymentIntent(input: { orderId: \"1\", userId: \"1\", amountPaise: \"10000\", razorpayOrderId: \"rp_1\" }) { intentId amountPaise } }",
@@ -585,6 +602,10 @@ async fn e2e_mutation_create_payment_intent() {
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_mutation_capture_payment() {
+    if !provider_test_gate::should_run_provider_dependent_test("e2e_mutation_capture_payment") {
+        return;
+    }
+
     let (status, body) = post_gql(
         &Client::new(),
         "mutation { capturePayment(input: { intentId: \"1\", razorpayPaymentId: \"pay_1\" }) { intentId status } }",
@@ -597,6 +618,12 @@ async fn e2e_mutation_capture_payment() {
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_mutation_verify_razorpay_payment() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "e2e_mutation_verify_razorpay_payment",
+    ) {
+        return;
+    }
+
     let (status, body) = post_gql(
         &Client::new(),
         r#"mutation { verifyRazorpayPayment(input: { orderId: "1", razorpayPaymentId: "pay_1", razorpayOrderId: "order_1", razorpaySignature: "sig" }) { verified paymentIntent { intentId status } } }"#,

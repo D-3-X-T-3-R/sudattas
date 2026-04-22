@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_coupons -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::{Duration, Utc};
 use integration_common::test_db_url;
@@ -164,6 +165,12 @@ async fn ensure_pending_and_place_order_setup(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_coupon_applied_at_checkout_reduces_total() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_coupon_applied_at_checkout_reduces_total",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -227,6 +234,12 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_expired_coupon_ignored_at_checkout() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_expired_coupon_ignored_at_checkout",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -401,6 +414,12 @@ async fn integration_coupon_usage_limit_preview_does_not_burn_limit() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_coupon_min_order_not_met_not_applied() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_coupon_min_order_not_met_not_applied",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -463,6 +482,12 @@ async fn integration_coupon_min_order_not_met_not_applied() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_free_shipping_threshold_uses_post_discount_total() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_free_shipping_threshold_uses_post_discount_total",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");

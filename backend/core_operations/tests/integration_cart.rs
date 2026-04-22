@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_cart -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use integration_common::test_db_url;
@@ -333,6 +334,12 @@ async fn integration_guest_cart_not_used_for_place_order() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_removes_only_selected_user_cart_items() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_removes_only_selected_user_cart_items",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");

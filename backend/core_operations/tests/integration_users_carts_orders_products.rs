@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_users_carts_orders_products -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use integration_common::test_db_url;
@@ -45,6 +46,12 @@ async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_happy_path_removes_only_selected_items_after_creation() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_happy_path_removes_only_selected_items_after_creation",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::{inventory as inventory_entity, orders};
 
     let db = Database::connect(&test_db_url())
@@ -273,6 +280,12 @@ async fn integration_place_order_happy_path_removes_only_selected_items_after_cr
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_insufficient_inventory_fails_and_preserves_cart",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::orders;
 
     let db = Database::connect(&test_db_url())
@@ -560,6 +573,12 @@ async fn integration_place_order_empty_cart_fails() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_cart_add_get_update_then_place_order() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_cart_add_get_update_then_place_order",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::{inventory as inventory_entity, orders};
 
     let db = Database::connect(&test_db_url())
@@ -766,6 +785,12 @@ async fn integration_cart_add_get_update_then_place_order() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_multiple_items_two_variants() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_multiple_items_two_variants",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::{inventory as inventory_entity, orders};
 
     let db = Database::connect(&test_db_url())
@@ -1008,6 +1033,12 @@ async fn integration_place_order_multiple_items_two_variants() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_then_search_order() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_then_search_order",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");

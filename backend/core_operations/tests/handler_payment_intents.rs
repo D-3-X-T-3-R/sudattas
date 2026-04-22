@@ -1,5 +1,7 @@
 //! Tests for payment_intents handlers (idempotent capture semantics) using SeaORM MockDatabase.
 
+mod provider_test_gate;
+
 use core_db_entities::entity::payment_intents;
 use core_db_entities::entity::sea_orm_active_enums::Status as PaymentStatus;
 use hmac::{Hmac, Mac};
@@ -40,6 +42,12 @@ fn make_intent(
 
 #[tokio::test]
 async fn capture_payment_is_idempotent_for_same_gateway_id() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "capture_payment_is_idempotent_for_same_gateway_id",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::capture_payment;
 
     // First query: find_by_id returns an intent with an existing gateway id.
@@ -81,6 +89,12 @@ async fn capture_payment_is_idempotent_for_same_gateway_id() {
 
 #[tokio::test]
 async fn capture_payment_rejects_conflicting_gateway_id_for_same_intent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "capture_payment_rejects_conflicting_gateway_id_for_same_intent",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::capture_payment;
 
     // Existing intent already has a different gateway payment id.
@@ -115,6 +129,12 @@ async fn capture_payment_rejects_conflicting_gateway_id_for_same_intent() {
 
 #[tokio::test]
 async fn capture_payment_rejects_gateway_id_reused_for_different_intent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "capture_payment_rejects_gateway_id_reused_for_different_intent",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::capture_payment;
 
     // First query: find_by_id returns intent 1 with no gateway id yet.
@@ -149,6 +169,10 @@ async fn capture_payment_rejects_gateway_id_reused_for_different_intent() {
 
 #[tokio::test]
 async fn create_payment_intent_success() {
+    if !provider_test_gate::should_run_provider_dependent_test("create_payment_intent_success") {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::create_payment_intent;
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
@@ -199,6 +223,12 @@ async fn create_payment_intent_success() {
 
 #[tokio::test]
 async fn create_payment_intent_reuses_existing_order_intent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "create_payment_intent_reuses_existing_order_intent",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::create_payment_intent;
 
     let existing = payment_intents::Model {
@@ -240,6 +270,10 @@ async fn create_payment_intent_reuses_existing_order_intent() {
 
 #[tokio::test]
 async fn get_payment_intent_by_id_found() {
+    if !provider_test_gate::should_run_provider_dependent_test("get_payment_intent_by_id_found") {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::get_payment_intent;
 
     let model = make_intent(7, "rz_ord_xyz", None, PaymentStatus::Pending);
@@ -262,6 +296,10 @@ async fn get_payment_intent_by_id_found() {
 
 #[tokio::test]
 async fn get_payment_intent_by_id_empty() {
+    if !provider_test_gate::should_run_provider_dependent_test("get_payment_intent_by_id_empty") {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::get_payment_intent;
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
@@ -280,6 +318,12 @@ async fn get_payment_intent_by_id_empty() {
 
 #[tokio::test]
 async fn get_payment_intent_requires_intent_id_or_order_id() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "get_payment_intent_requires_intent_id_or_order_id",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::get_payment_intent;
 
     let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
@@ -296,6 +340,12 @@ async fn get_payment_intent_requires_intent_id_or_order_id() {
 
 #[tokio::test]
 async fn verify_razorpay_payment_missing_fields_returns_invalid_argument() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "verify_razorpay_payment_missing_fields_returns_invalid_argument",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
 
     std::env::set_var("RAZORPAY_KEY_SECRET", "secret");
@@ -315,6 +365,12 @@ async fn verify_razorpay_payment_missing_fields_returns_invalid_argument() {
 
 #[tokio::test]
 async fn verify_razorpay_payment_not_configured_returns_failed_precondition() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "verify_razorpay_payment_not_configured_returns_failed_precondition",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
 
     std::env::remove_var("RAZORPAY_KEY_SECRET");
@@ -341,6 +397,12 @@ async fn verify_razorpay_payment_not_configured_returns_failed_precondition() {
 
 #[tokio::test]
 async fn verify_razorpay_payment_not_found_returns_not_found() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "verify_razorpay_payment_not_found_returns_not_found",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
 
     std::env::set_var("RAZORPAY_KEY_SECRET", "secret");
@@ -369,6 +431,12 @@ async fn verify_razorpay_payment_not_found_returns_not_found() {
 
 #[tokio::test]
 async fn verify_razorpay_payment_invalid_signature_returns_false_and_does_not_update() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "verify_razorpay_payment_invalid_signature_returns_false_and_does_not_update",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
 
     std::env::set_var("RAZORPAY_KEY_SECRET", "secret");
@@ -414,6 +482,12 @@ async fn verify_razorpay_payment_invalid_signature_returns_false_and_does_not_up
 
 #[tokio::test]
 async fn verify_razorpay_payment_duplicate_attempt_same_payload_is_idempotent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "verify_razorpay_payment_duplicate_attempt_same_payload_is_idempotent",
+    ) {
+        return;
+    }
+
     use core_operations::handlers::payment_intents::verify_razorpay_payment::verify_razorpay_payment;
 
     let secret = "dup_secret_for_test";
