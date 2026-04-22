@@ -306,6 +306,20 @@ async fn integration_stale_expiry_two_workers_claim_rows_once() {
     .insert(&setup)
     .await
     .expect("insert intent");
+
+    // Keep this concurrency proof deterministic in a shared integration DB:
+    // prevent unrelated historical pending intents from being claimed by worker B.
+    let _ = setup
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::MySql,
+            r#"UPDATE PaymentIntents
+               SET expires_at = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 DAY)
+               WHERE status = 'pending'
+                 AND intent_id <> ?"#,
+            [intent.intent_id.into()],
+        ))
+        .await
+        .expect("defer unrelated pending intents");
     setup.commit().await.expect("commit");
 
     let db_a = Database::connect(&test_db_url()).await.expect("connect a");

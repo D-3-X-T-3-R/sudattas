@@ -45,6 +45,18 @@ async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> 
     m.status_id
 }
 
+fn should_run_live_logistics_coupled_test() -> bool {
+    let flag = std::env::var("RUN_LIVE_LOGISTICS_TESTS").ok();
+    if flag.as_deref() == Some("1") {
+        return true;
+    }
+    let current = flag.unwrap_or_else(|| "<unset>".to_string());
+    eprintln!(
+        "skipping provider-coupled test: RUN_LIVE_LOGISTICS_TESTS must be exactly '1' (current: {current})"
+    );
+    false
+}
+
 /// AC1 – Stale user cart with marketing_opt_out = 0 triggers enqueue_abandoned_cart_events and enqueues one outbox event.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
@@ -452,6 +464,10 @@ async fn place_order_setup(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_does_not_enqueue_order_placed_outbox() {
+    if !should_run_live_logistics_coupled_test() {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -478,6 +494,10 @@ async fn integration_place_order_does_not_enqueue_order_placed_outbox() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_shipped_delivered_enqueue_outbox_events() {
+    if !should_run_live_logistics_coupled_test() {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
