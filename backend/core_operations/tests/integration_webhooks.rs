@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_webhooks -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use integration_common::test_db_url;
 use proto::proto::core::IngestWebhookRequest;
@@ -17,6 +18,12 @@ use tonic::Request;
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_webhook_triggers_capture_payment() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_triggers_capture_payment",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::payment_intents;
     use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
 
@@ -34,6 +41,7 @@ async fn integration_webhook_triggers_capture_payment() {
         intent_id: ActiveValue::NotSet,
         razorpay_order_id: ActiveValue::Set(razorpay_order_id.clone()),
         order_id: ActiveValue::Set(None),
+        active_order_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(10_000), // ₹100.00
         currency: ActiveValue::Set(Some("INR".to_string())),
@@ -112,6 +120,12 @@ async fn integration_webhook_triggers_capture_payment() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_duplicate_same_webhook_id_idempotent",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::payment_intents;
     use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
 
@@ -134,6 +148,7 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
         intent_id: ActiveValue::NotSet,
         razorpay_order_id: ActiveValue::Set(razorpay_order_id.clone()),
         order_id: ActiveValue::Set(None),
+        active_order_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(15_000),
         currency: ActiveValue::Set(Some("INR".to_string())),
@@ -211,6 +226,12 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_webhook_out_of_order_same_payment_second_idempotent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_out_of_order_same_payment_second_idempotent",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::payment_intents;
     use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
 
@@ -229,6 +250,7 @@ async fn integration_webhook_out_of_order_same_payment_second_idempotent() {
         intent_id: ActiveValue::NotSet,
         razorpay_order_id: ActiveValue::Set(razorpay_order_id.clone()),
         order_id: ActiveValue::Set(None),
+        active_order_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(20_000),
         currency: ActiveValue::Set(Some("INR".to_string())),
@@ -307,6 +329,12 @@ async fn integration_webhook_out_of_order_same_payment_second_idempotent() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_webhook_amount_mismatch_marked_needs_review_not_paid() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_amount_mismatch_marked_needs_review_not_paid",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::payment_intents;
     use sea_orm::DbBackend;
     use sea_orm::{ActiveModelTrait, ActiveValue};
@@ -329,6 +357,7 @@ async fn integration_webhook_amount_mismatch_marked_needs_review_not_paid() {
         intent_id: ActiveValue::NotSet,
         razorpay_order_id: ActiveValue::Set(razorpay_order_id.clone()),
         order_id: ActiveValue::Set(None),
+        active_order_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(25_000),
         currency: ActiveValue::Set(Some("INR".to_string())),
@@ -411,6 +440,12 @@ async fn integration_webhook_amount_mismatch_marked_needs_review_not_paid() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_currency_mismatch_marked_needs_review_not_paid",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::payment_intents;
     use sea_orm::DbBackend;
     use sea_orm::{ActiveModelTrait, ActiveValue};
@@ -433,6 +468,7 @@ async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
         intent_id: ActiveValue::NotSet,
         razorpay_order_id: ActiveValue::Set(razorpay_order_id.clone()),
         order_id: ActiveValue::Set(None),
+        active_order_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(None),
         amount_paise: ActiveValue::Set(30_000),
         currency: ActiveValue::Set(Some("INR".to_string())),
@@ -500,6 +536,12 @@ async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and schema with provider_event_id (run generate.ps1 after schema)"]
 async fn integration_webhook_replay_provider_event_id_rejected() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_replay_provider_event_id_rejected",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::webhook_events;
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 

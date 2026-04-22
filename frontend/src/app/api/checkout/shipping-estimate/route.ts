@@ -33,10 +33,17 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     shippingAddressId?: string;
     couponCode?: string;
+    selectedCartLineIds?: unknown;
   };
   const shippingAddressId = String(body.shippingAddressId ?? "").trim();
   if (!shippingAddressId) {
     return apiError("shippingAddressId is required", 400, "VALIDATION_ERROR");
+  }
+  const selectedCartLineIds = Array.isArray(body.selectedCartLineIds)
+    ? body.selectedCartLineIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  if (selectedCartLineIds.length === 0) {
+    return apiError("selectedCartLineIds must contain at least one cart line id", 400, "VALIDATION_ERROR");
   }
 
   const result = await callGraphqlAsCustomer<{
@@ -45,6 +52,7 @@ export async function POST(request: Request) {
     input: {
       shippingAddressId,
       couponCode: body.couponCode?.trim() || null,
+      selectedCartIds: selectedCartLineIds,
     },
   });
 

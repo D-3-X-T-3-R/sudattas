@@ -12,6 +12,16 @@ pub struct Order {
     pub total_amount_formatted: String,
     pub status_id: String,
     pub order_id: String,
+    /// Immutable external reference (Shiprocket channel id format); not the internal numeric id.
+    pub public_order_ref: String,
+    /// refund_pending | refund_processed | refund_failed | refund_not_applicable (from Orders.refund_settlement_status).
+    pub refund_settlement_status: Option<String>,
+    /// "prepaid" | "cod" (nullable for historical rows)
+    pub payment_method: Option<String>,
+    pub cancel_window_ends_at: Option<String>,
+    pub earliest_booking_at: Option<String>,
+    pub pickup_target_at: Option<String>,
+    pub fulfillment_status: Option<String>,
 }
 
 #[graphql_object]
@@ -52,6 +62,34 @@ impl Order {
         &self.order_id
     }
 
+    async fn public_order_ref(&self) -> &String {
+        &self.public_order_ref
+    }
+
+    async fn refund_settlement_status(&self) -> Option<&String> {
+        self.refund_settlement_status.as_ref()
+    }
+
+    async fn payment_method(&self) -> Option<&String> {
+        self.payment_method.as_ref()
+    }
+
+    async fn cancel_window_ends_at(&self) -> Option<&String> {
+        self.cancel_window_ends_at.as_ref()
+    }
+
+    async fn earliest_booking_at(&self) -> Option<&String> {
+        self.earliest_booking_at.as_ref()
+    }
+
+    async fn pickup_target_at(&self) -> Option<&String> {
+        self.pickup_target_at.as_ref()
+    }
+
+    async fn fulfillment_status(&self) -> Option<&String> {
+        self.fulfillment_status.as_ref()
+    }
+
     async fn order_details(&self) -> FieldResult<Vec<OrderDetails>> {
         crate::resolvers::order_details::handlers::search_order_detail(SearchOrderDetails {
             order_id: Some(self.order_id.to_string()),
@@ -74,6 +112,10 @@ pub struct NewOrder {
     pub shipping_address_id: String,
     /// Optional coupon code to apply a discount at checkout
     pub coupon_code: Option<String>,
+    /// Explicit cart line ids selected in the bag. Checkout never falls back to the full cart.
+    pub selected_cart_ids: Option<Vec<String>>,
+    /// "prepaid" (default) or "cod"
+    pub payment_mode: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -81,6 +123,7 @@ pub struct NewOrder {
 pub struct EstimateCheckoutShippingInput {
     pub shipping_address_id: String,
     pub coupon_code: Option<String>,
+    pub selected_cart_ids: Option<Vec<String>>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -194,4 +237,48 @@ pub struct AdminMarkOrderShippedInput {
 #[graphql(description = "Admin: mark order delivered")]
 pub struct AdminMarkOrderDeliveredInput {
     pub order_id: String,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Customer/admin cancel selected order lines")]
+pub struct CancelOrderItemsInput {
+    pub order_id: String,
+    pub order_detail_ids: Vec<String>,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Admin: update preferred pickup target timestamp")]
+pub struct UpdatePickupTargetInput {
+    pub order_id: String,
+    pub pickup_target_at: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct PickupTargetUpdateResult {
+    pub order_id: String,
+    pub pickup_target_at: String,
+    pub pickup_target_reason: Option<String>,
+    pub pickup_target_set_by: Option<String>,
+    pub pickup_target_updated_at: String,
+}
+
+#[graphql_object]
+#[graphql(description = "Updated pickup target metadata")]
+impl PickupTargetUpdateResult {
+    async fn order_id(&self) -> &String {
+        &self.order_id
+    }
+    async fn pickup_target_at(&self) -> &String {
+        &self.pickup_target_at
+    }
+    async fn pickup_target_reason(&self) -> Option<&String> {
+        self.pickup_target_reason.as_ref()
+    }
+    async fn pickup_target_set_by(&self) -> Option<&String> {
+        self.pickup_target_set_by.as_ref()
+    }
+    async fn pickup_target_updated_at(&self) -> &String {
+        &self.pickup_target_updated_at
+    }
 }

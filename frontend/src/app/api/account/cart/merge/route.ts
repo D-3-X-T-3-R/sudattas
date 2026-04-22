@@ -60,7 +60,15 @@ export async function POST(request: Request) {
   if (!customerUserId) return apiError("Unauthorized", 401, "UNAUTHORIZED");
 
   const body = (await request.json().catch(() => ({}))) as { guestSessionId?: unknown; idempotencyKey?: unknown };
-  const guestSessionId = String(body.guestSessionId ?? "").trim();
+  const guestSessionIdFromBody = String(body.guestSessionId ?? "").trim();
+  const guestSessionIdFromHeader = request.headers.get("x-guest-session-id")?.trim() ?? "";
+  if (!guestSessionIdFromHeader || !guestSessionIdFromBody) {
+    return apiError("guestSessionId is required", 400, "VALIDATION_ERROR");
+  }
+  if (guestSessionIdFromHeader !== guestSessionIdFromBody) {
+    return apiError("guestSessionId does not match the active guest session", 403, "FORBIDDEN");
+  }
+  const guestSessionId = guestSessionIdFromHeader;
   if (!guestSessionId) {
     return apiError("guestSessionId is required", 400, "VALIDATION_ERROR");
   }
@@ -112,6 +120,21 @@ export async function POST(request: Request) {
     const existing = userByVariant.get(guest.variantId);
     const guestQty = parseQty(guest.quantity);
 
+    const delRes = await callGraphqlAsInternalService<{ deleteCartItem?: Array<{ cartId: string }> }>(
+      DELETE_CART_ITEM,
+      {
+        input: {
+          userId: "0",
+          cartId: guest.cartId,
+          sessionId: guestSessionId,
+        },
+      },
+      { "Idempotency-Key": `${mergeKey}:del:${guest.cartId}` }
+    );
+    if (delRes.errors?.length) {
+      return apiError(delRes.errors[0]?.message ?? "Failed to finalize merged guest cart", 400, "GRAPHQL_ERROR");
+    }
+
     if (existing) {
       const mergedQty = capQuantity(parseQty(existing.quantity) + guestQty);
       const upRes = await callGraphqlAsCustomer<{ updateCartItem?: CartItem[] }>(
@@ -129,6 +152,18 @@ export async function POST(request: Request) {
         { "Idempotency-Key": `${mergeKey}:up:${guest.cartId}` }
       );
       if (upRes.errors?.length) {
+        await callGraphqlAsInternalService(
+          ADD_CART_ITEM,
+          {
+            input: {
+              userId: null,
+              variantId: guest.variantId,
+              quantity: String(capQuantity(guestQty)),
+              sessionId: guestSessionId,
+            },
+          },
+          { "Idempotency-Key": `${mergeKey}:restore:${guest.cartId}` }
+        );
         return apiError(upRes.errors[0]?.message ?? "Failed to merge cart item", 400, "GRAPHQL_ERROR");
       }
     } else {
@@ -146,25 +181,22 @@ export async function POST(request: Request) {
         { "Idempotency-Key": `${mergeKey}:add:${guest.cartId}` }
       );
       if (addRes.errors?.length) {
+        await callGraphqlAsInternalService(
+          ADD_CART_ITEM,
+          {
+            input: {
+              userId: null,
+              variantId: guest.variantId,
+              quantity: String(capQuantity(guestQty)),
+              sessionId: guestSessionId,
+            },
+          },
+          { "Idempotency-Key": `${mergeKey}:restore:${guest.cartId}` }
+        );
         return apiError(addRes.errors[0]?.message ?? "Failed to merge cart item", 400, "GRAPHQL_ERROR");
       }
       const created = addRes.data?.addCartItem?.[0];
       if (created) userByVariant.set(created.variantId, created);
-    }
-
-    const delRes = await callGraphqlAsInternalService<{ deleteCartItem?: Array<{ cartId: string }> }>(
-      DELETE_CART_ITEM,
-      {
-        input: {
-          userId: "0",
-          cartId: guest.cartId,
-          sessionId: guestSessionId,
-        },
-      },
-      { "Idempotency-Key": `${mergeKey}:del:${guest.cartId}` }
-    );
-    if (delRes.errors?.length) {
-      return apiError(delRes.errors[0]?.message ?? "Failed to finalize merged guest cart", 400, "GRAPHQL_ERROR");
     }
 
     merged += 1;

@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_coupons -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::{Duration, Utc};
 use integration_common::test_db_url;
@@ -31,7 +32,7 @@ async fn ensure_pending_and_place_order_setup(
     txn: &sea_orm::DatabaseTransaction,
     now_tag: i64,
     cart_total_paise: i64,
-) -> (i64, i64, i64) {
+) -> (i64, i64, i64, i64) {
     let pending = order_status::Entity::find()
         .filter(order_status::Column::StatusName.eq("pending"))
         .one(txn)
@@ -144,7 +145,7 @@ async fn ensure_pending_and_place_order_setup(
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -155,22 +156,30 @@ async fn ensure_pending_and_place_order_setup(
     )
     .await
     .expect("create_cart_item");
+    let cart_id = cart_res.into_inner().items[0].cart_id;
 
-    (user_id, shipping_id, cart_total_paise)
+    (user_id, shipping_id, cart_total_paise, cart_id)
 }
 
 /// CP1 – create_coupon + place_order with valid coupon applies discount to grand_total_minor and order snapshot.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_coupon_applied_at_checkout_reduces_total() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_coupon_applied_at_checkout_reduces_total",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let cart_total = 2_000_i64;
-    let (user_id, shipping_id, _) =
+    // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR so checkout does not depend on live shipping quote.
+    let cart_total = 200_000_i64;
+    let (user_id, shipping_id, _, cart_id) =
         ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP1_{}", now_tag);
@@ -196,14 +205,16 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: Some(code.clone()),
+            selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await
     .expect("place_order should succeed");
     let order = place_res.into_inner().items[0].clone();
     assert_eq!(
-        order.total_amount_paise, 1_500,
-        "2000 - 500 discount = 1500"
+        order.total_amount_paise, 199_500,
+        "200000 - 500 discount = 199500"
     );
 
     let db_order = orders::Entity::find_by_id(order.order_id)
@@ -211,7 +222,7 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
         .await
         .expect("query order")
         .expect("order exists");
-    assert_eq!(db_order.grand_total_minor, 1_500);
+    assert_eq!(db_order.grand_total_minor, 199_500);
     assert!(db_order.applied_coupon_id.is_some());
     assert_eq!(db_order.applied_coupon_code.as_deref(), Some(code.as_str()));
     assert_eq!(db_order.applied_discount_paise, Some(500));
@@ -223,14 +234,20 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_expired_coupon_ignored_at_checkout() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_expired_coupon_ignored_at_checkout",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let cart_total = 2_000_i64;
-    let (user_id, shipping_id, _) =
+    let cart_total = 200_000_i64;
+    let (user_id, shipping_id, _, cart_id) =
         ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP2_EXP_{}", now_tag);
@@ -256,6 +273,8 @@ async fn integration_expired_coupon_ignored_at_checkout() {
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: Some(code),
+            selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await
@@ -278,10 +297,10 @@ async fn integration_expired_coupon_ignored_at_checkout() {
     txn.rollback().await.ok();
 }
 
-/// CP3 – apply_coupon increments usage_count for the coupon row on success.
+/// CP3 – apply_coupon is preview-only and does not increment usage_count.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_apply_coupon_increments_usage_count() {
+async fn integration_apply_coupon_is_preview_only() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -322,15 +341,15 @@ async fn integration_apply_coupon_increments_usage_count() {
         .await
         .expect("query coupon")
         .expect("coupon exists");
-    assert_eq!(coupon.usage_count, Some(1));
+    assert_eq!(coupon.usage_count, Some(0));
 
     txn.rollback().await.ok();
 }
 
-/// CP4 – Coupon with usage_limit = 1: first apply_coupon succeeds, second returns invalid/limit-reached.
+/// CP4 – Coupon with usage_limit = 1: repeated apply_coupon previews stay valid until payment finalization.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_coupon_usage_limit_second_apply_invalid() {
+async fn integration_coupon_usage_limit_preview_does_not_burn_limit() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -376,9 +395,17 @@ async fn integration_coupon_usage_limit_second_apply_invalid() {
     .expect("second apply_coupon returns Ok (handler does not error)");
     let result = second.into_inner().items[0].clone();
     assert!(
-        !result.is_valid,
-        "second apply should return is_valid false when usage limit reached"
+        result.is_valid,
+        "preview should not consume coupon capacity"
     );
+
+    let coupon = coupons::Entity::find()
+        .filter(coupons::Column::Code.eq(&code))
+        .one(&txn)
+        .await
+        .expect("query coupon")
+        .expect("coupon exists");
+    assert_eq!(coupon.usage_count, Some(0));
 
     txn.rollback().await.ok();
 }
@@ -387,14 +414,20 @@ async fn integration_coupon_usage_limit_second_apply_invalid() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_coupon_min_order_not_met_not_applied() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_coupon_min_order_not_met_not_applied",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let cart_total = 500_i64;
-    let (user_id, shipping_id, _) =
+    let cart_total = 150_000_i64;
+    let (user_id, shipping_id, _, cart_id) =
         ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP5_MIN_{}", now_tag);
@@ -404,7 +437,7 @@ async fn integration_coupon_min_order_not_met_not_applied() {
             code: code.clone(),
             discount_type: "fixed_amount".to_string(),
             discount_value: 200,
-            min_order_value_paise: Some(10_000),
+            min_order_value_paise: Some(300_000),
             usage_limit: Some(10),
             max_uses_per_customer: None,
             starts_at: Utc::now().to_rfc3339(),
@@ -420,6 +453,8 @@ async fn integration_coupon_min_order_not_met_not_applied() {
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: Some(code),
+            selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await
@@ -438,6 +473,68 @@ async fn integration_coupon_min_order_not_met_not_applied() {
     assert_eq!(db_order.grand_total_minor, cart_total);
     assert!(db_order.applied_coupon_id.is_none());
     assert!(db_order.applied_coupon_code.is_none());
+
+    txn.rollback().await.ok();
+}
+
+/// CP6 – Free-shipping threshold is evaluated on post-discount items total.
+/// In test env, shipping quote is unavailable; crossing below threshold after coupon should fail checkout.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_free_shipping_threshold_uses_post_discount_total() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_free_shipping_threshold_uses_post_discount_total",
+    ) {
+        return;
+    }
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let cart_total = 120_000_i64;
+    let (user_id, shipping_id, _, cart_id) =
+        ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
+
+    let code = format!("CP6_THRESH_{}", now_tag);
+    let _ = core_operations::handlers::coupons::create_coupon(
+        &txn,
+        Request::new(CreateCouponRequest {
+            code: code.clone(),
+            discount_type: "fixed_amount".to_string(),
+            discount_value: 30_001,
+            min_order_value_paise: Some(1),
+            usage_limit: Some(10),
+            max_uses_per_customer: None,
+            starts_at: (Utc::now() - Duration::hours(1)).to_rfc3339(),
+            ends_at: Some((Utc::now() + Duration::days(1)).to_rfc3339()),
+        }),
+    )
+    .await
+    .expect("create_coupon");
+
+    let err = place_order(
+        &txn,
+        Request::new(PlaceOrderRequest {
+            shipping_address_id: shipping_id,
+            user_id,
+            coupon_code: Some(code),
+            selected_cart_ids: vec![cart_id],
+            payment_mode: None,
+        }),
+    )
+    .await
+    .expect_err("post-discount subtotal should require live shipping quote in this test env");
+
+    assert_eq!(err.code(), tonic::Code::Unavailable);
+    assert!(
+        err.message()
+            .contains("Live shipping quote is unavailable for this checkout"),
+        "unexpected error message: {}",
+        err.message()
+    );
 
     txn.rollback().await.ok();
 }

@@ -1,7 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Activity, AlertTriangle, Gauge, LogIn, ShieldAlert, ShoppingCart } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Gauge,
+  LogIn,
+  PackageSearch,
+  RefreshCcw,
+  ShieldAlert,
+  ShoppingCart,
+  Truck,
+  Wallet,
+} from "lucide-react";
 import { fetchTelemetrySummary } from "@/lib/admin-queries";
 
 function pct(v: number): string {
@@ -86,6 +97,41 @@ export function DashboardObservability() {
         data.webhookProcessingLatency.available
           ? "From Rust backend processing metrics"
           : data.webhookProcessingLatency.message ?? "Unavailable",
+      Icon: Activity,
+    },
+    {
+      key: "refund-failures",
+      label: "Refund failures",
+      value: String(data.backendSignals?.refundFailureCount?.value ?? 0),
+      hint: "Refund create or reconciliation failures",
+      Icon: Wallet,
+    },
+    {
+      key: "booking-failures",
+      label: "Shiprocket booking failures",
+      value: String(data.backendSignals?.shiprocketBookingFailureCount?.value ?? 0),
+      hint: "Auto-fulfillment booking failures",
+      Icon: Truck,
+    },
+    {
+      key: "stuck-pending",
+      label: "Stuck pending orders",
+      value: String(data.backendSignals?.stuckPendingOrders?.value ?? 0),
+      hint: "Pending orders older than 15 minutes",
+      Icon: PackageSearch,
+    },
+    {
+      key: "cancel-backlog",
+      label: "Cancel logistics backlog",
+      value: String(data.backendSignals?.cancelPendingLogisticsBacklog?.value ?? 0),
+      hint: "Orders waiting for logistics cancellation retry",
+      Icon: RefreshCcw,
+    },
+    {
+      key: "outbox-backlog",
+      label: "Outbox backlog",
+      value: String(data.backendSignals?.outboxBacklog?.value ?? 0),
+      hint: "Pending notification/email events",
       Icon: Activity,
     },
   ] as const;

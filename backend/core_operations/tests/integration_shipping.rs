@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_shipping -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use integration_common::test_db_url;
@@ -174,6 +175,12 @@ async fn integration_shipping_address_crud_end_to_end() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_uses_expected_shipping_address() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_uses_expected_shipping_address",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::orders;
 
     let db = Database::connect(&test_db_url())
@@ -295,7 +302,7 @@ async fn integration_place_order_uses_expected_shipping_address() {
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -306,6 +313,7 @@ async fn integration_place_order_uses_expected_shipping_address() {
     )
     .await
     .expect("create_cart_item should succeed");
+    let cart_id = cart_res.into_inner().items[0].cart_id;
 
     let place_res = place_order(
         &txn,
@@ -313,6 +321,8 @@ async fn integration_place_order_uses_expected_shipping_address() {
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await

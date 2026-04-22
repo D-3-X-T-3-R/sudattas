@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Kicker } from "@/components/ui/typography";
 
 interface FooterProps {
@@ -51,23 +52,66 @@ export function Footer({ goTo }: FooterProps) {
                 New arrivals
               </button>
             </li>
-            <li>Gift cards</li>
+            <li>
+              <Link
+                href="/contact-support"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                Styling support
+              </Link>
+            </li>
           </ul>
         </div>
         <div>
           <Kicker className="text-[var(--color-ink)]">Services</Kicker>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-muted)]">
-            <li>Shipping & delivery</li>
-            <li>Returns & exchanges</li>
-            <li>Care guide</li>
+            <li>
+              <Link
+                href="/shipping-policy"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                Shipping Policy
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/returns-exchanges"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                Returns & Exchanges
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/terms-conditions"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                Terms & Conditions
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/privacy-policy"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                Privacy Policy
+              </Link>
+            </li>
           </ul>
         </div>
         <div>
           <Kicker className="text-[var(--color-ink)]">Contact</Kicker>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-muted)]">
             <li>Customer support available through your account orders.</li>
-            <li>For styling and bulk queries, use the contact form.</li>
-            <li>Follow our latest drops on social channels.</li>
+            <li>
+              <Link
+                href="/contact-support"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                Styling, support, and bulk enquiries
+              </Link>
+            </li>
+            <li>Email support@sudattas.com for assisted resolution.</li>
           </ul>
           <div className="mt-6 flex items-center gap-2 text-xs text-[var(--color-muted)]">
             <span className="h-px w-4 bg-[var(--color-accent-gold)]" />

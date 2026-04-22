@@ -1,14 +1,14 @@
 use proto::proto::core::{
-    AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateOrderRequest,
-    DeleteOrderRequest, EstimateCheckoutShippingRequest, PlaceOrderRequest, SearchOrderRequest,
-    SearchOrderStatusRequest, UpdateOrderRequest,
+    AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CancelOrderItemsRequest,
+    CreateOrderRequest, DeleteOrderRequest, EstimateCheckoutShippingRequest, PlaceOrderRequest,
+    SearchOrderRequest, SearchOrderStatusRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
 };
 use tracing::instrument;
 
 use super::schema::{
-    AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CheckoutShippingEstimate,
-    CreateOrderInput, EstimateCheckoutShippingInput, NewOrder, Order, OrderMutation, OrderStatus,
-    SearchOrder,
+    AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
+    CheckoutShippingEstimate, CreateOrderInput, EstimateCheckoutShippingInput, NewOrder, Order,
+    OrderMutation, OrderStatus, PickupTargetUpdateResult, SearchOrder, UpdatePickupTargetInput,
 };
 use crate::resolvers::{
     convert,
@@ -30,6 +30,13 @@ pub(crate) async fn place_order(
         user_id: to_i64(Some(user_id)),
         shipping_address_id: to_i64(order.shipping_address_id),
         coupon_code: order.coupon_code,
+        selected_cart_ids: order
+            .selected_cart_ids
+            .unwrap_or_default()
+            .into_iter()
+            .map(|id| parse_i64(&id, "selected_cart_id"))
+            .collect::<Result<Vec<_>, _>>()?,
+        payment_mode: order.payment_mode,
     });
 
     if let Some(key) = idempotency_key {
@@ -60,6 +67,12 @@ pub(crate) async fn estimate_checkout_shipping(
             shipping_address_id: parse_i64(&input.shipping_address_id, "shipping_address_id")?,
             user_id: parse_i64(&user_id, "user_id")?,
             coupon_code: input.coupon_code,
+            selected_cart_ids: input
+                .selected_cart_ids
+                .unwrap_or_default()
+                .into_iter()
+                .map(|id| parse_i64(&id, "selected_cart_id"))
+                .collect::<Result<Vec<_>, _>>()?,
         })
         .await?;
     let row = response.into_inner();
@@ -125,6 +138,34 @@ pub(crate) async fn delete_order(
     let response = client
         .delete_order(DeleteOrderRequest {
             order_id: parse_i64(&order_id, "order_id")?,
+            acting_user_id,
+        })
+        .await
+        .map_err(crate::resolvers::error::map_err)?;
+
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::order_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn cancel_order_items(
+    input: CancelOrderItemsInput,
+    acting_user_id: Option<i64>,
+) -> Result<Vec<Order>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let order_detail_ids = input
+        .order_detail_ids
+        .into_iter()
+        .map(|id| parse_i64(&id, "order_detail_id"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let response = client
+        .cancel_order_items(CancelOrderItemsRequest {
+            order_id: parse_i64(&input.order_id, "order_id")?,
+            order_detail_ids,
             acting_user_id,
         })
         .await
@@ -227,4 +268,28 @@ pub(crate) async fn admin_mark_order_delivered(
         })
         .await?;
     Ok(true)
+}
+
+#[instrument]
+pub(crate) async fn update_pickup_target(
+    input: UpdatePickupTargetInput,
+    actor_id: Option<String>,
+) -> Result<PickupTargetUpdateResult, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .update_pickup_target(UpdatePickupTargetRequest {
+            order_id: parse_i64(&input.order_id, "order_id")?,
+            pickup_target_at: input.pickup_target_at,
+            reason: input.reason,
+            actor_id,
+        })
+        .await?;
+    let row = response.into_inner();
+    Ok(PickupTargetUpdateResult {
+        order_id: row.order_id.to_string(),
+        pickup_target_at: row.pickup_target_at,
+        pickup_target_reason: row.pickup_target_reason,
+        pickup_target_set_by: row.pickup_target_set_by,
+        pickup_target_updated_at: row.pickup_target_updated_at,
+    })
 }

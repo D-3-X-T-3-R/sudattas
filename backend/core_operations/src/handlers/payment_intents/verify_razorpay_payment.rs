@@ -3,17 +3,15 @@
 //! A later `payment.captured` webhook remains idempotent (`transition_order_status` no-ops if already Paid).
 
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::order_state_machine::{self, OrderState};
+use crate::handlers::payment_intents::{capture_payment, finalize_order_paid};
 use core_db_entities::entity::payment_intents;
-use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status};
+use core_db_entities::entity::sea_orm_active_enums::Status;
 use hmac::{Hmac, Mac};
 use proto::proto::core::{
-    PaymentIntentResponse, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
+    CapturePaymentRequest, PaymentIntentResponse, VerifyRazorpayPaymentRequest,
+    VerifyRazorpayPaymentResponse,
 };
-use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
-    QueryFilter,
-};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 use tonic::{Request, Response, Status as TonicStatus};
@@ -112,6 +110,7 @@ pub async fn verify_razorpay_payment(
         &secret,
     ) {
         crate::observability::record_payment_verify_invalid_signature_total();
+        crate::observability::record_payment_verification_failed_total("invalid_signature");
         warn!(
             order_id = req.order_id,
             "verify_razorpay_payment: invalid signature rejected"
@@ -122,28 +121,42 @@ pub async fn verify_razorpay_payment(
         }));
     }
 
-    let mut active = intent.clone().into_active_model();
-    active.status = ActiveValue::Set(Status::Processed);
-    active.razorpay_payment_id = ActiveValue::Set(Some(req.razorpay_payment_id.clone()));
+    crate::observability::log_operational_event(
+        "payment_verified",
+        &[
+            ("order_id", req.order_id.to_string()),
+            ("razorpay_order_id", req.razorpay_order_id.clone()),
+            ("razorpay_payment_id", req.razorpay_payment_id.clone()),
+        ],
+    );
 
-    let updated: payment_intents::Model =
-        active.update(txn).await.map_err(map_db_error_to_status)?;
+    let updated = capture_payment(
+        txn,
+        Request::new(CapturePaymentRequest {
+            intent_id: intent.intent_id,
+            razorpay_payment_id: req.razorpay_payment_id.clone(),
+        }),
+    )
+    .await?
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .ok_or_else(|| TonicStatus::internal("capture_payment returned no payment intent"))?;
 
     if let Some(oid) = updated.order_id {
-        order_state_machine::transition_order_status(
+        finalize_order_paid(
             txn,
             oid,
-            OrderState::Paid,
             "payment_client_verified",
             "customer",
-            Some("Payment verified after Razorpay checkout"),
-            Some(PaymentStatus::Captured),
+            "Payment verified after Razorpay checkout",
         )
         .await?;
     }
 
     Ok(Response::new(VerifyRazorpayPaymentResponse {
         verified: true,
-        payment_intent: Some(intent_to_response(&updated)),
+        payment_intent: Some(updated),
     }))
 }

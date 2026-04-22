@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireAuthenticatedCustomerUserId: vi.fn<() => Promise<string | null>>(),
@@ -53,9 +53,14 @@ describe("GET /api/account/orders/[orderId]", () => {
               orderId: "7",
               userId: "104",
               orderDate: "2026-04-10T00:00:00Z",
+              cancelWindowEndsAt: "2026-04-10T12:00:00Z",
+              earliestBookingAt: "2026-04-10T12:00:00Z",
+              pickupTargetAt: "2026-04-12T00:00:00Z",
+              fulfillmentStatus: "not_created",
               totalAmountPaise: "90499",
-              totalAmountFormatted: "₹904.99",
+              totalAmountFormatted: "Rs 904.99",
               statusId: "6",
+              refundSettlementStatus: "refund_pending",
               orderDetails: [],
             },
           ],
@@ -109,6 +114,11 @@ describe("GET /api/account/orders/[orderId]", () => {
             },
           ],
         },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          getRefunds: [],
+        },
       });
 
     const res = await GET(new Request("http://localhost/api/account/orders/7"), {
@@ -117,6 +127,13 @@ describe("GET /api/account/orders/[orderId]", () => {
     const json = (await res.json()) as {
       ok: boolean;
       data: {
+        order: {
+          cancelWindowEndsAt?: string | null;
+          earliestBookingAt?: string | null;
+          pickupTargetAt?: string | null;
+          fulfillmentStatus?: string | null;
+          refundSettlementStatus?: string | null;
+        };
         statusName: string;
         fulfillmentState: string;
         paymentState: string;
@@ -129,10 +146,14 @@ describe("GET /api/account/orders/[orderId]", () => {
     expect(json.ok).toBe(true);
     expect(json.data.statusName).toBe("cancelled");
     expect(json.data.fulfillmentState).toBe("issue");
+    expect(json.data.order.cancelWindowEndsAt).toBe("2026-04-10T12:00:00Z");
+    expect(json.data.order.earliestBookingAt).toBe("2026-04-10T12:00:00Z");
+    expect(json.data.order.pickupTargetAt).toBe("2026-04-12T00:00:00Z");
+    expect(json.data.order.fulfillmentStatus).toBe("not_created");
+    expect(json.data.order.refundSettlementStatus).toBe("refund_pending");
     // processed does not map to paid in this endpoint yet; document current behavior.
     expect(json.data.paymentState).toBe("processed");
     expect(json.data.shipments[0]?.shiprocketStatusId).toBe("8");
     expect(json.data.events.some((e) => e.eventType === "refund_initiated")).toBe(true);
   });
 });
-

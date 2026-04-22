@@ -277,8 +277,10 @@ CREATE TABLE `ShippingAddresses` (
 CREATE TABLE `Orders` (
     `OrderID` BIGINT NOT NULL AUTO_INCREMENT,
     `order_number` VARCHAR(50) UNIQUE COMMENT 'SUD-2024-00001',
+    `PublicOrderRef` VARCHAR(48) NOT NULL COMMENT 'Immutable external ref: SUD-YYYYMMDD-SUFFIX',
     `UserID` BIGINT NOT NULL,
     `OrderDate` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `ShippingAddressID` BIGINT NOT NULL,
     `TotalAmount` DECIMAL(10,2) NULL COMMENT 'Legacy field, do not use; use *_minor columns instead',
     `StatusID` BIGINT NOT NULL,
@@ -287,17 +289,23 @@ CREATE TABLE `Orders` (
     `currency` VARCHAR(3) DEFAULT 'INR',
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `subtotal_minor` BIGINT NOT NULL,
+    `items_total_minor_before_discount` BIGINT NULL DEFAULT NULL,
     `shipping_minor` BIGINT NULL DEFAULT 0,
+    `shipping_charge_minor` BIGINT NULL DEFAULT NULL,
     `tax_total_minor` BIGINT NULL DEFAULT 0,
     `discount_total_minor` BIGINT NULL DEFAULT 0,
+    `items_total_minor_after_discount` BIGINT NULL DEFAULT NULL,
     `grand_total_minor` BIGINT NOT NULL,
     `applied_coupon_id` BIGINT NULL DEFAULT NULL,
     `applied_coupon_code` VARCHAR(64) NULL DEFAULT NULL,
     `applied_discount_paise` INT NULL DEFAULT NULL,
+    `refund_settlement_status` VARCHAR(32) NULL DEFAULT NULL COMMENT 'refund_pending|refund_processed|refund_failed|refund_not_applicable',
+    `fulfillment_status` ENUM('not_created','booked','pickup_completed','in_transit','delivered','rto') NOT NULL DEFAULT 'not_created',
     PRIMARY KEY (`OrderID`),
     FOREIGN KEY (`UserID`) REFERENCES `Users`(`UserID`),
     FOREIGN KEY (`ShippingAddressID`) REFERENCES `ShippingAddresses`(`ShippingAddressID`),
     FOREIGN KEY (`StatusID`) REFERENCES `OrderStatus`(`StatusID`),
+    UNIQUE KEY `uq_orders_public_order_ref` (`PublicOrderRef`),
     INDEX `idx_order_number` (`order_number`),
     INDEX `idx_payment_status` (`payment_status`),
     INDEX `idx_orders_date_status_user` (`OrderDate`, `StatusID`, `UserID`)
@@ -371,17 +379,21 @@ CREATE TABLE `OrderDetails` (
     `VariantID` bigint NOT NULL,
     `Quantity` bigint NOT NULL,
     `Price` decimal(10,2) NULL COMMENT 'Legacy field, do not use; use unit_price_minor instead',
+    `line_total_minor` BIGINT NOT NULL DEFAULT 0 COMMENT 'Immutable line total captured at checkout',
     `unit_price_minor` INT NOT NULL,
     `discount_minor` INT NULL DEFAULT NULL,
     `tax_minor` INT NULL DEFAULT NULL,
     `sku` VARCHAR(255) NULL DEFAULT NULL,
     `title` VARCHAR(512) NULL DEFAULT NULL,
     `line_attrs` JSON NULL DEFAULT NULL,
+    `item_status` VARCHAR(16) NOT NULL DEFAULT 'active',
+    `cancelled_at` TIMESTAMP NULL,
     PRIMARY KEY (`OrderDetailID`),
     FOREIGN KEY (`OrderID`) REFERENCES `Orders`(`OrderID`),
     FOREIGN KEY (`VariantID`) REFERENCES `ProductVariants`(`VariantID`),
     INDEX `idx_order_details_order_id` (`OrderID`),
-    INDEX `idx_order_details_variant` (`VariantID`)
+    INDEX `idx_order_details_variant` (`VariantID`),
+    INDEX `idx_order_details_order_item_status` (`OrderID`, `item_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Table structure for table `Reviews` (Enhanced with moderation)
@@ -547,6 +559,14 @@ CREATE TABLE `PaymentIntents` (
     `intent_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `razorpay_order_id` VARCHAR(100) UNIQUE NOT NULL,
     `order_id` BIGINT NULL,
+    `active_order_id` BIGINT GENERATED ALWAYS AS (
+      CASE
+        WHEN `order_id` IS NOT NULL
+         AND `status` IN ('pending', 'client_verified', 'needs_review')
+        THEN `order_id`
+        ELSE NULL
+      END
+    ) STORED,
     `user_id` BIGINT NULL,
     `amount_paise` INT NOT NULL,
     `currency` VARCHAR(3) DEFAULT 'INR',
@@ -560,6 +580,7 @@ CREATE TABLE `PaymentIntents` (
     FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
     FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`),
     UNIQUE KEY `uq_razorpay_payment_id` (`razorpay_payment_id`),
+    UNIQUE KEY `uq_payment_intents_active_order` (`active_order_id`),
     INDEX `idx_razorpay_order` (`razorpay_order_id`),
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -569,8 +590,13 @@ CREATE TABLE `Shipments` (
     `shipment_id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `order_id` BIGINT NOT NULL,
     `shiprocket_order_id` VARCHAR(100),
+    `shiprocket_external_order_id` VARCHAR(100),
     `awb_code` VARCHAR(100),
     `carrier` VARCHAR(100),
+    `selected_courier_id` BIGINT NULL,
+    `selected_courier_name` VARCHAR(150) NULL,
+    `quoted_shipping_cost` BIGINT NULL,
+    `quoted_shipping_quote_payload` JSON NULL,
     `shiprocket_status_id` INT NULL COMMENT 'Shiprocket shipment_status_id',
     `shiprocket_status_label` VARCHAR(128) NULL COMMENT 'Shiprocket status label (API or mapped)',
     `shipment_status` ENUM(
@@ -593,9 +619,18 @@ CREATE TABLE `Shipments` (
     `tracking_events` JSON,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `delivered_at` TIMESTAMP NULL,
+    `pickup_scheduled_for` TIMESTAMP NULL,
+    `logistics_status` VARCHAR(64) NULL,
+    `can_customer_cancel` TINYINT(1) NOT NULL DEFAULT 1,
+    `razorpay_refund_id` VARCHAR(100) NULL,
+    `refund_status` VARCHAR(32) NULL,
+    `refund_initiated_at` TIMESTAMP NULL,
     FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
     INDEX `idx_order` (`order_id`),
-    INDEX `idx_awb` (`awb_code`)
+    INDEX `idx_awb` (`awb_code`),
+    INDEX `idx_shipments_external_order` (`shiprocket_external_order_id`),
+    INDEX `idx_shipments_cancelable` (`can_customer_cancel`, `logistics_status`),
+    UNIQUE KEY `uq_shipments_refund_id` (`razorpay_refund_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Coupons for discount codes
@@ -626,6 +661,7 @@ CREATE TABLE `CouponRedemptions` (
     FOREIGN KEY (`coupon_id`) REFERENCES `Coupons`(`coupon_id`),
     FOREIGN KEY (`user_id`) REFERENCES `Users`(`UserID`),
     FOREIGN KEY (`order_id`) REFERENCES `Orders`(`OrderID`),
+    UNIQUE KEY `uq_coupon_redemption_coupon_order` (`coupon_id`, `order_id`),
     INDEX `idx_coupon_user` (`coupon_id`, `user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -734,12 +770,15 @@ ALTER TABLE `Orders`
 
 -- Insert default order statuses
 INSERT INTO `OrderStatus` (`StatusName`) VALUES
+('active_sale'),
 ('pending'),
 ('confirmed'),
 ('processing'),
 ('shipped'),
 ('delivered'),
 ('cancelled'),
+('partially_cancelled'),
+('cancel_pending_logistics'),
 ('refunded'),
 ('needs_review')
 ON DUPLICATE KEY UPDATE StatusName = VALUES(StatusName);

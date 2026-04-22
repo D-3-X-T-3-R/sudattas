@@ -3,6 +3,7 @@
 //! `cargo test -p graphql --test e2e_business_flows -- --ignored`
 
 use reqwest::Client;
+mod provider_test_gate;
 
 fn base_url() -> String {
     std::env::var("GRAPHQL_URL")
@@ -135,6 +136,10 @@ async fn e2e_order_visible_in_profile_query() {
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_place_order() {
+    if !provider_test_gate::should_run_provider_dependent_test("e2e_place_order") {
+        return;
+    }
+
     let query = "mutation { placeOrder(order: { shippingAddressId: \"1\" }) { orderId userId totalAmount } }";
     let (status, body) = post_gql(&Client::new(), query, false).await;
     assert_success_gql(status, &body);
@@ -143,6 +148,10 @@ async fn e2e_place_order() {
 #[tokio::test]
 #[ignore = "requires GraphQL server; run with --ignored"]
 async fn e2e_payment_verify() {
+    if !provider_test_gate::should_run_provider_dependent_test("e2e_payment_verify") {
+        return;
+    }
+
     let query = "mutation { verifyRazorpayPayment(input: { orderId: \"1\", razorpayPaymentId: \"pay_1\", razorpayOrderId: \"order_1\", razorpaySignature: \"sig\" }) { verified paymentIntent { intentId status } } }";
     let (status, body) = post_gql(&Client::new(), query, false).await;
     assert_success_gql(status, &body);

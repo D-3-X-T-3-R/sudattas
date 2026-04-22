@@ -4,6 +4,7 @@ import { listTelemetryEvents, type StoredTelemetryEvent } from "@/lib/telemetry-
 import { coreOpsMetricsUrl, graphqlMetricsUrl } from "@/lib/env/server";
 
 type Ratio = { numerator: number; denominator: number; percent: number };
+type CountSignal = { value: number; unit: "count" };
 
 function ratio(numerator: number, denominator: number): Ratio {
   const safeDen = denominator <= 0 ? 0 : denominator;
@@ -139,6 +140,15 @@ export async function GET() {
   let backendAdminFailureRatio = ratio(0, 0);
   let backendAuthFailureCount = 0;
   let webhookLatencyAverageMs: number | null = null;
+  let paymentFailureCount = 0;
+  let webhookFailureCount = 0;
+  let refundFailureCount = 0;
+  let shiprocketBookingFailureCount = 0;
+  let staleExpiryFailureCount = 0;
+  let cancelPendingLogisticsBacklog = 0;
+  let outboxBacklog = 0;
+  let stuckPendingOrders = 0;
+  let stuckPaymentIntents = 0;
 
   try {
     const [graphqlMetricsText, coreOpsMetricsText] = await Promise.all([
@@ -171,6 +181,15 @@ export async function GET() {
     if (whCount > 0) {
       webhookLatencyAverageMs = Number(((whSum / whCount) * 1000).toFixed(2));
     }
+    paymentFailureCount = sumMetric(ops, "payment_verification_failed_total");
+    webhookFailureCount = sumMetric(ops, "webhook_processing_failed_total");
+    refundFailureCount = sumMetric(ops, "refund_failure_total");
+    shiprocketBookingFailureCount = sumMetric(ops, "shiprocket_booking_failed_total");
+    staleExpiryFailureCount = sumMetric(ops, "stale_order_expiry_failure_total");
+    cancelPendingLogisticsBacklog = sumMetric(ops, "cancel_pending_logistics_backlog");
+    outboxBacklog = sumMetric(ops, "outbox_backlog");
+    stuckPendingOrders = sumMetric(ops, "stuck_pending_orders");
+    stuckPaymentIntents = sumMetric(ops, "stuck_payment_intents");
   } catch {
     backendMetricsAvailable = false;
   }
@@ -210,6 +229,24 @@ export async function GET() {
       backendSignals: {
         available: backendMetricsAvailable,
         authUnauthorizedCount: backendAuthFailureCount,
+        paymentFailureCount: { value: paymentFailureCount, unit: "count" } satisfies CountSignal,
+        webhookFailureCount: { value: webhookFailureCount, unit: "count" } satisfies CountSignal,
+        refundFailureCount: { value: refundFailureCount, unit: "count" } satisfies CountSignal,
+        shiprocketBookingFailureCount: {
+          value: shiprocketBookingFailureCount,
+          unit: "count",
+        } satisfies CountSignal,
+        staleExpiryFailureCount: {
+          value: staleExpiryFailureCount,
+          unit: "count",
+        } satisfies CountSignal,
+        cancelPendingLogisticsBacklog: {
+          value: cancelPendingLogisticsBacklog,
+          unit: "count",
+        } satisfies CountSignal,
+        outboxBacklog: { value: outboxBacklog, unit: "count" } satisfies CountSignal,
+        stuckPendingOrders: { value: stuckPendingOrders, unit: "count" } satisfies CountSignal,
+        stuckPaymentIntents: { value: stuckPaymentIntents, unit: "count" } satisfies CountSignal,
       },
     },
     errorCode: null,

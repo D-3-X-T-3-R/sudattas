@@ -45,7 +45,6 @@ thiserror = "1.0"
 
 # UUID for session IDs
 uuid = { version = "1.6", features = ["v4", "serde"] }
-env_logger = "0.10.1"
 
 # HTTP server for GraphQL
 warp = "0.3"
@@ -63,7 +62,8 @@ subtle = "2.5"
 # Path Dependencies
 core_db_entities = {path = "../core_db_entities/"}
 proto = {path = "../protos/"}
-tracing = "0.1.44"
+tracing = { version = "0.1.44", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "json"] }
 metrics = "0.21"
 metrics-exporter-prometheus = "0.13"
 

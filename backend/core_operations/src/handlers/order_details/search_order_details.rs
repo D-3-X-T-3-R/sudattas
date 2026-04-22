@@ -42,6 +42,9 @@ pub async fn search_order_detail(
                     variant_id: model.variant_id,
                     quantity: model.quantity,
                     price_paise: model.price.as_ref().map(decimal_to_paise).unwrap_or(0),
+                    line_total_minor: model.line_total_minor,
+                    item_status: model.item_status,
+                    cancelled_at: model.cancelled_at.map(|v| v.to_rfc3339()),
                 })
                 .collect();
 

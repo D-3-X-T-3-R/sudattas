@@ -1,9 +1,10 @@
 use proto::proto::core::{
-    CreateRefundRequest, RefundResponse, RefundsResponse, ResolveNeedsReviewRequest,
+    CreateRefundRequest, GetRefundsRequest, RefundResponse, RefundsResponse,
+    ResolveNeedsReviewRequest,
 };
 use tracing::instrument;
 
-use super::schema::{NewRefund, Refund, ResolveNeedsReviewInput};
+use super::schema::{GetRefund, NewRefund, Refund, ResolveNeedsReviewInput};
 use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64},
@@ -18,6 +19,7 @@ fn refund_response_to_gql(r: RefundResponse) -> Refund {
         currency: r.currency,
         status: r.status,
         created_at: r.created_at,
+        line_items_refunded_json: r.line_items_refunded_json,
     }
 }
 
@@ -51,4 +53,28 @@ pub(crate) async fn resolve_needs_review(input: ResolveNeedsReviewInput) -> Resu
         })
         .await?;
     Ok(resp.into_inner().success)
+}
+
+#[instrument]
+pub(crate) async fn get_refunds(input: GetRefund) -> Result<Vec<Refund>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let resp = client
+        .get_refunds(GetRefundsRequest {
+            refund_id: input
+                .refund_id
+                .as_deref()
+                .map(|s| parse_i64(s, "refund_id"))
+                .transpose()?,
+            order_id: input
+                .order_id
+                .as_deref()
+                .map(|s| parse_i64(s, "order_id"))
+                .transpose()?,
+            gateway_refund_id: input
+                .gateway_refund_id
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
+        })
+        .await?;
+    Ok(refunds_response_to_vec(resp.into_inner()))
 }

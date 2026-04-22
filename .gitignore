@@ -35,6 +35,9 @@ Cargo.lock
 **/*.rs.bk
 *.pdb
 
+# DB backups
+**/db-backups/*
+
 #Secret Keys
 .secret
 nul

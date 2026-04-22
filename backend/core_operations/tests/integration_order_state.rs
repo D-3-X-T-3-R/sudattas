@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_order_state -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use integration_common::test_db_url;
@@ -19,11 +20,11 @@ use core_db_entities::entity::{
 use core_operations::procedures::orders::place_order;
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CreateCartItemRequest,
-    CreateUserRequest, PlaceOrderRequest, UpdateOrderRequest,
+    CreateUserRequest, DeleteOrderRequest, PlaceOrderRequest, UpdateOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
-    TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, EntityTrait,
+    QueryFilter, Statement, TransactionTrait,
 };
 use tonic::{Code, Request};
 
@@ -39,6 +40,21 @@ async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> 
     .await
     .expect("insert OrderStatus");
     m.status_id
+}
+
+async fn make_order_booking_eligible(txn: &sea_orm::DatabaseTransaction, order_id: i64) {
+    let _ = txn
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::MySql,
+            r#"UPDATE Orders
+               SET earliest_booking_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   cancel_window_ends_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   payment_status = 'captured'
+               WHERE OrderID = ?"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("make order booking-eligible");
 }
 
 /// Build user + shipping + one product/variant/inventory + one cart item, place order; return (order_id, user_id, shipping_id, variant_id, total_paise).
@@ -105,7 +121,8 @@ async fn place_order_minimal(
         name: ActiveValue::Set("Order State Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live shipping quote dependency.
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(cat.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -143,7 +160,7 @@ async fn place_order_minimal(
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -154,6 +171,7 @@ async fn place_order_minimal(
     )
     .await
     .expect("create_cart_item");
+    let cart_id = cart_res.into_inner().items[0].cart_id;
 
     let place_res = place_order(
         txn,
@@ -161,6 +179,8 @@ async fn place_order_minimal(
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await
@@ -179,6 +199,12 @@ async fn place_order_minimal(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_order_update_pending_to_confirmed_and_order_event() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_order_update_pending_to_confirmed_and_order_event",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -229,13 +255,19 @@ async fn integration_order_update_pending_to_confirmed_and_order_event() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_order_cancel_restores_inventory() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_order_cancel_restores_inventory",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, shipping_id, variant_id, total_paise) =
+    let (order_id, user_id, _shipping_id, variant_id, _total_paise) =
         place_order_minimal(&txn, now_tag).await;
 
     let inv_before = inventory::Entity::find()
@@ -246,20 +278,15 @@ async fn integration_order_cancel_restores_inventory() {
         .expect("inventory exists");
     let qty_before = inv_before.quantity_available.unwrap_or(0);
 
-    let cancelled_id = ensure_order_status(&txn, "cancelled").await;
-
-    let _ = core_operations::handlers::orders::update_order(
+    let _ = core_operations::handlers::orders::delete_order(
         &txn,
-        Request::new(UpdateOrderRequest {
+        Request::new(DeleteOrderRequest {
             order_id,
-            user_id,
-            shipping_address_id: shipping_id,
-            total_amount_paise: total_paise,
-            status_id: cancelled_id,
+            acting_user_id: Some(user_id),
         }),
     )
     .await
-    .expect("update_order to cancelled should succeed");
+    .expect("delete_order should cancel and restore inventory");
 
     let inv_after = inventory::Entity::find()
         .filter(inventory::Column::VariantId.eq(Some(variant_id)))
@@ -281,6 +308,12 @@ async fn integration_order_cancel_restores_inventory() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_order_illegal_transition_returns_invalid_argument() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_order_illegal_transition_returns_invalid_argument",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -319,6 +352,12 @@ async fn integration_order_illegal_transition_returns_invalid_argument() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_admin_mark_shipped_creates_shipment() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_admin_mark_shipped_creates_shipment",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -356,6 +395,8 @@ async fn integration_admin_mark_shipped_creates_shipment() {
     )
     .await
     .expect("update to processing");
+
+    make_order_booking_eligible(&txn, order_id).await;
 
     let ship_res = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
@@ -400,6 +441,12 @@ async fn integration_admin_mark_shipped_creates_shipment() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_admin_mark_shipped_twice_updates_shipment() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_admin_mark_shipped_twice_updates_shipment",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -437,6 +484,8 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
     )
     .await
     .expect("update to processing");
+
+    make_order_booking_eligible(&txn, order_id).await;
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
@@ -484,6 +533,12 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_admin_mark_delivered_transitions_to_delivered() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_admin_mark_delivered_transitions_to_delivered",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -522,6 +577,8 @@ async fn integration_admin_mark_delivered_transitions_to_delivered() {
     .await
     .expect("update to processing");
 
+    make_order_booking_eligible(&txn, order_id).await;
+
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
         Request::new(AdminMarkOrderShippedRequest {
@@ -559,6 +616,12 @@ async fn integration_admin_mark_delivered_transitions_to_delivered() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_order_full_lifecycle_pending_to_delivered() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_order_full_lifecycle_pending_to_delivered",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -568,7 +631,7 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
     let (order_id, user_id, shipping_id, _variant_id, total_paise) =
         place_order_minimal(&txn, now_tag).await;
 
-    let pending_id = ensure_order_status(&txn, "pending").await;
+    let active_sale_id = ensure_order_status(&txn, "active_sale").await;
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
     let processing_id = ensure_order_status(&txn, "processing").await;
     let _shipped_id = ensure_order_status(&txn, "shipped").await;
@@ -579,7 +642,7 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
         .await
         .expect("query order")
         .expect("order exists");
-    assert_eq!(order.status_id, pending_id);
+    assert_eq!(order.status_id, active_sale_id);
 
     let _ = core_operations::handlers::orders::update_order(
         &txn,
@@ -606,6 +669,8 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
     )
     .await
     .expect("confirmed → processing");
+
+    make_order_booking_eligible(&txn, order_id).await;
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,

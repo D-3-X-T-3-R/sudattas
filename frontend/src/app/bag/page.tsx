@@ -99,6 +99,7 @@ export default function BagPage() {
   const [shippingAmount, setShippingAmount] = useState(0);
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingNote, setShippingNote] = useState<string | null>(null);
+  const [paymentMode, setPaymentMode] = useState<"prepaid" | "cod">("prepaid");
   const cartSignature = useMemo(
     () => cartLines.map((line) => `${line.id}:${line.qty}`).join("|"),
     [cartLines]
@@ -156,12 +157,18 @@ export default function BagPage() {
         setShippingNote(status === "authenticated" ? "Select address to calculate shipping." : "Sign in to calculate shipping.");
         return;
       }
+      const selectedCartLineIds = [...selectedLineIds];
+      if (selectedCartLineIds.length === 0) {
+        setShippingAmount(0);
+        setShippingNote("Select at least one bag item to calculate shipping.");
+        return;
+      }
       setShippingLoading(true);
       try {
         const row = await fetchApiEnvelope<ShippingEstimate>("/api/checkout/shipping-estimate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shippingAddressId: selectedAddressId }),
+          body: JSON.stringify({ shippingAddressId: selectedAddressId, selectedCartLineIds }),
           signal: controller.signal,
         });
         const paise = Number.parseInt(row.shippingAmountPaise, 10);
@@ -184,7 +191,7 @@ export default function BagPage() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [status, selectedAddressId, cartSignature, cartLines.length]);
+  }, [status, selectedAddressId, cartSignature, cartLines.length, selectedLineIds]);
 
   const allSelected = cartLines.length > 0 && selectedLineIds.size === cartLines.length;
   const selectedLines = useMemo(
@@ -295,6 +302,8 @@ export default function BagPage() {
     }
     void runCheckout({
       shippingAddressId: selectedAddressId,
+      selectedCartLineIds: [...selectedLineIds],
+      paymentMode,
       onSuccess: ({ orderId }) => router.push(`/checkout/success?orderId=${encodeURIComponent(orderId)}`),
       onFailure: ({ orderId, reason }) => {
         const params = new URLSearchParams();
@@ -316,6 +325,31 @@ export default function BagPage() {
             <div className="mb-5 rounded-2xl border border-[#0F3D2E]/10 bg-white/70 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8B816D]">Delivery address</p>
               <p className="mt-2 text-sm text-[#162019]">{status === "authenticated" ? formatAddress(selectedAddress) : "Sign in to choose address"}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8B816D]">Payment mode</p>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMode("prepaid")}
+                  className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                    paymentMode === "prepaid"
+                      ? "border-[#0F3D2E] bg-[#0F3D2E]/10 text-[#0F3D2E]"
+                      : "border-[#0F3D2E]/20 text-[#6B6560]"
+                  }`}
+                >
+                  Prepaid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMode("cod")}
+                  className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                    paymentMode === "cod"
+                      ? "border-[#0F3D2E] bg-[#0F3D2E]/10 text-[#0F3D2E]"
+                      : "border-[#0F3D2E]/20 text-[#6B6560]"
+                  }`}
+                >
+                  Cash on Delivery
+                </button>
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {status === "authenticated" ? (
                   <>

@@ -8,12 +8,14 @@
 #    - --preserve-data (default): restore latest backup, then apply forward migrations
 #    - --fresh: load schema from database/sql_dump/01_schema.sql, then apply forward migrations
 # 5) Regenerate SeaORM entities
-# 6) Start Core Operations + GraphQL
+# 6) Start Core Operations + GraphQL (skipped with --orm)
 #
 # Usage (from backend/):
 #   ./start-services.sh
 #   ./start-services.sh --preserve-data
 #   ./start-services.sh --fresh
+#   ./start-services.sh --orm
+#   ./start-services.sh --fresh --orm
 
 set -e
 BACKEND_ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -21,6 +23,7 @@ ENV_FILE="$BACKEND_ROOT/.env"
 SCHEMA_FILE="$BACKEND_ROOT/database/sql_dump/01_schema.sql"
 DB_CONTAINER_NAME="sudattas-mysql"
 DB_MODE="preserve-data"
+ORM_ONLY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,9 +35,13 @@ while [[ $# -gt 0 ]]; do
       DB_MODE="preserve-data"
       shift
       ;;
+    --orm)
+      ORM_ONLY=true
+      shift
+      ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Usage: ./start-services.sh [--fresh|--preserve-data]" >&2
+      echo "Usage: ./start-services.sh [--fresh|--preserve-data] [--orm]" >&2
       exit 1
       ;;
   esac
@@ -138,9 +145,13 @@ else
   ) || { echo "Entity regeneration failed." >&2; exit 1; }
 fi
 
-# 6) Build and start app services after DB + entities are ready
-echo "Building and starting app services (Core Operations, GraphQL)..."
-(cd "$BACKEND_ROOT" && $COMPOSE_CMD up -d --build core_operations graphql) || { echo "Docker Compose (core services) failed." >&2; exit 1; }
+# 6) Build and start app services after DB + entities are ready (optional)
+if [[ "$ORM_ONLY" == "true" ]]; then
+  echo "ORM-only mode (--orm): skipping Core Operations and GraphQL."
+else
+  echo "Building and starting app services (Core Operations, GraphQL)..."
+  (cd "$BACKEND_ROOT" && $COMPOSE_CMD up -d --build core_operations graphql) || { echo "Docker Compose (core services) failed." >&2; exit 1; }
+fi
 
 # Keep only the latest 50 DB dumps under database/db-backups
 echo "Pruning old DB backups (keeping latest 50)..."
@@ -158,8 +169,13 @@ if [[ -d "$BACKUP_PRUNE_DIR" ]]; then
 fi
 
 echo ""
-echo "Done. All services running in Docker:"
-echo "  MySQL (3306), Redis (6379), Core Operations (50051), GraphQL (8080)"
+if [[ "$ORM_ONLY" == "true" ]]; then
+  echo "Done (ORM-only). MySQL + Redis are running; SeaORM entities were regenerated."
+  echo "  MySQL (3306), Redis (6379) — Core Operations / GraphQL were not started."
+else
+  echo "Done. All services running in Docker:"
+  echo "  MySQL (3306), Redis (6379), Core Operations (50051), GraphQL (8080)"
+fi
 echo "  DB mode: $DB_MODE"
 echo "  SeaORM entities refreshed from current DB schema"
 echo "  Stop with: docker compose down  (or docker-compose down)"

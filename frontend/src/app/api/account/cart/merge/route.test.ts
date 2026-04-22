@@ -42,7 +42,7 @@ describe("cart merge route", () => {
 
     const req = new Request("http://localhost/api/account/cart/merge", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Guest-Session-Id": "guest-1" },
       body: JSON.stringify({ guestSessionId: "guest-1", idempotencyKey: "merge-key" }),
     });
 
@@ -63,6 +63,103 @@ describe("cart merge route", () => {
       expect.stringContaining("DeleteCartItem"),
       expect.any(Object),
       { "Idempotency-Key": "merge-key:del:g1" }
+    );
+  });
+
+  it("rejects guest session header/body mismatches", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("12");
+
+    const req = new Request("http://localhost/api/account/cart/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Guest-Session-Id": "guest-a" },
+      body: JSON.stringify({ guestSessionId: "guest-b" }),
+    });
+
+    const res = await POST(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(json.message).toContain("active guest session");
+    expect(mocks.callGraphqlAsCustomer).not.toHaveBeenCalled();
+    expect(mocks.callGraphqlAsInternalService).not.toHaveBeenCalled();
+  });
+
+  it("merges guest cart exactly once across repeated attempts", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("12");
+
+    mocks.callGraphqlAsInternalService
+      .mockResolvedValueOnce({
+        data: { getCartItems: [{ cartId: "g1", userId: "0", variantId: "v1", quantity: "2" }] },
+      })
+      .mockResolvedValueOnce({ data: { deleteCartItem: [{ cartId: "g1" }] } })
+      .mockResolvedValueOnce({ data: { getCartItems: [] } });
+
+    mocks.callGraphqlAsCustomer
+      .mockResolvedValueOnce({
+        data: { getCartItems: [{ cartId: "u1", userId: "12", variantId: "v1", quantity: "1" }] },
+      })
+      .mockResolvedValueOnce({
+        data: { updateCartItem: [{ cartId: "u1", userId: "12", variantId: "v1", quantity: "3" }] },
+      })
+      .mockResolvedValueOnce({
+        data: { getCartItems: [{ cartId: "u1", userId: "12", variantId: "v1", quantity: "3" }] },
+      });
+
+    const requestFor = () =>
+      new Request("http://localhost/api/account/cart/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Guest-Session-Id": "guest-1" },
+        body: JSON.stringify({ guestSessionId: "guest-1", idempotencyKey: "merge-key" }),
+      });
+
+    const first = await POST(requestFor());
+    const firstJson = await first.json();
+    const second = await POST(requestFor());
+    const secondJson = await second.json();
+
+    expect(first.status).toBe(200);
+    expect(firstJson.data.merged).toBe(1);
+    expect(second.status).toBe(200);
+    expect(secondJson.data.merged).toBe(0);
+    expect(mocks.callGraphqlAsCustomer).toHaveBeenCalledTimes(3);
+    expect(mocks.callGraphqlAsInternalService).toHaveBeenCalledTimes(3);
+  });
+
+  it("restores the guest cart if the customer merge write fails", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("12");
+
+    mocks.callGraphqlAsInternalService
+      .mockResolvedValueOnce({
+        data: { getCartItems: [{ cartId: "g1", userId: "0", variantId: "v1", quantity: "2" }] },
+      })
+      .mockResolvedValueOnce({ data: { deleteCartItem: [{ cartId: "g1" }] } })
+      .mockResolvedValueOnce({ data: { addCartItem: [{ cartId: "g2", userId: "0", variantId: "v1", quantity: "2" }] } });
+
+    mocks.callGraphqlAsCustomer
+      .mockResolvedValueOnce({ data: { getCartItems: [] } })
+      .mockResolvedValueOnce({ errors: [{ message: "customer add failed" }] });
+
+    const req = new Request("http://localhost/api/account/cart/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Guest-Session-Id": "guest-1" },
+      body: JSON.stringify({ guestSessionId: "guest-1", idempotencyKey: "merge-key" }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    expect(mocks.callGraphqlAsInternalService).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining("AddCartItem"),
+      {
+        input: {
+          userId: null,
+          variantId: "v1",
+          quantity: "2",
+          sessionId: "guest-1",
+        },
+      },
+      { "Idempotency-Key": "merge-key:restore:g1" }
     );
   });
 });

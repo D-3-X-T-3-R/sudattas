@@ -1,13 +1,15 @@
+use crate::cancellation_saga;
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::payment_intents::capture_payment;
+use crate::handlers::payment_intents::finalize_order_paid;
 use crate::handlers::refunds::create_refund;
+use crate::handlers::shipments::{ensure_local_order_cancelled, update_cancelability_from_webhook};
 use crate::order_state_machine;
-use crate::razorpay;
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status};
 use core_db_entities::entity::webhook_events;
-use core_db_entities::entity::{coupon_redemptions, orders, payment_intents, refunds};
+use core_db_entities::entity::{orders, payment_intents, refunds};
 use proto::proto::core::{
     CapturePaymentRequest, CreateOrderEventRequest, CreateRefundRequest, IngestWebhookRequest,
     WebhookEventResponse, WebhookEventsResponse,
@@ -258,55 +260,14 @@ async fn process_payment_captured(
     .await?;
 
     if let Some(order_id) = intent.order_id {
-        let _ = order_state_machine::transition_order_status(
+        finalize_order_paid(
             txn,
             order_id,
-            order_state_machine::OrderState::Paid,
             "payment_captured",
             "system",
-            Some("Payment captured"),
-            Some(PaymentStatus::Captured),
+            "Payment captured",
         )
-        .await;
-    }
-
-    // Phase 4: increment coupon usage_count only on verified payment (not on place_order).
-    // P1: record redemption for per-customer usage tracking.
-    if let Some(order_id) = intent.order_id {
-        if let Ok(Some(order)) = orders::Entity::find_by_id(order_id).one(txn).await {
-            if let Some(coupon_id) = order.applied_coupon_id {
-                let res = txn
-                    .execute(Statement::from_sql_and_values(
-                        DbBackend::MySql,
-                        r#"UPDATE coupons SET usage_count = COALESCE(usage_count, 0) + 1
-                           WHERE coupon_id = ? AND (usage_limit IS NULL OR COALESCE(usage_count, 0) < usage_limit)"#,
-                        [coupon_id.into()],
-                    ))
-                    .await;
-                if let Ok(result) = res {
-                    if result.rows_affected() > 0 {
-                        info!(
-                            coupon_id = coupon_id,
-                            "coupon usage_count incremented (within limit)"
-                        );
-                        let redemption = coupon_redemptions::ActiveModel {
-                            redemption_id: ActiveValue::NotSet,
-                            coupon_id: ActiveValue::Set(coupon_id),
-                            user_id: ActiveValue::Set(order.user_id),
-                            order_id: ActiveValue::Set(order_id),
-                            redeemed_at: ActiveValue::Set(Some(Utc::now())),
-                        };
-                        if redemption.insert(txn).await.is_err() {
-                            warn!(
-                                coupon_id = coupon_id,
-                                order_id = order_id,
-                                "coupon_redemptions insert failed (non-fatal)"
-                            );
-                        }
-                    }
-                }
-            }
-        }
+        .await?;
     }
 
     Ok(())
@@ -346,7 +307,10 @@ async fn process_shiprocket_shipment_updates(
             shiprocket_status_label = ?lbl,
             "shiprocket webhook: applying shipment scan/status update"
         );
-        apply_shiprocket_scan_to_shipment(txn, row, sid, lbl.clone(), scan).await?;
+        let updated = apply_shiprocket_scan_to_shipment(txn, row, sid, lbl.clone(), scan).await?;
+        let updated_status = format!("{:?}", updated.shipment_status).to_lowercase();
+        update_cancelability_from_webhook(txn, order_id, sid, Some(updated_status.as_str()))
+            .await?;
         if shiprocket_status_indicates_cancelled_or_rto(sid) || cancel_like {
             info!(
                 order_id,
@@ -356,7 +320,13 @@ async fn process_shiprocket_shipment_updates(
                 "shiprocket webhook: cancellation/RTO detected, starting cancel+refund flow"
             );
             auto_transition_order_to_cancelled(txn, order_id).await;
-            auto_refund_order_on_shiprocket_cancel(txn, order_id).await;
+            if let Err(e) = cancellation_saga::run_order_settlement(txn, order_id).await {
+                warn!(
+                    order_id,
+                    error = ?e,
+                    "settlement after shiprocket cancel/RTO webhook failed"
+                );
+            }
         }
         if shiprocket_status_indicates_delivered(sid) {
             auto_transition_order_to_delivered(txn, order_id).await;
@@ -658,152 +628,8 @@ async fn upsert_refund_row(
     Ok(())
 }
 
-async fn auto_refund_order_on_shiprocket_cancel(txn: &DatabaseTransaction, order_id: i64) {
-    let Some(order) = orders::Entity::find_by_id(order_id)
-        .one(txn)
-        .await
-        .ok()
-        .flatten()
-    else {
-        warn!(
-            order_id,
-            "shiprocket webhook: order not found for auto-refund"
-        );
-        return;
-    };
-
-    let grand_total = order.grand_total_minor.max(0);
-    if grand_total <= 0 {
-        return;
-    }
-
-    let already_refunded: i64 = refunds::Entity::find()
-        .filter(refunds::Column::OrderId.eq(order_id))
-        .all(txn)
-        .await
-        .ok()
-        .unwrap_or_default()
-        .iter()
-        .map(|r| r.amount_paise as i64)
-        .sum();
-    let refund_due = grand_total.saturating_sub(already_refunded);
-    if refund_due <= 0 {
-        info!(order_id, "shiprocket webhook: order already fully refunded");
-        return;
-    }
-
-    let Some(intent) = payment_intents::Entity::find()
-        .filter(payment_intents::Column::OrderId.eq(order_id))
-        .filter(payment_intents::Column::RazorpayPaymentId.is_not_null())
-        .order_by_desc(payment_intents::Column::IntentId)
-        .one(txn)
-        .await
-        .ok()
-        .flatten()
-    else {
-        warn!(
-            order_id,
-            "shiprocket webhook: no captured Razorpay payment found; skipping auto-refund"
-        );
-        return;
-    };
-
-    let Some(payment_id) = intent.razorpay_payment_id.as_deref() else {
-        warn!(
-            order_id,
-            "shiprocket webhook: payment intent missing razorpay_payment_id; skipping auto-refund"
-        );
-        return;
-    };
-    info!(
-        order_id,
-        payment_intent_id = intent.intent_id,
-        razorpay_payment_id = %payment_id,
-        refund_due_paise = refund_due,
-        "shiprocket cancel flow: requesting Razorpay refund"
-    );
-
-    let gateway_refund = match razorpay::create_refund(payment_id, refund_due).await {
-        Ok(data) => data,
-        Err(e) => {
-            warn!(order_id, error = %e, "shiprocket webhook: Razorpay auto-refund failed");
-            return;
-        }
-    };
-    info!(
-        order_id,
-        gateway_refund_id = %gateway_refund.refund_id,
-        gateway_refund_status = %gateway_refund.status.clone().unwrap_or_else(|| "pending".to_string()),
-        refund_due_paise = refund_due,
-        "shiprocket cancel flow: Razorpay refund API responded"
-    );
-
-    let gateway_status = map_refund_status(gateway_refund.status.as_deref().unwrap_or("pending"));
-
-    if gateway_status == Status::Processed {
-        if let Err(e) = create_refund(
-            txn,
-            Request::new(CreateRefundRequest {
-                order_id,
-                gateway_refund_id: gateway_refund.refund_id.clone(),
-                amount_paise: refund_due,
-                currency: Some("INR".to_string()),
-                line_items_refunded_json: None,
-            }),
-        )
-        .await
-        {
-            warn!(order_id, error = %e, "shiprocket webhook: failed to persist auto-refund");
-            return;
-        }
-    } else if let Err(e) = upsert_refund_row(
-        txn,
-        order_id,
-        &gateway_refund.refund_id,
-        refund_due,
-        "INR",
-        Status::Pending,
-    )
-    .await
-    {
-        warn!(order_id, error = %e, "shiprocket webhook: failed to persist pending refund");
-        return;
-    } else {
-        let _ = create_order_event(
-            txn,
-            Request::new(CreateOrderEventRequest {
-                order_id,
-                event_type: "refund_initiated".to_string(),
-                from_status: None,
-                to_status: None,
-                actor_type: "system".to_string(),
-                message: Some("Refund initiated after courier cancellation".to_string()),
-            }),
-        )
-        .await;
-    }
-
-    info!(
-        order_id,
-        refund_amount_paise = refund_due,
-        gateway_refund_id = %gateway_refund.refund_id,
-        gateway_refund_status = %gateway_refund.status.unwrap_or_else(|| "pending".to_string()),
-        "shiprocket webhook: automatic Razorpay refund initiated"
-    );
-}
-
 async fn auto_transition_order_to_cancelled(txn: &DatabaseTransaction, order_id: i64) {
-    if let Err(e) = order_state_machine::transition_order_status(
-        txn,
-        order_id,
-        order_state_machine::OrderState::Cancelled,
-        "shiprocket_cancelled",
-        "system",
-        Some("Shipment cancelled by courier partner"),
-        None,
-    )
-    .await
-    {
+    if let Err(e) = ensure_local_order_cancelled(txn, order_id).await {
         if e.code() != tonic::Code::InvalidArgument {
             warn!(
                 order_id,

@@ -13,6 +13,7 @@ Set these in backend runtime env:
 RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
 RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
+REQUIRE_WEBHOOK_SECRETS=true
 
 SHIPROCKET_EMAIL=api_user@example.com
 SHIPROCKET_PASSWORD=your_shiprocket_password
@@ -24,6 +25,7 @@ Notes:
 - `RAZORPAY_KEY_SECRET` is for Razorpay API auth (server -> Razorpay).
 - `RAZORPAY_WEBHOOK_SECRET` is only for webhook signature validation (Razorpay -> server).
 - `SHIPROCKET_WEBHOOK_SECRET` is matched against header `x-shiprocket-token`.
+- `REQUIRE_WEBHOOK_SECRETS=true` is recommended for staging/production so startup fails fast if either webhook secret is missing.
 
 ## 2) Cloudflare tunnel URL for localhost
 
@@ -69,4 +71,3 @@ Important:
 1. Restart backend after env updates.
 2. Send webhook test events from both dashboards.
 3. Confirm no `401`/signature mismatch in backend logs.
-

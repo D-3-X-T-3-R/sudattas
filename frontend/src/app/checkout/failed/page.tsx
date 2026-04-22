@@ -19,7 +19,7 @@ export default async function CheckoutFailedPage({
           We could not complete your payment
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-[#615A50]">
-          Your order was not confirmed. Please retry checkout or choose a different payment method.
+          Your order was not confirmed. Your selected bag items remain available for retry, and no shipment is created until payment verification succeeds.
         </p>
         {reason ? (
           <p className="mt-4 rounded-xl bg-[#FFFDF8] px-3 py-2 text-xs text-[#8B816D]">
@@ -31,6 +31,20 @@ export default async function CheckoutFailedPage({
             Order ID: {orderId}
           </p>
         ) : null}
+        <div className="mt-6 grid gap-3 rounded-[22px] border border-[#B95A40]/10 bg-white/70 p-4 text-sm leading-6 text-[#615A50] sm:grid-cols-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#9F4A35]">What happened</p>
+            <p className="mt-2">Payment verification did not complete, so the order did not proceed into shipment booking.</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#9F4A35]">Retry safely</p>
+            <p className="mt-2">Retry from your bag with the same selected items. Duplicate payment verification is blocked by backend idempotency and signature checks.</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#9F4A35]">Need support</p>
+            <p className="mt-2">If you saw a bank debit but this page persisted, contact support with the order reference shown here.</p>
+          </div>
+        </div>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link
             href="/bag"
@@ -43,6 +57,12 @@ export default async function CheckoutFailedPage({
             className="inline-flex h-12 items-center justify-center rounded-full border border-[#0F3D2E]/20 bg-white px-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#0F3D2E] transition hover:border-[#0F3D2E]/40"
           >
             Back To Bag
+          </Link>
+          <Link
+            href="/contact-support"
+            className="inline-flex h-12 items-center justify-center rounded-full border border-[#B95A40]/25 bg-[#FFF3EE] px-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#9F4A35] transition hover:border-[#B95A40]/45"
+          >
+            Contact Support
           </Link>
         </div>
       </section>

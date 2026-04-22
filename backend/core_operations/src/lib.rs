@@ -1,30 +1,52 @@
 use core_db_entities::{get_db, CoreDatabaseConnection};
 use handlers::db_errors::map_db_error_to_status;
+use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 // Phase 1 additions
 pub mod auth;
+pub mod cancellation_saga;
 pub mod money;
 pub mod observability;
+pub mod order_policy;
 pub mod razorpay;
 pub mod services;
+
+static DOTENV_LOADED: OnceLock<()> = OnceLock::new();
+
+pub fn load_env_once() {
+    DOTENV_LOADED.get_or_init(|| {
+        let candidates = [
+            PathBuf::from("..").join(".env"),
+            PathBuf::from(".env"),
+            PathBuf::from("backend").join(".env"),
+        ];
+        for candidate in candidates {
+            if candidate.exists() {
+                let _ = dotenvy::from_path(candidate);
+                break;
+            }
+        }
+    });
+}
 
 use proto::proto::core::{
     grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkOrderDeliveredRequest,
     AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse,
     AdminUpdateReviewStatusRequest, AdminUpdateReviewStatusResponse, ApplyCouponRequest,
-    CapturePaymentRequest, CartItemsResponse, CategoriesResponse, ColorsResponse,
-    ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse, CreateCartItemRequest,
-    CreateCategoryRequest, CreateColorRequest, CreateCouponRequest, CreateEventLogRequest,
-    CreateFabricRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
-    CreateNewsletterSubscriberRequest, CreateOccasionRequest, CreateOrderDetailsRequest,
-    CreateOrderEventRequest, CreateOrderRequest, CreatePaymentIntentRequest,
-    CreateProductMoodMappingRequest, CreateProductMoodRequest, CreateProductRequest,
-    CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest, CreateShipmentRequest,
-    CreateShippingAddressRequest, CreateShippingMethodRequest, CreateSizeRequest,
-    CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest, CreateUserRoleRequest,
-    CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest, DeleteColorRequest,
-    DeleteEventLogRequest, DeleteFabricRequest, DeleteInventoryItemRequest,
+    CancelOrderItemsRequest, CapturePaymentRequest, CartItemsResponse, CategoriesResponse,
+    ColorsResponse, ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse,
+    CreateCartItemRequest, CreateCategoryRequest, CreateColorRequest, CreateCouponRequest,
+    CreateEventLogRequest, CreateFabricRequest, CreateInventoryItemRequest,
+    CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOccasionRequest,
+    CreateOrderDetailsRequest, CreateOrderEventRequest, CreateOrderRequest,
+    CreatePaymentIntentRequest, CreateProductMoodMappingRequest, CreateProductMoodRequest,
+    CreateProductRequest, CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest,
+    CreateShipmentRequest, CreateShippingAddressRequest, CreateShippingMethodRequest,
+    CreateSizeRequest, CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest,
+    CreateUserRoleRequest, CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest,
+    DeleteColorRequest, DeleteEventLogRequest, DeleteFabricRequest, DeleteInventoryItemRequest,
     DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOccasionRequest,
     DeleteOrderRequest, DeleteProductImageRequest, DeleteProductMoodMappingRequest,
     DeleteProductMoodRequest, DeleteProductRequest, DeleteProductVariantRequest,
@@ -34,7 +56,7 @@ use proto::proto::core::{
     EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse, EstimateCheckoutShippingRequest,
     EstimateCheckoutShippingResponse, EventLogsResponse, FabricsResponse, GetCartItemsRequest,
     GetOrderEventsRequest, GetPaymentIntentRequest, GetPresignedUploadUrlRequest,
-    GetProductsByIdRequest, GetRelatedProductsRequest, GetShipmentRequest,
+    GetProductsByIdRequest, GetRefundsRequest, GetRelatedProductsRequest, GetShipmentRequest,
     GetShippingAddressRequest, GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse,
     GetUserPiiExportRequest, GetUserPiiExportResponse, IngestWebhookRequest,
     InventoryItemsResponse, InventoryLogsResponse, NewsletterSubscribersResponse,
@@ -57,14 +79,14 @@ use proto::proto::core::{
     SyncProductImagesRequest, TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest,
     UpdateColorRequest, UpdateCouponRequest, UpdateEventLogRequest, UpdateFabricRequest,
     UpdateInventoryItemRequest, UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest,
-    UpdateOccasionRequest, UpdateOrderDetailRequest, UpdateOrderRequest, UpdateProductImageRequest,
-    UpdateProductMoodRequest, UpdateProductRequest, UpdateProductVariantRequest,
-    UpdateReviewRequest, UpdateShipmentRequest, UpdateShippingAddressRequest,
-    UpdateShippingMethodRequest, UpdateSizeRequest, UpdateTransactionRequest,
-    UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest, UpdateWeaveRequest,
-    UserActivitiesResponse, UserRolesResponse, UsersResponse, ValidateCouponRequest,
-    VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse, WeavesResponse,
-    WebhookEventsResponse, WishlistItemsResponse,
+    UpdateOccasionRequest, UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
+    UpdatePickupTargetResponse, UpdateProductImageRequest, UpdateProductMoodRequest,
+    UpdateProductRequest, UpdateProductVariantRequest, UpdateReviewRequest, UpdateShipmentRequest,
+    UpdateShippingAddressRequest, UpdateShippingMethodRequest, UpdateSizeRequest,
+    UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest,
+    UpdateWeaveRequest, UserActivitiesResponse, UserRolesResponse, UsersResponse,
+    ValidateCouponRequest, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
+    WeavesResponse, WebhookEventsResponse, WishlistItemsResponse,
 };
 
 use sea_orm::TransactionTrait;
@@ -648,23 +670,14 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<AdminMarkOrderShippedRequest>,
     ) -> Result<Response<AdminMarkOrderShippedResponse>, Status> {
-        let db = self
+        let txn = self
             .db
             .as_ref()
-            .ok_or_else(|| Status::failed_precondition("database not initialized"))?;
-        let mut inner = request.into_inner();
-        if inner.shiprocket_book == Some(true) {
-            let booked = integrations::shiprocket::book_shipment_for_order(db, inner.order_id)
-                .await
-                .map_err(|e| Status::failed_precondition(e.to_string()))?;
-            inner.awb_code = Some(booked.awb_code);
-            inner.carrier = Some(booked.courier_name);
-            inner.shiprocket_order_id = Some(booked.shiprocket_shipment_id);
-            inner.shiprocket_status_id = booked.shiprocket_status_id;
-            inner.shiprocket_status_label = booked.shiprocket_status_label;
-        }
-        let txn = db.begin().await.map_err(map_db_error_to_status)?;
-        let res = handlers::orders::admin_mark_order_shipped(&txn, Request::new(inner)).await?;
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::admin_mark_order_shipped(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -681,6 +694,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::admin_mark_order_delivered(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn update_pickup_target(
+        &self,
+        request: Request<UpdatePickupTargetRequest>,
+    ) -> Result<Response<UpdatePickupTargetResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::update_pickup_target(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -713,6 +742,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::delete_order(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn cancel_order_items(
+        &self,
+        request: Request<CancelOrderItemsRequest>,
+    ) -> Result<Response<OrdersResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::cancel_order_items(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2240,6 +2285,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::refunds::create_refund(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_refunds(
+        &self,
+        request: Request<GetRefundsRequest>,
+    ) -> Result<Response<RefundsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::refunds::get_refunds(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

@@ -1,10 +1,12 @@
 // SearchOrderRequest Proto message
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::handlers::orders::order_response;
 use chrono::{DateTime, Utc};
 use core_db_entities::entity::orders;
-use proto::proto::core::{OrderResponse, OrdersResponse, SearchOrderRequest};
+use proto::proto::core::{OrdersResponse, SearchOrderRequest};
 use sea_orm::{
-    ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect, QueryTrait,
+    ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend, EntityTrait, QueryFilter,
+    QuerySelect, QueryTrait, Statement,
 };
 use tonic::{Request, Response, Status};
 
@@ -44,20 +46,38 @@ pub async fn search_order(
         .await
     {
         Ok(models) => {
-            let items = models
-                .into_iter()
-                .map(|model| {
-                    let total_amount_paise = model.grand_total_minor;
-                    OrderResponse {
-                        order_id: model.order_id,
-                        user_id: model.user_id,
-                        order_date: model.order_date.to_string(),
-                        shipping_address_id: model.shipping_address_id,
-                        total_amount_paise,
-                        status_id: model.status_id,
-                    }
-                })
-                .collect();
+            let mut items = Vec::with_capacity(models.len());
+            for model in models {
+                let mut row = order_response::from_model(&model);
+                if let Some(extra) = txn
+                    .query_one(Statement::from_sql_and_values(
+                        DbBackend::MySql,
+                        r#"SELECT cancel_window_ends_at,
+                                  earliest_booking_at,
+                                  pickup_target_at
+                           FROM Orders
+                           WHERE OrderID = ?
+                           LIMIT 1"#,
+                        [model.order_id.into()],
+                    ))
+                    .await
+                    .map_err(map_db_error_to_status)?
+                {
+                    row.cancel_window_ends_at = extra
+                        .try_get::<DateTime<Utc>>("", "cancel_window_ends_at")
+                        .ok()
+                        .map(|v| v.to_rfc3339());
+                    row.earliest_booking_at = extra
+                        .try_get::<DateTime<Utc>>("", "earliest_booking_at")
+                        .ok()
+                        .map(|v| v.to_rfc3339());
+                    row.pickup_target_at = extra
+                        .try_get::<DateTime<Utc>>("", "pickup_target_at")
+                        .ok()
+                        .map(|v| v.to_rfc3339());
+                }
+                items.push(row);
+            }
 
             Ok(Response::new(OrdersResponse { items }))
         }

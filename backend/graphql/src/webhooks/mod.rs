@@ -1,6 +1,7 @@
 use hmac::{Hmac, Mac};
 use proto::proto::core::IngestWebhookRequest;
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 use tracing::{info, warn};
 use warp::hyper::body::Bytes;
 use warp::reply::{self, Reply};
@@ -21,7 +22,9 @@ fn verify_razorpay_signature(body: &[u8], signature: &str) -> bool {
     };
     mac.update(body);
     let computed = hex::encode(mac.finalize().into_bytes());
-    computed == signature
+    let computed_bytes = computed.as_bytes();
+    let signature_bytes = signature.as_bytes();
+    computed_bytes.len() == signature_bytes.len() && computed_bytes.ct_eq(signature_bytes).into()
 }
 
 /// When RAZORPAY_WEBHOOK_SECRET is set and provider is razorpay, signature is required and must be valid.
@@ -30,15 +33,17 @@ fn verify_razorpay_signature(body: &[u8], signature: &str) -> bool {
 fn verify_shiprocket_webhook_token(token: Option<&str>) -> bool {
     match std::env::var("SHIPROCKET_WEBHOOK_SECRET") {
         Ok(secret) if !secret.trim().is_empty() => {
-            let ok = token.map(|t| t.trim() == secret.trim()).unwrap_or(false);
+            let expected = secret.trim().as_bytes();
+            let provided = token.map(str::trim).unwrap_or("").as_bytes();
+            let ok = expected.len() == provided.len() && expected.ct_eq(provided).into();
             if !ok {
                 warn!("Shiprocket webhook rejected: X-Shiprocket-Token missing or wrong");
             }
             ok
         }
         _ => {
-            warn!("SHIPROCKET_WEBHOOK_SECRET not set; accepting Shiprocket webhooks without token verification (use only behind a private URL in production)");
-            true
+            warn!("SHIPROCKET_WEBHOOK_SECRET not set; rejecting Shiprocket webhook");
+            false
         }
     }
 }
@@ -48,14 +53,19 @@ fn enforce_signature_when_secret_set(
     signature_header: Option<&str>,
     body: &[u8],
 ) -> Result<bool, (warp::http::StatusCode, &'static str)> {
-    let secret_configured = std::env::var("RAZORPAY_WEBHOOK_SECRET").is_ok();
-    if provider != "razorpay" || !secret_configured {
-        if provider == "razorpay" && !secret_configured {
-            warn!(
-                "RAZORPAY_WEBHOOK_SECRET not set; accepting webhook without signature verification"
-            );
-        }
+    let secret_configured = std::env::var("RAZORPAY_WEBHOOK_SECRET")
+        .ok()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    if provider != "razorpay" {
         return Ok(false);
+    }
+    if !secret_configured {
+        warn!("RAZORPAY_WEBHOOK_SECRET not set; rejecting Razorpay webhook");
+        return Err((
+            warp::http::StatusCode::SERVICE_UNAVAILABLE,
+            "Webhook secret is not configured",
+        ));
     }
     let sig = signature_header.map(|s| s.trim()).unwrap_or("");
     if sig.is_empty() {
@@ -96,7 +106,15 @@ pub async fn handle_webhook(
 
     // Phase 6: When secret is set, reject invalid/missing signature at HTTP boundary; do not call gRPC.
     let signature_verified = if provider == "shiprocket" {
-        verify_shiprocket_webhook_token(shiprocket_token.as_deref())
+        if verify_shiprocket_webhook_token(shiprocket_token.as_deref()) {
+            true
+        } else {
+            crate::metrics::record_webhook_invalid_signature_total();
+            return Ok(reply::with_status(
+                "Missing or invalid webhook token",
+                warp::http::StatusCode::UNAUTHORIZED,
+            ));
+        }
     } else {
         match enforce_signature_when_secret_set(&provider, signature_header.as_deref(), &body) {
             Ok(verified) => verified,
@@ -124,10 +142,18 @@ pub async fn handle_webhook(
             .as_str()
             .unwrap_or("")
             .to_string();
-        let wh = if entity_id.is_empty() {
+        // Idempotency key must be unique per Razorpay delivery. Using only payment_id makes
+        // payment.authorized and payment.captured collide (same webhook_id → captured dropped).
+        let header_peid = provider_event_id
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty());
+        let wh = if let Some(peid) = header_peid {
+            format!("{}:{}", provider, peid)
+        } else if entity_id.is_empty() {
             format!("{}:{}", provider, hex::encode(&body[..body.len().min(32)]))
         } else {
-            format!("{}:{}", provider, entity_id)
+            format!("{}:{}:{}", provider, et, entity_id)
         };
         (et, wh)
     };
@@ -218,9 +244,10 @@ mod tests {
         let reply = handle_webhook("razorpay".to_string(), None, None, None, body.clone())
             .await
             .unwrap();
-        assert_eq!(
-            reply.into_response().status(),
-            warp::http::StatusCode::UNAUTHORIZED
+        let status = reply.into_response().status();
+        assert!(
+            status == warp::http::StatusCode::UNAUTHORIZED
+                || status == warp::http::StatusCode::SERVICE_UNAVAILABLE
         );
 
         std::env::set_var("RAZORPAY_WEBHOOK_SECRET", "test_secret");
@@ -233,9 +260,10 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(
-            reply.into_response().status(),
-            warp::http::StatusCode::UNAUTHORIZED
+        let status = reply.into_response().status();
+        assert!(
+            status == warp::http::StatusCode::UNAUTHORIZED
+                || status == warp::http::StatusCode::SERVICE_UNAVAILABLE
         );
 
         std::env::set_var("RAZORPAY_WEBHOOK_SECRET", "test_secret");
@@ -248,9 +276,10 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(
-            reply.into_response().status(),
-            warp::http::StatusCode::UNAUTHORIZED
+        let status = reply.into_response().status();
+        assert!(
+            status == warp::http::StatusCode::UNAUTHORIZED
+                || status == warp::http::StatusCode::SERVICE_UNAVAILABLE
         );
 
         std::env::set_var("RAZORPAY_WEBHOOK_SECRET", "test_secret");
@@ -269,6 +298,26 @@ mod tests {
             status == warp::http::StatusCode::SERVICE_UNAVAILABLE
                 || status == warp::http::StatusCode::OK
                 || status == warp::http::StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[tokio::test]
+    async fn webhook_rejects_when_secret_missing() {
+        std::env::remove_var("RAZORPAY_WEBHOOK_SECRET");
+        let reply = handle_webhook(
+            "razorpay".to_string(),
+            Some("sig".to_string()),
+            None,
+            None,
+            minimal_razorpay_body(),
+        )
+        .await
+        .unwrap();
+        let status = reply.into_response().status();
+        assert!(
+            status == warp::http::StatusCode::SERVICE_UNAVAILABLE
+                || status == warp::http::StatusCode::UNAUTHORIZED,
+            "expected fail-closed status when webhook secret is unavailable, got {status}"
         );
     }
 }

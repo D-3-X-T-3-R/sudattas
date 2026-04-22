@@ -9,6 +9,7 @@ type PlaceOrderRow = {
   totalAmountPaise: string;
   totalAmountFormatted: string;
   statusId: string;
+  paymentMethod?: string | null;
 };
 
 type PaymentIntentRow = {
@@ -27,11 +28,12 @@ const PLACE_ORDER_MUTATION = `mutation PlaceOrder($order: NewOrder!) {
     totalAmountPaise
     totalAmountFormatted
     statusId
+    paymentMethod
   }
 }`;
 
-const CREATE_PAYMENT_INTENT_MUTATION = `mutation CreatePaymentIntent($input: NewPaymentIntent!) {
-  createPaymentIntent(input: $input) {
+const GET_PAYMENT_INTENT_QUERY = `query GetPaymentIntent($input: GetPaymentIntent!) {
+  getPaymentIntent(input: $input) {
     intentId
     razorpayOrderId
     razorpayKeyId
@@ -47,15 +49,28 @@ export async function POST(request: Request) {
     shippingAddressId?: string;
     couponCode?: string;
     idempotencyKey?: string;
+    selectedCartLineIds?: unknown;
+    paymentMode?: string;
   };
 
   const shippingAddressId = String(body.shippingAddressId ?? "").trim();
   if (!shippingAddressId) {
     return apiError("shippingAddressId is required", 400, "VALIDATION_ERROR");
   }
+  const selectedCartLineIds = Array.isArray(body.selectedCartLineIds)
+    ? body.selectedCartLineIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  if (selectedCartLineIds.length === 0) {
+    return apiError("selectedCartLineIds must contain at least one cart line id", 400, "VALIDATION_ERROR");
+  }
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
+  }
+
+  const normalizedPaymentMode = (body.paymentMode ?? "prepaid").trim().toLowerCase();
+  if (normalizedPaymentMode !== "prepaid" && normalizedPaymentMode !== "cod") {
+    return apiError("paymentMode must be prepaid or cod", 400, "VALIDATION_ERROR");
   }
 
   const placeOrderKey =
@@ -69,6 +84,8 @@ export async function POST(request: Request) {
       order: {
         shippingAddressId,
         couponCode: body.couponCode?.trim() || null,
+        selectedCartIds: selectedCartLineIds,
+        paymentMode: normalizedPaymentMode,
       },
     },
     { "Idempotency-Key": placeOrderKey }
@@ -85,32 +102,42 @@ export async function POST(request: Request) {
     return apiError("Order was not created", 400, "GRAPHQL_ERROR");
   }
 
-  const amountPaiseNum = Number.parseInt(order.totalAmountPaise, 10);
-  if (!Number.isFinite(amountPaiseNum) || amountPaiseNum <= 0) {
-    return apiError("Invalid order amount for payment", 400, "VALIDATION_ERROR");
+  const resolvedPaymentMode = (order.paymentMethod ?? normalizedPaymentMode).toLowerCase();
+  if (resolvedPaymentMode === "cod") {
+    return Response.json({
+      ok: true,
+      data: {
+        order,
+        checkoutMode: "cod",
+        paymentIntent: null,
+        idempotency: {
+          placeOrderKey,
+          verifyKey: null,
+        },
+      },
+      errorCode: null,
+      message: null,
+      fieldErrors: null,
+      retryable: false,
+    });
   }
 
-  const paymentResult = await callGraphqlAsCustomer<{ createPaymentIntent?: PaymentIntentRow[] }>(
+  const paymentResult = await callGraphqlAsCustomer<{ getPaymentIntent?: PaymentIntentRow[] }>(
     userId,
-    CREATE_PAYMENT_INTENT_MUTATION,
+    GET_PAYMENT_INTENT_QUERY,
     {
-      input: {
-        orderId: order.orderId,
-        userId,
-        amountPaise: String(amountPaiseNum),
-        currency: "INR",
-      },
+      input: { orderId: order.orderId },
     }
   );
   if (paymentResult.errors?.length) {
     return apiError(
-      paymentResult.errors[0]?.message ?? "Failed to create payment intent",
+      paymentResult.errors[0]?.message ?? "Failed to load payment intent",
       400,
       "GRAPHQL_ERROR"
     );
   }
 
-  const paymentIntent = paymentResult.data?.createPaymentIntent?.[0];
+  const paymentIntent = paymentResult.data?.getPaymentIntent?.[0];
   if (!paymentIntent?.razorpayOrderId || !paymentIntent?.razorpayKeyId) {
     return apiError(
       "Payment intent is missing Razorpay details",
@@ -128,6 +155,7 @@ export async function POST(request: Request) {
     ok: true,
     data: {
       order,
+      checkoutMode: "prepaid",
       paymentIntent: normalizedIntent,
       idempotency: {
         placeOrderKey,

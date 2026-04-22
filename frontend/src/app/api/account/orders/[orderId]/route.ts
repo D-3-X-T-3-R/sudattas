@@ -1,4 +1,4 @@
-import {
+﻿import {
   apiError,
   callGraphqlAsCustomer,
   requireAuthenticatedCustomerUserId,
@@ -17,6 +17,9 @@ type OrderDetailRow = {
   variantId: string;
   quantity: string;
   pricePaise: string;
+  lineTotalMinor?: string;
+  itemStatus?: string;
+  cancelledAt?: string | null;
   priceFormatted: string;
   productDetails?: Array<{
     productId?: string;
@@ -30,9 +33,14 @@ type OrderRow = {
   orderId: string;
   userId: string;
   orderDate: string;
+  cancelWindowEndsAt?: string | null;
+  earliestBookingAt?: string | null;
+  pickupTargetAt?: string | null;
+  fulfillmentStatus?: string | null;
   totalAmountPaise: string;
   totalAmountFormatted: string;
   statusId: string;
+  refundSettlementStatus?: string | null;
   orderDetails?: OrderDetailRow[];
 };
 
@@ -67,14 +75,35 @@ type OrderEventRow = {
   createdAt: string;
 };
 
+type RefundRow = {
+  refundId: string;
+  orderId: string;
+  gatewayRefundId: string;
+  amountPaise: string;
+  currency: string;
+  status: string;
+  createdAt: string;
+  lineItemsRefundedJson?: string | null;
+};
+
 type AccountOrderDetailResponse = {
   order: OrderRow;
   statusName: string;
+  refundSettlementStatus?: string | null;
   paymentIntents: PaymentIntentRow[];
   shipments: ShipmentRow[];
   events: OrderEventRow[];
   fulfillmentState: string;
   paymentState: string;
+  refundSummary: {
+    itemRefundMinor: number;
+    shippingRefundMinor: number;
+    totalRefundMinor: number;
+    breakdownAvailable: boolean;
+    totalRefundFormatted: string;
+    itemRefundFormatted: string;
+    shippingRefundFormatted: string;
+  };
 };
 
 const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
@@ -82,14 +111,22 @@ const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
     orderId
     userId
     orderDate
+    cancelWindowEndsAt
+    earliestBookingAt
+    pickupTargetAt
+    fulfillmentStatus
     totalAmountPaise
     totalAmountFormatted
     statusId
+    refundSettlementStatus
     orderDetails {
       orderDetailId
       variantId
       quantity
       pricePaise
+      lineTotalMinor
+      itemStatus
+      cancelledAt
       priceFormatted
       productDetails {
         productId
@@ -145,6 +182,19 @@ const EVENTS_QUERY = `query AccountOrderEvents($orderId: String!) {
     actorType
     message
     createdAt
+  }
+}`;
+
+const REFUNDS_QUERY = `query AccountOrderRefunds($input: GetRefund!) {
+  getRefunds(input: $input) {
+    refundId
+    orderId
+    gatewayRefundId
+    amountPaise
+    currency
+    status
+    createdAt
+    lineItemsRefundedJson
   }
 }`;
 
@@ -244,6 +294,70 @@ function deriveFulfillmentState(shipments: ShipmentRow[]): string {
   return statuses[0] ?? "pending";
 }
 
+function parseMinorAmount(raw: unknown): number | null {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return null;
+  return Math.max(0, Math.trunc(value));
+}
+
+function parseRefundBreakdown(
+  lineItemsRefundedJson: string | null | undefined
+): { itemMinor: number; shippingMinor: number; breakdownAvailable: boolean } {
+  const raw = lineItemsRefundedJson?.trim();
+  if (!raw) {
+    return { itemMinor: 0, shippingMinor: 0, breakdownAvailable: false };
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const rows = Array.isArray(parsed)
+      ? parsed
+      : parsed &&
+          typeof parsed === "object" &&
+          Array.isArray((parsed as { items?: unknown[] }).items)
+        ? ((parsed as { items: unknown[] }).items ?? [])
+        : [];
+
+    if (!rows.length) {
+      return { itemMinor: 0, shippingMinor: 0, breakdownAvailable: false };
+    }
+
+    let itemMinor = 0;
+    let shippingMinor = 0;
+    let seenAmount = false;
+
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const entry = row as Record<string, unknown>;
+      const amount =
+        parseMinorAmount(entry.amount_paise) ??
+        parseMinorAmount(entry.amountPaise) ??
+        parseMinorAmount(entry.amount_minor) ??
+        parseMinorAmount(entry.amountMinor);
+      if (amount === null) continue;
+      seenAmount = true;
+
+      const kind = [
+        entry.type,
+        entry.item_type,
+        entry.kind,
+        entry.category,
+        entry.component,
+      ]
+        .filter((v): v is string => typeof v === "string")
+        .map((v) => v.toLowerCase());
+      const isShipping =
+        entry.shipping === true || kind.some((v) => v.includes("ship"));
+
+      if (isShipping) shippingMinor += amount;
+      else itemMinor += amount;
+    }
+
+    return { itemMinor, shippingMinor, breakdownAvailable: seenAmount };
+  } catch {
+    return { itemMinor: 0, shippingMinor: 0, breakdownAvailable: false };
+  }
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ orderId: string }> }
@@ -279,7 +393,7 @@ export async function GET(
       return null;
     });
 
-  const [orderResult, statusesResult, paymentResult, shipmentResult, eventsResult] =
+  const [orderResult, statusesResult, paymentResult, shipmentResult, eventsResult, refundsResult] =
     await Promise.all([
       callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(userId, ORDER_DETAIL_QUERY, {
         search: { userId, orderId: trimmedOrderId, limit: "1", offset: "0" },
@@ -296,6 +410,9 @@ export async function GET(
       callGraphqlAsCustomer<{ getOrderEvents?: OrderEventRow[] }>(userId, EVENTS_QUERY, {
         orderId: trimmedOrderId,
       }),
+      callGraphqlAsCustomer<{ getRefunds?: RefundRow[] }>(userId, REFUNDS_QUERY, {
+        input: { orderId: trimmedOrderId },
+      }),
     ]);
 
   const firstError =
@@ -303,7 +420,8 @@ export async function GET(
     statusesResult.errors?.[0]?.message ??
     paymentResult.errors?.[0]?.message ??
     shipmentResult.errors?.[0]?.message ??
-    eventsResult.errors?.[0]?.message;
+    eventsResult.errors?.[0]?.message ??
+    refundsResult.errors?.[0]?.message;
   if (firstError) {
     flowLog("graphql error while loading order detail", {
       orderId: trimmedOrderId,
@@ -340,15 +458,60 @@ export async function GET(
   const paymentIntents = paymentResult.data?.getPaymentIntent ?? [];
   const shipments = shipmentResult.data?.getShipment ?? [];
   const events = eventsResult.data?.getOrderEvents ?? [];
+  const refunds = refundsResult.data?.getRefunds ?? [];
 
+  const refundSettlementStatus = order.refundSettlementStatus?.trim() || null;
+  const processedRefunds = refunds.filter(
+    (r) => (r.status ?? "").trim().toLowerCase() === "processed"
+  );
+  const totalRefundMinor = processedRefunds.reduce((sum, refund) => {
+    const amount = parseMinorAmount(refund.amountPaise);
+    return sum + (amount ?? 0);
+  }, 0);
+
+  let itemRefundMinor = totalRefundMinor;
+  let shippingRefundMinor = 0;
+  let breakdownAvailable = false;
+
+  if (processedRefunds.length > 0) {
+    let parsedItemMinor = 0;
+    let parsedShippingMinor = 0;
+    let hasParsedBreakdown = false;
+
+    for (const refund of processedRefunds) {
+      const parsed = parseRefundBreakdown(refund.lineItemsRefundedJson);
+      if (!parsed.breakdownAvailable) continue;
+      hasParsedBreakdown = true;
+      parsedItemMinor += parsed.itemMinor;
+      parsedShippingMinor += parsed.shippingMinor;
+    }
+
+    if (hasParsedBreakdown) {
+      const parsedTotal = parsedItemMinor + parsedShippingMinor;
+      const remainder = totalRefundMinor - parsedTotal;
+      itemRefundMinor = parsedItemMinor + Math.max(0, remainder);
+      shippingRefundMinor = parsedShippingMinor;
+      breakdownAvailable = true;
+    }
+  }
   const payload: AccountOrderDetailResponse = {
     order,
     statusName,
+    refundSettlementStatus,
     paymentIntents,
     shipments,
     events,
     paymentState: derivePaymentState(paymentIntents),
     fulfillmentState: deriveFulfillmentState(shipments),
+    refundSummary: {
+      itemRefundMinor,
+      shippingRefundMinor,
+      totalRefundMinor,
+      breakdownAvailable,
+      totalRefundFormatted: `₹${(totalRefundMinor / 100).toFixed(2)}`,
+      itemRefundFormatted: `₹${(itemRefundMinor / 100).toFixed(2)}`,
+      shippingRefundFormatted: `₹${(shippingRefundMinor / 100).toFixed(2)}`,
+    },
   };
   const eventTypes = events.map((e) => (e.eventType ?? "").trim().toLowerCase());
   flowLog("order detail loaded", {
@@ -363,6 +526,9 @@ export async function GET(
     refundInitiated: eventTypes.includes("refund_initiated"),
     refundProcessed: eventTypes.includes("refund_recorded"),
     refundFailed: eventTypes.includes("refund_failed"),
+    refundRows: refunds.length,
+    processedRefundRows: processedRefunds.length,
+    totalRefundMinor,
   });
 
   return Response.json({
@@ -374,3 +540,5 @@ export async function GET(
     retryable: false,
   });
 }
+
+

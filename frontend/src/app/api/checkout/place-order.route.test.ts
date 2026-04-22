@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireAuthenticatedCustomerUserId: vi.fn<() => Promise<string | null>>(),
@@ -15,6 +15,11 @@ vi.mock("@/lib/server-session-auth", () => ({
 import { POST } from "@/app/api/checkout/place-order/route";
 
 describe("checkout place-order idempotency", () => {
+  beforeEach(() => {
+    mocks.requireAuthenticatedCustomerUserId.mockReset();
+    mocks.callGraphqlAsCustomer.mockReset();
+  });
+
   it("forwards stable idempotency key for order placement", async () => {
     mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("44");
     mocks.callGraphqlAsCustomer
@@ -23,7 +28,7 @@ describe("checkout place-order idempotency", () => {
       })
       .mockResolvedValueOnce({
         data: {
-          createPaymentIntent: [
+          getPaymentIntent: [
             {
               intentId: "pi1",
               razorpayOrderId: "r1",
@@ -40,7 +45,7 @@ describe("checkout place-order idempotency", () => {
     const req = new Request("http://localhost/api/checkout/place-order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shippingAddressId: "10", idempotencyKey: "place-key-1" }),
+      body: JSON.stringify({ shippingAddressId: "10", selectedCartLineIds: ["c1", "c2"], idempotencyKey: "place-key-1" }),
     });
 
     const res = await POST(req);
@@ -50,8 +55,94 @@ describe("checkout place-order idempotency", () => {
       1,
       "44",
       expect.stringContaining("PlaceOrder"),
-      expect.any(Object),
+      {
+        order: {
+          shippingAddressId: "10",
+          couponCode: null,
+          selectedCartIds: ["c1", "c2"],
+          paymentMode: "prepaid",
+        },
+      },
       { "Idempotency-Key": "place-key-1" }
     );
+    expect(mocks.callGraphqlAsCustomer).toHaveBeenNthCalledWith(
+      2,
+      "44",
+      expect.stringContaining("GetPaymentIntent"),
+      { input: { orderId: "100" } }
+    );
+  });
+
+  it("rejects empty selectedCartLineIds", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("44");
+
+    const req = new Request("http://localhost/api/checkout/place-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shippingAddressId: "10", selectedCartLineIds: [] }),
+    });
+
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.message).toContain("selectedCartLineIds");
+    expect(mocks.callGraphqlAsCustomer).not.toHaveBeenCalled();
+  });
+
+  it("rejects missing shippingAddressId", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("44");
+
+    const req = new Request("http://localhost/api/checkout/place-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selectedCartLineIds: ["c1"] }),
+    });
+
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.errorCode).toBe("VALIDATION_ERROR");
+    expect(body.message).toContain("shippingAddressId");
+    expect(mocks.callGraphqlAsCustomer).not.toHaveBeenCalled();
+  });
+
+  it("returns COD payload without fetching payment intent", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("44");
+    mocks.callGraphqlAsCustomer.mockResolvedValueOnce({
+      data: {
+        placeOrder: [
+          {
+            orderId: "200",
+            totalAmountPaise: "10000",
+            totalAmountFormatted: "Rs 100.00",
+            statusId: "1",
+            paymentMethod: "cod",
+          },
+        ],
+      },
+    });
+
+    const req = new Request("http://localhost/api/checkout/place-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shippingAddressId: "10",
+        selectedCartLineIds: ["c1"],
+        paymentMode: "cod",
+        idempotencyKey: "place-key-cod-1",
+      }),
+    });
+
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.data.checkoutMode).toBe("cod");
+    expect(body.data.order.totalAmountPaise).toBe("10000");
+    expect(body.data.paymentIntent).toBeNull();
+    expect(mocks.callGraphqlAsCustomer).toHaveBeenCalledTimes(1);
   });
 });

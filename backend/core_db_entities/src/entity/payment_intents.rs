@@ -12,6 +12,8 @@ pub struct Model {
     #[sea_orm(unique)]
     pub razorpay_order_id: String,
     pub order_id: Option<i64>,
+    #[sea_orm(unique)]
+    pub active_order_id: Option<i64>,
     pub user_id: Option<i64>,
     pub amount_paise: i32,
     pub currency: Option<String>,

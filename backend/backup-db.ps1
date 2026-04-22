@@ -65,7 +65,8 @@ try {
     # Use mysqldump inside the container and stream to a local file.
     # --set-gtid-purged=OFF avoids GTID warning on single-DB dumps and keeps the backup portable.
     $mysqlHost = "127.0.0.1"
-    docker exec -e MYSQL_PWD=$DbPassword $DbContainerName mysqldump "--set-gtid-purged=OFF" "-h$mysqlHost" "-u$DbUser" $DbName 2>&1 |
+    $maxPacket = 1073741824
+    docker exec -e MYSQL_PWD=$DbPassword $DbContainerName mysqldump "--set-gtid-purged=OFF" "--max_allowed_packet=$maxPacket" "-h$mysqlHost" "-u$DbUser" $DbName 2>&1 |
         Out-File -FilePath $backupFile -Encoding utf8
 
     $fileInfo = Get-Item -Path $backupFile -ErrorAction SilentlyContinue

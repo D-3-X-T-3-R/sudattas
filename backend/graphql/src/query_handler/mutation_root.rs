@@ -59,8 +59,9 @@ use crate::resolvers::{
     orders::{
         self,
         schema::{
-            AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CreateOrderInput, NewOrder,
-            Order, OrderMutation,
+            AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
+            CreateOrderInput, NewOrder, Order, OrderMutation, PickupTargetUpdateResult,
+            UpdatePickupTargetInput,
         },
     },
     payment_intents::{
@@ -165,6 +166,12 @@ fn require_jwt(context: &Context) -> Result<&str, juniper::FieldError> {
     })
 }
 
+fn require_customer_actor(context: &Context) -> Result<&str, juniper::FieldError> {
+    context.jwt_user_id().ok_or_else(|| {
+        juniper::FieldError::new("Login required for this operation", juniper::Value::null())
+    })
+}
+
 fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
     if context.is_admin() {
         Ok(())
@@ -180,6 +187,26 @@ fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
         crate::metrics::record_admin_authz_denied_reason_total(reason);
         Err(juniper::FieldError::new(
             "Admin authorization required",
+            juniper::Value::null(),
+        ))
+    }
+}
+
+fn require_admin_or_internal_service(context: &Context) -> Result<(), juniper::FieldError> {
+    if context.is_admin() || matches!(&context.auth, Some(super::AuthSource::InternalService)) {
+        Ok(())
+    } else {
+        crate::metrics::record_admin_authz_denied_total();
+        let reason = match &context.auth {
+            Some(super::AuthSource::InternalService) => "internal_service",
+            Some(super::AuthSource::Jwt(_)) | Some(super::AuthSource::InternalCustomer(_)) => {
+                "not_admin"
+            }
+            _ => "not_privileged",
+        };
+        crate::metrics::record_admin_authz_denied_reason_total(reason);
+        Err(juniper::FieldError::new(
+            "Privileged authorization required",
             juniper::Value::null(),
         ))
     }
@@ -211,11 +238,41 @@ async fn ensure_customer_owns_shipping_address(
     }
 }
 
+fn bind_cart_scope(
+    context: &Context,
+    requested_user_id: &str,
+    requested_session_id: Option<String>,
+) -> Result<(String, Option<String>), juniper::FieldError> {
+    if context.is_admin() {
+        return Ok((requested_user_id.to_string(), requested_session_id));
+    }
+
+    if let Some(uid) = context.jwt_user_id() {
+        return Ok((uid.to_string(), None));
+    }
+
+    if matches!(&context.auth, Some(super::AuthSource::Session(_))) {
+        let sid = context.guest_session_id().ok_or_else(|| {
+            juniper::FieldError::new(
+                "Validated guest session is required for guest cart operations",
+                juniper::Value::null(),
+            )
+        })?;
+        return Ok((String::new(), Some(sid.to_string())));
+    }
+
+    Ok((requested_user_id.to_string(), requested_session_id))
+}
+
 #[juniper::graphql_object(Context = Context)]
 impl MutationRoot {
     // Cart
     #[instrument(err, ret)]
-    async fn add_cart_item(context: &Context, cart_item: NewCart) -> FieldResult<Vec<Cart>> {
+    async fn add_cart_item(context: &Context, mut cart_item: NewCart) -> FieldResult<Vec<Cart>> {
+        let (user_id, session_id) =
+            bind_cart_scope(context, &cart_item.user_id, cart_item.session_id.clone())?;
+        cart_item.user_id = user_id;
+        cart_item.session_id = session_id;
         crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "add_cart_item",
@@ -238,21 +295,56 @@ impl MutationRoot {
 
     // Users
     #[instrument(err, ret)]
-    async fn create_user(input: NewUser) -> FieldResult<Vec<User>> {
+    async fn create_user(context: &Context, mut input: NewUser) -> FieldResult<Vec<User>> {
+        if !context.is_admin() {
+            match &context.auth {
+                Some(super::AuthSource::Jwt(_))
+                | Some(super::AuthSource::InternalCustomer(_))
+                | Some(super::AuthSource::InternalService) => {
+                    input.role_id = None;
+                }
+                _ => {
+                    return Err(juniper::FieldError::new(
+                        "Verified customer or internal auth required for user onboarding",
+                        juniper::Value::null(),
+                    ));
+                }
+            }
+        }
         users::handlers::create_user(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn update_user(input: UpdateUserInput) -> FieldResult<Vec<User>> {
+    async fn update_user(context: &Context, mut input: UpdateUserInput) -> FieldResult<Vec<User>> {
+        if !context.is_admin() {
+            let uid = require_customer_actor(context)?.to_string();
+            if input.user_id != uid {
+                return Err(juniper::FieldError::new(
+                    "Customers can only update their own profile",
+                    juniper::Value::null(),
+                ));
+            }
+            input.user_id = uid;
+            input.role_id = None;
+        }
         users::handlers::update_user(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn delete_user(input: DeleteUserInput) -> FieldResult<Vec<User>> {
+    async fn delete_user(context: &Context, input: DeleteUserInput) -> FieldResult<Vec<User>> {
+        if !context.is_admin() {
+            let uid = require_customer_actor(context)?;
+            if input.user_id != uid {
+                return Err(juniper::FieldError::new(
+                    "Customers can only delete their own profile",
+                    juniper::Value::null(),
+                ));
+            }
+        }
         users::handlers::delete_user(input)
             .await
             .map_err(|e| e.into_field_error())
@@ -269,7 +361,14 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn delete_cart_item(context: &Context, delete: DeleteCartItem) -> FieldResult<Vec<Cart>> {
+    async fn delete_cart_item(
+        context: &Context,
+        mut delete: DeleteCartItem,
+    ) -> FieldResult<Vec<Cart>> {
+        let (user_id, session_id) =
+            bind_cart_scope(context, &delete.user_id, delete.session_id.clone())?;
+        delete.user_id = user_id;
+        delete.session_id = session_id;
         crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "delete_cart_item",
@@ -283,8 +382,12 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn update_cart_item(
         context: &Context,
-        cart_item: CartMutation,
+        mut cart_item: CartMutation,
     ) -> FieldResult<Vec<Cart>> {
+        let (user_id, session_id) =
+            bind_cart_scope(context, &cart_item.user_id, cart_item.session_id.clone())?;
+        cart_item.user_id = user_id;
+        cart_item.session_id = session_id;
         crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "update_cart_item",
@@ -429,8 +532,10 @@ impl MutationRoot {
 
     #[instrument(err, ret)]
     async fn create_order_details(
+        context: &Context,
         order_details: NewOrderDetails,
     ) -> FieldResult<Vec<OrderDetails>> {
+        require_admin_or_internal_service(context)?;
         order_details::handlers::create_order_detail(order_details)
             .await
             .map_err(|e| e.into_field_error())
@@ -438,8 +543,10 @@ impl MutationRoot {
 
     #[instrument(err, ret)]
     async fn update_order_detail(
+        context: &Context,
         order_detail: OrderDetailsMutation,
     ) -> FieldResult<Vec<OrderDetails>> {
+        require_admin_or_internal_service(context)?;
         order_details::handlers::update_order_detail(order_detail)
             .await
             .map_err(|e| e.into_field_error())
@@ -458,6 +565,26 @@ impl MutationRoot {
             )
         };
         orders::handlers::delete_order(order_id, acting_user_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Cancels specific order lines. Updates order status to partially_cancelled/cancelled and runs unified settlement.
+    #[instrument(err, ret)]
+    async fn cancel_order_items(
+        context: &Context,
+        input: CancelOrderItemsInput,
+    ) -> FieldResult<Vec<Order>> {
+        let acting_user_id = if context.is_admin() {
+            None
+        } else {
+            let uid = require_jwt(context)?;
+            Some(
+                crate::resolvers::utils::parse_i64(uid, "user_id")
+                    .map_err(|e| e.into_field_error())?,
+            )
+        };
+        orders::handlers::cancel_order_items(input, acting_user_id)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -506,6 +633,19 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Admin: adjust pickup target timestamp for operations planning.
+    #[instrument(err, ret)]
+    async fn update_pickup_target(
+        context: &Context,
+        input: UpdatePickupTargetInput,
+    ) -> FieldResult<PickupTargetUpdateResult> {
+        require_admin(context)?;
+        let actor = context.user_id().map(std::string::ToString::to_string);
+        orders::handlers::update_pickup_target(input, actor)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Wishlist
     #[instrument(err, ret)]
     async fn add_wishlist_item(
@@ -537,8 +677,15 @@ impl MutationRoot {
     #[instrument(err, ret)]
     async fn create_payment_intent(
         context: &Context,
-        input: NewPaymentIntent,
+        mut input: NewPaymentIntent,
     ) -> FieldResult<Vec<PaymentIntent>> {
+        if matches!(&context.auth, Some(super::AuthSource::InternalService)) {
+            // Internal services may act without a customer identity; preserve explicit input.
+        } else if !context.is_admin() {
+            let uid = require_customer_actor(context)?.to_string();
+            query_root::ensure_customer_can_access_order(context, &input.order_id).await?;
+            input.user_id = uid;
+        }
         info!(
             request_id = ?context.request_id(),
             client_action = ?context.client_action(),
@@ -576,6 +723,7 @@ impl MutationRoot {
         context: &Context,
         input: CapturePayment,
     ) -> FieldResult<Vec<PaymentIntent>> {
+        require_admin_or_internal_service(context)?;
         let request_id = context.request_id().map(|s| s.to_string());
         let result = crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
@@ -595,6 +743,9 @@ impl MutationRoot {
         context: &Context,
         input: VerifyRazorpayPaymentInput,
     ) -> FieldResult<VerifyRazorpayPaymentResult> {
+        if !context.is_admin() {
+            query_root::ensure_customer_can_access_order(context, &input.order_id).await?;
+        }
         info!(
             request_id = ?context.request_id(),
             client_action = ?context.client_action(),
@@ -693,6 +844,7 @@ impl MutationRoot {
     // Coupons
     #[instrument(err, ret)]
     async fn apply_coupon(context: &Context, input: ApplyCoupon) -> FieldResult<Vec<Coupon>> {
+        let _ = require_customer_actor(context)?;
         crate::idempotency::with_idempotency(
             context.redis_url.as_deref(),
             "apply_coupon",
@@ -1429,7 +1581,11 @@ impl MutationRoot {
 
     // Order Events
     #[instrument(err, ret)]
-    async fn create_order_event(input: NewOrderEvent) -> FieldResult<Vec<OrderEvent>> {
+    async fn create_order_event(
+        context: &Context,
+        input: NewOrderEvent,
+    ) -> FieldResult<Vec<OrderEvent>> {
+        require_admin_or_internal_service(context)?;
         order_events::handlers::create_order_event(input)
             .await
             .map_err(|e| e.into_field_error())

@@ -5,6 +5,23 @@ export default async function CheckoutSuccessPage({
 }: {
   searchParams: Promise<{ orderId?: string }>;
 }) {
+  const cancelWindowHours = Number.parseInt(
+    (process.env.CANCEL_WINDOW_HOURS ?? "12").trim(),
+    10
+  );
+  const pickupDelayHours = Number.parseInt(
+    (process.env.PICKUP_DELAY_HOURS ?? "48").trim(),
+    10
+  );
+  const normalizedCancelWindowHours =
+    Number.isFinite(cancelWindowHours) && cancelWindowHours > 0
+      ? cancelWindowHours
+      : 12;
+  const normalizedPickupDelayHours =
+    Number.isFinite(pickupDelayHours) && pickupDelayHours > 0
+      ? pickupDelayHours
+      : 48;
+
   const params = await searchParams;
   const orderId = params.orderId?.trim() ?? "";
 
@@ -18,13 +35,27 @@ export default async function CheckoutSuccessPage({
           Order placed successfully
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-[#615A50]">
-          Thank you for shopping with us. Your order has been created and payment verification is complete.
+          Thank you for shopping with us. Your order has been created, payment verification is complete, and fulfillment is now moving into our courier booking flow.
         </p>
         {orderId ? (
           <p className="mt-4 rounded-xl bg-[#FFFDF8] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#8B816D]">
             Order ID: {orderId}
           </p>
         ) : null}
+        <div className="mt-6 grid gap-3 rounded-[22px] border border-[#0F3D2E]/8 bg-white/65 p-4 text-sm leading-6 text-[#615A50] sm:grid-cols-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A37D34]">Next step</p>
+            <p className="mt-2">We book shipment after the cancellation window and schedule pickup with a {normalizedPickupDelayHours}-hour delay.</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A37D34]">Cancellation window</p>
+            <p className="mt-2">Cancellation stays available for {normalizedCancelWindowHours} hours from order creation. After that, you can refuse delivery.</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A37D34]">Need help?</p>
+            <p className="mt-2">Use your order detail page for support, refund status, and the latest shipment updates.</p>
+          </div>
+        </div>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link
             href="/profile"
@@ -37,6 +68,12 @@ export default async function CheckoutSuccessPage({
             className="inline-flex h-12 items-center justify-center rounded-full border border-[#0F3D2E]/20 bg-white px-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#0F3D2E] transition hover:border-[#0F3D2E]/40"
           >
             Continue Shopping
+          </Link>
+          <Link
+            href="/contact-support"
+            className="inline-flex h-12 items-center justify-center rounded-full border border-[#C9A646]/35 bg-[#FFF9EF] px-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#A37D34] transition hover:border-[#C9A646]/60"
+          >
+            Contact Support
           </Link>
         </div>
       </section>

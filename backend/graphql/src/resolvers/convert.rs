@@ -43,6 +43,13 @@ pub fn order_response_to_gql(o: OrderResponse) -> Order {
         total_amount_paise: o.total_amount_paise,
         total_amount_formatted: money.formatted,
         status_id: o.status_id.to_string(),
+        public_order_ref: o.public_order_ref,
+        refund_settlement_status: o.refund_settlement_status,
+        payment_method: o.payment_method,
+        cancel_window_ends_at: o.cancel_window_ends_at,
+        earliest_booking_at: o.earliest_booking_at,
+        pickup_target_at: o.pickup_target_at,
+        fulfillment_status: o.fulfillment_status,
     }
 }
 
@@ -82,7 +89,10 @@ pub fn order_detail_response_to_gql(o: OrderDetailResponse) -> OrderDetails {
         variant_id: o.variant_id.to_string(),
         quantity: o.quantity.to_string(),
         price_paise: o.price_paise,
+        line_total_minor: o.line_total_minor,
         price_formatted: money.formatted,
+        item_status: o.item_status,
+        cancelled_at: o.cancelled_at,
     }
 }
 

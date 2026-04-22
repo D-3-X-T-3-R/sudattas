@@ -106,8 +106,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Restoring into database '$DbName'..." -ForegroundColor Yellow
-$restoreCmd = "mysql -h$mysqlHost -u$DbUser $DbName < $containerPath"
-docker exec -e MYSQL_PWD=$DbPassword $DbContainerName sh -c $restoreCmd 2>&1 | Out-Null
+# Match server max_allowed_packet (see docker-compose mysql command) so large INSERTs restore.
+$maxPacket = 1073741824
+$restoreCmd = "mysql -h$mysqlHost -u$DbUser --max_allowed_packet=$maxPacket $DbName < $containerPath"
+docker exec -e MYSQL_PWD=$DbPassword $DbContainerName sh -c $restoreCmd
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Restore completed successfully." -ForegroundColor Green

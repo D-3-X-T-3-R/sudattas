@@ -35,7 +35,9 @@ pub struct Context {
     pub idempotency_key: Option<String>,
     /// Optional client action name from `X-Client-Action` header.
     pub client_action: Option<String>,
-    /// Optional guest session identifier from `X-Guest-Session-Id` header (frontend correlation).
+    /// Optional guest session identifier for guest-scoped operations.
+    /// Prefer the validated `X-Session-Id` when present; otherwise use `X-Guest-Session-Id`
+    /// for frontend correlation/internal forwarding.
     pub guest_session_id: Option<String>,
     /// JWT sub claim when authenticated via JWT.
     pub jwt_subject: Option<String>,

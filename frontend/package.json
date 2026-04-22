@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:e2e:critical": "node -e \"const {spawnSync}=require('node:child_process'); const env={...process.env, PW_DESKTOP:'1'}; const result=spawnSync('npx playwright test tests/e2e/critical-commerce.spec.ts',{stdio:'inherit',env,shell:true}); process.exit(result.status ?? 1);\"",
     "test:e2e:journeys": "playwright test tests/e2e/journey-paths.spec.ts"
   },
   "dependencies": {

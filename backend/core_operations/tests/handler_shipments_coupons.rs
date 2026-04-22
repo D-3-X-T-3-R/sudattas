@@ -8,29 +8,59 @@ use proto::proto::core::{
     ValidateCouponRequest,
 };
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
+use std::collections::BTreeMap;
 use tonic::Request;
 
 #[tokio::test]
 async fn create_shipment_success() {
     use core_operations::handlers::shipments::create_shipment;
 
+    let mut booking_validation_row = BTreeMap::new();
+    booking_validation_row.insert("OrderID", 100_i64.into());
+    booking_validation_row.insert("order_status_name", "confirmed".into());
+    booking_validation_row.insert("payment_method", "prepaid".into());
+    booking_validation_row.insert("payment_status", "captured".into());
+    booking_validation_row.insert("fulfillment_status", "not_created".into());
+    booking_validation_row.insert("earliest_booking_at", Utc::now().into());
+    booking_validation_row.insert("pickup_target_at", Utc::now().into());
+    booking_validation_row.insert("has_active_items", 1_i8.into());
+
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_exec_results(vec![MockExecResult {
-            last_insert_id: 1,
-            rows_affected: 1,
-        }])
+        .append_query_results(vec![vec![booking_validation_row]])
+        .append_query_results(vec![Vec::<shipments::Model>::new()])
+        .append_exec_results(vec![
+            MockExecResult {
+                last_insert_id: 1,
+                rows_affected: 1,
+            },
+            MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            },
+        ])
         .append_query_results(vec![vec![shipments::Model {
             shipment_id: 1,
             order_id: 100,
             shiprocket_order_id: Some("sr_123".to_string()),
+            shiprocket_external_order_id: None,
             awb_code: Some("AWB456".to_string()),
             carrier: Some("DTDC".to_string()),
+            selected_courier_id: None,
+            selected_courier_name: None,
+            quoted_shipping_cost: None,
+            quoted_shipping_quote_payload: None,
             shiprocket_status_id: None,
             shiprocket_status_label: None,
-            shipment_status: ShipmentStatus::InTransit,
+            shipment_status: ShipmentStatus::AwbAssigned,
             tracking_events: None,
             created_at: None,
             delivered_at: None,
+            pickup_scheduled_for: None,
+            logistics_status: Some("booked".to_string()),
+            can_customer_cancel: 0,
+            razorpay_refund_id: None,
+            refund_status: None,
+            refund_initiated_at: None,
         }]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
@@ -55,7 +85,7 @@ async fn create_shipment_success() {
     assert_eq!(res.items[0].shiprocket_order_id.as_deref(), Some("sr_123"));
     assert_eq!(res.items[0].awb_code.as_deref(), Some("AWB456"));
     assert_eq!(res.items[0].carrier.as_deref(), Some("DTDC"));
-    assert_eq!(res.items[0].status, "in_transit");
+    assert_eq!(res.items[0].status, "awb_assigned");
 }
 
 #[tokio::test]
@@ -66,14 +96,25 @@ async fn get_shipment_by_order_id_returns_items() {
         shipment_id: 2,
         order_id: 200,
         shiprocket_order_id: Some("sr_456".to_string()),
+        shiprocket_external_order_id: None,
         awb_code: Some("AWB789".to_string()),
         carrier: Some("Bluedart".to_string()),
+        selected_courier_id: None,
+        selected_courier_name: None,
+        quoted_shipping_cost: None,
+        quoted_shipping_quote_payload: None,
         shiprocket_status_id: None,
         shiprocket_status_label: None,
         shipment_status: ShipmentStatus::InTransit,
         tracking_events: None,
         created_at: None,
         delivered_at: None,
+        pickup_scheduled_for: None,
+        logistics_status: None,
+        can_customer_cancel: 1,
+        razorpay_refund_id: None,
+        refund_status: None,
+        refund_initiated_at: None,
     };
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
@@ -140,14 +181,25 @@ async fn update_shipment_updates_status_and_sets_delivered_at_when_processed() {
         shipment_id: 3,
         order_id: 300,
         shiprocket_order_id: Some("sr_789".to_string()),
+        shiprocket_external_order_id: None,
         awb_code: Some("AWB000".to_string()),
         carrier: Some("Xpress".to_string()),
+        selected_courier_id: None,
+        selected_courier_name: None,
+        quoted_shipping_cost: None,
+        quoted_shipping_quote_payload: None,
         shiprocket_status_id: None,
         shiprocket_status_label: None,
         shipment_status: ShipmentStatus::Pending,
         tracking_events: None,
         created_at: Some(Utc::now()),
         delivered_at: None,
+        pickup_scheduled_for: None,
+        logistics_status: None,
+        can_customer_cancel: 1,
+        razorpay_refund_id: None,
+        refund_status: None,
+        refund_initiated_at: None,
     };
     let updated = shipments::Model {
         shipment_status: ShipmentStatus::Delivered,
@@ -186,7 +238,7 @@ async fn update_shipment_updates_status_and_sets_delivered_at_when_processed() {
 }
 
 #[tokio::test]
-async fn apply_coupon_valid_returns_valid_and_increments_usage() {
+async fn apply_coupon_valid_returns_valid_without_mutating_usage() {
     use core_operations::handlers::coupons::apply_coupon;
 
     let now = Utc::now();
@@ -205,18 +257,8 @@ async fn apply_coupon_valid_returns_valid_and_increments_usage() {
         created_at: None,
     };
 
-    // apply_coupon: check_coupon does find by code; then if valid, find by code again + update.
-    // Some DB drivers may run an extra select; supply enough results.
     let db = MockDatabase::new(DatabaseBackend::MySql)
-        .append_query_results(vec![
-            vec![coupon_model.clone()], // check_coupon find
-            vec![coupon_model.clone()], // apply_coupon find for update
-            vec![coupon_model],         // optional extra select (e.g. after update)
-        ])
-        .append_exec_results(vec![MockExecResult {
-            last_insert_id: 0,
-            rows_affected: 1,
-        }])
+        .append_query_results(vec![vec![coupon_model]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 

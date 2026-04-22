@@ -49,10 +49,12 @@ service GRPCServices {
     rpc SearchOrder(SearchOrderRequest) returns (OrdersResponse);
     rpc UpdateOrder(UpdateOrderRequest) returns (OrdersResponse);
     rpc DeleteOrder(DeleteOrderRequest) returns (OrdersResponse);
+    rpc CancelOrderItems(CancelOrderItemsRequest) returns (OrdersResponse);
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
     rpc EstimateCheckoutShipping(EstimateCheckoutShippingRequest) returns (EstimateCheckoutShippingResponse);
     rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);
     rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);
+    rpc UpdatePickupTarget(UpdatePickupTargetRequest) returns (UpdatePickupTargetResponse);
     rpc SearchOrderStatus(SearchOrderStatusRequest) returns (OrderStatusesResponse);
 
     // OrderDetails
@@ -201,6 +203,7 @@ service GRPCServices {
 
     // P1 Refunds
     rpc CreateRefund(CreateRefundRequest) returns (RefundsResponse);
+    rpc GetRefunds(GetRefundsRequest) returns (RefundsResponse);
 
     // P1 Manual NeedsReview resolution (admin)
     rpc ResolveNeedsReview(ResolveNeedsReviewRequest) returns (ResolveNeedsReviewResponse);

@@ -51,7 +51,7 @@ pub struct ValidateCoupon {
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
-#[graphql(description = "Apply a coupon code (increments usage count)")]
+#[graphql(description = "Preview a coupon code for the current amount without redeeming it")]
 pub struct ApplyCoupon {
     pub code: String,
     pub order_amount_paise: String,

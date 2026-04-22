@@ -8,13 +8,14 @@
 //! - `cargo test --test integration_cart -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use integration_common::test_db_url;
 
 use core_db_entities::entity::{
     cart, inventory, order_status, product_categories, product_variants, products,
-    sea_orm_active_enums::PaymentStatus, shipping_addresses, user_roles,
+    shipping_addresses, user_roles,
 };
 use core_operations::procedures::orders::place_order;
 use proto::proto::core::{
@@ -27,6 +28,7 @@ use sea_orm::{
 };
 use tonic::{Code, Request};
 
+#[allow(dead_code)]
 async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
     if let Ok(Some(id)) = core_operations::order_state_machine::get_status_id(txn, name).await {
         return id;
@@ -91,7 +93,8 @@ async fn integration_cart_delete_one_item_returns_remaining() {
         name: ActiveValue::Set("C1 Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(100),
+        // Keep selected subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live quote dependency.
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -261,7 +264,7 @@ async fn integration_guest_cart_not_used_for_place_order() {
     .expect("insert ProductVariants");
 
     let session_id = format!("guest-session-{}", now_tag);
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let guest_cart = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: None,
@@ -272,6 +275,7 @@ async fn integration_guest_cart_not_used_for_place_order() {
     )
     .await
     .expect("create_cart_item (guest) should succeed");
+    let guest_cart_id = guest_cart.into_inner().items[0].cart_id;
 
     let get_res = core_operations::handlers::cart::get_cart_items(
         &txn,
@@ -307,26 +311,35 @@ async fn integration_guest_cart_not_used_for_place_order() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![guest_cart_id],
+            payment_mode: None,
         }),
     )
     .await;
-    let err =
-        result.expect_err("place_order should fail: user's cart is empty, guest cart is not used");
-    assert_eq!(err.code(), Code::FailedPrecondition);
+    let err = result.expect_err(
+        "place_order should fail because selected guest cart ids do not belong to the customer cart",
+    );
+    assert_eq!(err.code(), Code::InvalidArgument);
     assert!(
-        err.message().to_lowercase().contains("cart")
-            && err.message().to_lowercase().contains("empty"),
-        "error should mention empty cart, got: {}",
+        err.message().to_lowercase().contains("selected cart item")
+            && err.message().to_lowercase().contains("not found"),
+        "error should mention invalid selected ownership, got: {}",
         err.message()
     );
 
     txn.rollback().await.ok();
 }
 
-/// C3 – Multiple cart items remain after place_order; all cleared after order becomes Paid.
+/// C3 – place_order removes only selected user cart items and leaves unselected rows intact.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_place_order_clears_all_user_cart_items_after_payment() {
+async fn integration_place_order_removes_only_selected_user_cart_items() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_removes_only_selected_user_cart_items",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -406,7 +419,8 @@ async fn integration_place_order_clears_all_user_cart_items_after_payment() {
         name: ActiveValue::Set("C3 Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(100),
+        // Keep selected subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live quote dependency.
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -470,7 +484,7 @@ async fn integration_place_order_clears_all_user_cart_items_after_payment() {
         .expect("insert Inventory");
     }
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_1 = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -481,7 +495,7 @@ async fn integration_place_order_clears_all_user_cart_items_after_payment() {
     )
     .await
     .expect("create_cart_item 1");
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_2 = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -492,7 +506,7 @@ async fn integration_place_order_clears_all_user_cart_items_after_payment() {
     )
     .await
     .expect("create_cart_item 2");
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_3 = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -503,6 +517,11 @@ async fn integration_place_order_clears_all_user_cart_items_after_payment() {
     )
     .await
     .expect("create_cart_item 3");
+    let selected_cart_ids = vec![
+        cart_1.into_inner().items[0].cart_id,
+        cart_3.into_inner().items[0].cart_id,
+    ];
+    let unselected_cart_id = cart_2.into_inner().items[0].cart_id;
 
     let get_before = core_operations::handlers::cart::get_cart_items(
         &txn,
@@ -525,13 +544,15 @@ async fn integration_place_order_clears_all_user_cart_items_after_payment() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: selected_cart_ids.clone(),
+            payment_mode: None,
         }),
     )
     .await
     .expect("place_order should succeed");
     let place_body = place_res.into_inner();
     assert_eq!(place_body.items.len(), 1);
-    let order_id = place_body.items[0].order_id;
+    let _order_id = place_body.items[0].order_id;
 
     let get_after_place = core_operations::handlers::cart::get_cart_items(
         &txn,
@@ -544,35 +565,12 @@ async fn integration_place_order_clears_all_user_cart_items_after_payment() {
     .expect("get_cart_items");
     assert_eq!(
         get_after_place.get_ref().items.len(),
-        3,
-        "cart unchanged until payment succeeds"
+        1,
+        "only unselected cart rows should remain after place_order"
     );
-
-    let _ = ensure_order_status(&txn, "confirmed").await;
-    core_operations::order_state_machine::transition_order_status(
-        &txn,
-        order_id,
-        core_operations::order_state_machine::OrderState::Paid,
-        "payment_captured",
-        "system",
-        Some("test payment"),
-        Some(PaymentStatus::Captured),
-    )
-    .await
-    .expect("transition to paid");
-
-    let get_after_pay = core_operations::handlers::cart::get_cart_items(
-        &txn,
-        Request::new(GetCartItemsRequest {
-            user_id: Some(user_id),
-            session_id: None,
-        }),
-    )
-    .await
-    .expect("get_cart_items");
-    assert!(
-        get_after_pay.get_ref().items.is_empty(),
-        "all cart items should be cleared after Paid"
+    assert_eq!(
+        get_after_place.get_ref().items[0].cart_id,
+        unselected_cart_id
     );
 
     let cart_rows = cart::Entity::find()
@@ -580,7 +578,8 @@ async fn integration_place_order_clears_all_user_cart_items_after_payment() {
         .all(&txn)
         .await
         .expect("query Cart");
-    assert!(cart_rows.is_empty(), "no cart rows should remain for user");
+    assert_eq!(cart_rows.len(), 1, "one unselected cart row should remain");
+    assert_eq!(cart_rows[0].cart_id, unselected_cart_id);
 
     txn.rollback().await.ok();
 }

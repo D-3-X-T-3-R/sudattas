@@ -15,6 +15,8 @@ BACKUP_DIR="$BACKEND_ROOT/database/db-backups"
 ENV_FILE="$BACKEND_ROOT/.env"
 CONTAINER_PATH="/tmp/db-restore.sql"
 MYSQL_HOST="127.0.0.1"
+# 1GiB — must align with docker-compose mysql `command: --max_allowed_packet=...` for large INSERTs.
+MAX_ALLOWED_PACKET=1073741824
 
 # Resolve backup file
 if [[ -n "${1:-}" ]]; then
@@ -94,7 +96,7 @@ fi
 
 echo "Restoring into database '$DB_NAME'..."
 if docker exec -e MYSQL_PWD="$DB_PASSWORD" "$DB_CONTAINER_NAME" \
-  sh -c "mysql -h$MYSQL_HOST -u$DB_USER $DB_NAME < $CONTAINER_PATH" 2>/dev/null; then
+  sh -c "mysql -h$MYSQL_HOST -u$DB_USER --max_allowed_packet=$MAX_ALLOWED_PACKET $DB_NAME < $CONTAINER_PATH" 2>/dev/null; then
   echo "Restore completed successfully."
   exit 0
 fi

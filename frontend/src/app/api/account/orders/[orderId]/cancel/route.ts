@@ -55,6 +55,8 @@ export async function POST(
     const status =
       lower.includes("not found") || lower.includes("order not found")
         ? 404
+        : lower.includes("failed_precondition")
+          ? 409
         : lower.includes("illegal") || lower.includes("invalid")
           ? 400
           : 400;

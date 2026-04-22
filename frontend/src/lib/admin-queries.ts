@@ -866,7 +866,19 @@ export interface TelemetrySummary {
   adminActionFailureRate: TelemetryRatio;
   releaseConfidence: { score: number; scale: string };
   webhookProcessingLatency: { available: boolean; averageMs?: number | null; message?: string | null };
-  backendSignals?: { available: boolean; authUnauthorizedCount?: number };
+  backendSignals?: {
+    available: boolean;
+    authUnauthorizedCount?: number;
+    paymentFailureCount?: { value: number; unit: string };
+    webhookFailureCount?: { value: number; unit: string };
+    refundFailureCount?: { value: number; unit: string };
+    shiprocketBookingFailureCount?: { value: number; unit: string };
+    staleExpiryFailureCount?: { value: number; unit: string };
+    cancelPendingLogisticsBacklog?: { value: number; unit: string };
+    outboxBacklog?: { value: number; unit: string };
+    stuckPendingOrders?: { value: number; unit: string };
+    stuckPaymentIntents?: { value: number; unit: string };
+  };
 }
 
 export async function fetchTelemetrySummary(): Promise<TelemetrySummary> {

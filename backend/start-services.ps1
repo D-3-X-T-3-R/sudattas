@@ -7,14 +7,15 @@ Start backend services with DB-first bootstrap and explicit DB mode:
    - -PreserveData (default): restore latest backup, then apply forward migrations
    - -Fresh: load schema from database/sql_dump/01_schema.sql, then apply forward migrations
 5) Regenerate SeaORM entities
-6) Build and start Core Operations + GraphQL
+6) Build and start Core Operations + GraphQL (skipped with -Orm)
 
-Run from backend/: .\start-services.ps1 [-Fresh | -PreserveData]
+Run from backend/: .\start-services.ps1 [-Fresh | -PreserveData] [-Orm]
 #>
 
 param(
     [switch]$Fresh,
-    [switch]$PreserveData
+    [switch]$PreserveData,
+    [switch]$Orm
 )
 
 $ErrorActionPreference = "Stop"
@@ -114,7 +115,6 @@ function Load-FreshSchema {
     Write-Host "Fresh schema loaded." -ForegroundColor Green
 }
 
-# 1) Backup DB before tearing down containers
 Write-Host "Backing up DB (if running)..." -ForegroundColor Yellow
 & "$BackendRoot\backup-db.ps1"
 if ($LASTEXITCODE -ne 0) {
@@ -149,7 +149,6 @@ Write-Host "Applying forward DB migrations..." -ForegroundColor Yellow
 & "$BackendRoot\apply-db-migrations.ps1"
 if ($LASTEXITCODE -ne 0) { throw "apply-db-migrations.ps1 failed" }
 
-# 5) Regenerate SeaORM entities from current DB schema
 Write-Host "Regenerating SeaORM entities..." -ForegroundColor Yellow
 $entityGenerateScript = Join-Path $BackendRoot "core_db_entities\src\entity\generate.ps1"
 if (-not (Test-Path -Path $entityGenerateScript -PathType Leaf)) {
@@ -164,12 +163,15 @@ try {
     Pop-Location
 }
 
-# 6) Build and start app services after DB + entities are ready
-Write-Host "Building and starting app services (Core Operations, GraphQL)..." -ForegroundColor Cyan
-$composeStatus = Invoke-Compose -Args @("up", "-d", "--build", "core_operations", "graphql")
-if ($composeStatus -ne 0) { throw "docker compose core_operations/graphql failed" }
+docker exec -i $DbContainerName sh -c "mysql -u root -p12345678 -e 'DROP DATABASE IF EXISTS SUDATTAS_CLONED; CREATE DATABASE SUDATTAS_CLONED;' && mysqldump --set-gtid-purged=OFF -u root -p12345678 SUDATTAS | mysql -u root -p12345678 SUDATTAS_CLONED"
+if ($Orm) {
+    Write-Host "ORM-only mode (-Orm): skipping Core Operations and GraphQL." -ForegroundColor Yellow
+} else {
+    Write-Host "Building and starting app services (Core Operations, GraphQL)..." -ForegroundColor Cyan
+    $composeStatus = Invoke-Compose -Args @("up", "-d", "--build", "core_operations", "graphql")
+    if ($composeStatus -ne 0) { throw "docker compose core_operations/graphql failed" }
+}
 
-# Keep only the latest 50 DB dumps under database/db-backups
 Write-Host "Pruning old DB backups (keeping latest 50)..." -ForegroundColor Yellow
 $BackupDirForPrune = Join-Path $BackendRoot "database\db-backups"
 if (Test-Path -Path $BackupDirForPrune -PathType Container) {
@@ -183,8 +185,13 @@ if (Test-Path -Path $BackupDirForPrune -PathType Container) {
 }
 
 Write-Host ""
-Write-Host "Done. All services running in Docker:" -ForegroundColor Green
-Write-Host "  MySQL (3306), Redis (6379), Core Operations (50051), GraphQL (8080)" -ForegroundColor Gray
+if ($Orm) {
+    Write-Host "Done (ORM-only). MySQL + Redis are running; SeaORM entities were regenerated." -ForegroundColor Green
+    Write-Host "  MySQL (3306), Redis (6379) - Core Operations / GraphQL were not started." -ForegroundColor Gray
+} else {
+    Write-Host "Done. All services running in Docker:" -ForegroundColor Green
+    Write-Host "  MySQL (3306), Redis (6379), Core Operations (50051), GraphQL (8080)" -ForegroundColor Gray
+}
 Write-Host "  DB mode: $DbMode" -ForegroundColor Gray
 Write-Host "  SeaORM entities refreshed from current DB schema" -ForegroundColor Gray
 Write-Host "  Stop with: docker compose down (or docker-compose down)" -ForegroundColor Gray

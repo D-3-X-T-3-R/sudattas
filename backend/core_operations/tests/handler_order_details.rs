@@ -19,12 +19,15 @@ async fn create_order_details_inserts_multiple_lines_and_returns_responses() {
         variant_id: 100,
         quantity: 2,
         price: Some(Decimal::new(5000, 2)),
+        line_total_minor: 5000,
         unit_price_minor: 5000,
         discount_minor: None,
         tax_minor: None,
         sku: None,
         title: None,
         line_attrs: None,
+        item_status: "active".to_string(),
+        cancelled_at: None,
     };
     let model2 = order_details::Model {
         order_detail_id: 2,
@@ -88,12 +91,15 @@ async fn update_order_detail_updates_single_line() {
         variant_id: 200,
         quantity: 1,
         price: Some(Decimal::new(1000, 2)),
+        line_total_minor: 1000,
         unit_price_minor: 1000,
         discount_minor: None,
         tax_minor: None,
         sku: None,
         title: None,
         line_attrs: None,
+        item_status: "active".to_string(),
+        cancelled_at: None,
     };
     let updated = order_details::Model {
         quantity: 2,
@@ -133,12 +139,15 @@ async fn search_order_detail_filters_by_order_and_price_range() {
         variant_id: 300,
         quantity: 1,
         price: Some(Decimal::new(2500, 2)),
+        line_total_minor: 2500,
         unit_price_minor: 2500,
         discount_minor: None,
         tax_minor: None,
         sku: None,
         title: None,
         line_attrs: None,
+        item_status: "active".to_string(),
+        cancelled_at: None,
     };
 
     let db = MockDatabase::new(DatabaseBackend::MySql)

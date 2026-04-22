@@ -8,13 +8,14 @@
 //! - `cargo test --test integration_users_carts_orders_products -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use integration_common::test_db_url;
 
 use core_db_entities::entity::{
     cart, inventory, order_details, order_status, product_categories, product_variants, products,
-    sea_orm_active_enums::PaymentStatus, shipping_addresses, user_roles,
+    shipping_addresses, user_roles,
 };
 use core_operations::procedures::orders::place_order;
 use proto::proto::core::{
@@ -27,6 +28,7 @@ use sea_orm::{
 };
 use tonic::{Code, Request};
 
+#[allow(dead_code)]
 async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
     if let Ok(Some(id)) = core_operations::order_state_machine::get_status_id(txn, name).await {
         return id;
@@ -43,7 +45,13 @@ async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> 
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
-async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_payment() {
+async fn integration_place_order_happy_path_removes_only_selected_items_after_creation() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_happy_path_removes_only_selected_items_after_creation",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::{inventory as inventory_entity, orders};
 
     let db = Database::connect(&test_db_url())
@@ -137,7 +145,8 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
         name: ActiveValue::Set("Integration Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live shipping quote dependency.
+        price_paise: ActiveValue::Set(60_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -177,7 +186,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
     .expect("insert Inventory");
 
     // Add item to cart via handler.
-    let _cart_res = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -188,6 +197,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
     )
     .await
     .expect("create_cart_item should succeed");
+    let selected_cart_id = cart_res.into_inner().items[0].cart_id;
 
     // Place order – integrates users, cart, products, orders, inventory, and order_events/outbox.
     let result = place_order(
@@ -196,6 +206,8 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![selected_cart_id],
+            payment_mode: None,
         }),
     )
     .await;
@@ -210,8 +222,8 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
         "order uses expected shipping address"
     );
     assert_eq!(
-        order.total_amount_paise, 2_000,
-        "2 items * ₹10.00 (1000 paise) each"
+        order.total_amount_paise, 120_000,
+        "2 items * 60000 paise each"
     );
 
     // Order persisted with matching totals.
@@ -223,7 +235,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
         .expect("order row should exist");
     assert_eq!(db_order.user_id, user_id);
     assert_eq!(
-        db_order.grand_total_minor, 2_000,
+        db_order.grand_total_minor, 120_000,
         "grand_total_minor should match computed total"
     );
 
@@ -250,30 +262,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
         "quantity_available should be decremented by ordered quantity"
     );
 
-    // Cart still has items until payment succeeds (pending order + Razorpay).
-    let remaining_cart = cart::Entity::find()
-        .filter(cart::Column::UserId.eq(user_id))
-        .all(&txn)
-        .await
-        .expect("query Cart for user");
-    assert!(
-        !remaining_cart.is_empty(),
-        "cart should remain after place_order until paid"
-    );
-
-    let _ = ensure_order_status(&txn, "confirmed").await;
-    core_operations::order_state_machine::transition_order_status(
-        &txn,
-        order.order_id,
-        core_operations::order_state_machine::OrderState::Paid,
-        "payment_captured",
-        "system",
-        Some("test payment"),
-        Some(PaymentStatus::Captured),
-    )
-    .await
-    .expect("transition to paid");
-
+    // Purchased selected rows are removed immediately after successful order creation.
     let remaining_cart = cart::Entity::find()
         .filter(cart::Column::UserId.eq(user_id))
         .all(&txn)
@@ -281,7 +270,7 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
         .expect("query Cart for user");
     assert!(
         remaining_cart.is_empty(),
-        "cart should be cleared after order becomes Paid"
+        "selected cart rows should be removed after successful order creation"
     );
 
     // Roll back to keep test non-destructive.
@@ -291,6 +280,12 @@ async fn integration_place_order_happy_path_creates_order_and_clears_cart_after_
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_insufficient_inventory_fails_and_preserves_cart",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::orders;
 
     let db = Database::connect(&test_db_url())
@@ -381,7 +376,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
         name: ActiveValue::Set("Integration Product Insufficient".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        price_paise: ActiveValue::Set(50_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -421,7 +416,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     .expect("insert Inventory");
 
     // Add cart item with quantity > available stock.
-    let _cart_res = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -432,6 +427,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     )
     .await
     .expect("create_cart_item should succeed");
+    let selected_cart_id = cart_res.into_inner().items[0].cart_id;
 
     let result = place_order(
         &txn,
@@ -439,6 +435,8 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![selected_cart_id],
+            payment_mode: None,
         }),
     )
     .await;
@@ -555,16 +553,17 @@ async fn integration_place_order_empty_cart_fails() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![],
+            payment_mode: None,
         }),
     )
     .await;
 
-    let err = result.expect_err("place_order should fail when cart is empty");
+    let err = result.expect_err("place_order should fail when nothing is selected");
     assert_eq!(err.code(), Code::FailedPrecondition);
     assert!(
-        err.message().to_lowercase().contains("cart")
-            && err.message().to_lowercase().contains("empty"),
-        "error should mention empty cart, got: {}",
+        err.message().to_lowercase().contains("selected"),
+        "error should mention missing selected cart items, got: {}",
         err.message()
     );
 
@@ -574,6 +573,12 @@ async fn integration_place_order_empty_cart_fails() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_cart_add_get_update_then_place_order() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_cart_add_get_update_then_place_order",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::{inventory as inventory_entity, orders};
 
     let db = Database::connect(&test_db_url())
@@ -656,7 +661,7 @@ async fn integration_cart_add_get_update_then_place_order() {
         name: ActiveValue::Set("Cart Update Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        price_paise: ActiveValue::Set(50_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -750,19 +755,21 @@ async fn integration_cart_add_get_update_then_place_order() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await
     .expect("place_order should succeed");
     let order = &place_res.into_inner().items[0];
-    assert_eq!(order.total_amount_paise, 3_000, "3 * 1000 paise");
+    assert_eq!(order.total_amount_paise, 150_000, "3 * 50000 paise");
 
     let db_order = orders::Entity::find_by_id(order.order_id)
         .one(&txn)
         .await
         .expect("query order")
         .expect("order exists");
-    assert_eq!(db_order.grand_total_minor, 3_000);
+    assert_eq!(db_order.grand_total_minor, 150_000);
 
     let inv_after = inventory_entity::Entity::find()
         .filter(inventory_entity::Column::VariantId.eq(Some(variant.variant_id)))
@@ -778,6 +785,12 @@ async fn integration_cart_add_get_update_then_place_order() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_multiple_items_two_variants() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_multiple_items_two_variants",
+    ) {
+        return;
+    }
+
     use core_db_entities::entity::{inventory as inventory_entity, orders};
 
     let db = Database::connect(&test_db_url())
@@ -860,7 +873,7 @@ async fn integration_place_order_multiple_items_two_variants() {
         name: ActiveValue::Set("Product A".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        price_paise: ActiveValue::Set(60_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -880,7 +893,7 @@ async fn integration_place_order_multiple_items_two_variants() {
         name: ActiveValue::Set("Product B".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(2_000),
+        price_paise: ActiveValue::Set(40_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -939,7 +952,7 @@ async fn integration_place_order_multiple_items_two_variants() {
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_a = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -950,7 +963,7 @@ async fn integration_place_order_multiple_items_two_variants() {
     )
     .await
     .expect("create_cart_item A");
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_b = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -961,6 +974,10 @@ async fn integration_place_order_multiple_items_two_variants() {
     )
     .await
     .expect("create_cart_item B");
+    let selected_cart_ids = vec![
+        cart_a.into_inner().items[0].cart_id,
+        cart_b.into_inner().items[0].cart_id,
+    ];
 
     let place_res = place_order(
         &txn,
@@ -968,13 +985,18 @@ async fn integration_place_order_multiple_items_two_variants() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids,
+            payment_mode: None,
         }),
     )
     .await
     .expect("place_order should succeed");
     let order = &place_res.into_inner().items[0];
-    let expected_total = 2 * 1_000 + 2_000;
-    assert_eq!(order.total_amount_paise, expected_total, "2*A + 1*B = 4000");
+    let expected_total = 2 * 60_000 + 40_000;
+    assert_eq!(
+        order.total_amount_paise, expected_total,
+        "2*A + 1*B = 160000"
+    );
 
     let db_order = orders::Entity::find_by_id(order.order_id)
         .one(&txn)
@@ -1011,6 +1033,12 @@ async fn integration_place_order_multiple_items_two_variants() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_then_search_order() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_place_order_then_search_order",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -1091,7 +1119,7 @@ async fn integration_place_order_then_search_order() {
         name: ActiveValue::Set("Search Order Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(1_000),
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(category.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -1129,7 +1157,7 @@ async fn integration_place_order_then_search_order() {
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -1140,6 +1168,7 @@ async fn integration_place_order_then_search_order() {
     )
     .await
     .expect("create_cart_item should succeed");
+    let selected_cart_id = cart_res.into_inner().items[0].cart_id;
 
     let place_res = place_order(
         &txn,
@@ -1147,6 +1176,8 @@ async fn integration_place_order_then_search_order() {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![selected_cart_id],
+            payment_mode: None,
         }),
     )
     .await

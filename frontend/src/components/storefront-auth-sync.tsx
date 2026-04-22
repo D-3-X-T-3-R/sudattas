@@ -35,6 +35,7 @@ export function StorefrontAuthSync() {
         headers: {
           "Content-Type": "application/json",
           "Idempotency-Key": `cart-merge-${resolvedCustomerUserId}-${guestSessionId}`,
+          "X-Guest-Session-Id": guestSessionId,
         },
         body: JSON.stringify({ guestSessionId }),
       }).finally(notify);

@@ -23,6 +23,10 @@ export interface AdminOrderDetail {
   orderId: string;
   userId: string;
   orderDate: string;
+  cancelWindowEndsAt?: string | null;
+  earliestBookingAt?: string | null;
+  pickupTargetAt?: string | null;
+  fulfillmentStatus?: string | null;
   shippingAddressId: string;
   totalAmountPaise: string;
   totalAmountFormatted: string;
@@ -36,6 +40,10 @@ const ADMIN_ORDER_DETAIL_QUERY = `query AdminOrderDetail($search: SearchOrder!) 
     orderId
     userId
     orderDate
+    cancelWindowEndsAt
+    earliestBookingAt
+    pickupTargetAt
+    fulfillmentStatus
     shippingAddressId
     totalAmountPaise
     totalAmountFormatted
@@ -80,6 +88,10 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
         orderId: string;
         userId: string;
         orderDate: string;
+        cancelWindowEndsAt?: string | null;
+        earliestBookingAt?: string | null;
+        pickupTargetAt?: string | null;
+        fulfillmentStatus?: string | null;
         shippingAddressId: string;
         totalAmountPaise: string;
         totalAmountFormatted: string;
@@ -120,6 +132,10 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
     orderId: row.orderId,
     userId: row.userId,
     orderDate: row.orderDate,
+    cancelWindowEndsAt: row.cancelWindowEndsAt ?? null,
+    earliestBookingAt: row.earliestBookingAt ?? null,
+    pickupTargetAt: row.pickupTargetAt ?? null,
+    fulfillmentStatus: row.fulfillmentStatus ?? null,
     shippingAddressId: row.shippingAddressId,
     totalAmountPaise: String(row.totalAmountPaise ?? ""),
     totalAmountFormatted: row.totalAmountFormatted,
@@ -146,6 +162,16 @@ const UPDATE_ORDER_MUTATION = `mutation UpdateAdminOrder($order: OrderMutation!)
 
 const ADMIN_MARK_ORDER_SHIPPED_MUTATION = `mutation AdminMarkOrderShipped($input: AdminMarkOrderShippedInput!) {
   adminMarkOrderShipped(input: $input)
+}`;
+
+const UPDATE_PICKUP_TARGET_MUTATION = `mutation UpdatePickupTarget($input: UpdatePickupTargetInput!) {
+  updatePickupTarget(input: $input) {
+    orderId
+    pickupTargetAt
+    pickupTargetReason
+    pickupTargetSetBy
+    pickupTargetUpdatedAt
+  }
 }`;
 
 /**
@@ -192,4 +218,36 @@ export async function updateAdminOrderStatus(
     orderId: order.orderId,
     targetStatusId: newStatusId.trim(),
   });
+}
+
+export async function updateAdminPickupTarget(params: {
+  orderId: string;
+  pickupTargetAt: string;
+  reason?: string;
+}): Promise<{
+  orderId: string;
+  pickupTargetAt: string;
+  pickupTargetReason?: string | null;
+  pickupTargetSetBy?: string | null;
+  pickupTargetUpdatedAt: string;
+}> {
+  const data = await gqlAdmin<{
+    updatePickupTarget?: {
+      orderId: string;
+      pickupTargetAt: string;
+      pickupTargetReason?: string | null;
+      pickupTargetSetBy?: string | null;
+      pickupTargetUpdatedAt: string;
+    };
+  }>(UPDATE_PICKUP_TARGET_MUTATION, {
+    input: {
+      orderId: params.orderId,
+      pickupTargetAt: params.pickupTargetAt,
+      reason: params.reason?.trim() || undefined,
+    },
+  });
+  if (!data?.updatePickupTarget) {
+    throw new Error("updatePickupTarget returned empty payload");
+  }
+  return data.updatePickupTarget;
 }

@@ -8,6 +8,7 @@
 //! - `cargo test --test integration_refunds -- --ignored`
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
@@ -23,8 +24,8 @@ use proto::proto::core::{
     CreateRefundRequest, CreateUserRequest, PlaceOrderRequest, UpdateOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
-    TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DatabaseBackend,
+    EntityTrait, QueryFilter, Statement, TransactionTrait,
 };
 use tonic::{Code, Request};
 
@@ -40,6 +41,21 @@ async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> 
     .await
     .expect("insert OrderStatus");
     m.status_id
+}
+
+async fn make_order_booking_eligible(txn: &sea_orm::DatabaseTransaction, order_id: i64) {
+    let _ = txn
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            r#"UPDATE Orders
+               SET earliest_booking_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   cancel_window_ends_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR),
+                   payment_status = 'captured'
+               WHERE OrderID = ?"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("make order booking-eligible");
 }
 
 /// Place order; return (order_id, user_id, shipping_id, total_paise).
@@ -106,7 +122,8 @@ async fn place_order_minimal(
         name: ActiveValue::Set("Refund Test Product".to_string()),
         slug: ActiveValue::Set(None),
         description: ActiveValue::Set(None),
-        price_paise: ActiveValue::Set(5_000),
+        // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR to avoid live quote dependency.
+        price_paise: ActiveValue::Set(150_000),
         category_id: ActiveValue::Set(cat.category_id),
         fabric: ActiveValue::Set(None),
         weave: ActiveValue::Set(None),
@@ -144,7 +161,7 @@ async fn place_order_minimal(
     .await
     .expect("insert Inventory");
 
-    let _ = core_operations::handlers::cart::create_cart_item(
+    let cart_res = core_operations::handlers::cart::create_cart_item(
         txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
@@ -155,6 +172,7 @@ async fn place_order_minimal(
     )
     .await
     .expect("create_cart_item");
+    let cart_id = cart_res.into_inner().items[0].cart_id;
 
     let place_res = place_order(
         txn,
@@ -162,6 +180,8 @@ async fn place_order_minimal(
             shipping_address_id: shipping_id,
             user_id,
             coupon_code: None,
+            selected_cart_ids: vec![cart_id],
+            payment_mode: None,
         }),
     )
     .await
@@ -211,6 +231,8 @@ async fn transition_order_to_delivered(
     )
     .await
     .expect("update to processing");
+
+    make_order_booking_eligible(txn, order_id).await;
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         txn,
@@ -272,12 +294,14 @@ async fn transition_order_to_shipped(
     .await
     .expect("update to processing");
 
+    make_order_booking_eligible(txn, order_id).await;
+
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         txn,
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
-            awb_code: None,
-            carrier: None,
+            awb_code: Some("AWBREF-SHIPPED".to_string()),
+            carrier: Some("Carrier".to_string()),
             shiprocket_book: None,
             shiprocket_order_id: None,
             shiprocket_status_id: None,
@@ -292,6 +316,12 @@ async fn transition_order_to_shipped(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_full_refund_delivered_transitions_to_refunded() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_full_refund_delivered_transitions_to_refunded",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -337,6 +367,12 @@ async fn integration_full_refund_delivered_transitions_to_refunded() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_partial_refund_shipped_leaves_status_shipped() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_partial_refund_shipped_leaves_status_shipped",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -387,6 +423,12 @@ async fn integration_partial_refund_shipped_leaves_status_shipped() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_create_refund_duplicate_gateway_id_idempotent() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_create_refund_duplicate_gateway_id_idempotent",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -456,6 +498,12 @@ async fn integration_create_refund_duplicate_gateway_id_idempotent() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_create_refund_pending_returns_failed_precondition() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_create_refund_pending_returns_failed_precondition",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
@@ -494,6 +542,12 @@ async fn integration_create_refund_pending_returns_failed_precondition() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_create_refund_cancelled_order_succeeds() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_create_refund_cancelled_order_succeeds",
+    ) {
+        return;
+    }
+
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");

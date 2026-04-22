@@ -9,6 +9,7 @@ pub struct Refund {
     pub currency: String,
     pub status: String,
     pub created_at: String,
+    pub line_items_refunded_json: Option<String>,
 }
 
 #[graphql_object]
@@ -41,6 +42,10 @@ impl Refund {
     async fn created_at(&self) -> &String {
         &self.created_at
     }
+
+    async fn line_items_refunded_json(&self) -> &Option<String> {
+        &self.line_items_refunded_json
+    }
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -62,4 +67,12 @@ pub struct ResolveNeedsReviewInput {
     pub resolution: String,
     /// admin identifier (e.g. user_id or "admin")
     pub actor_id: String,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Get refunds")]
+pub struct GetRefund {
+    pub refund_id: Option<String>,
+    pub order_id: Option<String>,
+    pub gateway_refund_id: Option<String>,
 }
