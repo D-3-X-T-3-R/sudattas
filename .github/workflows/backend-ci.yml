@@ -251,6 +251,8 @@ jobs:
       working-directory: ./backend
       env:
         TEST_DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/SUDATTAS
+        FREE_SHIPPING_THRESHOLD_MINOR: "100000"
+        RUN_LIVE_LOGISTICS_TESTS: "0"
         # For payment verification tests (optional; tests set their own for P2/P3)
         RAZORPAY_KEY_SECRET: ""
       run: |
