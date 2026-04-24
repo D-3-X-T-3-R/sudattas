@@ -26,7 +26,7 @@ use proto::proto::core::{
 use sea_orm::DbBackend;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, Set,
-    Statement,
+    Statement, TransactionTrait,
 };
 
 use chrono::Utc;
@@ -190,6 +190,32 @@ fn qualifies_for_free_shipping(
 }
 
 pub async fn place_order(
+    txn: &DatabaseTransaction,
+    request: Request<PlaceOrderRequest>,
+) -> Result<Response<OrdersResponse>, Status> {
+    // Run checkout within a nested transaction (savepoint) so any failure
+    // rolls back all place_order side effects before returning to caller.
+    let nested_txn = txn
+        .begin()
+        .await
+        .map_err(|e| Status::internal(format!("failed to begin nested place_order txn: {e}")))?;
+
+    let result = place_order_in_txn(&nested_txn, request).await;
+    match result {
+        Ok(response) => {
+            nested_txn.commit().await.map_err(|e| {
+                Status::internal(format!("failed to commit nested place_order txn: {e}"))
+            })?;
+            Ok(response)
+        }
+        Err(err) => {
+            let _ = nested_txn.rollback().await;
+            Err(err)
+        }
+    }
+}
+
+async fn place_order_in_txn(
     txn: &DatabaseTransaction,
     request: Request<PlaceOrderRequest>,
 ) -> Result<Response<OrdersResponse>, Status> {
@@ -549,26 +575,6 @@ pub async fn place_order(
     let grand_total_paise = paise_checked_add(items_total_minor_after_discount, shipping_minor)
         .map_err(|e| Status::internal(format!("Overflow computing grand total in paise: {}", e)))?;
 
-    // Reserve inventory before creating the order so that on insufficient stock we fail without creating any order.
-    for (variant_id, quantity) in &variant_quantity_map {
-        let qty = *quantity;
-        let result = txn
-            .execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable - ? WHERE VariantID = ? AND QuantityAvailable >= ?"#,
-                [qty.into(), (*variant_id).into(), qty.into()],
-            ))
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-        if result.rows_affected() == 0 {
-            crate::observability::record_inventory_update_failure_total();
-            return Err(Status::failed_precondition(format!(
-                "Insufficient stock for variant {} (need {}); inventory update had no effect",
-                variant_id, qty
-            )));
-        }
-    }
-
     let pending_status_id = order_state_machine::get_status_id(txn, "active_sale")
         .await
         .map_err(|e| Status::internal(e.to_string()))?
@@ -682,7 +688,7 @@ pub async fn place_order(
         })
     }
 
-    let _ = create_order_details(
+    let created_order_details = create_order_details(
         txn,
         Request::new(CreateOrderDetailsRequest { order_details }),
     )
@@ -690,17 +696,68 @@ pub async fn place_order(
     .into_inner()
     .items;
 
+    if created_order_details.len() != frozen_lines.len() {
+        return Err(Status::internal(format!(
+            "OrderDetails insert mismatch: expected {}, inserted {}",
+            frozen_lines.len(),
+            created_order_details.len()
+        )));
+    }
+
+    // Reserve inventory only after order + order details were fully persisted in the
+    // nested place_order transaction. Any later failure will roll this reservation back.
+    for (variant_id, quantity) in &variant_quantity_map {
+        let qty = *quantity;
+        let result = txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable - ? WHERE VariantID = ? AND QuantityAvailable >= ?"#,
+                [qty.into(), (*variant_id).into(), qty.into()],
+            ))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        if result.rows_affected() == 0 {
+            crate::observability::record_inventory_update_failure_total();
+            return Err(Status::failed_precondition(format!(
+                "Insufficient stock for variant {} (need {}); inventory update had no effect",
+                variant_id, qty
+            )));
+        }
+    }
+
+    let selected_snapshot_condition =
+        cart_items.iter().fold(Condition::any(), |condition, item| {
+            condition.add(
+                Condition::all()
+                    .add(cart::Column::CartId.eq(item.cart_id))
+                    .add(cart::Column::VariantId.eq(item.variant_id))
+                    .add(cart::Column::Quantity.eq(item.quantity)),
+            )
+        });
+    let delete_result = cart::Entity::delete_many()
+        .filter(cart::Column::UserId.eq(req.user_id))
+        .filter(selected_snapshot_condition)
+        .exec(txn)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+    if delete_result.rows_affected != cart_items.len() as u64 {
+        return Err(Status::internal(
+            "Selected cart items changed during checkout; please refresh your cart and try again",
+        ));
+    }
+
     if !is_cod_checkout {
-        // Auto-create a pending payment intent: backend creates Razorpay order via API (server-authoritative).
+        // Create a pending payment intent record without calling Razorpay pre-commit.
+        // A later post-commit/payment step can refresh placeholder ids to real gateway ids.
         let amount_paise = grand_total_paise;
-        let payment_intent = create_payment_intent(
+        let _payment_intent = create_payment_intent(
             txn,
             tonic::Request::new(CreatePaymentIntentRequest {
                 order_id: create_order.order_id,
                 user_id: req.user_id,
                 amount_paise,
                 currency: Some("INR".to_string()),
-                razorpay_order_id: None, // Backend will call Razorpay Orders API and store returned id.
+                razorpay_order_id: Some(format!("rzp_pending_{}", create_order.order_id)),
             }),
         )
         .await?
@@ -709,13 +766,6 @@ pub async fn place_order(
         .into_iter()
         .next()
         .ok_or_else(|| Status::internal("create_payment_intent returned no payment intent"))?;
-
-        if payment_intent.razorpay_order_id.starts_with("rzp_pending_") {
-            return Err(Status::unavailable(format!(
-                "Failed to create payment intent for order {}",
-                create_order.order_id
-            )));
-        }
     } else {
         // COD orders are accepted immediately without creating a Razorpay payment intent.
         let confirmed_status_id = order_state_machine::get_status_id(txn, "confirmed")
@@ -770,27 +820,6 @@ pub async fn place_order(
         }),
     )
     .await;
-
-    let selected_snapshot_condition =
-        cart_items.iter().fold(Condition::any(), |condition, item| {
-            condition.add(
-                Condition::all()
-                    .add(cart::Column::CartId.eq(item.cart_id))
-                    .add(cart::Column::VariantId.eq(item.variant_id))
-                    .add(cart::Column::Quantity.eq(item.quantity)),
-            )
-        });
-    let delete_result = cart::Entity::delete_many()
-        .filter(cart::Column::UserId.eq(req.user_id))
-        .filter(selected_snapshot_condition)
-        .exec(txn)
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
-    if delete_result.rows_affected != cart_items.len() as u64 {
-        return Err(Status::internal(
-            "Selected cart items changed during checkout; please refresh your cart and try again",
-        ));
-    }
 
     // If we have an idempotency key, mark this operation as completed and store
     // the created order_id as the response_ref so replays can return it.

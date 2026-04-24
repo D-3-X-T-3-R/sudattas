@@ -12,7 +12,6 @@ pub async fn create_order_details(
     let req = request.into_inner().order_details;
 
     let mut response: Vec<OrderDetailResponse> = vec![];
-    let mut first_error = None;
 
     for details in req.iter() {
         let create_order_detail = order_details::ActiveModel {
@@ -50,24 +49,21 @@ pub async fn create_order_details(
             cancelled_at: ActiveValue::Set(None),
         };
 
-        match create_order_detail.insert(txn).await {
-            Ok(model) => {
-                response.push(OrderDetailResponse {
-                    order_detail_id: model.order_detail_id,
-                    order_id: model.order_id,
-                    variant_id: model.variant_id,
-                    quantity: model.quantity,
-                    price_paise: model.price.as_ref().map(decimal_to_paise).unwrap_or(0),
-                    line_total_minor: model.line_total_minor,
-                    item_status: model.item_status,
-                    cancelled_at: model.cancelled_at.map(|v| v.to_rfc3339()),
-                });
-            }
-            Err(e) => {
-                first_error.get_or_insert_with(|| map_db_error_to_status(e));
-                break;
-            }
-        }
+        let model = create_order_detail
+            .insert(txn)
+            .await
+            .map_err(map_db_error_to_status)?;
+
+        response.push(OrderDetailResponse {
+            order_detail_id: model.order_detail_id,
+            order_id: model.order_id,
+            variant_id: model.variant_id,
+            quantity: model.quantity,
+            price_paise: model.price.as_ref().map(decimal_to_paise).unwrap_or(0),
+            line_total_minor: model.line_total_minor,
+            item_status: model.item_status,
+            cancelled_at: model.cancelled_at.map(|v| v.to_rfc3339()),
+        });
     }
 
     Ok(Response::new(OrderDetailsResponse { items: response }))
