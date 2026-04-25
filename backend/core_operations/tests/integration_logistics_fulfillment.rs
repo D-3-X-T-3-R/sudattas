@@ -707,10 +707,7 @@ async fn latest_refund_attempt_snapshot(
     })
 }
 
-async fn neutralize_open_refund_attempts(
-    db: &sea_orm::DatabaseConnection,
-    reason: &str,
-) {
+async fn neutralize_open_refund_attempts(db: &sea_orm::DatabaseConnection, reason: &str) {
     let txn = db.begin().await.expect("begin refund attempt cleanup");
     txn.execute(Statement::from_sql_and_values(
         sea_orm::DbBackend::MySql,
@@ -1227,8 +1224,11 @@ async fn integration_refund_attempt_persisted_before_external_call_and_processed
     process_refund_attempts(&db, 25)
         .await
         .expect("run refund worker");
-    let expected_idempotency_key =
-        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    let expected_idempotency_key = refund_idempotency_key(
+        order_id,
+        &format!("pay_logistics_{tag}"),
+        frozen_order_total,
+    );
     {
         let guard = state.lock().expect("lock");
         assert_eq!(
@@ -1348,8 +1348,11 @@ END"#
     process_refund_attempts(&db, 25)
         .await
         .expect("refund worker run with forced persistence failure");
-    let expected_idempotency_key =
-        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    let expected_idempotency_key = refund_idempotency_key(
+        order_id,
+        &format!("pay_logistics_{tag}"),
+        frozen_order_total,
+    );
     {
         let guard = state.lock().expect("lock");
         assert_eq!(
@@ -2287,8 +2290,11 @@ async fn integration_customer_cancel_and_webhook_cancel_race_refunds_once() {
     process_refund_attempts(&db, 25)
         .await
         .expect("run refund worker after race");
-    let expected_idempotency_key =
-        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    let expected_idempotency_key = refund_idempotency_key(
+        order_id,
+        &format!("pay_logistics_{tag}"),
+        frozen_order_total,
+    );
     {
         let guard = state.lock().expect("lock");
         assert_eq!(
@@ -2389,8 +2395,11 @@ async fn integration_failed_shiprocket_cancel_moves_to_cancel_pending_without_re
     process_refund_attempts(&db, 25)
         .await
         .expect("run refund worker");
-    let expected_idempotency_key =
-        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    let expected_idempotency_key = refund_idempotency_key(
+        order_id,
+        &format!("pay_logistics_{tag}"),
+        frozen_order_total,
+    );
     {
         let guard = state.lock().expect("lock");
         assert_eq!(
@@ -2547,8 +2556,11 @@ async fn integration_rto_terminal_webhook_refunds_once() {
     process_refund_attempts(&db, 25)
         .await
         .expect("run refund worker after RTO webhook");
-    let expected_idempotency_key =
-        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    let expected_idempotency_key = refund_idempotency_key(
+        order_id,
+        &format!("pay_logistics_{tag}"),
+        frozen_order_total,
+    );
     {
         let guard = state.lock().expect("lock");
         assert_eq!(
@@ -2665,8 +2677,11 @@ async fn integration_refund_retry_reuses_same_idempotency_key() {
     process_refund_attempts(&db, 25)
         .await
         .expect("run worker with forced gateway failure");
-    let expected_idempotency_key =
-        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    let expected_idempotency_key = refund_idempotency_key(
+        order_id,
+        &format!("pay_logistics_{tag}"),
+        frozen_order_total,
+    );
     {
         let guard = state.lock().expect("lock");
         assert_eq!(

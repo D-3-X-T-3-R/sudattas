@@ -681,7 +681,9 @@ async fn ensure_live_shipment_booked(db: &DatabaseConnection, order_id: i64) -> 
             Ok(()) => txn.commit().await.map_err(|e| e.to_string())?,
             Err(status)
                 if status.code() == tonic::Code::FailedPrecondition
-                    && status.message().contains("Shipment already created for this order") =>
+                    && status
+                        .message()
+                        .contains("Shipment already created for this order") =>
             {
                 txn.rollback().await.ok();
             }
