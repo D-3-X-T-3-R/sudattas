@@ -64,6 +64,45 @@ struct MockState {
     refund_should_fail: bool,
 }
 
+fn refund_idempotency_key(order_id: i64, payment_id: &str, target_minor: i64) -> String {
+    format!("refund_{order_id}_{payment_id}_{target_minor}")
+}
+
+fn order_scoped_refund_call_count(state: &MockState, order_id: i64) -> usize {
+    let prefix = format!("refund_{order_id}_");
+    state
+        .refund_idempotency_keys
+        .iter()
+        .filter(|key| key.starts_with(&prefix))
+        .count()
+}
+
+fn order_scoped_refund_amounts(state: &MockState, order_id: i64) -> Vec<i64> {
+    let prefix = format!("refund_{order_id}_");
+    state
+        .refund_idempotency_keys
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, key)| {
+            if key.starts_with(&prefix) {
+                state.refund_amounts.get(idx).copied()
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn order_scoped_refund_idempotency_keys(state: &MockState, order_id: i64) -> Vec<String> {
+    let prefix = format!("refund_{order_id}_");
+    state
+        .refund_idempotency_keys
+        .iter()
+        .filter(|key| key.starts_with(&prefix))
+        .cloned()
+        .collect()
+}
+
 fn compute_signature(order_id: &str, payment_id: &str, secret: &str) -> String {
     let payload = format!("{order_id}|{payment_id}");
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac");
@@ -612,6 +651,81 @@ async fn refund_row_count(db: &sea_orm::DatabaseConnection, order_id: i64) -> i6
     row.try_get("", "count").expect("count")
 }
 
+async fn processed_refund_total_minor(db: &sea_orm::DatabaseConnection, order_id: i64) -> i64 {
+    let txn = db.begin().await.expect("begin processed refund total");
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT CAST(COALESCE(SUM(amount_paise), 0) AS SIGNED) AS total
+               FROM Refunds
+               WHERE order_id = ?
+                 AND status = 'processed'"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("query processed refund total")
+        .expect("total row");
+    txn.rollback().await.ok();
+    row.try_get("", "total").expect("total")
+}
+
+#[derive(Debug, Clone)]
+struct RefundAttemptSnapshot {
+    status: String,
+    amount_requested_paise: i64,
+    amount_sent_to_gateway_paise: i64,
+}
+
+async fn latest_refund_attempt_snapshot(
+    db: &sea_orm::DatabaseConnection,
+    order_id: i64,
+) -> Option<RefundAttemptSnapshot> {
+    let txn = db.begin().await.expect("begin latest refund attempt");
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT status,
+                      amount_requested_paise,
+                      amount_sent_to_gateway_paise
+               FROM RefundAttempts
+               WHERE order_id = ?
+               ORDER BY attempt_id DESC
+               LIMIT 1"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("query latest refund attempt");
+    txn.rollback().await.ok();
+    row.map(|r| RefundAttemptSnapshot {
+        status: r.try_get("", "status").expect("status"),
+        amount_requested_paise: r
+            .try_get("", "amount_requested_paise")
+            .expect("amount_requested_paise"),
+        amount_sent_to_gateway_paise: r
+            .try_get("", "amount_sent_to_gateway_paise")
+            .expect("amount_sent_to_gateway_paise"),
+    })
+}
+
+async fn neutralize_open_refund_attempts(
+    db: &sea_orm::DatabaseConnection,
+    reason: &str,
+) {
+    let txn = db.begin().await.expect("begin refund attempt cleanup");
+    txn.execute(Statement::from_sql_and_values(
+        sea_orm::DbBackend::MySql,
+        r#"UPDATE RefundAttempts
+           SET status = 'processed',
+               provider_error = COALESCE(provider_error, ?),
+               updated_at = UTC_TIMESTAMP()
+           WHERE status IN ('pending_external', 'submitting', 'submitted')"#,
+        [reason.into()],
+    ))
+    .await
+    .expect("cleanup open refund attempts");
+    txn.commit().await.expect("commit refund attempt cleanup");
+}
+
 async fn create_trigger(db: &sea_orm::DatabaseConnection, trigger_name: &str, body_sql: &str) {
     db.execute_unprepared(&format!("DROP TRIGGER IF EXISTS `{trigger_name}`"))
         .await
@@ -1057,8 +1171,14 @@ async fn integration_refund_attempt_persisted_before_external_call_and_processed
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18121, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
+    neutralize_open_refund_attempts(
+        &db,
+        "itest cleanup: isolate refund worker before durable-attempt flow",
+    )
+    .await;
     let tag = unique_tag(18121);
     let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18121, tag).await;
+    let frozen_order_total = order_grand_total_minor(&db, order_id).await;
 
     let cancel_txn = db.begin().await.expect("cancel txn");
     delete_order(
@@ -1107,10 +1227,25 @@ async fn integration_refund_attempt_persisted_before_external_call_and_processed
     process_refund_attempts(&db, 25)
         .await
         .expect("run refund worker");
+    let expected_idempotency_key =
+        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "refund worker should issue exactly one gateway refund call for this order"
+        );
+        assert_eq!(
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            vec![expected_idempotency_key],
+            "worker should use deterministic order-scoped idempotency key"
+        );
+    }
     assert_eq!(
-        state.lock().expect("lock").refund_calls,
-        1,
-        "refund worker should issue exactly one gateway refund call"
+        processed_refund_total_minor(&db, order_id).await,
+        frozen_order_total,
+        "worker should persist full refund amount for a fully cancelled prepaid order"
     );
     assert_eq!(
         refund_attempt_status(&db, order_id).await.as_deref(),
@@ -1171,8 +1306,14 @@ async fn integration_refund_worker_persistence_retry_does_not_duplicate_gateway_
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18123, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
+    neutralize_open_refund_attempts(
+        &db,
+        "itest cleanup: isolate refund worker before persistence-retry flow",
+    )
+    .await;
     let tag = unique_tag(18123);
     let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18123, tag).await;
+    let frozen_order_total = order_grand_total_minor(&db, order_id).await;
 
     let cancel_txn = db.begin().await.expect("cancel txn");
     delete_order(
@@ -1207,11 +1348,21 @@ END"#
     process_refund_attempts(&db, 25)
         .await
         .expect("refund worker run with forced persistence failure");
-    assert_eq!(
-        state.lock().expect("lock").refund_calls,
-        1,
-        "gateway call should have happened once"
-    );
+    let expected_idempotency_key =
+        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "gateway call should have happened exactly once for this order"
+        );
+        assert_eq!(
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            vec![expected_idempotency_key.clone()],
+            "first worker run should call gateway with deterministic idempotency key"
+        );
+    }
     assert_eq!(
         refund_attempt_status(&db, order_id).await.as_deref(),
         Some("submitted"),
@@ -1224,10 +1375,23 @@ END"#
     process_refund_attempts(&db, 25)
         .await
         .expect("retry refund persistence");
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "retry should reconcile persisted result without a second gateway call for this order"
+        );
+        assert_eq!(
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            vec![expected_idempotency_key],
+            "retry must preserve the original idempotency key"
+        );
+    }
     assert_eq!(
-        state.lock().expect("lock").refund_calls,
-        1,
-        "retry should reconcile persisted result without a second gateway call"
+        processed_refund_total_minor(&db, order_id).await,
+        frozen_order_total,
+        "once persistence recovers, full refunded amount should match frozen order total"
     );
     assert_eq!(refund_row_count(&db, order_id).await, 1);
     assert_eq!(
@@ -2040,8 +2204,14 @@ async fn integration_customer_cancel_and_webhook_cancel_race_refunds_once() {
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18106, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
+    neutralize_open_refund_attempts(
+        &db,
+        "itest cleanup: isolate refund worker before cancel/webhook race flow",
+    )
+    .await;
     let tag = unique_tag(18106);
     let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18106, tag).await;
+    let frozen_order_total = order_grand_total_minor(&db, order_id).await;
     ensure_delayed_shipment_booked(&db, order_id).await;
     let shipment = shipment_meta(&db, order_id).await;
     let shiprocket_order_id: String = shipment
@@ -2100,14 +2270,55 @@ async fn integration_customer_cancel_and_webhook_cancel_race_refunds_once() {
     {
         let guard = state.lock().expect("lock");
         assert_eq!(
-            guard.refund_calls, 1,
-            "race should produce only one outbound refund call"
+            order_scoped_refund_call_count(&guard, order_id),
+            0,
+            "race should queue refund attempt durably before worker, without inline outbound refund call"
         );
     }
     assert!(
-        refund_attempt_count(&db, order_id).await <= 1,
-        "race should not create duplicate refund attempt rows"
+        refund_attempt_count(&db, order_id).await == 1,
+        "race should create exactly one durable refund attempt row"
     );
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("pending_external")
+    );
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run refund worker after race");
+    let expected_idempotency_key =
+        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "race should converge to exactly one outbound refund call after worker execution"
+        );
+        assert_eq!(
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            vec![expected_idempotency_key],
+            "race should preserve exactly one deterministic idempotency key"
+        );
+    }
+    assert_eq!(refund_row_count(&db, order_id).await, 1);
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("processed")
+    );
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("second worker pass should stay idempotent");
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "second worker pass must not issue duplicate outbound refund calls"
+        );
+    }
 }
 
 #[tokio::test]
@@ -2125,8 +2336,14 @@ async fn integration_failed_shiprocket_cancel_moves_to_cancel_pending_without_re
     }));
     let _server = spawn_mock_server(18103, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
+    neutralize_open_refund_attempts(
+        &db,
+        "itest cleanup: isolate refund worker before failed shiprocket cancel flow",
+    )
+    .await;
     let tag = unique_tag(18103);
     let (order_id, user_id, inventory_marker) = place_and_pay_order(&db, 18103, tag).await;
+    let frozen_order_total = order_grand_total_minor(&db, order_id).await;
 
     let cancel_txn = db.begin().await.expect("cancel txn");
     delete_order(
@@ -2140,11 +2357,57 @@ async fn integration_failed_shiprocket_cancel_moves_to_cancel_pending_without_re
     .expect("within-window cancellation should succeed without logistics API cancel");
     cancel_txn.commit().await.expect("commit cancel");
 
-    assert_eq!(order_status_name(&db, order_id).await, "refunded");
+    assert_eq!(order_status_name(&db, order_id).await, "cancelled");
+    assert_eq!(
+        refund_attempt_count(&db, order_id).await,
+        1,
+        "cancellation should persist exactly one durable refund attempt before worker"
+    );
+    let latest_attempt = latest_refund_attempt_snapshot(&db, order_id)
+        .await
+        .expect("latest refund attempt");
+    assert_eq!(latest_attempt.status, "pending_external");
+    assert_eq!(
+        latest_attempt.amount_requested_paise, frozen_order_total,
+        "full cancellation should target frozen order grand total"
+    );
+    assert_eq!(
+        latest_attempt.amount_sent_to_gateway_paise, frozen_order_total,
+        "pending attempt should queue full frozen order amount"
+    );
     assert_eq!(inventory_available(&db, inventory_marker).await, 6);
-    let guard = state.lock().expect("lock");
-    assert_eq!(guard.cancel_calls, 0);
-    assert_eq!(guard.refund_calls, 1);
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(guard.cancel_calls, 0);
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            0,
+            "no refund gateway call should happen before worker"
+        );
+    }
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run refund worker");
+    let expected_idempotency_key =
+        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "worker should issue exactly one outbound refund call for this order"
+        );
+        assert_eq!(
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            vec![expected_idempotency_key]
+        );
+    }
+    assert_eq!(order_status_name(&db, order_id).await, "refunded");
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("processed")
+    );
 }
 
 #[tokio::test]
@@ -2216,8 +2479,14 @@ async fn integration_rto_terminal_webhook_refunds_once() {
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18105, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
+    neutralize_open_refund_attempts(
+        &db,
+        "itest cleanup: isolate refund worker before RTO webhook flow",
+    )
+    .await;
     let tag = unique_tag(18105);
     let (order_id, _user_id, inventory_marker) = place_and_pay_order(&db, 18105, tag).await;
+    let frozen_order_total = order_grand_total_minor(&db, order_id).await;
     ensure_delayed_shipment_booked(&db, order_id).await;
     let shipment = shipment_meta(&db, order_id).await;
     let shiprocket_order_id: String = shipment
@@ -2249,14 +2518,76 @@ async fn integration_rto_terminal_webhook_refunds_once() {
         webhook_txn.commit().await.expect("commit webhook");
     }
 
+    assert_eq!(
+        refund_attempt_count(&db, order_id).await,
+        1,
+        "duplicate terminal RTO webhooks should queue exactly one durable refund attempt"
+    );
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("pending_external")
+    );
     let shipment = shipment_meta(&db, order_id).await;
-    let refund_id: String = shipment
+    let refund_id_before_worker: Option<String> = shipment
         .try_get("", "razorpay_refund_id")
-        .expect("refund id");
-    assert!(refund_id.starts_with("rfnd_logistics_"));
+        .expect("refund id before worker");
+    assert!(
+        refund_id_before_worker.is_none(),
+        "shipment refund id must stay null until refund worker persists gateway success"
+    );
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            0,
+            "webhook path must not call refund gateway before worker"
+        );
+    }
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run refund worker after RTO webhook");
+    let expected_idempotency_key =
+        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "RTO flow should issue exactly one outbound refund call after worker"
+        );
+        assert_eq!(
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            vec![expected_idempotency_key]
+        );
+    }
+    let shipment = shipment_meta(&db, order_id).await;
+    let refund_id_after_worker: Option<String> = shipment
+        .try_get("", "razorpay_refund_id")
+        .expect("refund id after worker");
+    assert!(
+        refund_id_after_worker
+            .as_deref()
+            .is_some_and(|id| id.starts_with("rfnd_logistics_")),
+        "shipment refund id should be persisted after worker reconciliation"
+    );
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("processed")
+    );
     assert_eq!(inventory_available(&db, inventory_marker).await, 6);
-    let guard = state.lock().expect("lock");
-    assert_eq!(guard.refund_calls, 1);
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("second worker pass should stay idempotent");
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "RTO retry worker pass must not produce duplicate gateway refunds"
+        );
+    }
 }
 
 #[tokio::test]
@@ -2274,6 +2605,11 @@ async fn integration_refund_retry_reuses_same_idempotency_key() {
     }));
     let _server = spawn_mock_server(18107, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
+    neutralize_open_refund_attempts(
+        &db,
+        "itest cleanup: isolate refund worker before refund retry idempotency-key flow",
+    )
+    .await;
     let tag = unique_tag(18107);
     let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18107, tag).await;
     let frozen_order_total = order_grand_total_minor(&db, order_id).await;
@@ -2303,11 +2639,52 @@ async fn integration_refund_retry_reuses_same_idempotency_key() {
         }),
     )
     .await
-    .expect("first webhook should converge with refund_failed");
+    .expect("first webhook should queue refund attempt");
     first_webhook_txn
         .commit()
         .await
         .expect("commit first webhook");
+    assert_eq!(
+        refund_attempt_count(&db, order_id).await,
+        1,
+        "first terminal webhook should queue exactly one refund attempt"
+    );
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("pending_external")
+    );
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            0,
+            "webhook processing must not call gateway before refund worker"
+        );
+    }
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run worker with forced gateway failure");
+    let expected_idempotency_key =
+        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), frozen_order_total);
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "first worker run should perform exactly one outbound refund call"
+        );
+        assert_eq!(
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            vec![expected_idempotency_key.clone()],
+            "first worker run should use deterministic idempotency key"
+        );
+    }
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("pending_external"),
+        "failed gateway call should reset attempt to pending_external for retry"
+    );
 
     {
         let mut guard = state.lock().expect("lock");
@@ -2335,30 +2712,38 @@ async fn integration_refund_retry_reuses_same_idempotency_key() {
     .await
     .expect("webhook retry should converge");
     webhook_txn.commit().await.expect("commit webhook");
+    assert_eq!(
+        refund_attempt_count(&db, order_id).await,
+        1,
+        "duplicate webhook must not create a second refund attempt"
+    );
 
-    let (refund_calls, refund_idempotency_keys) = {
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run worker retry after webhook replay");
+    {
         let guard = state.lock().expect("lock");
-        (guard.refund_calls, guard.refund_idempotency_keys.clone())
-    };
-    assert!(
-        refund_calls <= 1,
-        "retry path must not issue duplicate outbound refunds"
-    );
-    assert!(
-        refund_attempt_count(&db, order_id).await <= 1,
-        "retry path must not create duplicate refund attempts"
-    );
-    if refund_calls == 1 {
         assert_eq!(
-            refund_idempotency_keys.len(),
-            1,
-            "only one outbound refund call should carry idempotency key"
+            order_scoped_refund_call_count(&guard, order_id),
+            2,
+            "retry path should issue exactly one additional outbound call after first failure"
         );
         assert_eq!(
-            refund_idempotency_keys[0],
-            format!("refund_{order_id}_pay_logistics_{tag}_{frozen_order_total}")
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            vec![expected_idempotency_key.clone(), expected_idempotency_key],
+            "retry path must reuse the same idempotency key across worker retries"
         );
     }
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("processed")
+    );
+    assert_eq!(refund_row_count(&db, order_id).await, 1);
+    assert_eq!(
+        processed_refund_total_minor(&db, order_id).await,
+        frozen_order_total,
+        "retry path should reconcile to full frozen-order refund amount once gateway succeeds"
+    );
 }
 
 #[tokio::test]
@@ -2373,6 +2758,11 @@ async fn integration_partial_cancel_refunds_items_then_shipping_on_full_cancel()
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18108, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
+    neutralize_open_refund_attempts(
+        &db,
+        "itest cleanup: isolate refund worker before partial/full cancel settlement flow",
+    )
+    .await;
     let tag = unique_tag(18108);
     let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18108, tag).await;
     let detail_ids = split_order_into_two_lines(&db, order_id).await;
@@ -2394,6 +2784,48 @@ async fn integration_partial_cancel_refunds_items_then_shipping_on_full_cancel()
         .commit()
         .await
         .expect("commit first cancel");
+    assert_eq!(
+        refund_attempt_count(&db, order_id).await,
+        1,
+        "first partial cancel should queue exactly one durable refund attempt"
+    );
+    let first_attempt = latest_refund_attempt_snapshot(&db, order_id)
+        .await
+        .expect("first refund attempt snapshot");
+    assert_eq!(first_attempt.status, "pending_external");
+    assert_eq!(
+        first_attempt.amount_requested_paise, 2000,
+        "first partial cancel should target cancelled line total only"
+    );
+    assert_eq!(
+        first_attempt.amount_sent_to_gateway_paise, 2000,
+        "first queued refund amount should match cancelled line total"
+    );
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            0,
+            "first partial cancel must not call gateway before worker"
+        );
+    }
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run worker for first partial refund");
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "worker should execute first partial refund exactly once"
+        );
+    }
+    assert_eq!(
+        processed_refund_total_minor(&db, order_id).await,
+        2000,
+        "first worker pass should persist only cancelled line total"
+    );
 
     let second_cancel_txn = db.begin().await.expect("cancel second txn");
     cancel_order_items(
@@ -2410,17 +2842,72 @@ async fn integration_partial_cancel_refunds_items_then_shipping_on_full_cancel()
         .commit()
         .await
         .expect("commit second cancel");
+    assert_eq!(
+        refund_attempt_count(&db, order_id).await,
+        2,
+        "full cancellation after first settlement should queue second refund attempt"
+    );
+    let second_attempt = latest_refund_attempt_snapshot(&db, order_id)
+        .await
+        .expect("second refund attempt snapshot");
+    let expected_remaining = frozen_order_total - 2000;
+    assert_eq!(second_attempt.status, "pending_external");
+    assert_eq!(
+        second_attempt.amount_requested_paise, expected_remaining,
+        "second attempt should target remaining amount after processed partial refund"
+    );
+    assert_eq!(
+        second_attempt.amount_sent_to_gateway_paise, expected_remaining,
+        "second queued amount should send only the remaining frozen total"
+    );
 
-    let guard = state.lock().expect("lock");
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run worker for full settlement remainder");
+    let expected_idempotency_keys = vec![
+        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), 2000),
+        refund_idempotency_key(
+            order_id,
+            &format!("pay_logistics_{tag}"),
+            frozen_order_total,
+        ),
+    ];
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            2,
+            "partial then full flow should execute exactly two gateway settlements"
+        );
+        assert_eq!(
+            order_scoped_refund_amounts(&guard, order_id),
+            vec![2000, expected_remaining],
+            "gateway amounts should match partial line total then full-order remainder"
+        );
+        assert_eq!(
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            expected_idempotency_keys,
+            "each settlement should use deterministic idempotency key based on target amount"
+        );
+    }
     assert_eq!(
-        guard.refund_calls, 2,
-        "partial then full should trigger two settlements"
+        processed_refund_total_minor(&db, order_id).await,
+        frozen_order_total,
+        "partial then full cancel should reconcile to full frozen order refund total"
     );
-    assert_eq!(
-        guard.refund_amounts,
-        vec![2000, frozen_order_total - 2000],
-        "full cancellation should settle remaining amount from frozen order grand total"
-    );
+    assert_eq!(order_status_name(&db, order_id).await, "refunded");
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("idempotency check worker rerun");
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            2,
+            "rerunning worker must not create a third settlement call"
+        );
+    }
 }
 
 #[tokio::test]
@@ -2435,6 +2922,11 @@ async fn integration_partial_duplicate_line_cancel_does_not_double_refund() {
     let state = Arc::new(Mutex::new(MockState::default()));
     let _server = spawn_mock_server(18109, state.clone()).await;
     let db = Database::connect(&test_db_url()).await.expect("connect");
+    neutralize_open_refund_attempts(
+        &db,
+        "itest cleanup: isolate refund worker before duplicate-line cancel flow",
+    )
+    .await;
     let tag = unique_tag(18109);
     let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18109, tag).await;
     let detail_ids = split_order_into_two_lines(&db, order_id).await;
@@ -2451,6 +2943,15 @@ async fn integration_partial_duplicate_line_cancel_does_not_double_refund() {
     .await
     .expect("cancel first line");
     first_cancel_txn.commit().await.expect("commit first");
+    assert_eq!(
+        refund_attempt_count(&db, order_id).await,
+        1,
+        "first line cancel should queue exactly one refund attempt"
+    );
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("pending_external")
+    );
 
     let replay_txn = db.begin().await.expect("cancel replay txn");
     let replay = cancel_order_items(
@@ -2464,12 +2965,54 @@ async fn integration_partial_duplicate_line_cancel_does_not_double_refund() {
     .await;
     replay_txn.rollback().await.ok();
     assert!(replay.is_err(), "duplicate line cancel should be rejected");
-
-    let guard = state.lock().expect("lock");
     assert_eq!(
-        guard.refund_calls, 1,
-        "duplicate cancel must not trigger extra refund"
+        refund_attempt_count(&db, order_id).await,
+        1,
+        "duplicate cancel must not queue an additional refund attempt"
     );
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            0,
+            "duplicate line cancel should not trigger inline gateway refund before worker"
+        );
+    }
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run refund worker for first line cancel");
+    let expected_idempotency_key =
+        refund_idempotency_key(order_id, &format!("pay_logistics_{tag}"), 2000);
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "worker should execute queued refund once despite duplicate cancel request"
+        );
+        assert_eq!(
+            order_scoped_refund_idempotency_keys(&guard, order_id),
+            vec![expected_idempotency_key]
+        );
+    }
+    assert_eq!(
+        processed_refund_total_minor(&db, order_id).await,
+        2000,
+        "single cancelled line should settle exactly one line total"
+    );
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("worker rerun should stay idempotent");
+    {
+        let guard = state.lock().expect("lock");
+        assert_eq!(
+            order_scoped_refund_call_count(&guard, order_id),
+            1,
+            "worker rerun must not produce duplicate outbound refunds"
+        );
+    }
 }
 
 #[tokio::test]

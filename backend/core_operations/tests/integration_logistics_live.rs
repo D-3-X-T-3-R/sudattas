@@ -13,8 +13,13 @@ use core_operations::handlers::orders::delete_order;
 use core_operations::handlers::payment_intents::verify_razorpay_payment;
 use core_operations::handlers::shipments::logistics_workflow::{
     cancel_order_via_logistics, ensure_shiprocket_booking_for_paid_order,
+    process_booking_intents_batch,
 };
 use core_operations::procedures::orders::place_order;
+use core_operations::procedures::{
+    cancel_pending_logistics::process_cancel_pending_logistics,
+    refund_attempts_worker::process_refund_attempts,
+};
 use hmac::{Hmac, Mac};
 use integration_common::test_db_url_optional;
 use proto::proto::core::{
@@ -562,6 +567,27 @@ async fn refund_attempt_count(db: &DatabaseConnection, order_id: i64) -> Result<
     Ok(count)
 }
 
+async fn latest_refund_attempt_status(
+    db: &DatabaseConnection,
+    order_id: i64,
+) -> Result<Option<String>, String> {
+    let txn = db.begin().await.map_err(|e| e.to_string())?;
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT status
+               FROM RefundAttempts
+               WHERE order_id = ?
+               ORDER BY attempt_id DESC
+               LIMIT 1"#,
+            [order_id.into()],
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
+    txn.rollback().await.ok();
+    Ok(row.and_then(|r| r.try_get("", "status").ok()))
+}
+
 async fn order_refund_settlement_status(
     db: &DatabaseConnection,
     order_id: i64,
@@ -582,6 +608,22 @@ async fn order_refund_settlement_status(
 }
 
 async fn ensure_live_shipment_booked(db: &DatabaseConnection, order_id: i64) -> Result<(), String> {
+    {
+        let eligibility_txn = db.begin().await.map_err(|e| e.to_string())?;
+        eligibility_txn
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DbBackend::MySql,
+                r#"UPDATE Orders
+                   SET earliest_booking_at = UTC_TIMESTAMP() - INTERVAL 1 MINUTE,
+                       updated_at = UTC_TIMESTAMP()
+                   WHERE OrderID = ?"#,
+                [order_id.into()],
+            ))
+            .await
+            .map_err(|e| e.to_string())?;
+        eligibility_txn.commit().await.map_err(|e| e.to_string())?;
+    }
+
     {
         let txn = db.begin().await.map_err(|e| e.to_string())?;
         let has_shipment = txn
@@ -633,11 +675,25 @@ async fn ensure_live_shipment_booked(db: &DatabaseConnection, order_id: i64) -> 
     }
 
     let mut last_status = "<missing>".to_string();
-    for _ in 0..4 {
+    {
         let txn = db.begin().await.map_err(|e| e.to_string())?;
-        ensure_shiprocket_booking_for_paid_order(&txn, order_id)
+        match ensure_shiprocket_booking_for_paid_order(&txn, order_id).await {
+            Ok(()) => txn.commit().await.map_err(|e| e.to_string())?,
+            Err(status)
+                if status.code() == tonic::Code::FailedPrecondition
+                    && status.message().contains("Shipment already created for this order") =>
+            {
+                txn.rollback().await.ok();
+            }
+            Err(status) => return Err(status.to_string()),
+        }
+    }
+
+    for _ in 0..6 {
+        process_booking_intents_batch(db, 25)
             .await
             .map_err(|e| e.to_string())?;
+        let txn = db.begin().await.map_err(|e| e.to_string())?;
         let row = txn
             .query_one(Statement::from_sql_and_values(
                 sea_orm::DbBackend::MySql,
@@ -695,26 +751,66 @@ async fn cleanup_live_order(
     order_id: i64,
     user_id: i64,
 ) -> Result<(), String> {
-    let txn = db.begin().await.map_err(|e| e.to_string())?;
-    let logistics_cancelled = match cancel_order_via_logistics(&txn, order_id, Some(user_id)).await
+    let mut cancel_requested = false;
     {
-        Ok(Some(_)) => true,
-        Ok(None) => false,
-        Err(status) if status.code() == tonic::Code::FailedPrecondition => false,
-        Err(status) => return Err(status.to_string()),
+        let txn = db.begin().await.map_err(|e| e.to_string())?;
+        match cancel_order_via_logistics(&txn, order_id, Some(user_id)).await {
+            Ok(Some(_)) => {
+                cancel_requested = true;
+                txn.commit().await.map_err(|e| e.to_string())?;
+            }
+            Ok(None) => {
+                txn.commit().await.map_err(|e| e.to_string())?;
+            }
+            Err(status) if status.code() == tonic::Code::Unavailable => {
+                cancel_requested = true;
+                txn.commit().await.map_err(|e| e.to_string())?;
+            }
+            Err(status) if status.code() == tonic::Code::FailedPrecondition => {
+                delete_order(
+                    &txn,
+                    Request::new(DeleteOrderRequest {
+                        order_id,
+                        acting_user_id: Some(user_id),
+                    }),
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+                txn.commit().await.map_err(|e| e.to_string())?;
+                return Ok(());
+            }
+            Err(status) => return Err(status.to_string()),
+        }
+    }
+
+    if !cancel_requested {
+        return Ok(());
+    }
+
+    for _ in 0..8 {
+        process_cancel_pending_logistics(db, 25)
+            .await
+            .map_err(|e| e.to_string())?;
+        let shipment = shipment_meta(db, order_id).await?;
+        let logistics_status: Option<String> = shipment.try_get("", "logistics_status").ok();
+        if logistics_status.as_deref() == Some("cancelled") {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+
+    let shipment = shipment_meta(db, order_id).await?;
+    let logistics_status: Option<String> = shipment.try_get("", "logistics_status").ok();
+    if logistics_status.as_deref() != Some("cancelled") {
+        return Err(format!(
+            "cleanup did not converge shipment to cancelled state (logistics_status={:?})",
+            logistics_status
+        ));
     };
-    if !logistics_cancelled {
-        delete_order(
-            &txn,
-            Request::new(DeleteOrderRequest {
-                order_id,
-                acting_user_id: Some(user_id),
-            }),
-        )
+
+    process_refund_attempts(db, 25)
         .await
         .map_err(|e| e.to_string())?;
-    }
-    txn.commit().await.map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -759,10 +855,7 @@ async fn live_payment_success_auto_books_shiprocket_and_cleans_up() {
         assert!(!shipment_id.trim().is_empty());
         assert!(!external_order_id.trim().is_empty());
         assert!(!awb_code.trim().is_empty());
-        assert!(matches!(
-            logistics_status.as_str(),
-            "ready_to_ship" | "pickup_scheduled"
-        ));
+        assert_eq!(logistics_status, "booked");
         assert_eq!(intent.status, PaymentIntentStatus::Processed);
         assert!(
             intent
@@ -890,6 +983,9 @@ async fn live_pre_pickup_cancel_refunds_once_and_is_idempotent() {
     let refund_attempts = refund_attempt_count(&db, order_id)
         .await
         .expect("refund attempts");
+    let refund_attempt_status = latest_refund_attempt_status(&db, order_id)
+        .await
+        .expect("latest refund attempt status");
     assert_eq!(
         refund_attempts, 1,
         "refund flow should record exactly one attempt even after replay"
@@ -897,30 +993,32 @@ async fn live_pre_pickup_cancel_refunds_once_and_is_idempotent() {
     let refund_settlement_status = order_refund_settlement_status(&db, order_id)
         .await
         .expect("order refund settlement status");
-    if let Some(refund_id_value) = refund_id.as_deref() {
-        let refund_status_value = refund_status
-            .as_deref()
-            .expect("refund_status should be present when refund id exists");
-        assert!(
-            matches!(refund_status_value, "pending" | "processed"),
-            "unexpected refund status {refund_status_value}"
-        );
-        assert_eq!(refunds_count, 1);
-        assert!(
-            refund_id_value.starts_with("rfnd_"),
-            "gateway refund id should have Razorpay refund prefix"
-        );
-    } else {
-        assert_eq!(
-            refunds_count, 0,
-            "synthetic backend-only payment id should not create a persisted gateway refund row"
-        );
-        assert_eq!(
-            refund_settlement_status.as_deref(),
-            Some("refund_failed"),
-            "without a real Razorpay checkout payment id, refund should settle as failed"
-        );
-    }
+    assert_eq!(
+        final_status, "cancelled",
+        "durable cancel flow should converge order status to cancelled for synthetic backend-only payment ids"
+    );
+    assert_eq!(
+        refunds_count, 0,
+        "synthetic backend-only payment id should not create a persisted gateway refund row"
+    );
+    assert!(
+        refund_id.is_none(),
+        "shipment must not persist gateway refund id when worker cannot create external refund"
+    );
+    assert!(
+        refund_status.is_none(),
+        "shipment refund status should remain empty when no gateway refund was persisted"
+    );
+    assert_eq!(
+        refund_settlement_status.as_deref(),
+        Some("refund_pending"),
+        "gateway failures should keep durable refund state retryable"
+    );
+    assert_eq!(
+        refund_attempt_status.as_deref(),
+        Some("pending_external"),
+        "latest refund attempt should stay pending_external for worker retry after gateway failure"
+    );
 
     eprintln!(
         "[live-verify] after_cancel_duplicate_retry internal_order_id={order_id} razorpay_refund_id={} refund_status={} final_order_status={final_status} inventory_quantity_available={final_inventory} refunds_table_rows={refunds_count} refund_attempt_rows={refund_attempts} refund_settlement_status={}",
