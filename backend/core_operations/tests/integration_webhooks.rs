@@ -187,6 +187,14 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
 
     let r1 = core_operations::handlers::webhooks::ingest_webhook(&txn, req).await;
     assert!(r1.is_ok(), "first ingest should succeed: {:?}", r1.err());
+    let first_event = r1
+        .expect("already checked is_ok")
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .expect("first webhook response item");
+    assert_eq!(first_event.status, "processed");
 
     let req2 = Request::new(IngestWebhookRequest {
         provider: "razorpay".to_string(),
@@ -201,6 +209,18 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
         r2.is_ok(),
         "second ingest (duplicate webhook_id) should succeed: {:?}",
         r2.err()
+    );
+    let second_event = r2
+        .expect("already checked is_ok")
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .expect("second webhook response item");
+    assert_eq!(second_event.status, "processed");
+    assert_eq!(
+        second_event.event_id, first_event.event_id,
+        "duplicate processed webhook should replay idempotently"
     );
 
     let updated = payment_intents::Entity::find_by_id(inserted.intent_id)

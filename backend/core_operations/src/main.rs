@@ -5,6 +5,7 @@ use core_operations::{
         cancel_pending_logistics::process_cancel_pending_logistics,
         create_shipments_after_cancel_window::process_create_shipments_after_cancel_window,
         outbox_worker::process_pending_outbox_events,
+        refund_attempts_worker::process_refund_attempts,
         stale_order_expiry::expire_stale_pending_orders,
     },
     MyGRPCServices,
@@ -312,6 +313,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!(
             "delayed shipment creation worker: disabled via DELAYED_SHIPMENT_CREATION_DISABLE_WORKER"
         );
+    }
+
+    let refund_worker_disabled = std::env::var("REFUND_ATTEMPTS_DISABLE_WORKER")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !refund_worker_disabled {
+        let db = get_db()
+            .await
+            .map_err(|e| format!("refund attempts worker: database connect failed: {e}"))?;
+        let poll_sec = std::env::var("REFUND_ATTEMPTS_POLL_INTERVAL_SEC")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(30);
+        let batch_limit = std::env::var("REFUND_ATTEMPTS_BATCH_LIMIT")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(25);
+        log::info!(
+            "refund attempts worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
+        );
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
+            loop {
+                interval.tick().await;
+                match process_refund_attempts(&db, batch_limit).await {
+                    Ok(n) if n > 0 => {
+                        log::info!("refund attempts worker: processed {n} refund attempt(s)");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        observability::record_refund_failure_total("worker_error");
+                        log::warn!("refund attempts worker: batch failed: {}", e.message());
+                    }
+                }
+                refresh_backlog_metrics(&db).await;
+            }
+        });
+    } else {
+        log::info!("refund attempts worker: disabled via REFUND_ATTEMPTS_DISABLE_WORKER");
     }
 
     Server::builder()

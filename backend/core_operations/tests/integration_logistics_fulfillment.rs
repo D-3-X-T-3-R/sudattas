@@ -13,10 +13,15 @@ use core_operations::handlers::orders::{
     admin_mark_order_shipped, cancel_order_items, delete_order, update_pickup_target,
 };
 use core_operations::handlers::payment_intents::verify_razorpay_payment;
-use core_operations::handlers::shipments::create_shipment;
+use core_operations::handlers::shipments::{
+    book_order_after_validation, cancel_order_via_logistics, create_shipment,
+    process_booking_intents_batch,
+};
 use core_operations::handlers::webhooks::ingest_webhook;
+use core_operations::procedures::cancel_pending_logistics::process_cancel_pending_logistics;
 use core_operations::procedures::create_shipments_after_cancel_window::process_create_shipments_after_cancel_window;
 use core_operations::procedures::orders::place_order;
+use core_operations::procedures::refund_attempts_worker::process_refund_attempts;
 use hmac::{Hmac, Mac};
 use integration_common::test_db_url;
 use proto::proto::core::{
@@ -48,6 +53,7 @@ struct MockState {
     razorpay_order_calls: usize,
     pickup_calls: usize,
     cancel_calls: usize,
+    cancel_order_ids: Vec<i64>,
     refund_calls: usize,
     refund_amounts: Vec<i64>,
     refund_idempotency_keys: Vec<String>,
@@ -175,10 +181,18 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
 
     let cancel = warp::path!("v1" / "external" / "orders" / "cancel")
         .and(warp::post())
+        .and(warp::body::json())
         .and(with_state.clone())
-        .map(|state: Arc<Mutex<MockState>>| {
+        .map(|body: serde_json::Value, state: Arc<Mutex<MockState>>| {
             let mut guard = state.lock().expect("lock");
             guard.cancel_calls += 1;
+            if let Some(ids) = body.get("ids").and_then(|x| x.as_array()) {
+                for id in ids {
+                    if let Some(parsed) = id.as_i64() {
+                        guard.cancel_order_ids.push(parsed);
+                    }
+                }
+            }
             if guard.cancel_should_fail {
                 warp::reply::with_status(String::from("fail"), warp::http::StatusCode::BAD_GATEWAY)
             } else {
@@ -563,6 +577,56 @@ async fn refund_attempt_count(db: &sea_orm::DatabaseConnection, order_id: i64) -
     row.try_get("", "count").expect("count")
 }
 
+async fn refund_attempt_status(db: &sea_orm::DatabaseConnection, order_id: i64) -> Option<String> {
+    let txn = db.begin().await.expect("begin refund attempt status");
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT status
+               FROM RefundAttempts
+               WHERE order_id = ?
+               ORDER BY attempt_id DESC
+               LIMIT 1"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("query refund attempt status");
+    txn.rollback().await.ok();
+    row.and_then(|r| r.try_get("", "status").ok())
+}
+
+async fn refund_row_count(db: &sea_orm::DatabaseConnection, order_id: i64) -> i64 {
+    let txn = db.begin().await.expect("begin refund count");
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT COUNT(*) AS count
+               FROM Refunds
+               WHERE order_id = ?"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("query refund count")
+        .expect("count row");
+    txn.rollback().await.ok();
+    row.try_get("", "count").expect("count")
+}
+
+async fn create_trigger(db: &sea_orm::DatabaseConnection, trigger_name: &str, body_sql: &str) {
+    db.execute_unprepared(&format!("DROP TRIGGER IF EXISTS `{trigger_name}`"))
+        .await
+        .expect("drop existing trigger");
+    db.execute_unprepared(body_sql)
+        .await
+        .expect("create trigger");
+}
+
+async fn drop_trigger(db: &sea_orm::DatabaseConnection, trigger_name: &str) {
+    db.execute_unprepared(&format!("DROP TRIGGER IF EXISTS `{trigger_name}`"))
+        .await
+        .expect("drop trigger");
+}
+
 async fn shipment_count(db: &sea_orm::DatabaseConnection, order_id: i64) -> i64 {
     let txn = db.begin().await.expect("begin shipment count");
     let row = txn
@@ -643,6 +707,74 @@ async fn order_refund_settlement_status(
     row.try_get("", "refund_settlement_status").ok()
 }
 
+async fn webhook_status_by_webhook_id(
+    db: &sea_orm::DatabaseConnection,
+    webhook_id: &str,
+) -> Option<String> {
+    let txn = db.begin().await.expect("begin webhook status");
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT status
+               FROM WebhookEvents
+               WHERE webhook_id = ?
+               ORDER BY event_id DESC
+               LIMIT 1"#,
+            [webhook_id.into()],
+        ))
+        .await
+        .expect("query webhook status");
+    txn.rollback().await.ok();
+    row.and_then(|r| r.try_get("", "status").ok())
+}
+
+async fn latest_payment_intent_ids_for_order(
+    db: &sea_orm::DatabaseConnection,
+    order_id: i64,
+) -> (String, Option<String>) {
+    let txn = db.begin().await.expect("begin payment intent lookup");
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT razorpay_order_id, razorpay_payment_id
+               FROM PaymentIntents
+               WHERE order_id = ?
+               ORDER BY intent_id DESC
+               LIMIT 1"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("query payment intent")
+        .expect("payment intent row");
+    txn.rollback().await.ok();
+    (
+        row.try_get("", "razorpay_order_id")
+            .expect("razorpay_order_id"),
+        row.try_get("", "razorpay_payment_id").ok(),
+    )
+}
+
+async fn shipment_logistics_status(
+    db: &sea_orm::DatabaseConnection,
+    order_id: i64,
+) -> Option<String> {
+    let txn = db.begin().await.expect("begin shipment logistics status");
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT logistics_status
+               FROM Shipments
+               WHERE order_id = ?
+               ORDER BY shipment_id DESC
+               LIMIT 1"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("query logistics status");
+    txn.rollback().await.ok();
+    row.and_then(|r| r.try_get("", "logistics_status").ok())
+}
+
 async fn make_order_eligible_for_delayed_booking(db: &sea_orm::DatabaseConnection, order_id: i64) {
     let rewind_txn = db.begin().await.expect("rewind txn");
     rewind_txn
@@ -699,11 +831,33 @@ async fn ensure_delayed_shipment_booked(db: &sea_orm::DatabaseConnection, order_
         process_create_shipments_after_cancel_window(db, 500)
             .await
             .expect("run delayed shipment worker");
-        if shipment_count(db, order_id).await > 0 {
+        if shipment_count(db, order_id).await == 0 {
+            continue;
+        }
+
+        let shipment = shipment_meta(db, order_id).await;
+        let shiprocket_order_id = shipment
+            .try_get::<Option<String>>("", "shiprocket_order_id")
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty());
+        let shiprocket_external_order_id = shipment
+            .try_get::<Option<String>>("", "shiprocket_external_order_id")
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty());
+        let awb_code = shipment
+            .try_get::<Option<String>>("", "awb_code")
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty());
+        if (shiprocket_external_order_id.is_some() || shiprocket_order_id.is_some())
+            && awb_code.is_some()
+        {
             return;
         }
     }
-    panic!("shipment was not created for order {order_id} after delayed worker retries");
+    panic!("shipment was not fully booked for order {order_id} after delayed worker retries");
 }
 
 async fn split_order_into_two_lines(db: &sea_orm::DatabaseConnection, order_id: i64) -> Vec<i64> {
@@ -763,6 +917,985 @@ async fn split_order_into_two_lines(db: &sea_orm::DatabaseConnection, order_id: 
     rows.into_iter()
         .map(|r| r.try_get("", "OrderDetailID").expect("id"))
         .collect()
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_inventory_unique_variant_constraint_blocks_duplicate_rows() {
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let txn = db.begin().await.expect("begin");
+    let tag = unique_tag(18127);
+    let (_user_id, _shipping_address_id, inventory_marker) = seed_checkout_user(&txn, tag).await;
+
+    let inventory_row = inventory::Entity::find_by_id(inventory_marker)
+        .one(&txn)
+        .await
+        .expect("query inventory row")
+        .expect("inventory row");
+    let variant_id = inventory_row.variant_id.expect("variant_id must be set");
+
+    let duplicate_insert = inventory::ActiveModel {
+        inventory_id: ActiveValue::NotSet,
+        variant_id: ActiveValue::Set(Some(variant_id)),
+        quantity_available: ActiveValue::Set(Some(1)),
+        quantity_reserved: ActiveValue::Set(Some(0)),
+        reorder_level: ActiveValue::Set(None),
+        updated_at: ActiveValue::Set(Some(Utc::now())),
+    }
+    .insert(&txn)
+    .await;
+    assert!(
+        duplicate_insert.is_err(),
+        "unique(VariantID) must reject duplicate inventory rows"
+    );
+
+    txn.rollback().await.ok();
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_place_order_fails_when_inventory_row_is_missing() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18128, state).await;
+    configure_mock_provider_env(18128);
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let txn = db.begin().await.expect("begin");
+    let tag = unique_tag(18128);
+    let (user_id, shipping_address_id, inventory_marker) = seed_checkout_user(&txn, tag).await;
+    let cart_item = core_operations::handlers::cart::get_cart_items(
+        &txn,
+        Request::new(proto::proto::core::GetCartItemsRequest {
+            user_id: Some(user_id),
+            session_id: None,
+        }),
+    )
+    .await
+    .expect("get cart")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("cart item");
+
+    txn.execute(Statement::from_sql_and_values(
+        sea_orm::DbBackend::MySql,
+        "DELETE FROM Inventory WHERE InventoryID = ?",
+        [inventory_marker.into()],
+    ))
+    .await
+    .expect("delete inventory row");
+
+    let err = place_order(
+        &txn,
+        Request::new(PlaceOrderRequest {
+            shipping_address_id,
+            user_id,
+            coupon_code: None,
+            selected_cart_ids: vec![cart_item.cart_id],
+            payment_mode: Some("cod".to_string()),
+        }),
+    )
+    .await
+    .expect_err("reserve must fail when inventory row is missing");
+    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+    assert!(
+        err.message().contains("No inventory row exists"),
+        "expected missing inventory row error, got: {}",
+        err.message()
+    );
+
+    txn.rollback().await.ok();
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_cancel_fails_when_restore_inventory_row_is_missing() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18129, state).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18129);
+    let (order_id, user_id, inventory_marker) =
+        place_order_without_payment_verification(&db, 18129, tag, Some("cod")).await;
+
+    let delete_inv_txn = db.begin().await.expect("delete inventory txn");
+    delete_inv_txn
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "DELETE FROM Inventory WHERE InventoryID = ?",
+            [inventory_marker.into()],
+        ))
+        .await
+        .expect("delete inventory row");
+    delete_inv_txn
+        .commit()
+        .await
+        .expect("commit inventory delete");
+
+    let cancel_txn = db.begin().await.expect("cancel txn");
+    let err = delete_order(
+        &cancel_txn,
+        Request::new(DeleteOrderRequest {
+            order_id,
+            acting_user_id: Some(user_id),
+        }),
+    )
+    .await
+    .expect_err("cancel must fail when inventory restore row is missing");
+    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+    assert!(
+        err.message()
+            .contains("No inventory row exists for variant"),
+        "expected missing inventory restore row error, got: {}",
+        err.message()
+    );
+    cancel_txn.rollback().await.ok();
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_refund_attempt_persisted_before_external_call_and_processed_post_commit() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18121, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18121);
+    let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18121, tag).await;
+
+    let cancel_txn = db.begin().await.expect("cancel txn");
+    delete_order(
+        &cancel_txn,
+        Request::new(DeleteOrderRequest {
+            order_id,
+            acting_user_id: Some(user_id),
+        }),
+    )
+    .await
+    .expect("cancellation should queue refund attempt");
+
+    let pending_attempts_row = cancel_txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "SELECT COUNT(*) AS count FROM RefundAttempts WHERE order_id = ?",
+            [order_id.into()],
+        ))
+        .await
+        .expect("query pending attempts in txn")
+        .expect("count row");
+    let pending_attempts: i64 = pending_attempts_row.try_get("", "count").expect("count");
+    assert_eq!(
+        pending_attempts, 1,
+        "refund attempt must exist before commit"
+    );
+    assert_eq!(
+        state.lock().expect("lock").refund_calls,
+        0,
+        "no gateway refund call should happen before durable commit"
+    );
+
+    cancel_txn.commit().await.expect("commit cancel");
+
+    assert_eq!(refund_attempt_count(&db, order_id).await, 1);
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("pending_external")
+    );
+    assert_eq!(
+        state.lock().expect("lock").refund_calls,
+        0,
+        "refund worker not run yet; gateway call count must stay 0"
+    );
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run refund worker");
+    assert_eq!(
+        state.lock().expect("lock").refund_calls,
+        1,
+        "refund worker should issue exactly one gateway refund call"
+    );
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("processed")
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_cod_cancellation_creates_no_refund_attempt_even_with_worker() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18122, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let cleanup_txn = db.begin().await.expect("cleanup txn");
+    cleanup_txn
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"UPDATE RefundAttempts
+               SET status = 'processed',
+                   provider_error = COALESCE(provider_error, 'itest cleanup: already open before COD worker assertion')
+               WHERE status IN ('pending_external', 'submitting', 'submitted')"#,
+            Vec::<sea_orm::Value>::new(),
+        ))
+        .await
+        .expect("cleanup open refund attempts");
+    cleanup_txn.commit().await.expect("commit cleanup");
+    let tag = unique_tag(18122);
+    let (order_id, user_id, _inventory_marker) =
+        place_order_without_payment_verification(&db, 18122, tag, Some("cod")).await;
+
+    let cancel_txn = db.begin().await.expect("cancel txn");
+    delete_order(
+        &cancel_txn,
+        Request::new(DeleteOrderRequest {
+            order_id,
+            acting_user_id: Some(user_id),
+        }),
+    )
+    .await
+    .expect("COD cancellation should succeed");
+    cancel_txn.commit().await.expect("commit cancel");
+
+    assert_eq!(refund_attempt_count(&db, order_id).await, 0);
+    let refund_calls_before_worker = state.lock().expect("lock").refund_calls;
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("run refund worker");
+    assert_eq!(
+        state.lock().expect("lock").refund_calls,
+        refund_calls_before_worker,
+        "COD flow must not issue gateway refunds"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_refund_worker_persistence_retry_does_not_duplicate_gateway_call() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18123, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18123);
+    let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18123, tag).await;
+
+    let cancel_txn = db.begin().await.expect("cancel txn");
+    delete_order(
+        &cancel_txn,
+        Request::new(DeleteOrderRequest {
+            order_id,
+            acting_user_id: Some(user_id),
+        }),
+    )
+    .await
+    .expect("cancel order");
+    cancel_txn.commit().await.expect("commit cancel");
+
+    let trigger_name = format!("trg_itest_refund_insert_fail_{}", unique_tag(18123));
+    create_trigger(
+        &db,
+        &trigger_name,
+        &format!(
+            r#"CREATE TRIGGER `{trigger_name}`
+BEFORE INSERT ON `Refunds`
+FOR EACH ROW
+BEGIN
+    IF NEW.order_id = {order_id} THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'itest forced refund persistence failure';
+    END IF;
+END"#
+        ),
+    )
+    .await;
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("refund worker run with forced persistence failure");
+    assert_eq!(
+        state.lock().expect("lock").refund_calls,
+        1,
+        "gateway call should have happened once"
+    );
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("submitted"),
+        "attempt should remain submitted for persistence retry"
+    );
+    assert_eq!(refund_row_count(&db, order_id).await, 0);
+
+    drop_trigger(&db, &trigger_name).await;
+
+    process_refund_attempts(&db, 25)
+        .await
+        .expect("retry refund persistence");
+    assert_eq!(
+        state.lock().expect("lock").refund_calls,
+        1,
+        "retry should reconcile persisted result without a second gateway call"
+    );
+    assert_eq!(refund_row_count(&db, order_id).await, 1);
+    assert_eq!(
+        refund_attempt_status(&db, order_id).await.as_deref(),
+        Some("processed")
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_booking_intent_is_persisted_before_external_call_and_worker_is_idempotent() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18124, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18124);
+    let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18124, tag).await;
+
+    make_order_eligible_for_delayed_booking(&db, order_id).await;
+
+    let txn = db.begin().await.expect("booking intent txn");
+    let _shipment_id =
+        book_order_after_validation(&txn, order_id, Utc::now(), "itest_booking_intent")
+            .await
+            .expect("persist booking intent");
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT logistics_status, shiprocket_order_id, awb_code
+               FROM Shipments
+               WHERE order_id = ?
+               ORDER BY shipment_id DESC
+               LIMIT 1"#,
+            [order_id.into()],
+        ))
+        .await
+        .expect("query shipment intent row")
+        .expect("shipment row");
+    let logistics_status: String = row
+        .try_get("", "logistics_status")
+        .expect("logistics_status");
+    let shiprocket_order_id: Option<String> = row.try_get("", "shiprocket_order_id").ok();
+    let awb_code: Option<String> = row.try_get("", "awb_code").ok();
+    assert_eq!(logistics_status, "booking_pending");
+    assert!(shiprocket_order_id.is_none());
+    assert!(awb_code.is_none());
+    assert_eq!(
+        state.lock().expect("lock").create_order_calls,
+        0,
+        "external booking must not be called before commit"
+    );
+    txn.commit().await.expect("commit booking intent");
+
+    assert_eq!(state.lock().expect("lock").create_order_calls, 0);
+    process_booking_intents_batch(&db, 25)
+        .await
+        .expect("run booking worker");
+    assert_eq!(
+        state.lock().expect("lock").create_order_calls,
+        1,
+        "worker should perform one external booking call"
+    );
+
+    process_booking_intents_batch(&db, 25)
+        .await
+        .expect("run booking worker again");
+    assert_eq!(
+        state.lock().expect("lock").create_order_calls,
+        1,
+        "duplicate worker run must not create duplicate shiprocket orders"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_booking_worker_failure_before_external_call_creates_no_shiprocket_order() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18125, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18125);
+    let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18125, tag).await;
+    make_order_eligible_for_delayed_booking(&db, order_id).await;
+
+    let claim_txn = db.begin().await.expect("claim txn");
+    book_order_after_validation(&claim_txn, order_id, Utc::now(), "itest_booking_claim")
+        .await
+        .expect("persist booking intent");
+    claim_txn.commit().await.expect("commit claim");
+
+    let trigger_name = format!("trg_itest_booking_pre_external_fail_{}", unique_tag(18125));
+    create_trigger(
+        &db,
+        &trigger_name,
+        &format!(
+            r#"CREATE TRIGGER `{trigger_name}`
+BEFORE UPDATE ON `Shipments`
+FOR EACH ROW
+BEGIN
+    IF NEW.order_id = {order_id} AND NEW.logistics_status = 'booking_in_progress' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'itest forced booking pre-external failure';
+    END IF;
+END"#
+        ),
+    )
+    .await;
+
+    process_booking_intents_batch(&db, 25)
+        .await
+        .expect("booking batch run with forced failure");
+    assert_eq!(
+        state.lock().expect("lock").create_order_calls,
+        0,
+        "external Shiprocket create order call must not happen when DB step fails before call"
+    );
+
+    drop_trigger(&db, &trigger_name).await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_cancel_request_is_durable_before_external_call_and_retry_is_idempotent() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18126, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18126);
+    let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18126, tag).await;
+    ensure_delayed_shipment_booked(&db, order_id).await;
+    let shipment = shipment_meta(&db, order_id).await;
+    let cancel_order_id: i64 = shipment
+        .try_get::<Option<String>>("", "shiprocket_external_order_id")
+        .ok()
+        .flatten()
+        .or_else(|| {
+            shipment
+                .try_get::<Option<String>>("", "shiprocket_order_id")
+                .ok()
+                .flatten()
+        })
+        .expect("shiprocket cancel reference")
+        .parse()
+        .expect("numeric shiprocket cancel reference");
+
+    let cancel_req_txn = db.begin().await.expect("cancel request txn");
+    let cancel_req = cancel_order_via_logistics(&cancel_req_txn, order_id, Some(user_id)).await;
+    assert!(
+        cancel_req.is_err(),
+        "cancel request should return retryable unavailable while pending logistics cancel"
+    );
+    assert_eq!(
+        cancel_req.expect_err("checked err").code(),
+        tonic::Code::Unavailable
+    );
+    assert_eq!(
+        state
+            .lock()
+            .expect("lock")
+            .cancel_order_ids
+            .iter()
+            .filter(|id| **id == cancel_order_id)
+            .count(),
+        0,
+        "external cancel must not run before durable cancel intent commit"
+    );
+    cancel_req_txn
+        .commit()
+        .await
+        .expect("commit cancel request");
+
+    assert_eq!(
+        order_status_name(&db, order_id).await,
+        "cancel_pending_logistics"
+    );
+    process_cancel_pending_logistics(&db, 25)
+        .await
+        .expect("process cancel pending logistics");
+    assert_eq!(
+        state
+            .lock()
+            .expect("lock")
+            .cancel_order_ids
+            .iter()
+            .filter(|id| **id == cancel_order_id)
+            .count(),
+        1
+    );
+    process_cancel_pending_logistics(&db, 25)
+        .await
+        .expect("process cancel pending logistics second run");
+    assert_eq!(
+        state
+            .lock()
+            .expect("lock")
+            .cancel_order_ids
+            .iter()
+            .filter(|id| **id == cancel_order_id)
+            .count(),
+        1,
+        "retry worker should not duplicate external cancel after success"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_booking_worker_external_success_with_persistence_retry_is_reconciled() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18130, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18130);
+    let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18130, tag).await;
+    make_order_eligible_for_delayed_booking(&db, order_id).await;
+
+    let claim_txn = db.begin().await.expect("claim txn");
+    book_order_after_validation(
+        &claim_txn,
+        order_id,
+        Utc::now(),
+        "itest_booking_persist_retry",
+    )
+    .await
+    .expect("persist booking intent");
+    claim_txn.commit().await.expect("commit booking intent");
+
+    let trigger_name = format!("trg_itest_booking_persist_fail_{}", unique_tag(18130));
+    create_trigger(
+        &db,
+        &trigger_name,
+        &format!(
+            r#"CREATE TRIGGER `{trigger_name}`
+BEFORE UPDATE ON `Orders`
+FOR EACH ROW
+BEGIN
+    IF NEW.OrderID = {order_id} AND NEW.fulfillment_status = 'booked' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'itest forced booking persistence failure';
+    END IF;
+END"#
+        ),
+    )
+    .await;
+
+    process_booking_intents_batch(&db, 25)
+        .await
+        .expect("run booking worker with forced persist failure");
+    assert_eq!(
+        state.lock().expect("lock").create_order_calls,
+        1,
+        "external booking call must happen once before persistence failure fallback"
+    );
+    assert_eq!(
+        shipment_logistics_status(&db, order_id).await.as_deref(),
+        Some("booking_persist_pending")
+    );
+    assert_eq!(order_fulfillment_status(&db, order_id).await, "not_created");
+
+    drop_trigger(&db, &trigger_name).await;
+
+    process_booking_intents_batch(&db, 25)
+        .await
+        .expect("retry booking worker after persist failure");
+    assert_eq!(
+        state.lock().expect("lock").create_order_calls,
+        1,
+        "reconcile retry must not issue a duplicate external booking call"
+    );
+    assert_eq!(
+        shipment_logistics_status(&db, order_id).await.as_deref(),
+        Some("booked")
+    );
+    assert_eq!(order_fulfillment_status(&db, order_id).await, "booked");
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_cancel_worker_external_success_with_persistence_retry_is_reconciled() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18131, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18131);
+    let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18131, tag).await;
+    ensure_delayed_shipment_booked(&db, order_id).await;
+    let shipment = shipment_meta(&db, order_id).await;
+    let cancel_order_id: i64 = shipment
+        .try_get::<Option<String>>("", "shiprocket_external_order_id")
+        .ok()
+        .flatten()
+        .or_else(|| {
+            shipment
+                .try_get::<Option<String>>("", "shiprocket_order_id")
+                .ok()
+                .flatten()
+        })
+        .expect("shiprocket cancel reference")
+        .parse()
+        .expect("numeric shiprocket cancel reference");
+
+    let cancel_req_txn = db.begin().await.expect("cancel request txn");
+    let cancel_req = cancel_order_via_logistics(&cancel_req_txn, order_id, Some(user_id)).await;
+    assert!(
+        cancel_req.is_err(),
+        "cancel request should return retryable unavailable"
+    );
+    assert_eq!(
+        cancel_req.expect_err("checked err").code(),
+        tonic::Code::Unavailable
+    );
+    cancel_req_txn
+        .commit()
+        .await
+        .expect("commit cancel request intent");
+
+    let trigger_name = format!("trg_itest_cancel_persist_fail_{}", unique_tag(18131));
+    create_trigger(
+        &db,
+        &trigger_name,
+        &format!(
+            r#"CREATE TRIGGER `{trigger_name}`
+BEFORE UPDATE ON `Shipments`
+FOR EACH ROW
+BEGIN
+    IF NEW.order_id = {order_id} AND NEW.logistics_status = 'cancelled' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'itest forced cancel persistence failure';
+    END IF;
+END"#
+        ),
+    )
+    .await;
+
+    process_cancel_pending_logistics(&db, 25)
+        .await
+        .expect("run cancel worker with forced persistence failure");
+    assert_eq!(
+        state
+            .lock()
+            .expect("lock")
+            .cancel_order_ids
+            .iter()
+            .filter(|id| **id == cancel_order_id)
+            .count(),
+        1,
+        "external cancel should be attempted once"
+    );
+    assert_eq!(
+        order_status_name(&db, order_id).await,
+        "cancel_pending_logistics"
+    );
+    assert_eq!(
+        shipment_logistics_status(&db, order_id).await.as_deref(),
+        Some("cancel_persist_pending"),
+        "failed local persistence after external cancel must remain visibly retryable"
+    );
+
+    drop_trigger(&db, &trigger_name).await;
+
+    process_cancel_pending_logistics(&db, 25)
+        .await
+        .expect("retry cancel worker after persistence failure");
+    assert_eq!(
+        state
+            .lock()
+            .expect("lock")
+            .cancel_order_ids
+            .iter()
+            .filter(|id| **id == cancel_order_id)
+            .count(),
+        1,
+        "retry reconcile must not issue duplicate external cancel"
+    );
+    assert_eq!(
+        shipment_logistics_status(&db, order_id).await.as_deref(),
+        Some("cancelled")
+    );
+    assert_eq!(order_status_name(&db, order_id).await, "cancelled");
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_cancel_worker_failure_leaves_visible_retryable_state() {
+    let state = Arc::new(Mutex::new(MockState {
+        cancel_should_fail: true,
+        ..MockState::default()
+    }));
+    let _server = spawn_mock_server(18132, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18132);
+    let (order_id, user_id, _inventory_marker) = place_and_pay_order(&db, 18132, tag).await;
+    ensure_delayed_shipment_booked(&db, order_id).await;
+    let shipment = shipment_meta(&db, order_id).await;
+    let cancel_order_id: i64 = shipment
+        .try_get::<Option<String>>("", "shiprocket_external_order_id")
+        .ok()
+        .flatten()
+        .or_else(|| {
+            shipment
+                .try_get::<Option<String>>("", "shiprocket_order_id")
+                .ok()
+                .flatten()
+        })
+        .expect("shiprocket cancel reference")
+        .parse()
+        .expect("numeric shiprocket cancel reference");
+
+    let cancel_req_txn = db.begin().await.expect("cancel request txn");
+    let cancel_req = cancel_order_via_logistics(&cancel_req_txn, order_id, Some(user_id)).await;
+    assert!(
+        cancel_req.is_err(),
+        "cancel request should return retryable unavailable"
+    );
+    assert_eq!(
+        cancel_req.expect_err("checked err").code(),
+        tonic::Code::Unavailable
+    );
+    cancel_req_txn
+        .commit()
+        .await
+        .expect("commit cancel request");
+
+    process_cancel_pending_logistics(&db, 25)
+        .await
+        .expect("run cancel worker with provider failure");
+    assert_eq!(
+        state
+            .lock()
+            .expect("lock")
+            .cancel_order_ids
+            .iter()
+            .filter(|id| **id == cancel_order_id)
+            .count(),
+        1
+    );
+    assert_eq!(
+        order_status_name(&db, order_id).await,
+        "cancel_pending_logistics"
+    );
+    assert_eq!(
+        shipment_logistics_status(&db, order_id).await.as_deref(),
+        Some("cancel_pending_logistics")
+    );
+
+    let shipment = shipment_meta(&db, order_id).await;
+    let can_customer_cancel = shipment
+        .try_get::<i8>("", "can_customer_cancel")
+        .map(|v| v != 0)
+        .unwrap_or(false);
+    assert!(
+        can_customer_cancel,
+        "failed cancel attempt should leave shipment in a visible retryable state"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_payment_mismatch_transition_failure_marks_webhook_failed_not_processed() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18133, state).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18133);
+    let (order_id, _user_id, _inventory_marker) =
+        place_order_without_payment_verification(&db, 18133, tag, Some("prepaid")).await;
+    let (razorpay_order_id, _payment_id) = latest_payment_intent_ids_for_order(&db, order_id).await;
+
+    let trigger_name = format!(
+        "trg_itest_webhook_mismatch_transition_fail_{}",
+        unique_tag(18133)
+    );
+    create_trigger(
+        &db,
+        &trigger_name,
+        &format!(
+            r#"CREATE TRIGGER `{trigger_name}`
+BEFORE UPDATE ON `Orders`
+FOR EACH ROW
+BEGIN
+    IF NEW.OrderID = {order_id} AND NEW.StatusID <> OLD.StatusID THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'itest forced order transition failure';
+    END IF;
+END"#
+        ),
+    )
+    .await;
+
+    let webhook_id = format!("itest_mismatch_fail_{tag}");
+    let webhook_txn = db.begin().await.expect("webhook txn");
+    let response = ingest_webhook(
+        &webhook_txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: json!({
+                "event": "payment.captured",
+                "payload": {
+                    "payment": {
+                        "entity": {
+                            "id": format!("pay_mismatch_fail_{tag}"),
+                            "order_id": razorpay_order_id,
+                            "amount": 1,
+                            "currency": "INR"
+                        }
+                    }
+                }
+            })
+            .to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("ingest mismatch webhook");
+    assert_eq!(response.get_ref().items[0].status, "failed");
+    webhook_txn.commit().await.expect("commit webhook");
+
+    assert_eq!(
+        webhook_status_by_webhook_id(&db, webhook_id.as_str())
+            .await
+            .as_deref(),
+        Some("failed")
+    );
+    drop_trigger(&db, &trigger_name).await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_shiprocket_cancel_settlement_failure_marks_webhook_failed_not_processed() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_shiprocket_cancel_settlement_failure_marks_webhook_failed_not_processed",
+    ) {
+        return;
+    }
+
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18134, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18134);
+    let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18134, tag).await;
+    ensure_delayed_shipment_booked(&db, order_id).await;
+    let shipment = shipment_meta(&db, order_id).await;
+    let shiprocket_order_id: String = shipment
+        .try_get("", "shiprocket_order_id")
+        .expect("shiprocket_order_id");
+    let awb_code: String = shipment.try_get("", "awb_code").expect("awb_code");
+
+    let trigger_name = format!("trg_itest_settlement_fail_{}", unique_tag(18134));
+    create_trigger(
+        &db,
+        &trigger_name,
+        &format!(
+            r#"CREATE TRIGGER `{trigger_name}`
+BEFORE INSERT ON `RefundAttempts`
+FOR EACH ROW
+BEGIN
+    IF NEW.order_id = {order_id} THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'itest forced settlement persistence failure';
+    END IF;
+END"#
+        ),
+    )
+    .await;
+
+    let webhook_id = format!("itest_shiprocket_cancel_fail_{tag}");
+    let webhook_txn = db.begin().await.expect("webhook txn");
+    let response = ingest_webhook(
+        &webhook_txn,
+        Request::new(IngestWebhookRequest {
+            provider: "shiprocket".to_string(),
+            event_type: "shiprocket.update".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: json!({
+                "awb": awb_code,
+                "shipment_id": shiprocket_order_id,
+                "shipment_status_id": 8,
+                "shipment_status": "CANCELLED"
+            })
+            .to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("ingest shiprocket cancel webhook");
+    assert_eq!(response.get_ref().items[0].status, "failed");
+    webhook_txn.commit().await.expect("commit webhook");
+
+    assert_eq!(
+        webhook_status_by_webhook_id(&db, webhook_id.as_str())
+            .await
+            .as_deref(),
+        Some("failed")
+    );
+    drop_trigger(&db, &trigger_name).await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and mocked local APIs"]
+async fn integration_refund_webhook_persistence_failure_marks_webhook_failed_not_processed() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_refund_webhook_persistence_failure_marks_webhook_failed_not_processed",
+    ) {
+        return;
+    }
+
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let _server = spawn_mock_server(18135, state.clone()).await;
+    let db = Database::connect(&test_db_url()).await.expect("connect");
+    let tag = unique_tag(18135);
+    let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18135, tag).await;
+    let (_rzp_order_id, payment_id_opt) = latest_payment_intent_ids_for_order(&db, order_id).await;
+    let payment_id = payment_id_opt.expect("captured payment id");
+
+    let trigger_name = format!("trg_itest_refund_webhook_fail_{}", unique_tag(18135));
+    create_trigger(
+        &db,
+        &trigger_name,
+        &format!(
+            r#"CREATE TRIGGER `{trigger_name}`
+BEFORE INSERT ON `Refunds`
+FOR EACH ROW
+BEGIN
+    IF NEW.order_id = {order_id} THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'itest forced refund webhook persistence failure';
+    END IF;
+END"#
+        ),
+    )
+    .await;
+
+    let webhook_id = format!("itest_refund_webhook_fail_{tag}");
+    let webhook_txn = db.begin().await.expect("refund webhook txn");
+    let response = ingest_webhook(
+        &webhook_txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "refund.processed".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: json!({
+                "event": "refund.processed",
+                "payload": {
+                    "refund": {
+                        "entity": {
+                            "id": format!("rfnd_webhook_fail_{tag}"),
+                            "payment_id": payment_id,
+                            "amount": 500,
+                            "currency": "INR",
+                            "status": "processed"
+                        }
+                    }
+                }
+            })
+            .to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("ingest refund webhook");
+    assert_eq!(response.get_ref().items[0].status, "failed");
+    webhook_txn.commit().await.expect("commit refund webhook");
+
+    assert_eq!(
+        webhook_status_by_webhook_id(&db, webhook_id.as_str())
+            .await
+            .as_deref(),
+        Some("failed")
+    );
+    drop_trigger(&db, &trigger_name).await;
 }
 
 #[tokio::test]

@@ -30,7 +30,7 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Colors,
-    #[sea_orm(has_many = "super::inventory::Entity")]
+    #[sea_orm(has_one = "super::inventory::Entity")]
     Inventory,
     #[sea_orm(has_many = "super::inventory_log::Entity")]
     InventoryLog,

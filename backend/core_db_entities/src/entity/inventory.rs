@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(column_name = "InventoryID", primary_key)]
     pub inventory_id: i64,
-    #[sea_orm(column_name = "VariantID")]
+    #[sea_orm(column_name = "VariantID", unique)]
     pub variant_id: Option<i64>,
     #[sea_orm(column_name = "QuantityAvailable")]
     pub quantity_available: Option<i64>,

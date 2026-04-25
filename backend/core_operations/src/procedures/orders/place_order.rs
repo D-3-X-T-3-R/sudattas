@@ -189,6 +189,44 @@ fn qualifies_for_free_shipping(
     items_total_after_discount_minor >= threshold_minor
 }
 
+#[allow(clippy::result_large_err)]
+async fn lock_inventory_row_and_get_available_quantity(
+    txn: &DatabaseTransaction,
+    variant_id: i64,
+) -> Result<i64, Status> {
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            r#"SELECT COUNT(*) AS row_count,
+                      COALESCE(MAX(QuantityAvailable), 0) AS quantity_available
+               FROM Inventory
+               WHERE VariantID = ?
+               FOR UPDATE"#,
+            [variant_id.into()],
+        ))
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?
+        .ok_or_else(|| Status::internal("Inventory row-count query returned no row"))?;
+    let row_count = row
+        .try_get::<i64>("", "row_count")
+        .map_err(|e| Status::internal(e.to_string()))?;
+    let quantity_available = row
+        .try_get::<i64>("", "quantity_available")
+        .map_err(|e| Status::internal(e.to_string()))?;
+
+    match row_count {
+        1 => Ok(quantity_available),
+        0 => Err(Status::failed_precondition(format!(
+            "No inventory row exists for variant {}",
+            variant_id
+        ))),
+        _ => Err(Status::internal(format!(
+            "Inventory data corruption: expected exactly 1 row for variant {}, found {}",
+            variant_id, row_count
+        ))),
+    }
+}
+
 pub async fn place_order(
     txn: &DatabaseTransaction,
     request: Request<PlaceOrderRequest>,
@@ -708,19 +746,38 @@ async fn place_order_in_txn(
     // nested place_order transaction. Any later failure will roll this reservation back.
     for (variant_id, quantity) in &variant_quantity_map {
         let qty = *quantity;
+        let quantity_available =
+            lock_inventory_row_and_get_available_quantity(txn, *variant_id).await?;
+        if quantity_available < qty {
+            crate::observability::record_inventory_update_failure_total();
+            return Err(Status::failed_precondition(format!(
+                "Insufficient stock for variant {} (need {}, available {})",
+                variant_id, qty, quantity_available
+            )));
+        }
         let result = txn
             .execute(Statement::from_sql_and_values(
                 DbBackend::MySql,
-                r#"UPDATE Inventory SET QuantityAvailable = QuantityAvailable - ? WHERE VariantID = ? AND QuantityAvailable >= ?"#,
-                [qty.into(), (*variant_id).into(), qty.into()],
+                r#"UPDATE Inventory
+                   SET QuantityAvailable = QuantityAvailable - ?
+                   WHERE VariantID = ?"#,
+                [qty.into(), (*variant_id).into()],
             ))
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
         if result.rows_affected() == 0 {
             crate::observability::record_inventory_update_failure_total();
             return Err(Status::failed_precondition(format!(
-                "Insufficient stock for variant {} (need {}); inventory update had no effect",
-                variant_id, qty
+                "No inventory row exists for variant {}",
+                variant_id
+            )));
+        }
+        if result.rows_affected() > 1 {
+            crate::observability::record_inventory_update_failure_total();
+            return Err(Status::internal(format!(
+                "Inventory data corruption: reserve update touched {} rows for variant {}",
+                result.rows_affected(),
+                variant_id
             )));
         }
     }

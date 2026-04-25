@@ -51,7 +51,7 @@ pub async fn ingest_webhook(
     {
         info!(
             webhook_id = %req.webhook_id,
-            "ingest_webhook idempotent replay – returning existing event"
+            "ingest_webhook idempotent replay - returning existing event"
         );
         return Ok(Response::new(WebhookEventsResponse {
             items: vec![model_to_response(existing)],
@@ -100,7 +100,7 @@ pub async fn ingest_webhook(
 
     let inserted = event.insert(txn).await.map_err(map_db_error_to_status)?;
 
-    // Process: payment.captured → trigger capture_payment; shiprocket → update Shipments from payload.
+    // Process: payment.captured -> trigger capture_payment; shiprocket -> update Shipments from payload.
     let new_status = if req.event_type == "payment.captured" && req.signature_verified {
         match process_payment_captured(txn, &payload_json).await {
             Ok(_) => Status::Processed,
@@ -202,11 +202,18 @@ async fn process_payment_captured(
     // Phase 5: Verify amount and currency before treating as paid.
     let intent_paise = intent.amount_paise as i64;
     let order = match intent.order_id {
-        Some(oid) => orders::Entity::find_by_id(oid)
-            .one(txn)
-            .await
-            .ok()
-            .flatten(),
+        Some(oid) => Some(
+            orders::Entity::find_by_id(oid)
+                .one(txn)
+                .await
+                .map_err(map_db_error_to_status)?
+                .ok_or_else(|| {
+                    TonicStatus::not_found(format!(
+                        "Order {} referenced by payment intent {} was not found",
+                        oid, intent.intent_id
+                    ))
+                })?,
+        ),
         None => None,
     };
     let order_grand_paise: Option<i64> = order.as_ref().map(|o| o.grand_total_minor);
@@ -226,26 +233,38 @@ async fn process_payment_captured(
             order_grand_paise = ?order_grand_paise,
             webhook_currency = %webhook_currency,
             intent_currency = %intent_currency,
-            "payment.captured amount/currency mismatch – marking as needs_review"
+            "payment.captured amount/currency mismatch - marking as needs_review"
         );
-        let _ = txn
+        let update_result = txn
             .execute(Statement::from_sql_and_values(
                 DbBackend::MySql,
                 "UPDATE PaymentIntents SET status = 'needs_review' WHERE intent_id = ?",
                 [intent.intent_id.into()],
             ))
-            .await;
+            .await
+            .map_err(map_db_error_to_status)?;
+        if update_result.rows_affected() != 1 {
+            return Err(TonicStatus::internal(format!(
+                "expected to mark exactly one PaymentIntent as needs_review, updated {} rows",
+                update_result.rows_affected()
+            )));
+        }
         if let Some(order_id) = intent.order_id {
-            let _ = order_state_machine::transition_order_status(
+            if let Err(e) = order_state_machine::transition_order_status(
                 txn,
                 order_id,
                 order_state_machine::OrderState::NeedsReview,
                 "payment_mismatch",
                 "system",
-                Some("Amount/currency mismatch – needs review"),
+                Some("Amount/currency mismatch - needs review"),
                 Some(PaymentStatus::NeedsReview),
             )
-            .await;
+            .await
+            {
+                if e.code() != tonic::Code::InvalidArgument {
+                    return Err(e);
+                }
+            }
         }
         return Ok(());
     }
@@ -319,14 +338,8 @@ async fn process_shiprocket_shipment_updates(
                 cancel_like,
                 "shiprocket webhook: cancellation/RTO detected, starting cancel+refund flow"
             );
-            auto_transition_order_to_cancelled(txn, order_id).await;
-            if let Err(e) = cancellation_saga::run_order_settlement(txn, order_id).await {
-                warn!(
-                    order_id,
-                    error = ?e,
-                    "settlement after shiprocket cancel/RTO webhook failed"
-                );
-            }
+            auto_transition_order_to_cancelled(txn, order_id).await?;
+            cancellation_saga::run_order_settlement(txn, order_id).await?;
         }
         if shiprocket_status_indicates_delivered(sid) {
             auto_transition_order_to_delivered(txn, order_id).await;
@@ -493,8 +506,7 @@ async fn process_razorpay_refund_updates(
         .order_by_desc(payment_intents::Column::IntentId)
         .one(txn)
         .await
-        .ok()
-        .flatten()
+        .map_err(map_db_error_to_status)?
     else {
         warn!(
             payment_id = %payment_id,
@@ -522,7 +534,7 @@ async fn process_razorpay_refund_updates(
 
     if refund_status == Status::Processed {
         // Reuse existing idempotent refund handler for persistence + auto transition to refunded.
-        let _ = create_refund(
+        create_refund(
             txn,
             Request::new(CreateRefundRequest {
                 order_id,
@@ -628,21 +640,27 @@ async fn upsert_refund_row(
     Ok(())
 }
 
-async fn auto_transition_order_to_cancelled(txn: &DatabaseTransaction, order_id: i64) {
+async fn auto_transition_order_to_cancelled(
+    txn: &DatabaseTransaction,
+    order_id: i64,
+) -> Result<(), TonicStatus> {
     if let Err(e) = ensure_local_order_cancelled(txn, order_id).await {
-        if e.code() != tonic::Code::InvalidArgument {
-            warn!(
-                order_id,
-                error = %e,
-                "shiprocket webhook: failed to auto-transition order to cancelled"
-            );
+        if e.code() == tonic::Code::InvalidArgument {
+            // Idempotent duplicate: already cancelled / transition no longer needed.
+            return Ok(());
         }
-    } else {
-        info!(
+        warn!(
             order_id,
-            "shiprocket webhook: order auto-transitioned to cancelled"
+            error = %e,
+            "shiprocket webhook: failed to auto-transition order to cancelled"
         );
+        return Err(e);
     }
+    info!(
+        order_id,
+        "shiprocket webhook: order auto-transitioned to cancelled"
+    );
+    Ok(())
 }
 
 async fn auto_transition_order_to_shipped(txn: &DatabaseTransaction, order_id: i64) {
