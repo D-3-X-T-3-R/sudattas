@@ -166,12 +166,9 @@ impl LiveCleanupTracker {
             .local_orders
             .lock()
             .map_err(|_| "local cleanup tracker lock poisoned".to_string())?;
-        if !guard
-            .iter()
-            .any(|(existing_order_id, existing_user_id)| {
-                *existing_order_id == internal_order_id && *existing_user_id == user_id
-            })
-        {
+        if !guard.iter().any(|(existing_order_id, existing_user_id)| {
+            *existing_order_id == internal_order_id && *existing_user_id == user_id
+        }) {
             guard.push((internal_order_id, user_id));
         }
         Ok(())
@@ -210,14 +207,24 @@ async fn capture_created_shiprocket_order(
     internal_order_id: i64,
 ) -> Result<Option<CreatedShiprocketOrder>, String> {
     let shipment = shipment_meta(db, internal_order_id).await?;
-    let shiprocket_order_id = non_empty_trimmed(shipment.try_get::<Option<String>>("", "shiprocket_order_id").ok().flatten());
+    let shiprocket_order_id = non_empty_trimmed(
+        shipment
+            .try_get::<Option<String>>("", "shiprocket_order_id")
+            .ok()
+            .flatten(),
+    );
     let external_order_id = non_empty_trimmed(
         shipment
             .try_get::<Option<String>>("", "shiprocket_external_order_id")
             .ok()
             .flatten(),
     );
-    let awb_code = non_empty_trimmed(shipment.try_get::<Option<String>>("", "awb_code").ok().flatten());
+    let awb_code = non_empty_trimmed(
+        shipment
+            .try_get::<Option<String>>("", "awb_code")
+            .ok()
+            .flatten(),
+    );
 
     match (shiprocket_order_id, external_order_id) {
         (Some(shiprocket_order_id), Some(external_order_id)) => Ok(Some(CreatedShiprocketOrder {
@@ -317,12 +324,16 @@ async fn shiprocket_cancel_and_verify(
             cancel_body
         ));
     }
-    let cancel_json = serde_json::from_str::<serde_json::Value>(&cancel_body).unwrap_or_else(|_| {
-        serde_json::json!({
-            "raw": cancel_body
-        })
-    });
-    if let Some(code) = cancel_json.get("status_code").and_then(|value| value.as_i64()) {
+    let cancel_json =
+        serde_json::from_str::<serde_json::Value>(&cancel_body).unwrap_or_else(|_| {
+            serde_json::json!({
+                "raw": cancel_body
+            })
+        });
+    if let Some(code) = cancel_json
+        .get("status_code")
+        .and_then(|value| value.as_i64())
+    {
         if code != 200 {
             return Err(format!(
                 "Shiprocket cancel returned non-success status_code for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}: {}",
@@ -389,8 +400,8 @@ async fn shiprocket_cancel_and_verify(
         .and_then(|value| value.as_str())
         .unwrap_or_default()
         .to_ascii_uppercase();
-    let cancelled = provider_order_status.contains("CANCEL")
-        || provider_shipment_status.contains("CANCEL");
+    let cancelled =
+        provider_order_status.contains("CANCEL") || provider_shipment_status.contains("CANCEL");
     if !cancelled {
         return Err(format!(
             "Shiprocket provider status not cancelled after cleanup for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}: order_status={} shipment_status={} cancel_response={} show_response={}",
@@ -437,7 +448,8 @@ async fn cleanup_created_shiprocket_orders(
         if !seen.insert(created.clone()) {
             continue;
         }
-        if let Err(error) = shiprocket_cancel_and_verify(&client, bearer_token.as_str(), created).await
+        if let Err(error) =
+            shiprocket_cancel_and_verify(&client, bearer_token.as_str(), created).await
         {
             failures.push(error);
         }
@@ -1445,10 +1457,8 @@ async fn integration_live_cleanup_finally_runs_when_body_panics() {
     let cleanup_ran_for_cleanup = cleanup_ran.clone();
 
     let body_result = tokio::spawn(async move {
-        let should_panic = std::env::var("CODEx_LIVE_TEST_PANIC_PROBE")
-            .ok()
-            .as_deref()
-            != Some("0");
+        let should_panic =
+            std::env::var("CODEx_LIVE_TEST_PANIC_PROBE").ok().as_deref() != Some("0");
         if should_panic {
             panic!("intentional panic to validate finally-style cleanup path");
         }
