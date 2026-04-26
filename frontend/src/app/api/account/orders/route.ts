@@ -17,6 +17,7 @@ type OrderRow = {
   userId: string;
   orderDate: string;
   cancelWindowEndsAt?: string | null;
+  paymentMethod?: string | null;
   totalAmountPaise: string;
   totalAmountFormatted: string;
   statusId: string;
@@ -28,6 +29,7 @@ const ORDERS_QUERY = `query AccountOrders($search: SearchOrder!) {
     userId
     orderDate
     cancelWindowEndsAt
+    paymentMethod
     totalAmountPaise
     totalAmountFormatted
     statusId
@@ -62,6 +64,14 @@ export async function GET() {
     Number.isFinite(cancelWindowHours) && cancelWindowHours > 0
       ? cancelWindowHours
       : 12;
+  const returnWindowDays = Number.parseInt(
+    (process.env.RETURN_WINDOW_DAYS ?? "7").trim(),
+    10
+  );
+  const normalizedReturnWindowDays =
+    Number.isFinite(returnWindowDays) && returnWindowDays > 0
+      ? returnWindowDays
+      : 7;
 
   const [ordersResult, statusesResult] = await Promise.all([
     callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(userId, ORDERS_QUERY, {
@@ -106,6 +116,7 @@ export async function GET() {
     ...order,
     statusName: statusNameById.get(order.statusId) ?? order.statusId,
     cancelWindowHours: normalizedCancelWindowHours,
+    returnWindowDays: normalizedReturnWindowDays,
   }));
   const mismatchedOrder = orders.find((order) => order.userId !== userId);
   if (mismatchedOrder) {

@@ -100,6 +100,13 @@ use crate::resolvers::{
         self,
         schema::{NewRefund, Refund, ResolveNeedsReviewInput},
     },
+    returns::{
+        self,
+        schema::{
+            AdminMarkReturnReceivedInput, AdminUpdateReturnStatusInput, RequestReturnInput,
+            ReturnRequest,
+        },
+    },
     reviews::{
         self,
         schema::{NewReview, Review, ReviewMutation},
@@ -585,6 +592,40 @@ impl MutationRoot {
             )
         };
         orders::handlers::cancel_order_items(input, acting_user_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn request_return(
+        context: &Context,
+        input: RequestReturnInput,
+    ) -> FieldResult<Vec<ReturnRequest>> {
+        let uid = require_jwt(context)?.to_string();
+        query_root::ensure_customer_can_access_order(context, &input.order_id).await?;
+        returns::handlers::request_return(input, uid)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn admin_mark_return_received(
+        context: &Context,
+        input: AdminMarkReturnReceivedInput,
+    ) -> FieldResult<Vec<ReturnRequest>> {
+        require_admin(context)?;
+        returns::handlers::admin_mark_return_received(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn admin_update_return_status(
+        context: &Context,
+        input: AdminUpdateReturnStatusInput,
+    ) -> FieldResult<Vec<ReturnRequest>> {
+        require_admin(context)?;
+        returns::handlers::admin_update_return_status(input)
             .await
             .map_err(|e| e.into_field_error())
     }

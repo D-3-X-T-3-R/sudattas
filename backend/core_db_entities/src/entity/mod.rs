@@ -31,6 +31,8 @@ pub mod product_variants;
 pub mod products;
 pub mod refund_attempts;
 pub mod refunds;
+pub mod return_request_items;
+pub mod return_requests;
 pub mod reviews;
 pub mod schema_migrations;
 pub mod sea_orm_active_enums;

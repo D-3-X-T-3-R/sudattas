@@ -663,6 +663,102 @@ pub struct CancelOrderItemsRequest {
     #[prost(int64, optional, tag = "3")]
     pub acting_user_id: ::core::option::Option<i64>,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReturnRequestItemInput {
+    #[prost(int64, tag = "1")]
+    pub order_detail_id: i64,
+    #[prost(int64, optional, tag = "2")]
+    pub quantity: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RequestReturnRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+    #[prost(int64, tag = "2")]
+    pub user_id: i64,
+    #[prost(message, repeated, tag = "3")]
+    pub items: ::prost::alloc::vec::Vec<ReturnRequestItemInput>,
+    #[prost(string, tag = "4")]
+    pub reason: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SearchReturnRequestsRequest {
+    #[prost(int64, optional, tag = "1")]
+    pub return_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "2")]
+    pub order_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "3")]
+    pub user_id: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AdminMarkReturnReceivedRequest {
+    #[prost(int64, tag = "1")]
+    pub return_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AdminUpdateReturnStatusRequest {
+    #[prost(int64, tag = "1")]
+    pub return_id: i64,
+    #[prost(string, tag = "2")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub note: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReturnRequestItemResponse {
+    #[prost(int64, tag = "1")]
+    pub return_id: i64,
+    #[prost(int64, tag = "2")]
+    pub order_detail_id: i64,
+    #[prost(int64, tag = "3")]
+    pub quantity: i64,
+    #[prost(int64, tag = "4")]
+    pub refund_amount_minor: i64,
+    #[prost(string, tag = "5")]
+    pub status: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReturnRequestResponse {
+    #[prost(int64, tag = "1")]
+    pub return_id: i64,
+    #[prost(int64, tag = "2")]
+    pub order_id: i64,
+    #[prost(int64, tag = "3")]
+    pub user_id: i64,
+    #[prost(string, tag = "4")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub reason: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub created_at: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "7")]
+    pub received_at: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, optional, tag = "8")]
+    pub refund_attempt_id: ::core::option::Option<i64>,
+    #[prost(message, repeated, tag = "9")]
+    pub items: ::prost::alloc::vec::Vec<ReturnRequestItemResponse>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReturnRequestsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<ReturnRequestResponse>,
+}
 /// P1 Admin: mark order shipped/delivered with enforced transitions
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -3491,6 +3587,118 @@ pub mod grpc_services_client {
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new("grpc_services.GRPCServices", "CancelOrderItems"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn request_return(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RequestReturnRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ReturnRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/RequestReturn",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "RequestReturn"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn search_return_requests(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SearchReturnRequestsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ReturnRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SearchReturnRequests",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "SearchReturnRequests"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn admin_mark_return_received(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AdminMarkReturnReceivedRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ReturnRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/AdminMarkReturnReceived",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "AdminMarkReturnReceived",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn admin_update_return_status(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AdminUpdateReturnStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ReturnRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/AdminUpdateReturnStatus",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "AdminUpdateReturnStatus",
+                    ),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -6532,6 +6740,34 @@ pub mod grpc_services_server {
             &self,
             request: tonic::Request<super::CancelOrderItemsRequest>,
         ) -> std::result::Result<tonic::Response<super::OrdersResponse>, tonic::Status>;
+        async fn request_return(
+            &self,
+            request: tonic::Request<super::RequestReturnRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ReturnRequestsResponse>,
+            tonic::Status,
+        >;
+        async fn search_return_requests(
+            &self,
+            request: tonic::Request<super::SearchReturnRequestsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ReturnRequestsResponse>,
+            tonic::Status,
+        >;
+        async fn admin_mark_return_received(
+            &self,
+            request: tonic::Request<super::AdminMarkReturnReceivedRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ReturnRequestsResponse>,
+            tonic::Status,
+        >;
+        async fn admin_update_return_status(
+            &self,
+            request: tonic::Request<super::AdminUpdateReturnStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ReturnRequestsResponse>,
+            tonic::Status,
+        >;
         async fn place_order(
             &self,
             request: tonic::Request<super::PlaceOrderRequest>,
@@ -8754,6 +8990,203 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CancelOrderItemsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/RequestReturn" => {
+                    #[allow(non_camel_case_types)]
+                    struct RequestReturnSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::RequestReturnRequest>
+                    for RequestReturnSvc<T> {
+                        type Response = super::ReturnRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RequestReturnRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::request_return(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RequestReturnSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SearchReturnRequests" => {
+                    #[allow(non_camel_case_types)]
+                    struct SearchReturnRequestsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::SearchReturnRequestsRequest>
+                    for SearchReturnRequestsSvc<T> {
+                        type Response = super::ReturnRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SearchReturnRequestsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::search_return_requests(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SearchReturnRequestsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/AdminMarkReturnReceived" => {
+                    #[allow(non_camel_case_types)]
+                    struct AdminMarkReturnReceivedSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::AdminMarkReturnReceivedRequest>
+                    for AdminMarkReturnReceivedSvc<T> {
+                        type Response = super::ReturnRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::AdminMarkReturnReceivedRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::admin_mark_return_received(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = AdminMarkReturnReceivedSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/AdminUpdateReturnStatus" => {
+                    #[allow(non_camel_case_types)]
+                    struct AdminUpdateReturnStatusSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::AdminUpdateReturnStatusRequest>
+                    for AdminUpdateReturnStatusSvc<T> {
+                        type Response = super::ReturnRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::AdminUpdateReturnStatusRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::admin_update_return_status(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = AdminUpdateReturnStatusSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

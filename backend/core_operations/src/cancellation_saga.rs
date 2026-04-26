@@ -5,6 +5,7 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::refunds::create_refund;
+use crate::handlers::returns::{find_return_by_refund_attempt, set_return_status_and_items};
 use crate::handlers::shipments::logistics_workflow::load_shipment_for_order;
 use crate::money::paise_to_decimal;
 use crate::observability;
@@ -757,6 +758,60 @@ async fn settle_refund_after_gateway_success(
     Ok(())
 }
 
+async fn settle_return_refund_after_gateway_success(
+    txn: &DatabaseTransaction,
+    attempt: &refund_attempts::Model,
+    return_id: i64,
+    gateway_refund_id: &str,
+) -> Result<(), TonicStatus> {
+    let order = orders::Entity::find_by_id(attempt.order_id)
+        .lock(LockType::Update)
+        .one(txn)
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| TonicStatus::not_found("order not found"))?;
+
+    let amount_to_record = attempt.amount_sent_to_gateway_paise.max(0);
+    if amount_to_record <= 0 {
+        return Err(TonicStatus::failed_precondition(
+            "return refund attempt amount is not positive",
+        ));
+    }
+
+    create_refund(
+        txn,
+        Request::new(CreateRefundRequest {
+            order_id: order.order_id,
+            gateway_refund_id: gateway_refund_id.to_string(),
+            amount_paise: amount_to_record,
+            currency: order.currency.clone(),
+            line_items_refunded_json: None,
+        }),
+    )
+    .await?;
+
+    mark_refund_attempt_processed(txn, attempt.attempt_id, gateway_refund_id).await?;
+    set_return_status_and_items(txn, return_id, "refunded").await?;
+
+    let _ = create_order_event(
+        txn,
+        Request::new(CreateOrderEventRequest {
+            order_id: order.order_id,
+            event_type: "return_refunded".to_string(),
+            from_status: Some("refund_pending".to_string()),
+            to_status: Some("refunded".to_string()),
+            actor_type: "system".to_string(),
+            message: Some(format!(
+                "Return {} refunded for {} paise",
+                return_id, amount_to_record
+            )),
+        }),
+    )
+    .await;
+
+    Ok(())
+}
+
 async fn process_claimed_refund_attempt(
     db: &DatabaseConnection,
     attempt_id: i64,
@@ -783,6 +838,13 @@ async fn process_claimed_refund_attempt(
         .await
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| TonicStatus::not_found("order not found"))?;
+    let linked_return = find_return_by_refund_attempt(&prep_txn, attempt.attempt_id).await?;
+    let linked_return_id = linked_return.as_ref().map(|r| r.return_id);
+    if let Some(return_row) = linked_return.as_ref() {
+        if !return_row.status.eq_ignore_ascii_case("refunded") {
+            set_return_status_and_items(&prep_txn, return_row.return_id, "refund_pending").await?;
+        }
+    }
 
     if order
         .payment_method
@@ -795,8 +857,12 @@ async fn process_claimed_refund_attempt(
             "COD orders must not create gateway refund attempts",
         )
         .await?;
-        set_order_refund_settlement_status(&prep_txn, order.order_id, "refund_not_applicable")
-            .await?;
+        if let Some(return_id) = linked_return_id {
+            set_return_status_and_items(&prep_txn, return_id, "rejected").await?;
+        } else {
+            set_order_refund_settlement_status(&prep_txn, order.order_id, "refund_not_applicable")
+                .await?;
+        }
         prep_txn.commit().await.map_err(map_db_error_to_status)?;
         return Ok(false);
     }
@@ -848,20 +914,43 @@ async fn process_claimed_refund_attempt(
                     ))
                     .await
                     .map_err(map_db_error_to_status)?;
-                set_order_refund_settlement_status(&fail_txn, attempt.order_id, "refund_pending")
+                if let Some(return_id) = linked_return_id {
+                    set_return_status_and_items(&fail_txn, return_id, "refund_pending").await?;
+                    let _ = create_order_event(
+                        &fail_txn,
+                        Request::new(CreateOrderEventRequest {
+                            order_id: attempt.order_id,
+                            event_type: "return_refund_retry_scheduled".to_string(),
+                            from_status: None,
+                            to_status: None,
+                            actor_type: "system".to_string(),
+                            message: Some(format!(
+                                "Return {} refund gateway call failed: {}",
+                                return_id, err
+                            )),
+                        }),
+                    )
+                    .await;
+                } else {
+                    set_order_refund_settlement_status(
+                        &fail_txn,
+                        attempt.order_id,
+                        "refund_pending",
+                    )
                     .await?;
-                let _ = create_order_event(
-                    &fail_txn,
-                    Request::new(CreateOrderEventRequest {
-                        order_id: attempt.order_id,
-                        event_type: "refund_retry_scheduled".to_string(),
-                        from_status: None,
-                        to_status: None,
-                        actor_type: "system".to_string(),
-                        message: Some(format!("Refund gateway call failed: {err}")),
-                    }),
-                )
-                .await;
+                    let _ = create_order_event(
+                        &fail_txn,
+                        Request::new(CreateOrderEventRequest {
+                            order_id: attempt.order_id,
+                            event_type: "refund_retry_scheduled".to_string(),
+                            from_status: None,
+                            to_status: None,
+                            actor_type: "system".to_string(),
+                            message: Some(format!("Refund gateway call failed: {err}")),
+                        }),
+                    )
+                    .await;
+                }
                 fail_txn.commit().await.map_err(map_db_error_to_status)?;
                 return Ok(false);
             }
@@ -875,9 +964,18 @@ async fn process_claimed_refund_attempt(
         .await
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| TonicStatus::not_found("refund attempt not found while persisting"))?;
-    let persist_result =
+    let persist_result = if let Some(return_id) = linked_return_id {
+        settle_return_refund_after_gateway_success(
+            &persist_txn,
+            &persist_attempt,
+            return_id,
+            &gateway_refund_id,
+        )
+        .await
+    } else {
         settle_refund_after_gateway_success(&persist_txn, &persist_attempt, &gateway_refund_id)
-            .await;
+            .await
+    };
     match persist_result {
         Ok(()) => {
             persist_txn.commit().await.map_err(map_db_error_to_status)?;
@@ -893,8 +991,16 @@ async fn process_claimed_refund_attempt(
                 Some("Gateway refund succeeded; local persistence pending retry"),
             )
             .await?;
-            set_order_refund_settlement_status(&fallback_txn, attempt.order_id, "refund_pending")
+            if let Some(return_id) = linked_return_id {
+                set_return_status_and_items(&fallback_txn, return_id, "refund_pending").await?;
+            } else {
+                set_order_refund_settlement_status(
+                    &fallback_txn,
+                    attempt.order_id,
+                    "refund_pending",
+                )
                 .await?;
+            }
             fallback_txn
                 .commit()
                 .await

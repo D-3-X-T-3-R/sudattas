@@ -51,6 +51,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     ProductVariants,
+    #[sea_orm(has_many = "super::return_request_items::Entity")]
+    ReturnRequestItems,
 }
 
 impl Related<super::order_inventory_restore_items::Entity> for Entity {
@@ -65,6 +67,12 @@ impl Related<super::product_variants::Entity> for Entity {
     }
 }
 
+impl Related<super::return_request_items::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ReturnRequestItems.def()
+    }
+}
+
 impl Related<super::orders::Entity> for Entity {
     fn to() -> RelationDef {
         super::order_inventory_restore_items::Relation::Orders.def()
@@ -72,6 +80,19 @@ impl Related<super::orders::Entity> for Entity {
     fn via() -> Option<RelationDef> {
         Some(
             super::order_inventory_restore_items::Relation::OrderDetails
+                .def()
+                .rev(),
+        )
+    }
+}
+
+impl Related<super::return_requests::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::return_request_items::Relation::ReturnRequests.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(
+            super::return_request_items::Relation::OrderDetails
                 .def()
                 .rev(),
         )

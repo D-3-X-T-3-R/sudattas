@@ -119,6 +119,11 @@ describe("GET /api/account/orders/[orderId]", () => {
         data: {
           getRefunds: [],
         },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          searchReturnRequests: [],
+        },
       });
 
     const res = await GET(new Request("http://localhost/api/account/orders/7"), {

@@ -1,4 +1,4 @@
-﻿/* eslint-disable max-lines */
+﻿/* eslint-disable max-lines, max-lines-per-function */
 "use client";
 
 import Image from "next/image";
@@ -37,11 +37,13 @@ export type AccountOrderRow = {
   userId: string;
   orderDate: string;
   cancelWindowEndsAt?: string | null;
+  paymentMethod?: string | null;
   totalAmountPaise: string;
   totalAmountFormatted: string;
   statusId: string;
   statusName: string;
   cancelWindowHours?: number;
+  returnWindowDays?: number;
 };
 
 export type AccountProfileRow = {
@@ -111,6 +113,24 @@ export type AccountOrderDetailPayload = {
   }>;
   fulfillmentState: string;
   paymentState: string;
+  returnWindowDays: number;
+  returnRequests: Array<{
+    returnId: string;
+    orderId: string;
+    userId: string;
+    status: string;
+    reason: string;
+    createdAt: string;
+    receivedAt?: string | null;
+    refundAttemptId?: string | null;
+    items: Array<{
+      returnId: string;
+      orderDetailId: string;
+      quantity: string;
+      refundAmountMinor: string;
+      status: string;
+    }>;
+  }>;
   refundSummary?: {
     itemRefundMinor: number;
     shippingRefundMinor: number;
@@ -491,6 +511,81 @@ function orderMayBeCancelledByCustomer(
   return orderWithinCancelWindow(orderDate, cancelWindowHours, cancelWindowEndsAt);
 }
 
+function normalizePaymentMethod(raw: string | null | undefined): string {
+  return (raw ?? "prepaid").trim().toLowerCase();
+}
+
+function latestDeliveredAtForOrder(detail: AccountOrderDetailPayload | undefined): number {
+  const deliveredAtValues = (detail?.shipments ?? [])
+    .map((s) => Date.parse(s.deliveredAt ?? ""))
+    .filter((v) => Number.isFinite(v));
+  if (deliveredAtValues.length) return Math.max(...deliveredAtValues);
+  const status = (detail?.statusName ?? "").toLowerCase();
+  const fulfillment = (detail?.fulfillmentState ?? "").toLowerCase();
+  if (status.includes("deliver") || fulfillment.includes("deliver")) {
+    const fallback = Date.parse(detail?.order?.orderDate ?? "");
+    if (Number.isFinite(fallback)) return fallback;
+  }
+  return Number.NaN;
+}
+
+function orderWithinReturnWindow(deliveredAtEpochMs: number, returnWindowDays: number): boolean {
+  if (!Number.isFinite(deliveredAtEpochMs)) return false;
+  const days = Number.isFinite(returnWindowDays) && returnWindowDays > 0 ? returnWindowDays : 7;
+  const deadline = deliveredAtEpochMs + days * 24 * 60 * 60 * 1000;
+  return Date.now() <= deadline;
+}
+
+function returnStatusLabel(rawStatus: string): string {
+  const s = rawStatus.trim().toLowerCase();
+  if (s === "requested") return "Return requested";
+  if (s === "approved" || s === "in_transit") return "Return in progress";
+  if (s === "received") return "Received at store";
+  if (s === "refund_pending") return "Refund processing";
+  if (s === "refunded") return "Refunded";
+  if (s === "rejected") return "Return rejected";
+  if (s === "cancelled") return "Return cancelled";
+  return "Return in progress";
+}
+
+function lineReturnStatus(
+  detail: AccountOrderDetailPayload | undefined,
+  orderDetailId: string
+): string | null {
+  const statuses: string[] = [];
+  for (const request of detail?.returnRequests ?? []) {
+    for (const item of request.items ?? []) {
+      if (item.orderDetailId === orderDetailId) {
+        const status = (item.status || request.status || "").trim();
+        if (status) statuses.push(status);
+      }
+    }
+  }
+  if (statuses.length === 0) return null;
+  const priority = [
+    "refunded",
+    "refund_pending",
+    "received",
+    "in_transit",
+    "approved",
+    "requested",
+    "rejected",
+    "cancelled",
+  ];
+  for (const state of priority) {
+    const found = statuses.find((s) => s.toLowerCase() === state);
+    if (found) return found;
+  }
+  return statuses[0] ?? null;
+}
+
+function lineHasActiveReturn(detail: AccountOrderDetailPayload | undefined, orderDetailId: string): boolean {
+  const status = lineReturnStatus(detail, orderDetailId);
+  if (!status) return false;
+  const s = status.toLowerCase();
+  return s !== "rejected" && s !== "cancelled";
+}
+
 function UserIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
@@ -606,6 +701,7 @@ type ProfileAuthenticatedContentProps = {
   refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
   cancelOrderItems: (orderId: string, orderDetailIds: string[]) => Promise<void>;
+  requestReturn: (orderId: string, orderDetailIds: string[], reason: string) => Promise<void>;
   onSignOut: () => void;
 };
 
@@ -647,7 +743,6 @@ function DashboardCard({
   );
 }
 
-// eslint-disable-next-line max-lines-per-function
 export function ProfileAuthenticatedContent({
   displayName,
   displayEmail,
@@ -670,6 +765,7 @@ export function ProfileAuthenticatedContent({
   refreshOrderDetail,
   cancelOrder,
   cancelOrderItems,
+  requestReturn,
   onSignOut,
 }: ProfileAuthenticatedContentProps) {
   const [activeNav, setActiveNav] = useState<ProfileNavId>("profile");
@@ -679,6 +775,9 @@ export function ProfileAuthenticatedContent({
   const [cancellingItemKey, setCancellingItemKey] = useState<string | null>(null);
   const [cancelDialogOrderId, setCancelDialogOrderId] = useState<string | null>(null);
   const [cancelDialogItem, setCancelDialogItem] = useState<{ orderId: string; orderDetailId: string } | null>(null);
+  const [returnSelectionByOrder, setReturnSelectionByOrder] = useState<Record<string, string[]>>({});
+  const [returnReasonByOrder, setReturnReasonByOrder] = useState<Record<string, string>>({});
+  const [requestingReturnOrderId, setRequestingReturnOrderId] = useState<string | null>(null);
   const [refreshingOrderId, setRefreshingOrderId] = useState<string | null>(null);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [supportCategory, setSupportCategory] = useState<SupportCategory>("order");
@@ -773,6 +872,31 @@ export function ProfileAuthenticatedContent({
       await cancelOrder(id);
     } finally {
       setCancellingOrderId(null);
+    }
+  };
+
+  const toggleReturnSelection = (orderId: string, orderDetailId: string) => {
+    setReturnSelectionByOrder((prev) => {
+      const next = { ...prev };
+      const current = new Set(next[orderId] ?? []);
+      if (current.has(orderDetailId)) current.delete(orderDetailId);
+      else current.add(orderDetailId);
+      next[orderId] = Array.from(current);
+      return next;
+    });
+  };
+
+  const submitReturnRequest = async (orderId: string) => {
+    const selected = returnSelectionByOrder[orderId] ?? [];
+    const reason = (returnReasonByOrder[orderId] ?? "").trim();
+    if (!selected.length || !reason) return;
+    setRequestingReturnOrderId(orderId);
+    try {
+      await requestReturn(orderId, selected, reason);
+      setReturnSelectionByOrder((prev) => ({ ...prev, [orderId]: [] }));
+      setReturnReasonByOrder((prev) => ({ ...prev, [orderId]: "" }));
+    } finally {
+      setRequestingReturnOrderId((prev) => (prev === orderId ? null : prev));
     }
   };
 
@@ -950,6 +1074,69 @@ export function ProfileAuthenticatedContent({
                       const ship = primaryShipmentForOrder(detail);
                       const refundTrackingState = refundTrackingStateForOrder(o.statusName, detail);
                       const showRefundTracking = refundTrackingState !== "none";
+                      const paymentMethod = normalizePaymentMethod(
+                        o.paymentMethod ?? detail?.order?.paymentMethod
+                      );
+                      const isCodOrder = paymentMethod === "cod";
+                      const deliveredAt = latestDeliveredAtForOrder(detail);
+                      const deliveredForReturns = Number.isFinite(deliveredAt);
+                      const returnWindowDays = Math.max(
+                        1,
+                        Number(
+                          detail?.returnWindowDays ??
+                            o.returnWindowDays ??
+                            7
+                        )
+                      );
+                      const withinReturnWindow = orderWithinReturnWindow(
+                        deliveredAt,
+                        returnWindowDays
+                      );
+                      const lineReturnRawStatus = line
+                        ? lineReturnStatus(detail, line.orderDetailId)
+                        : null;
+                      const lineReturnLabel = lineReturnRawStatus
+                        ? returnStatusLabel(lineReturnRawStatus)
+                        : null;
+                      const lineHasOpenReturnRequest = line
+                        ? lineHasActiveReturn(detail, line.orderDetailId)
+                        : false;
+                      const showReturnWindowClosed =
+                        !!line &&
+                        !isCodOrder &&
+                        deliveredForReturns &&
+                        !withinReturnWindow &&
+                        !lineHasOpenReturnRequest;
+                      const lineEligibleForReturn =
+                        !!line &&
+                        !isCodOrder &&
+                        deliveredForReturns &&
+                        withinReturnWindow &&
+                        !((line.itemStatus ?? "").toLowerCase().includes("cancel")) &&
+                        !lineHasOpenReturnRequest;
+                      const eligibleLineIdsForOrder = (detail?.order?.orderDetails ?? [])
+                        .filter((row) => {
+                          const rowHasReturn = lineHasActiveReturn(
+                            detail,
+                            row.orderDetailId
+                          );
+                          return (
+                            !isCodOrder &&
+                            deliveredForReturns &&
+                            withinReturnWindow &&
+                            !((row.itemStatus ?? "").toLowerCase().includes("cancel")) &&
+                            !rowHasReturn
+                          );
+                        })
+                        .map((row) => row.orderDetailId);
+                      const selectedReturnIdsForOrder =
+                        returnSelectionByOrder[o.orderId] ?? [];
+                      const selectedReturnIdSet = new Set(selectedReturnIdsForOrder);
+                      const returnReason = returnReasonByOrder[o.orderId] ?? "";
+                      const canSubmitReturn =
+                        selectedReturnIdsForOrder.length > 0 &&
+                        returnReason.trim().length > 0 &&
+                        requestingReturnOrderId !== o.orderId;
                       return (
                         <article
                           key={key}
@@ -1000,6 +1187,34 @@ export function ProfileAuthenticatedContent({
                                 Cancellation window closed. You can refuse delivery.
                               </p>
                             ) : null}
+                            {line && lineEligibleForReturn ? (
+                              <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs text-[#0F3D2E]">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedReturnIdSet.has(line.orderDetailId)}
+                                  onChange={() =>
+                                    toggleReturnSelection(o.orderId, line.orderDetailId)
+                                  }
+                                  disabled={requestingReturnOrderId === o.orderId}
+                                  aria-label={`Select line ${line.orderDetailId} for return`}
+                                  className="h-4 w-4 rounded border-[#C9A646]/40 text-[#0F3D2E]"
+                                />
+                                Select for return
+                              </label>
+                            ) : null}
+                            {lineReturnLabel ? (
+                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#0F3D2E]">
+                                {lineReturnLabel}
+                              </p>
+                            ) : isCodOrder && line ? (
+                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8B816D]">
+                                Returns are available only for prepaid orders.
+                              </p>
+                            ) : showReturnWindowClosed ? (
+                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8B816D]">
+                                Return window closed.
+                              </p>
+                            ) : null}
                             {showFullOrderCancel ? (
                               <button
                                 type="button"
@@ -1009,6 +1224,37 @@ export function ProfileAuthenticatedContent({
                               >
                                 {cancellingOrderId === o.orderId ? "Cancelling..." : "Cancel full order"}
                               </button>
+                            ) : null}
+                            {isFirstForOrder && eligibleLineIdsForOrder.length > 0 ? (
+                              <div className="mt-3 rounded-2xl border border-[#C9A646]/25 bg-[#FFFCF4] p-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#A37D34]">
+                                  Request return
+                                </p>
+                                <textarea
+                                  value={returnReason}
+                                  onChange={(e) =>
+                                    setReturnReasonByOrder((prev) => ({
+                                      ...prev,
+                                      [o.orderId]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Reason for return"
+                                  rows={2}
+                                  className="mt-2 w-full rounded-lg border border-[#E7D8B6] bg-white px-3 py-2 text-sm text-[#2D2A24]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void submitReturnRequest(o.orderId);
+                                  }}
+                                  disabled={!canSubmitReturn}
+                                  className="mt-2 rounded-full border border-[#A37D34]/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7E622A] transition hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {requestingReturnOrderId === o.orderId
+                                    ? "Submitting..."
+                                    : "Return selected items"}
+                                </button>
+                              </div>
                             ) : null}
                             {isFirstForOrder && detail?.refundSummary ? (
                               <p className="mt-2 text-xs text-[#615A50]">
@@ -1593,3 +1839,5 @@ export function ProfileAuthenticatedContent({
     </section>
   );
 }
+
+

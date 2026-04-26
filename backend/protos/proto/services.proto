@@ -50,6 +50,10 @@ service GRPCServices {
     rpc UpdateOrder(UpdateOrderRequest) returns (OrdersResponse);
     rpc DeleteOrder(DeleteOrderRequest) returns (OrdersResponse);
     rpc CancelOrderItems(CancelOrderItemsRequest) returns (OrdersResponse);
+    rpc RequestReturn(RequestReturnRequest) returns (ReturnRequestsResponse);
+    rpc SearchReturnRequests(SearchReturnRequestsRequest) returns (ReturnRequestsResponse);
+    rpc AdminMarkReturnReceived(AdminMarkReturnReceivedRequest) returns (ReturnRequestsResponse);
+    rpc AdminUpdateReturnStatus(AdminUpdateReturnStatusRequest) returns (ReturnRequestsResponse);
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
     rpc EstimateCheckoutShipping(EstimateCheckoutShippingRequest) returns (EstimateCheckoutShippingResponse);
     rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);

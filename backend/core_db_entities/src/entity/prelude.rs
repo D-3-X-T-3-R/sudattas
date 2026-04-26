@@ -29,6 +29,8 @@ pub use super::product_variants::Entity as ProductVariants;
 pub use super::products::Entity as Products;
 pub use super::refund_attempts::Entity as RefundAttempts;
 pub use super::refunds::Entity as Refunds;
+pub use super::return_request_items::Entity as ReturnRequestItems;
+pub use super::return_requests::Entity as ReturnRequests;
 pub use super::reviews::Entity as Reviews;
 pub use super::schema_migrations::Entity as SchemaMigrations;
 pub use super::security_audit_log::Entity as SecurityAuditLog;

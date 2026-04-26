@@ -34,19 +34,20 @@ pub fn load_env_once() {
 use proto::proto::core::{
     grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkOrderDeliveredRequest,
     AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse,
-    AdminUpdateReviewStatusRequest, AdminUpdateReviewStatusResponse, ApplyCouponRequest,
-    CancelOrderItemsRequest, CapturePaymentRequest, CartItemsResponse, CategoriesResponse,
-    ColorsResponse, ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse,
-    CreateCartItemRequest, CreateCategoryRequest, CreateColorRequest, CreateCouponRequest,
-    CreateEventLogRequest, CreateFabricRequest, CreateInventoryItemRequest,
-    CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOccasionRequest,
-    CreateOrderDetailsRequest, CreateOrderEventRequest, CreateOrderRequest,
-    CreatePaymentIntentRequest, CreateProductMoodMappingRequest, CreateProductMoodRequest,
-    CreateProductRequest, CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest,
-    CreateShipmentRequest, CreateShippingAddressRequest, CreateShippingMethodRequest,
-    CreateSizeRequest, CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest,
-    CreateUserRoleRequest, CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest,
-    DeleteColorRequest, DeleteEventLogRequest, DeleteFabricRequest, DeleteInventoryItemRequest,
+    AdminMarkReturnReceivedRequest, AdminUpdateReturnStatusRequest, AdminUpdateReviewStatusRequest,
+    AdminUpdateReviewStatusResponse, ApplyCouponRequest, CancelOrderItemsRequest,
+    CapturePaymentRequest, CartItemsResponse, CategoriesResponse, ColorsResponse,
+    ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse, CreateCartItemRequest,
+    CreateCategoryRequest, CreateColorRequest, CreateCouponRequest, CreateEventLogRequest,
+    CreateFabricRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
+    CreateNewsletterSubscriberRequest, CreateOccasionRequest, CreateOrderDetailsRequest,
+    CreateOrderEventRequest, CreateOrderRequest, CreatePaymentIntentRequest,
+    CreateProductMoodMappingRequest, CreateProductMoodRequest, CreateProductRequest,
+    CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest, CreateShipmentRequest,
+    CreateShippingAddressRequest, CreateShippingMethodRequest, CreateSizeRequest,
+    CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest, CreateUserRoleRequest,
+    CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest, DeleteColorRequest,
+    DeleteEventLogRequest, DeleteFabricRequest, DeleteInventoryItemRequest,
     DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOccasionRequest,
     DeleteOrderRequest, DeleteProductImageRequest, DeleteProductMoodMappingRequest,
     DeleteProductMoodRequest, DeleteProductRequest, DeleteProductVariantRequest,
@@ -64,22 +65,23 @@ use proto::proto::core::{
     OrdersResponse, PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse,
     ProductImagesResponse, ProductMoodMappingsResponse, ProductMoodsResponse,
     ProductVariantsResponse, ProductsResponse, ReadinessRequest, ReadinessResponse,
-    RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
-    ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ReviewsResponse, SearchCategoryRequest,
-    SearchColorRequest, SearchEventLogRequest, SearchFabricRequest, SearchInventoryItemRequest,
-    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOccasionRequest,
-    SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
+    RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse, RequestReturnRequest,
+    ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ReturnRequestsResponse, ReviewsResponse,
+    SearchCategoryRequest, SearchColorRequest, SearchEventLogRequest, SearchFabricRequest,
+    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterSubscriberRequest,
+    SearchOccasionRequest, SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
     SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
     SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
-    SearchReviewRequest, SearchShippingMethodRequest, SearchSizeRequest, SearchTransactionRequest,
-    SearchUserActivityRequest, SearchUserRequest, SearchUserRoleRequest, SearchWeaveRequest,
-    SearchWishlistItemRequest, ShipmentsResponse, ShippingAddressesResponse,
-    ShippingMethodsResponse, ShopHighlightMoodsRequest, ShopHighlightMoodsResponse, SizesResponse,
-    SyncOrderShipmentsFromShiprocketRequest, SyncOrderShipmentsFromShiprocketResponse,
-    SyncProductImagesRequest, TransactionsResponse, UpdateCartItemRequest, UpdateCategoryRequest,
-    UpdateColorRequest, UpdateCouponRequest, UpdateEventLogRequest, UpdateFabricRequest,
-    UpdateInventoryItemRequest, UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest,
-    UpdateOccasionRequest, UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
+    SearchReturnRequestsRequest, SearchReviewRequest, SearchShippingMethodRequest,
+    SearchSizeRequest, SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
+    SearchUserRoleRequest, SearchWeaveRequest, SearchWishlistItemRequest, ShipmentsResponse,
+    ShippingAddressesResponse, ShippingMethodsResponse, ShopHighlightMoodsRequest,
+    ShopHighlightMoodsResponse, SizesResponse, SyncOrderShipmentsFromShiprocketRequest,
+    SyncOrderShipmentsFromShiprocketResponse, SyncProductImagesRequest, TransactionsResponse,
+    UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest,
+    UpdateEventLogRequest, UpdateFabricRequest, UpdateInventoryItemRequest,
+    UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOccasionRequest,
+    UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
     UpdatePickupTargetResponse, UpdateProductImageRequest, UpdateProductMoodRequest,
     UpdateProductRequest, UpdateProductVariantRequest, UpdateReviewRequest, UpdateShipmentRequest,
     UpdateShippingAddressRequest, UpdateShippingMethodRequest, UpdateSizeRequest,
@@ -758,6 +760,70 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::cancel_order_items(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn request_return(
+        &self,
+        request: Request<RequestReturnRequest>,
+    ) -> Result<Response<ReturnRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::returns::request_return(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_return_requests(
+        &self,
+        request: Request<SearchReturnRequestsRequest>,
+    ) -> Result<Response<ReturnRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::returns::search_return_requests(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn admin_mark_return_received(
+        &self,
+        request: Request<AdminMarkReturnReceivedRequest>,
+    ) -> Result<Response<ReturnRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::returns::admin_mark_return_received(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn admin_update_return_status(
+        &self,
+        request: Request<AdminUpdateReturnStatusRequest>,
+    ) -> Result<Response<ReturnRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::returns::admin_update_return_status(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

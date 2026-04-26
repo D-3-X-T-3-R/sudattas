@@ -3,11 +3,13 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::orders::order_response;
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
-use core_db_entities::entity::{order_details, order_status, orders};
+use core_db_entities::entity::{
+    order_details, order_status, orders, return_request_items, return_requests,
+};
 use proto::proto::core::{CancelOrderItemsRequest, OrdersResponse};
 use sea_orm::{
     sea_query::LockType, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend, EntityTrait,
-    PaginatorTrait, QueryFilter, QuerySelect, Statement,
+    JoinType, PaginatorTrait, QueryFilter, QuerySelect, RelationTrait, Statement,
 };
 use std::collections::HashSet;
 use tonic::{Request, Response, Status};
@@ -34,6 +36,18 @@ pub async fn cancel_order_items(
         if order.user_id != uid {
             return Err(Status::not_found("Order not found"));
         }
+    }
+
+    let order_status_name = order_status::Entity::find_by_id(order.status_id)
+        .one(txn)
+        .await
+        .map_err(map_db_error_to_status)?
+        .map(|row| row.status_name)
+        .unwrap_or_default();
+    if order_status_name.eq_ignore_ascii_case("delivered") {
+        return Err(Status::failed_precondition(
+            "Cancellation window closed. You can refuse delivery.",
+        ));
     }
 
     if order.fulfillment_status != FulfillmentStatus::NotCreated {
@@ -86,6 +100,23 @@ pub async fn cancel_order_items(
     {
         return Err(Status::failed_precondition(
             "One or more order items are already cancelled",
+        ));
+    }
+
+    let open_return_count = return_request_items::Entity::find()
+        .join(
+            JoinType::InnerJoin,
+            return_request_items::Relation::ReturnRequests.def(),
+        )
+        .filter(return_requests::Column::OrderId.eq(req.order_id))
+        .filter(return_request_items::Column::OrderDetailId.is_in(requested_ids.iter().copied()))
+        .filter(return_requests::Column::Status.is_not_in(["rejected", "cancelled"]))
+        .count(txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+    if open_return_count > 0 {
+        return Err(Status::failed_precondition(
+            "One or more order items already have an active return request",
         ));
     }
 

@@ -32,11 +32,19 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Orders,
+    #[sea_orm(has_many = "super::return_requests::Entity")]
+    ReturnRequests,
 }
 
 impl Related<super::orders::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Orders.def()
+    }
+}
+
+impl Related<super::return_requests::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ReturnRequests.def()
     }
 }
 
