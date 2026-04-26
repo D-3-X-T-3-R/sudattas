@@ -1,13 +1,13 @@
 //! P1 Tests for outbox enqueue and worker (idempotent publish).
 //! Unit tests use mock; integration test requires TEST_DATABASE_URL.
 //!
-//! Tests that use `OUTBOX_DELIVER_FAIL` share process env. To avoid flakiness when running
-//! the full suite, run this file with one thread:
-//! `cargo test -p core_operations --test handler_outbox -- --test-threads=1`
+//! Tests that toggle `OUTBOX_DELIVER_FAIL` share process env and are synchronized by a
+//! test-local mutex so this file stays deterministic under parallel execution.
 
 mod integration_common;
 
 use serde_json::json;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
 async fn connect_test_db() -> sea_orm::DatabaseConnection {
@@ -40,19 +40,37 @@ async fn connect_test_db() -> sea_orm::DatabaseConnection {
     );
 }
 
-/// Ensures OUTBOX_DELIVER_FAIL is unset so tests don't affect each other when run in parallel.
-struct OutboxDeliverFailGuard;
+/// Serialize tests that mutate OUTBOX_DELIVER_FAIL; env vars are process-global.
+fn outbox_deliver_fail_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+/// Ensures OUTBOX_DELIVER_FAIL is set/cleared under a shared lock.
+struct OutboxDeliverFailGuard {
+    _lock: MutexGuard<'static, ()>,
+}
+
 impl OutboxDeliverFailGuard {
     /// Clear now and again on drop (for success test).
     fn clear() -> Self {
+        let lock = outbox_deliver_fail_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         std::env::remove_var("OUTBOX_DELIVER_FAIL");
-        Self
+        Self { _lock: lock }
     }
-    /// Only clear on drop (for delivery_fail test: var is set during test, cleaned up after).
-    fn restore_on_drop() -> Self {
-        Self
+
+    /// Set failure mode and clear on drop (for delivery-failure tests).
+    fn set_fail() -> Self {
+        let lock = outbox_deliver_fail_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        std::env::set_var("OUTBOX_DELIVER_FAIL", "1");
+        Self { _lock: lock }
     }
 }
+
 impl Drop for OutboxDeliverFailGuard {
     fn drop(&mut self) {
         std::env::remove_var("OUTBOX_DELIVER_FAIL");
@@ -265,7 +283,6 @@ async fn process_pending_outbox_events_one_success_returns_one() {
             },
         ])
         .into_connection();
-    std::env::remove_var("OUTBOX_DELIVER_FAIL");
     let result = process_pending_outbox_events(&db, 5).await;
     let count = result.expect("process should not return error");
     assert_eq!(
@@ -274,16 +291,16 @@ async fn process_pending_outbox_events_one_success_returns_one() {
     );
 }
 
-/// When delivery fails (OUTBOX_DELIVER_FAIL=1), event is left Pending and processed_count is 0.
+/// Delivery failure path: claim once, requeue to Pending, never mark Processed, return 0 processed.
 #[tokio::test]
-async fn process_pending_outbox_events_delivery_fail_leaves_pending_returns_zero() {
+async fn process_pending_outbox_events_delivery_fail_claims_once_requeues_and_returns_zero_processed(
+) {
     use core_db_entities::entity::outbox_events;
     use core_db_entities::entity::sea_orm_active_enums::Status as OutboxStatus;
     use core_operations::procedures::outbox_worker::process_pending_outbox_events;
     use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
 
-    std::env::set_var("OUTBOX_DELIVER_FAIL", "1");
-    let _guard = OutboxDeliverFailGuard::restore_on_drop();
+    let _guard = OutboxDeliverFailGuard::set_fail();
     let now = chrono::Utc::now();
     let row = outbox_events::Model {
         event_id: 1,
@@ -315,7 +332,63 @@ async fn process_pending_outbox_events_delivery_fail_leaves_pending_returns_zero
         .expect("process");
     assert_eq!(
         count, 0,
-        "on delivery failure event stays Pending, nothing processed"
+        "return value is processed_count; failed delivery must not count as processed"
+    );
+
+    let logs = db.into_transaction_log();
+    let sql: Vec<String> = logs
+        .iter()
+        .flat_map(|txn| {
+            txn.statements()
+                .iter()
+                .map(|stmt| stmt.sql.to_ascii_lowercase())
+        })
+        .collect();
+
+    let total_updates = sql
+        .iter()
+        .filter(|s| s.contains("update outboxevents"))
+        .count();
+    let claim_updates = sql
+        .iter()
+        .filter(|s| {
+            s.contains("update outboxevents")
+                && s.contains("set status = 'client_verified'")
+                && s.contains("and status = 'pending'")
+        })
+        .count();
+    let requeue_updates = sql
+        .iter()
+        .filter(|s| {
+            s.contains("update outboxevents")
+                && s.contains("set status = 'pending'")
+                && s.contains("and status = 'client_verified'")
+        })
+        .count();
+    let processed_updates = sql
+        .iter()
+        .filter(|s| {
+            s.contains("update outboxevents")
+                && s.contains("set status = 'processed'")
+                && s.contains("and status = 'client_verified'")
+        })
+        .count();
+
+    assert_eq!(
+        total_updates, 2,
+        "failed delivery should only execute claim + requeue updates"
+    );
+    assert_eq!(
+        claim_updates, 1,
+        "exactly one row must be claimed/attempted in this scenario"
+    );
+    assert_eq!(
+        requeue_updates, 1,
+        "failed delivery must return the row to pending (retryable)"
+    );
+    assert_eq!(
+        processed_updates, 0,
+        "failed delivery must never mark the event processed"
     );
 }
 
