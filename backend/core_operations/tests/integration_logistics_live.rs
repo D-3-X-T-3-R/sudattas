@@ -30,9 +30,11 @@ use sea_orm::{
     EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Statement, TransactionTrait,
 };
 use sha2::Sha256;
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tonic::Request;
 
 static UNIQUE_COUNTER: AtomicI64 = AtomicI64::new(0);
@@ -46,6 +48,20 @@ struct LiveCheckoutPayment {
     payment_id: String,
     order_id: String,
     signature: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct CreatedShiprocketOrder {
+    internal_order_id: i64,
+    shiprocket_order_id: String,
+    external_order_id: String,
+    awb_code: Option<String>,
+}
+
+#[derive(Clone, Default)]
+struct LiveCleanupTracker {
+    local_orders: Arc<Mutex<Vec<(i64, i64)>>>,
+    shiprocket_orders: Arc<Mutex<Vec<CreatedShiprocketOrder>>>,
 }
 
 fn mask_gateway_id(id: &str) -> String {
@@ -127,6 +143,369 @@ fn print_live_skip_message(reason: &str) {
     eprintln!(
         "skipping live logistics test: {reason}. To enable, set RUN_LIVE_LOGISTICS_TESTS=1 and provide required live credentials."
     );
+}
+
+fn shiprocket_api_base() -> String {
+    std::env::var("SHIPROCKET_API_BASE")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "https://apiv2.shiprocket.in/v1/external".to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
+fn non_empty_trimmed(value: Option<String>) -> Option<String> {
+    value
+        .map(|raw| raw.trim().to_string())
+        .filter(|trimmed| !trimmed.is_empty())
+}
+
+impl LiveCleanupTracker {
+    fn record_local_order(&self, internal_order_id: i64, user_id: i64) -> Result<(), String> {
+        let mut guard = self
+            .local_orders
+            .lock()
+            .map_err(|_| "local cleanup tracker lock poisoned".to_string())?;
+        if !guard
+            .iter()
+            .any(|(existing_order_id, existing_user_id)| {
+                *existing_order_id == internal_order_id && *existing_user_id == user_id
+            })
+        {
+            guard.push((internal_order_id, user_id));
+        }
+        Ok(())
+    }
+
+    fn record_shiprocket_order(&self, created: CreatedShiprocketOrder) -> Result<(), String> {
+        let mut guard = self
+            .shiprocket_orders
+            .lock()
+            .map_err(|_| "shiprocket cleanup tracker lock poisoned".to_string())?;
+        if !guard.iter().any(|existing| existing == &created) {
+            guard.push(created);
+        }
+        Ok(())
+    }
+
+    fn snapshot_local_orders(&self) -> Result<Vec<(i64, i64)>, String> {
+        let guard = self
+            .local_orders
+            .lock()
+            .map_err(|_| "local cleanup tracker lock poisoned".to_string())?;
+        Ok(guard.clone())
+    }
+
+    fn snapshot_shiprocket_orders(&self) -> Result<Vec<CreatedShiprocketOrder>, String> {
+        let guard = self
+            .shiprocket_orders
+            .lock()
+            .map_err(|_| "shiprocket cleanup tracker lock poisoned".to_string())?;
+        Ok(guard.clone())
+    }
+}
+
+async fn capture_created_shiprocket_order(
+    db: &DatabaseConnection,
+    internal_order_id: i64,
+) -> Result<Option<CreatedShiprocketOrder>, String> {
+    let shipment = shipment_meta(db, internal_order_id).await?;
+    let shiprocket_order_id = non_empty_trimmed(shipment.try_get::<Option<String>>("", "shiprocket_order_id").ok().flatten());
+    let external_order_id = non_empty_trimmed(
+        shipment
+            .try_get::<Option<String>>("", "shiprocket_external_order_id")
+            .ok()
+            .flatten(),
+    );
+    let awb_code = non_empty_trimmed(shipment.try_get::<Option<String>>("", "awb_code").ok().flatten());
+
+    match (shiprocket_order_id, external_order_id) {
+        (Some(shiprocket_order_id), Some(external_order_id)) => Ok(Some(CreatedShiprocketOrder {
+            internal_order_id,
+            shiprocket_order_id,
+            external_order_id,
+            awb_code,
+        })),
+        (None, None) => Ok(None),
+        (shiprocket_order_id, external_order_id) => Err(format!(
+            "incomplete Shiprocket identifiers persisted for internal_order_id={internal_order_id}: shiprocket_order_id={:?} external_order_id={:?}",
+            shiprocket_order_id, external_order_id
+        )),
+    }
+}
+
+async fn shiprocket_auth_token(client: &reqwest::Client) -> Result<String, String> {
+    load_live_env_from_repo();
+    let email = std::env::var("SHIPROCKET_EMAIL")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| "missing required env: SHIPROCKET_EMAIL".to_string())?;
+    let password = std::env::var("SHIPROCKET_PASSWORD")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| "missing required env: SHIPROCKET_PASSWORD".to_string())?;
+
+    let response = client
+        .post(format!("{}/auth/login", shiprocket_api_base()))
+        .json(&serde_json::json!({
+            "email": email,
+            "password": password
+        }))
+        .send()
+        .await
+        .map_err(|error| format!("Shiprocket login request failed: {error}"))?;
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(format!("Shiprocket login failed HTTP {status}: {body}"));
+    }
+    let parsed: serde_json::Value = serde_json::from_str(body.as_str())
+        .map_err(|error| format!("Shiprocket login payload parse failed: {error}; body={body}"))?;
+    let token = parsed
+        .get("token")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| format!("Shiprocket login payload missing token: {body}"))?;
+    Ok(token.to_string())
+}
+
+async fn shiprocket_cancel_and_verify(
+    client: &reqwest::Client,
+    bearer_token: &str,
+    created: &CreatedShiprocketOrder,
+) -> Result<(), String> {
+    let cancel_reference = created
+        .external_order_id
+        .parse::<i64>()
+        .or_else(|_| created.shiprocket_order_id.parse::<i64>())
+        .map_err(|_| {
+            format!(
+                "unable to parse Shiprocket cancel reference for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}",
+                created.internal_order_id,
+                created.shiprocket_order_id,
+                created.external_order_id,
+                created.awb_code.as_deref().unwrap_or("")
+            )
+        })?;
+
+    let cancel_response = client
+        .post(format!("{}/orders/cancel", shiprocket_api_base()))
+        .header("Authorization", format!("Bearer {bearer_token}"))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({ "ids": [cancel_reference] }))
+        .send()
+        .await
+        .map_err(|error| {
+            format!(
+                "Shiprocket cancel request failed for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}: {error}",
+                created.internal_order_id,
+                created.shiprocket_order_id,
+                created.external_order_id,
+                created.awb_code.as_deref().unwrap_or("")
+            )
+        })?;
+    let cancel_status = cancel_response.status();
+    let cancel_body = cancel_response.text().await.unwrap_or_default();
+    if !cancel_status.is_success() {
+        return Err(format!(
+            "Shiprocket cancel failed for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={} HTTP {}: {}",
+            created.internal_order_id,
+            created.shiprocket_order_id,
+            created.external_order_id,
+            created.awb_code.as_deref().unwrap_or(""),
+            cancel_status,
+            cancel_body
+        ));
+    }
+    let cancel_json = serde_json::from_str::<serde_json::Value>(&cancel_body).unwrap_or_else(|_| {
+        serde_json::json!({
+            "raw": cancel_body
+        })
+    });
+    if let Some(code) = cancel_json.get("status_code").and_then(|value| value.as_i64()) {
+        if code != 200 {
+            return Err(format!(
+                "Shiprocket cancel returned non-success status_code for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}: {}",
+                created.internal_order_id,
+                created.shiprocket_order_id,
+                created.external_order_id,
+                created.awb_code.as_deref().unwrap_or(""),
+                cancel_json
+            ));
+        }
+    }
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let show_response = client
+        .get(format!(
+            "{}/orders/show/{}",
+            shiprocket_api_base(),
+            created.external_order_id
+        ))
+        .header("Authorization", format!("Bearer {bearer_token}"))
+        .send()
+        .await
+        .map_err(|error| {
+            format!(
+                "Shiprocket show-order request failed for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}: {error}",
+                created.internal_order_id,
+                created.shiprocket_order_id,
+                created.external_order_id,
+                created.awb_code.as_deref().unwrap_or("")
+            )
+        })?;
+    let show_status = show_response.status();
+    let show_body = show_response.text().await.unwrap_or_default();
+    if !show_status.is_success() {
+        return Err(format!(
+            "Shiprocket show-order failed for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={} HTTP {}: {}",
+            created.internal_order_id,
+            created.shiprocket_order_id,
+            created.external_order_id,
+            created.awb_code.as_deref().unwrap_or(""),
+            show_status,
+            show_body
+        ));
+    }
+
+    let show_json: serde_json::Value = serde_json::from_str(show_body.as_str()).map_err(|error| {
+        format!(
+            "Shiprocket show-order payload parse failed for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}: {}; body={}",
+            created.internal_order_id,
+            created.shiprocket_order_id,
+            created.external_order_id,
+            created.awb_code.as_deref().unwrap_or(""),
+            error,
+            show_body
+        )
+    })?;
+    let provider_order_status = show_json
+        .pointer("/data/status")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    let provider_shipment_status = show_json
+        .pointer("/data/shipments/status")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    let cancelled = provider_order_status.contains("CANCEL")
+        || provider_shipment_status.contains("CANCEL");
+    if !cancelled {
+        return Err(format!(
+            "Shiprocket provider status not cancelled after cleanup for internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}: order_status={} shipment_status={} cancel_response={} show_response={}",
+            created.internal_order_id,
+            created.shiprocket_order_id,
+            created.external_order_id,
+            created.awb_code.as_deref().unwrap_or(""),
+            provider_order_status,
+            provider_shipment_status,
+            cancel_json,
+            show_json
+        ));
+    }
+
+    eprintln!(
+        "[live-cleanup] provider cancelled internal_order_id={} shiprocket_order_id={} external_order_id={} awb={} order_status={} shipment_status={} cancel_response={}",
+        created.internal_order_id,
+        created.shiprocket_order_id,
+        created.external_order_id,
+        created.awb_code.as_deref().unwrap_or(""),
+        provider_order_status,
+        provider_shipment_status,
+        cancel_json
+    );
+    Ok(())
+}
+
+async fn cleanup_created_shiprocket_orders(
+    created_orders: &[CreatedShiprocketOrder],
+) -> Result<(), String> {
+    if created_orders.is_empty() {
+        return Ok(());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|error| format!("failed to create Shiprocket cleanup HTTP client: {error}"))?;
+    let bearer_token = shiprocket_auth_token(&client).await?;
+
+    let mut failures = Vec::new();
+    let mut seen = HashSet::new();
+    for created in created_orders {
+        if !seen.insert(created.clone()) {
+            continue;
+        }
+        if let Err(error) = shiprocket_cancel_and_verify(&client, bearer_token.as_str(), created).await
+        {
+            failures.push(error);
+        }
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n"))
+    }
+}
+
+async fn cleanup_local_live_orders(
+    db: &DatabaseConnection,
+    local_orders: &[(i64, i64)],
+) -> Result<(), String> {
+    if local_orders.is_empty() {
+        return Ok(());
+    }
+
+    let mut failures = Vec::new();
+    let mut seen = HashSet::new();
+    for (order_id, user_id) in local_orders.iter().copied() {
+        if !seen.insert((order_id, user_id)) {
+            continue;
+        }
+        if let Err(error) = cleanup_live_order(db, order_id, user_id).await {
+            failures.push(format!(
+                "local cleanup failed for internal_order_id={order_id} user_id={user_id}: {error}"
+            ));
+        }
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n"))
+    }
+}
+
+async fn finalize_live_test_with_cleanup(
+    db: &DatabaseConnection,
+    tracker: &LiveCleanupTracker,
+    body_result: Result<Result<(), String>, tokio::task::JoinError>,
+) -> Result<(), String> {
+    let mut failures = Vec::new();
+
+    let created_orders = tracker.snapshot_shiprocket_orders()?;
+    let local_orders = tracker.snapshot_local_orders()?;
+
+    if let Err(error) = cleanup_created_shiprocket_orders(created_orders.as_slice()).await {
+        failures.push(format!("provider cleanup failure:\n{error}"));
+    }
+    if let Err(error) = cleanup_local_live_orders(db, local_orders.as_slice()).await {
+        failures.push(format!("local cleanup failure:\n{error}"));
+    }
+
+    match body_result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => failures.push(format!("test body returned error: {error}")),
+        Err(join_error) => failures.push(format!("test body panicked: {join_error}")),
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n"))
+    }
 }
 
 fn unique_tag() -> i64 {
@@ -828,11 +1207,16 @@ async fn live_payment_success_auto_books_shiprocket_and_cleans_up() {
     };
     let db = Database::connect(&ctx.db_url).await.expect("connect");
     let tag = unique_tag();
+    let tracker = LiveCleanupTracker::default();
+    let tracker_for_body = tracker.clone();
+    let db_url_for_body = ctx.db_url.clone();
 
-    let mut cleanup: Option<(i64, i64)> = None;
-    let outcome: Result<(), String> = async {
-        let (order_id, user_id, shiprocket_live_ready) = place_and_pay_live_order(&db, tag).await?;
-        cleanup = Some((order_id, user_id));
+    let body_result = tokio::spawn(async move {
+        let body_db = Database::connect(db_url_for_body.as_str())
+            .await
+            .map_err(|error| format!("connect for live test body failed: {error}"))?;
+        let (order_id, user_id, shiprocket_live_ready) = place_and_pay_live_order(&body_db, tag).await?;
+        tracker_for_body.record_local_order(order_id, user_id)?;
         if !shiprocket_live_ready {
             print_live_skip_message(
                 "Shiprocket live AWB assignment is unavailable (wallet balance precondition)",
@@ -840,17 +1224,31 @@ async fn live_payment_success_auto_books_shiprocket_and_cleans_up() {
             return Ok(());
         }
 
-        let shipment = shipment_meta(&db, order_id).await?;
-        let intent = payment_intent_meta(&db, order_id).await?;
+        let created = capture_created_shiprocket_order(&body_db, order_id)
+            .await?
+            .ok_or_else(|| {
+                format!(
+                    "shiprocket booking was marked ready but identifiers were missing for internal_order_id={order_id}"
+                )
+            })?;
+        tracker_for_body.record_shiprocket_order(created.clone())?;
+        eprintln!(
+            "[live-cleanup-track] internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}",
+            created.internal_order_id,
+            created.shiprocket_order_id,
+            created.external_order_id,
+            created.awb_code.as_deref().unwrap_or("")
+        );
+
+        let shipment = shipment_meta(&body_db, order_id).await?;
+        let intent = payment_intent_meta(&body_db, order_id).await?;
         let shipment_id: String = shipment
             .try_get("", "shiprocket_order_id")
             .map_err(|e| e.to_string())?;
         let external_order_id: String = shipment
             .try_get("", "shiprocket_external_order_id")
             .map_err(|e| e.to_string())?;
-        let awb_code: String = shipment
-            .try_get("", "awb_code")
-            .map_err(|e| e.to_string())?;
+        let awb_code: String = shipment.try_get("", "awb_code").map_err(|e| e.to_string())?;
         let logistics_status: String = shipment
             .try_get("", "logistics_status")
             .map_err(|e| e.to_string())?;
@@ -866,22 +1264,22 @@ async fn live_payment_success_auto_books_shiprocket_and_cleans_up() {
                 .is_some_and(|value| value.starts_with("pay_")),
             "expected a real Razorpay payment id to be persisted"
         );
-        let payment_status = order_payment_status(&db, order_id).await?;
+        let payment_status = order_payment_status(&body_db, order_id).await?;
         assert_eq!(
             payment_status, "captured",
             "order payment_status must be captured after backend verify"
         );
-        let order_status = order_status_name(&db, order_id).await?;
+        let order_status = order_status_name(&body_db, order_id).await?;
         assert_eq!(
             order_status, "confirmed",
             "order should be finalized to confirmed exactly once"
         );
-        let confirmed_events = confirmed_event_count(&db, order_id).await?;
+        let confirmed_events = confirmed_event_count(&body_db, order_id).await?;
         assert_eq!(
             confirmed_events, 1,
             "payment finalization should create exactly one confirmed transition event"
         );
-        let shipment_rows = shipment_count(&db, order_id).await?;
+        let shipment_rows = shipment_count(&body_db, order_id).await?;
         assert_eq!(
             shipment_rows, 1,
             "payment verification flow should create exactly one shipment row"
@@ -893,17 +1291,12 @@ async fn live_payment_success_auto_books_shiprocket_and_cleans_up() {
                 .as_deref()
                 .unwrap_or("")
         );
-        Ok(())
-    }
+        Ok::<(), String>(())
+    })
     .await;
 
-    if let Some((order_id, user_id)) = cleanup {
-        if let Err(err) = cleanup_live_order(&db, order_id, user_id).await {
-            panic!("live cleanup failed for order {order_id}: {err}");
-        }
-    }
-    if let Err(err) = outcome {
-        panic!("{err}");
+    if let Err(error) = finalize_live_test_with_cleanup(&db, &tracker, body_result).await {
+        panic!("{error}");
     }
 }
 
@@ -919,113 +1312,158 @@ async fn live_pre_pickup_cancel_refunds_once_and_is_idempotent() {
     };
     let db = Database::connect(&ctx.db_url).await.expect("connect");
     let tag = unique_tag();
+    let tracker = LiveCleanupTracker::default();
+    let tracker_for_body = tracker.clone();
+    let db_url_for_body = ctx.db_url.clone();
 
-    let (order_id, user_id, shiprocket_live_ready) = place_and_pay_live_order(&db, tag)
-        .await
-        .expect("place and pay live order");
-    if !shiprocket_live_ready {
-        if let Err(err) = cleanup_live_order(&db, order_id, user_id).await {
-            panic!("live cleanup failed for order {order_id}: {err}");
-        }
-        print_live_skip_message(
-            "Shiprocket live AWB assignment is unavailable (wallet balance precondition)",
-        );
-        return;
-    }
-
-    let first = cleanup_live_order(&db, order_id, user_id).await;
-    if let Err(err) = first {
-        panic!("live cleanup failed for order {order_id}: {err}");
-    }
-
-    let replay = cleanup_live_order(&db, order_id, user_id).await;
-    if let Err(err) = replay {
-        panic!("live cancel replay failed for order {order_id}: {err}");
-    }
-
-    let shipment = shipment_meta(&db, order_id).await.expect("shipment");
-    let intent = payment_intent_meta(&db, order_id).await.expect("intent");
-    let final_status = order_status_name(&db, order_id)
-        .await
-        .expect("order status");
-    let final_inventory = inventory_quantity(&db, order_id)
-        .await
-        .expect("inventory quantity");
-    let refund_id: Option<String> = shipment
-        .try_get("", "razorpay_refund_id")
-        .ok()
-        .filter(|value: &String| !value.trim().is_empty());
-    let refund_status: Option<String> = shipment
-        .try_get("", "refund_status")
-        .ok()
-        .filter(|value: &String| !value.trim().is_empty());
-    assert!(
-        intent
-            .razorpay_payment_id
-            .as_deref()
-            .is_some_and(|value| value.starts_with("pay_")),
-        "expected a real Razorpay payment id to be persisted before refund"
-    );
-    assert!(matches!(final_status.as_str(), "cancelled" | "refunded"));
-    assert_eq!(
-        final_inventory, 3,
-        "inventory should be restored exactly once"
-    );
-
-    let refunds_count = {
-        let txn = db.begin().await.expect("refund count txn");
-        let count = core_db_entities::entity::refunds::Entity::find()
-            .filter(core_db_entities::entity::refunds::Column::OrderId.eq(order_id))
-            .count(&txn)
+    let body_result = tokio::spawn(async move {
+        let body_db = Database::connect(db_url_for_body.as_str())
             .await
-            .expect("count refunds");
-        txn.rollback().await.ok();
-        count
-    };
-    let refund_attempts = refund_attempt_count(&db, order_id)
-        .await
-        .expect("refund attempts");
-    let refund_attempt_status = latest_refund_attempt_status(&db, order_id)
-        .await
-        .expect("latest refund attempt status");
-    assert_eq!(
-        refund_attempts, 1,
-        "refund flow should record exactly one attempt even after replay"
-    );
-    let refund_settlement_status = order_refund_settlement_status(&db, order_id)
-        .await
-        .expect("order refund settlement status");
-    assert_eq!(
-        final_status, "cancelled",
-        "durable cancel flow should converge order status to cancelled for synthetic backend-only payment ids"
-    );
-    assert_eq!(
-        refunds_count, 0,
-        "synthetic backend-only payment id should not create a persisted gateway refund row"
-    );
-    assert!(
-        refund_id.is_none(),
-        "shipment must not persist gateway refund id when worker cannot create external refund"
-    );
-    assert!(
-        refund_status.is_none(),
-        "shipment refund status should remain empty when no gateway refund was persisted"
-    );
-    assert_eq!(
-        refund_settlement_status.as_deref(),
-        Some("refund_pending"),
-        "gateway failures should keep durable refund state retryable"
-    );
-    assert_eq!(
-        refund_attempt_status.as_deref(),
-        Some("pending_external"),
-        "latest refund attempt should stay pending_external for worker retry after gateway failure"
-    );
+            .map_err(|error| format!("connect for live test body failed: {error}"))?;
+        let (order_id, user_id, shiprocket_live_ready) = place_and_pay_live_order(&body_db, tag)
+            .await
+            .map_err(|error| format!("place and pay live order failed: {error}"))?;
+        tracker_for_body.record_local_order(order_id, user_id)?;
+        if !shiprocket_live_ready {
+            print_live_skip_message(
+                "Shiprocket live AWB assignment is unavailable (wallet balance precondition)",
+            );
+            return Ok(());
+        }
 
-    eprintln!(
-        "[live-verify] after_cancel_duplicate_retry internal_order_id={order_id} razorpay_refund_id={} refund_status={} final_order_status={final_status} inventory_quantity_available={final_inventory} refunds_table_rows={refunds_count} refund_attempt_rows={refund_attempts} refund_settlement_status={}",
-        refund_id.as_deref().unwrap_or(""),
-        refund_status.as_deref().unwrap_or(""),
-        refund_settlement_status.as_deref().unwrap_or("")
+        let created = capture_created_shiprocket_order(&body_db, order_id)
+            .await?
+            .ok_or_else(|| {
+                format!(
+                    "shiprocket booking was marked ready but identifiers were missing for internal_order_id={order_id}"
+                )
+            })?;
+        tracker_for_body.record_shiprocket_order(created.clone())?;
+        eprintln!(
+            "[live-cleanup-track] internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}",
+            created.internal_order_id,
+            created.shiprocket_order_id,
+            created.external_order_id,
+            created.awb_code.as_deref().unwrap_or("")
+        );
+
+        cleanup_live_order(&body_db, order_id, user_id)
+            .await
+            .map_err(|error| format!("live cleanup failed for order {order_id}: {error}"))?;
+        cleanup_live_order(&body_db, order_id, user_id)
+            .await
+            .map_err(|error| format!("live cancel replay failed for order {order_id}: {error}"))?;
+
+        let shipment = shipment_meta(&body_db, order_id).await?;
+        let intent = payment_intent_meta(&body_db, order_id).await?;
+        let final_status = order_status_name(&body_db, order_id).await?;
+        let final_inventory = inventory_quantity(&body_db, order_id).await?;
+        let refund_id: Option<String> = shipment
+            .try_get("", "razorpay_refund_id")
+            .ok()
+            .filter(|value: &String| !value.trim().is_empty());
+        let refund_status: Option<String> = shipment
+            .try_get("", "refund_status")
+            .ok()
+            .filter(|value: &String| !value.trim().is_empty());
+        assert!(
+            intent
+                .razorpay_payment_id
+                .as_deref()
+                .is_some_and(|value| value.starts_with("pay_")),
+            "expected a real Razorpay payment id to be persisted before refund"
+        );
+        assert!(matches!(final_status.as_str(), "cancelled" | "refunded"));
+        assert_eq!(
+            final_inventory, 3,
+            "inventory should be restored exactly once"
+        );
+
+        let refunds_count = {
+            let txn = body_db.begin().await.map_err(|e| e.to_string())?;
+            let count = core_db_entities::entity::refunds::Entity::find()
+                .filter(core_db_entities::entity::refunds::Column::OrderId.eq(order_id))
+                .count(&txn)
+                .await
+                .map_err(|e| e.to_string())?;
+            txn.rollback().await.ok();
+            count
+        };
+        let refund_attempts = refund_attempt_count(&body_db, order_id).await?;
+        let refund_attempt_status = latest_refund_attempt_status(&body_db, order_id).await?;
+        assert_eq!(
+            refund_attempts, 1,
+            "refund flow should record exactly one attempt even after replay"
+        );
+        let refund_settlement_status =
+            order_refund_settlement_status(&body_db, order_id).await?;
+        assert_eq!(
+            final_status, "cancelled",
+            "durable cancel flow should converge order status to cancelled for synthetic backend-only payment ids"
+        );
+        assert_eq!(
+            refunds_count, 0,
+            "synthetic backend-only payment id should not create a persisted gateway refund row"
+        );
+        assert!(
+            refund_id.is_none(),
+            "shipment must not persist gateway refund id when worker cannot create external refund"
+        );
+        assert!(
+            refund_status.is_none(),
+            "shipment refund status should remain empty when no gateway refund was persisted"
+        );
+        assert_eq!(
+            refund_settlement_status.as_deref(),
+            Some("refund_pending"),
+            "gateway failures should keep durable refund state retryable"
+        );
+        assert_eq!(
+            refund_attempt_status.as_deref(),
+            Some("pending_external"),
+            "latest refund attempt should stay pending_external for worker retry after gateway failure"
+        );
+
+        eprintln!(
+            "[live-verify] after_cancel_duplicate_retry internal_order_id={order_id} razorpay_refund_id={} refund_status={} final_order_status={final_status} inventory_quantity_available={final_inventory} refunds_table_rows={refunds_count} refund_attempt_rows={refund_attempts} refund_settlement_status={}",
+            refund_id.as_deref().unwrap_or(""),
+            refund_status.as_deref().unwrap_or(""),
+            refund_settlement_status.as_deref().unwrap_or("")
+        );
+        Ok::<(), String>(())
+    })
+    .await;
+
+    if let Err(error) = finalize_live_test_with_cleanup(&db, &tracker, body_result).await {
+        panic!("{error}");
+    }
+}
+
+#[tokio::test]
+async fn integration_live_cleanup_finally_runs_when_body_panics() {
+    let cleanup_ran = Arc::new(AtomicBool::new(false));
+    let cleanup_ran_for_cleanup = cleanup_ran.clone();
+
+    let body_result = tokio::spawn(async move {
+        let should_panic = std::env::var("CODEx_LIVE_TEST_PANIC_PROBE")
+            .ok()
+            .as_deref()
+            != Some("0");
+        if should_panic {
+            panic!("intentional panic to validate finally-style cleanup path");
+        }
+        Ok::<(), String>(())
+    })
+    .await;
+
+    cleanup_ran_for_cleanup.store(true, Ordering::SeqCst);
+
+    assert!(
+        body_result.is_err(),
+        "spawned live-test body should report panic through JoinError"
+    );
+    assert!(
+        cleanup_ran.load(Ordering::SeqCst),
+        "finally cleanup path must run even when body panics"
     );
 }
