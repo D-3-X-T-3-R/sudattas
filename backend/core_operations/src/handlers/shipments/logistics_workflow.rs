@@ -2,13 +2,16 @@ use crate::cancellation_saga;
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::orders::update_order;
-use crate::integrations::shiprocket::{self, ShiprocketBooking};
+use crate::integrations::shiprocket;
 use crate::money::paise_to_decimal;
 use crate::order_state_machine;
 use chrono::{DateTime, Utc};
 use core_db_entities::entity::orders;
 use proto::proto::core::{CreateOrderEventRequest, UpdateOrderRequest};
-use sea_orm::{ConnectionTrait, DatabaseTransaction, DbBackend, EntityTrait, Statement};
+use sea_orm::{
+    ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbBackend, EntityTrait, Statement,
+    TransactionTrait,
+};
 use serde_json::Value;
 use tonic::{Request, Status as TonicStatus};
 use tracing::{info, warn};
@@ -19,6 +22,7 @@ pub struct ShipmentLogisticsRecord {
     pub order_id: i64,
     pub shiprocket_order_id: Option<String>,
     pub shiprocket_external_order_id: Option<String>,
+    pub shipment_status: Option<String>,
     pub awb_code: Option<String>,
     pub carrier: Option<String>,
     pub selected_courier_id: Option<i64>,
@@ -51,7 +55,7 @@ fn bool_to_i32(value: bool) -> i32 {
 fn shipment_cancel_allowed_for_status(logistics_status: Option<&str>) -> bool {
     matches!(
         logistics_status.unwrap_or("quote_selected"),
-        "quote_selected" | "ready_to_ship" | "pickup_scheduled"
+        "quote_selected" | "ready_to_ship" | "pickup_scheduled" | "booked"
     )
 }
 
@@ -116,6 +120,68 @@ fn parse_bool_like(row: &sea_orm::QueryResult, column: &str) -> bool {
 
 fn cod_status_allows_booking(status_name: &str) -> bool {
     matches!(status_name, "confirmed" | "partially_cancelled")
+}
+
+fn shipment_is_fully_booked(shipment: &ShipmentLogisticsRecord) -> bool {
+    shipment.awb_code.is_some() && shipment.shiprocket_order_id.is_some()
+}
+
+async fn upsert_booking_intent(
+    txn: &DatabaseTransaction,
+    order_id: i64,
+) -> Result<i64, TonicStatus> {
+    if let Some(existing) = load_shipment_for_order(txn, order_id, true).await? {
+        if shipment_is_fully_booked(&existing) {
+            return Err(TonicStatus::failed_precondition(
+                "Shipment already created for this order",
+            ));
+        }
+        txn.execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            r#"UPDATE Shipments
+               SET logistics_status = 'booking_pending',
+                   shipment_status = 'pending',
+                   can_customer_cancel = 1
+               WHERE shipment_id = ?"#,
+            [existing.shipment_id.into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?;
+        return Ok(existing.shipment_id);
+    }
+
+    let insert_result = txn
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            r#"INSERT INTO Shipments (
+                   order_id,
+                   shiprocket_order_id,
+                   shiprocket_external_order_id,
+                   awb_code,
+                   carrier,
+                   selected_courier_id,
+                   selected_courier_name,
+                   quoted_shipping_cost,
+                   quoted_shipping_quote_payload,
+                   shiprocket_status_id,
+                   shiprocket_status_label,
+                   shipment_status,
+                   tracking_events,
+                   created_at,
+                   delivered_at,
+                   pickup_scheduled_for,
+                   logistics_status,
+                   can_customer_cancel,
+                   razorpay_refund_id,
+                   refund_status,
+                   refund_initiated_at
+               ) VALUES (?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'pending', NULL, UTC_TIMESTAMP(), NULL, NULL, 'booking_pending', 1, NULL, NULL, NULL)"#,
+            [order_id.into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?;
+    i64::try_from(insert_result.last_insert_id())
+        .map_err(|_| TonicStatus::internal("shipment id overflow"))
 }
 
 pub async fn validate_order_can_be_booked(
@@ -234,13 +300,12 @@ pub async fn validate_order_can_be_booked(
         ));
     }
 
-    if load_shipment_for_order(txn, order_id, for_update)
-        .await?
-        .is_some()
-    {
-        return Err(TonicStatus::failed_precondition(
-            "Shipment already created for this order",
-        ));
+    if let Some(existing) = load_shipment_for_order(txn, order_id, for_update).await? {
+        if shipment_is_fully_booked(&existing) {
+            return Err(TonicStatus::failed_precondition(
+                "Shipment already created for this order",
+            ));
+        }
     }
 
     Ok(BookingValidation {
@@ -420,6 +485,7 @@ pub async fn load_shipment_for_order(
                   order_id,
                   shiprocket_order_id,
                   shiprocket_external_order_id,
+                  shipment_status,
                   awb_code,
                   carrier,
                   selected_courier_id,
@@ -440,6 +506,7 @@ pub async fn load_shipment_for_order(
                   order_id,
                   shiprocket_order_id,
                   shiprocket_external_order_id,
+                  shipment_status,
                   awb_code,
                   carrier,
                   selected_courier_id,
@@ -474,6 +541,7 @@ pub async fn load_shipment_for_order(
             .map_err(map_db_error_to_status)?,
         shiprocket_order_id: row.try_get("", "shiprocket_order_id").ok(),
         shiprocket_external_order_id: row.try_get("", "shiprocket_external_order_id").ok(),
+        shipment_status: row.try_get("", "shipment_status").ok(),
         awb_code: row.try_get("", "awb_code").ok(),
         carrier: row.try_get("", "carrier").ok(),
         selected_courier_id: row.try_get("", "selected_courier_id").ok(),
@@ -495,49 +563,83 @@ pub async fn ensure_shiprocket_booking_for_paid_order(
     txn: &DatabaseTransaction,
     order_id: i64,
 ) -> Result<(), TonicStatus> {
-    let Some(shipment) = load_shipment_for_order(txn, order_id, true).await? else {
-        return Ok(());
-    };
-    if shipment.awb_code.is_some() && shipment.shiprocket_order_id.is_some() {
-        return Ok(());
-    }
-
-    let booking = match shiprocket::book_shipment_for_order_with_preferred_courier(
-        txn,
-        order_id,
-        shipment.selected_courier_id,
-    )
-    .await
-    {
-        Ok(booking) => booking,
-        Err(error) => {
-            warn!(order_id, error = %error, "automatic Shiprocket booking failed");
-            crate::observability::record_shiprocket_booking_failure_total("provider_error");
-            let message = error.to_string();
-            txn.execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                "UPDATE Shipments SET logistics_status = 'booking_failed' WHERE shipment_id = ?",
-                [shipment.shipment_id.into()],
-            ))
-            .await
-            .map_err(map_db_error_to_status)?;
-            let _ = create_order_event(
-                txn,
-                Request::new(CreateOrderEventRequest {
-                    order_id,
-                    event_type: "shipment_booking_failed".to_string(),
-                    from_status: None,
-                    to_status: None,
-                    actor_type: "system".to_string(),
-                    message: Some(message),
-                }),
-            )
-            .await;
+    validate_order_can_be_booked(txn, order_id, Utc::now(), true).await?;
+    if let Some(existing) = load_shipment_for_order(txn, order_id, true).await? {
+        if shipment_is_fully_booked(&existing) {
             return Ok(());
         }
+    }
+    upsert_booking_intent(txn, order_id).await?;
+    Ok(())
+}
+
+pub async fn process_booking_intent(
+    db: &DatabaseConnection,
+    order_id: i64,
+) -> Result<bool, TonicStatus> {
+    let prep_txn = db.begin().await.map_err(map_db_error_to_status)?;
+    let existing_shipment = load_shipment_for_order(&prep_txn, order_id, true).await?;
+    if let Some(existing) = existing_shipment.as_ref() {
+        if shipment_is_fully_booked(existing) {
+            if existing.logistics_status.as_deref() != Some("booked") {
+                prep_txn
+                    .execute(Statement::from_sql_and_values(
+                        DbBackend::MySql,
+                        "UPDATE Orders SET fulfillment_status = 'booked', updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
+                        [order_id.into()],
+                    ))
+                    .await
+                    .map_err(map_db_error_to_status)?;
+                prep_txn
+                    .execute(Statement::from_sql_and_values(
+                        DbBackend::MySql,
+                        "UPDATE Shipments SET logistics_status = 'booked', can_customer_cancel = ? WHERE shipment_id = ?",
+                        [
+                            bool_to_i32(shipment_cancel_allowed_for_status(Some("booked"))).into(),
+                            existing.shipment_id.into(),
+                        ],
+                    ))
+                    .await
+                    .map_err(map_db_error_to_status)?;
+                prep_txn.commit().await.map_err(map_db_error_to_status)?;
+                return Ok(true);
+            }
+            prep_txn.commit().await.map_err(map_db_error_to_status)?;
+            return Ok(false);
+        }
+    }
+
+    let validation = validate_order_can_be_booked(&prep_txn, order_id, Utc::now(), true).await?;
+    if validation.payment_method.eq_ignore_ascii_case("cod") {
+        recompute_cod_payable_before_booking(&prep_txn, order_id).await?;
+    }
+
+    let shipment = if let Some(existing) = existing_shipment {
+        existing
+    } else {
+        let shipment_id = upsert_booking_intent(&prep_txn, order_id).await?;
+        load_shipment_for_order(&prep_txn, order_id, true)
+            .await?
+            .ok_or_else(|| {
+                TonicStatus::internal(format!(
+                    "Booking intent inserted for order {} but shipment {} missing",
+                    order_id, shipment_id
+                ))
+            })?
     };
 
-    let pickup_row = txn
+    prep_txn
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            r#"UPDATE Shipments
+               SET logistics_status = 'booking_in_progress'
+               WHERE shipment_id = ?"#,
+            [shipment.shipment_id.into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?;
+
+    let pickup_row = prep_txn
         .query_one(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"SELECT COALESCE(pickup_target_at, DATE_ADD(created_at, INTERVAL ? HOUR)) AS pickup_target_at
@@ -555,125 +657,222 @@ pub async fn ensure_shiprocket_booking_for_paid_order(
     let pickup_at: DateTime<Utc> = pickup_row
         .try_get("", "pickup_target_at")
         .map_err(|e| TonicStatus::internal(e.to_string()))?;
-    if let Err(error) =
-        shiprocket::schedule_pickup_for_shipment(booking.shiprocket_shipment_id.as_str(), pickup_at)
-            .await
-    {
-        warn!(order_id, error = %error, "Shiprocket pickup scheduling failed");
-        crate::observability::record_shiprocket_booking_failure_total("pickup_schedule_failed");
-        txn.execute(Statement::from_sql_and_values(
-            DbBackend::MySql,
-            r#"UPDATE Shipments
-               SET shiprocket_order_id = ?,
-                   shiprocket_external_order_id = ?,
-                   awb_code = ?,
-                   carrier = ?,
-                   shiprocket_status_id = ?,
-                   shiprocket_status_label = ?,
-                   shipment_status = 'awb_assigned',
-                   logistics_status = 'ready_to_ship',
-                   can_customer_cancel = 1
-               WHERE shipment_id = ?"#,
-            [
-                booking.shiprocket_shipment_id.clone().into(),
-                booking
-                    .shiprocket_order_id
-                    .clone()
-                    .unwrap_or_default()
-                    .into(),
-                booking.awb_code.clone().into(),
-                booking.courier_name.clone().into(),
-                booking.shiprocket_status_id.unwrap_or(3).into(),
-                booking
-                    .shiprocket_status_label
-                    .clone()
-                    .unwrap_or_else(|| "AWB Assigned".to_string())
-                    .into(),
-                shipment.shipment_id.into(),
-            ],
-        ))
-        .await
-        .map_err(map_db_error_to_status)?;
-        return Ok(());
-    }
 
-    let public_order_ref_for_log = orders::Entity::find_by_id(order_id)
-        .one(txn)
-        .await
-        .map_err(map_db_error_to_status)?
-        .map(|o| o.public_order_ref)
-        .unwrap_or_default();
+    let preferred_courier_id = shipment.selected_courier_id;
+    prep_txn.commit().await.map_err(map_db_error_to_status)?;
 
-    crate::observability::log_operational_event(
-        "shipment_booked",
-        &[
-            ("order_id", order_id.to_string()),
-            ("public_order_ref", public_order_ref_for_log),
-            (
-                "shiprocket_shipment_id",
-                booking.shiprocket_shipment_id.clone(),
-            ),
-            (
-                "shiprocket_order_id",
-                booking.shiprocket_order_id.clone().unwrap_or_default(),
-            ),
-            (
-                "courier",
-                if booking.courier_name.trim().is_empty() {
-                    "unknown".to_string()
-                } else {
-                    booking.courier_name.clone()
-                },
-            ),
-            ("awb_code", booking.awb_code.clone()),
-            ("pickup_scheduled_for", pickup_at.to_rfc3339()),
-        ],
-    );
-    persist_successful_booking(txn, shipment.shipment_id, &booking, pickup_at).await
-}
-
-async fn persist_successful_booking(
-    txn: &DatabaseTransaction,
-    shipment_id: i64,
-    booking: &ShiprocketBooking,
-    pickup_at: DateTime<Utc>,
-) -> Result<(), TonicStatus> {
-    txn.execute(Statement::from_sql_and_values(
-        DbBackend::MySql,
-        r#"UPDATE Shipments
-           SET shiprocket_order_id = ?,
-               shiprocket_external_order_id = ?,
-               awb_code = ?,
-               carrier = ?,
-               shiprocket_status_id = ?,
-               shiprocket_status_label = ?,
-               shipment_status = 'pickup_scheduled',
-               pickup_scheduled_for = ?,
-               logistics_status = 'pickup_scheduled',
-               can_customer_cancel = 1
-           WHERE shipment_id = ?"#,
-        [
-            booking.shiprocket_shipment_id.clone().into(),
-            booking
-                .shiprocket_order_id
-                .clone()
-                .unwrap_or_default()
-                .into(),
-            booking.awb_code.clone().into(),
-            booking.courier_name.clone().into(),
-            booking.shiprocket_status_id.unwrap_or(4).into(),
-            booking
-                .shiprocket_status_label
-                .clone()
-                .unwrap_or_else(|| "Pickup Scheduled".to_string())
-                .into(),
-            pickup_at.into(),
-            shipment_id.into(),
-        ],
-    ))
+    let booking = match shiprocket::book_shipment_for_order_with_preferred_courier(
+        db,
+        order_id,
+        preferred_courier_id,
+    )
     .await
-    .map_err(map_db_error_to_status)?;
-    Ok(())
+    {
+        Ok(booking) => booking,
+        Err(error) => {
+            warn!(
+                order_id,
+                error = %error,
+                "Shiprocket booking call failed for queued booking intent"
+            );
+            crate::observability::record_shiprocket_booking_failure_total("provider_error");
+            let fail_txn = db.begin().await.map_err(map_db_error_to_status)?;
+            fail_txn
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    r#"UPDATE Shipments
+                       SET logistics_status = 'booking_failed'
+                       WHERE order_id = ?
+                         AND shiprocket_order_id IS NULL
+                         AND awb_code IS NULL"#,
+                    [order_id.into()],
+                ))
+                .await
+                .map_err(map_db_error_to_status)?;
+            let _ = create_order_event(
+                &fail_txn,
+                Request::new(CreateOrderEventRequest {
+                    order_id,
+                    event_type: "shipment_booking_failed".to_string(),
+                    from_status: None,
+                    to_status: None,
+                    actor_type: "system".to_string(),
+                    message: Some(error.to_string()),
+                }),
+            )
+            .await;
+            fail_txn.commit().await.map_err(map_db_error_to_status)?;
+            return Ok(false);
+        }
+    };
+
+    let (shipment_status, logistics_status, pickup_for_db) =
+        match shiprocket::schedule_pickup_for_shipment(
+            booking.shiprocket_shipment_id.as_str(),
+            pickup_at,
+        )
+        .await
+        {
+            Ok(_) => ("pickup_scheduled", "booked", Some(pickup_at)),
+            Err(error) => {
+                warn!(
+                    order_id,
+                    error = %error,
+                    pickup_target_at = %pickup_at,
+                    "pickup scheduling failed after shipment booking; keeping shipment in booked state"
+                );
+                ("awb_assigned", "booked", None)
+            }
+        };
+    let can_customer_cancel = shipment_cancel_allowed_for_status(Some(logistics_status));
+
+    let persist_txn = db.begin().await.map_err(map_db_error_to_status)?;
+    let persist_result: Result<(), TonicStatus> = async {
+        let latest = load_shipment_for_order(&persist_txn, order_id, true).await?;
+        let Some(latest_shipment) = latest else {
+            return Ok(());
+        };
+        if shipment_is_fully_booked(&latest_shipment) {
+            return Ok(());
+        }
+
+        persist_txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE Shipments
+                   SET shiprocket_order_id = ?,
+                       shiprocket_external_order_id = ?,
+                       awb_code = ?,
+                       carrier = ?,
+                       shiprocket_status_id = ?,
+                       shiprocket_status_label = ?,
+                        shipment_status = ?,
+                        pickup_scheduled_for = ?,
+                        logistics_status = ?,
+                        can_customer_cancel = ?
+                    WHERE shipment_id = ?"#,
+                [
+                    booking.shiprocket_shipment_id.clone().into(),
+                    booking
+                        .shiprocket_order_id
+                        .clone()
+                        .unwrap_or_default()
+                        .into(),
+                    booking.awb_code.clone().into(),
+                    booking.courier_name.clone().into(),
+                    booking.shiprocket_status_id.unwrap_or(3).into(),
+                    booking
+                        .shiprocket_status_label
+                        .clone()
+                        .unwrap_or_else(|| "Booked".to_string())
+                        .into(),
+                    shipment_status.into(),
+                    pickup_for_db.into(),
+                    logistics_status.into(),
+                    bool_to_i32(can_customer_cancel).into(),
+                    latest_shipment.shipment_id.into(),
+                ],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+
+        persist_txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "UPDATE Orders SET fulfillment_status = 'booked', updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
+                [order_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+
+        let public_order_ref_for_log = orders::Entity::find_by_id(order_id)
+            .one(&persist_txn)
+            .await
+            .map_err(map_db_error_to_status)?
+            .map(|o| o.public_order_ref)
+            .unwrap_or_default();
+        crate::observability::log_operational_event(
+            "shipment_booked",
+            &[
+                ("order_id", order_id.to_string()),
+                ("public_order_ref", public_order_ref_for_log),
+                (
+                    "shiprocket_shipment_id",
+                    booking.shiprocket_shipment_id.clone(),
+                ),
+                (
+                    "shiprocket_order_id",
+                    booking.shiprocket_order_id.clone().unwrap_or_default(),
+                ),
+                (
+                    "courier",
+                    if booking.courier_name.trim().is_empty() {
+                        "unknown".to_string()
+                    } else {
+                        booking.courier_name.clone()
+                    },
+                ),
+                ("awb_code", booking.awb_code.clone()),
+                ("pickup_scheduled_for", pickup_at.to_rfc3339()),
+            ],
+        );
+        Ok(())
+    }
+    .await;
+
+    match persist_result {
+        Ok(()) => {
+            persist_txn.commit().await.map_err(map_db_error_to_status)?;
+            Ok(true)
+        }
+        Err(err) => {
+            persist_txn.rollback().await.ok();
+            let fallback_txn = db.begin().await.map_err(map_db_error_to_status)?;
+            fallback_txn
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    r#"UPDATE Shipments
+                       SET shiprocket_order_id = ?,
+                           shiprocket_external_order_id = ?,
+                           awb_code = ?,
+                           carrier = ?,
+                           shiprocket_status_id = ?,
+                           shiprocket_status_label = ?,
+                           shipment_status = ?,
+                           pickup_scheduled_for = ?,
+                           logistics_status = 'booking_persist_pending',
+                            can_customer_cancel = ?
+                        WHERE order_id = ?"#,
+                    [
+                        booking.shiprocket_shipment_id.clone().into(),
+                        booking
+                            .shiprocket_order_id
+                            .clone()
+                            .unwrap_or_default()
+                            .into(),
+                        booking.awb_code.clone().into(),
+                        booking.courier_name.clone().into(),
+                        booking.shiprocket_status_id.unwrap_or(3).into(),
+                        booking
+                            .shiprocket_status_label
+                            .clone()
+                            .unwrap_or_else(|| "Booked".to_string())
+                            .into(),
+                        shipment_status.into(),
+                        pickup_for_db.into(),
+                        bool_to_i32(can_customer_cancel).into(),
+                        order_id.into(),
+                    ],
+                ))
+                .await
+                .map_err(map_db_error_to_status)?;
+            fallback_txn
+                .commit()
+                .await
+                .map_err(map_db_error_to_status)?;
+            Err(err)
+        }
+    }
 }
 
 pub async fn update_cancelability_from_webhook(
@@ -737,24 +936,17 @@ pub async fn cancel_order_via_logistics(
             TonicStatus::failed_precondition("Order has no Shiprocket identifier to cancel")
         })?;
 
-    if let Err(error) = shiprocket::cancel_shiprocket_order(cancel_ref).await {
-        warn!(order_id, error = %error, "Shiprocket cancellation failed");
-        crate::observability::record_shiprocket_cancel_failure_total("provider_error");
-        move_order_to_cancel_pending_logistics(txn, order_id).await?;
-        txn.execute(Statement::from_sql_and_values(
-            DbBackend::MySql,
-            r#"UPDATE Shipments
-               SET logistics_status = 'cancel_pending_logistics',
-                   can_customer_cancel = 1
-               WHERE shipment_id = ?"#,
-            [shipment.shipment_id.into()],
-        ))
-        .await
-        .map_err(map_db_error_to_status)?;
-        return Err(TonicStatus::unavailable(
-            "Shipment cancellation is pending with the logistics partner; retry will continue automatically",
-        ));
-    }
+    move_order_to_cancel_pending_logistics(txn, order_id).await?;
+    txn.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        r#"UPDATE Shipments
+           SET logistics_status = 'cancel_pending_logistics',
+               can_customer_cancel = 1
+           WHERE shipment_id = ?"#,
+        [shipment.shipment_id.into()],
+    ))
+    .await
+    .map_err(map_db_error_to_status)?;
 
     crate::observability::log_operational_event(
         "cancellation_initiated",
@@ -764,28 +956,9 @@ pub async fn cancel_order_via_logistics(
         ],
     );
 
-    txn.execute(Statement::from_sql_and_values(
-        DbBackend::MySql,
-        r#"UPDATE Shipments
-           SET logistics_status = 'cancelled',
-               can_customer_cancel = 0,
-               shipment_status = 'cancelled',
-               shiprocket_status_label = COALESCE(shiprocket_status_label, 'Cancelled')
-           WHERE shipment_id = ?"#,
-        [shipment.shipment_id.into()],
+    Err(TonicStatus::unavailable(
+        "Shipment cancellation is pending with the logistics partner; retry will continue automatically",
     ))
-    .await
-    .map_err(map_db_error_to_status)?;
-
-    let order = ensure_local_order_cancelled(txn, order_id)
-        .await?
-        .into_inner()
-        .items
-        .into_iter()
-        .next();
-
-    cancellation_saga::run_order_settlement(txn, order_id).await?;
-    Ok(order)
 }
 
 pub async fn book_order_after_validation(
@@ -800,103 +973,14 @@ pub async fn book_order_after_validation(
         recompute_cod_payable_before_booking(txn, order_id).await?;
     }
 
-    let booking = shiprocket::book_shipment_for_order(txn, order_id)
-        .await
-        .map_err(|error| {
-            warn!(
-                order_id,
-                error = %error,
-                "shipment booking failed during validated booking path"
-            );
-            TonicStatus::unavailable(error.to_string())
-        })?;
-
-    let pickup_at = validation.pickup_target_at;
-    let (shipment_status, logistics_status, pickup_for_db) =
-        match shiprocket::schedule_pickup_for_shipment(
-            booking.shiprocket_shipment_id.as_str(),
-            pickup_at,
-        )
-        .await
-        {
-            Ok(_) => ("pickup_scheduled", "booked", Some(pickup_at)),
-            Err(error) => {
-                warn!(
-                    order_id,
-                    error = %error,
-                    pickup_target_at = %pickup_at,
-                    "pickup scheduling failed after shipment booking; keeping shipment in booked state"
-                );
-                ("awb_assigned", "booked", None)
-            }
-        };
-
-    let insert_result = txn
-        .execute(Statement::from_sql_and_values(
-            DbBackend::MySql,
-            r#"INSERT INTO Shipments (
-                   order_id,
-                   shiprocket_order_id,
-                   shiprocket_external_order_id,
-                   awb_code,
-                   carrier,
-                   selected_courier_id,
-                   selected_courier_name,
-                   quoted_shipping_cost,
-                   quoted_shipping_quote_payload,
-                   shiprocket_status_id,
-                   shiprocket_status_label,
-                   shipment_status,
-                   tracking_events,
-                   created_at,
-                   delivered_at,
-                   pickup_scheduled_for,
-                   logistics_status,
-                   can_customer_cancel,
-                   razorpay_refund_id,
-                   refund_status,
-                   refund_initiated_at
-               ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, NULL, UTC_TIMESTAMP(), NULL, ?, ?, 0, NULL, NULL, NULL)"#,
-            [
-                order_id.into(),
-                booking.shiprocket_shipment_id.clone().into(),
-                booking.shiprocket_order_id.clone().unwrap_or_default().into(),
-                booking.awb_code.clone().into(),
-                booking.courier_name.clone().into(),
-                booking.shiprocket_status_id.unwrap_or(3).into(),
-                booking
-                    .shiprocket_status_label
-                    .clone()
-                    .unwrap_or_else(|| "Booked".to_string())
-                    .into(),
-                shipment_status.into(),
-                pickup_for_db.into(),
-                logistics_status.into(),
-            ],
-        ))
-        .await
-        .map_err(map_db_error_to_status)?;
-    let shipment_id = i64::try_from(insert_result.last_insert_id())
-        .map_err(|_| TonicStatus::internal("shipment id overflow"))?;
-
-    txn.execute(Statement::from_sql_and_values(
-        DbBackend::MySql,
-        "UPDATE Orders SET fulfillment_status = 'booked', updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
-        [order_id.into()],
-    ))
-    .await
-    .map_err(map_db_error_to_status)?;
+    let shipment_id = upsert_booking_intent(txn, order_id).await?;
 
     crate::observability::log_operational_event(
         event_name,
         &[
             ("order_id", order_id.to_string()),
-            (
-                "shiprocket_shipment_id",
-                booking.shiprocket_shipment_id.clone(),
-            ),
-            ("awb_code", booking.awb_code.clone()),
-            ("pickup_target_at", pickup_at.to_rfc3339()),
+            ("shipment_id", shipment_id.to_string()),
+            ("pickup_target_at", validation.pickup_target_at.to_rfc3339()),
             (
                 "booking_opened_at",
                 validation.earliest_booking_at.to_rfc3339(),
@@ -905,8 +989,8 @@ pub async fn book_order_after_validation(
         ],
     );
     info!(
-        order_id,
-        shipment_id, "validated shipment booking completed"
+        order_id, shipment_id,
+        "validated shipment booking intent persisted; external booking deferred until post-commit worker"
     );
 
     Ok(shipment_id)
@@ -949,26 +1033,6 @@ pub async fn create_shipments_after_cancel_window_batch(
     let mut processed = 0_u64;
     for row in rows {
         let order_id: i64 = row.try_get("", "OrderID").map_err(map_db_error_to_status)?;
-
-        if let Some(existing) = load_shipment_for_order(txn, order_id, true).await? {
-            txn.execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                "UPDATE Orders SET fulfillment_status = 'booked', updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
-                [order_id.into()],
-            ))
-            .await
-            .map_err(map_db_error_to_status)?;
-            txn.execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                "UPDATE Shipments SET can_customer_cancel = 0 WHERE shipment_id = ?",
-                [existing.shipment_id.into()],
-            ))
-            .await
-            .map_err(map_db_error_to_status)?;
-            processed += 1;
-            continue;
-        }
-
         match book_order_after_validation(
             txn,
             order_id,
@@ -990,10 +1054,78 @@ pub async fn create_shipments_after_cancel_window_batch(
     Ok(processed)
 }
 
-pub async fn retry_cancel_pending_logistics_batch(
-    txn: &DatabaseTransaction,
+pub async fn process_booking_intents_batch(
+    db: &DatabaseConnection,
     batch_limit: u64,
 ) -> Result<u64, TonicStatus> {
+    let claim_txn = db.begin().await.map_err(map_db_error_to_status)?;
+    let rows = claim_txn
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            r#"SELECT order_id
+               FROM Shipments
+               WHERE logistics_status IN (
+                       'booking_pending',
+                       'booking_failed',
+                       'booking_claimed',
+                       'booking_persist_pending'
+                    )
+               ORDER BY shipment_id ASC
+               LIMIT ?
+               FOR UPDATE SKIP LOCKED"#,
+            [i64::try_from(batch_limit).unwrap_or(i64::MAX).into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?;
+
+    let mut order_ids = Vec::with_capacity(rows.len());
+    for row in rows {
+        let order_id = row
+            .try_get::<i64>("", "order_id")
+            .map_err(map_db_error_to_status)?;
+        let claim = claim_txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE Shipments
+                   SET logistics_status = 'booking_claimed'
+                   WHERE order_id = ?
+                     AND logistics_status IN (
+                         'booking_pending',
+                         'booking_failed',
+                         'booking_claimed',
+                         'booking_persist_pending'
+                     )"#,
+                [order_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+        if claim.rows_affected() > 0 {
+            order_ids.push(order_id);
+        }
+    }
+    claim_txn.commit().await.map_err(map_db_error_to_status)?;
+
+    let mut processed = 0_u64;
+    for order_id in order_ids {
+        match process_booking_intent(db, order_id).await {
+            Ok(true) => processed += 1,
+            Ok(false) => {}
+            Err(error) => {
+                warn!(
+                    order_id,
+                    error = %error,
+                    "queued shipment booking failed; will retry on next worker tick"
+                );
+            }
+        }
+    }
+    Ok(processed)
+}
+
+async fn claim_cancel_pending_logistics_order_ids(
+    txn: &DatabaseTransaction,
+    batch_limit: u64,
+) -> Result<Vec<i64>, TonicStatus> {
     let rows = txn
         .query_all(Statement::from_sql_and_values(
             DbBackend::MySql,
@@ -1009,11 +1141,168 @@ pub async fn retry_cancel_pending_logistics_batch(
         .await
         .map_err(map_db_error_to_status)?;
 
-    let mut processed = 0_u64;
+    let mut order_ids = Vec::with_capacity(rows.len());
     for row in rows {
         let order_id: i64 = row.try_get("", "OrderID").map_err(map_db_error_to_status)?;
-        match cancel_order_via_logistics(txn, order_id, None).await {
-            Ok(_) => processed += 1,
+        let claim = txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE Shipments
+                   SET logistics_status = 'cancel_claimed'
+                   WHERE order_id = ?
+                     AND logistics_status IN (
+                         'cancel_pending_logistics',
+                         'cancel_claimed',
+                         'cancel_in_progress',
+                         'cancel_persist_pending'
+                     )"#,
+                [order_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+        if claim.rows_affected() > 0 {
+            order_ids.push(order_id);
+        }
+    }
+    Ok(order_ids)
+}
+
+pub async fn process_cancel_pending_logistics_order(
+    db: &DatabaseConnection,
+    order_id: i64,
+) -> Result<bool, TonicStatus> {
+    let prep_txn = db.begin().await.map_err(map_db_error_to_status)?;
+    let Some(shipment) = load_shipment_for_order(&prep_txn, order_id, true).await? else {
+        prep_txn.rollback().await.ok();
+        return Ok(false);
+    };
+    if shipment.logistics_status.as_deref() == Some("cancelled") {
+        prep_txn.commit().await.map_err(map_db_error_to_status)?;
+        return Ok(false);
+    }
+    let cancel_ref = shipment
+        .shiprocket_external_order_id
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .or(shipment.shiprocket_order_id.as_deref())
+        .ok_or_else(|| {
+            TonicStatus::failed_precondition("Order has no Shiprocket identifier to cancel")
+        })?
+        .to_string();
+
+    let external_cancel_already_succeeded = shipment.logistics_status.as_deref()
+        == Some("cancel_persist_pending")
+        || shipment
+            .shipment_status
+            .as_deref()
+            .is_some_and(|s| s.eq_ignore_ascii_case("cancelled"));
+
+    if !external_cancel_already_succeeded {
+        prep_txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE Shipments
+                   SET logistics_status = 'cancel_in_progress',
+                       can_customer_cancel = 0
+                   WHERE shipment_id = ?"#,
+                [shipment.shipment_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+        prep_txn.commit().await.map_err(map_db_error_to_status)?;
+
+        if let Err(error) = shiprocket::cancel_shiprocket_order(cancel_ref.as_str()).await {
+            warn!(order_id, error = %error, "Shiprocket cancellation failed");
+            crate::observability::record_shiprocket_cancel_failure_total("provider_error");
+            let fail_txn = db.begin().await.map_err(map_db_error_to_status)?;
+            move_order_to_cancel_pending_logistics(&fail_txn, order_id).await?;
+            fail_txn
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    r#"UPDATE Shipments
+                       SET logistics_status = 'cancel_pending_logistics',
+                           can_customer_cancel = 1
+                       WHERE order_id = ?"#,
+                    [order_id.into()],
+                ))
+                .await
+                .map_err(map_db_error_to_status)?;
+            fail_txn.commit().await.map_err(map_db_error_to_status)?;
+            return Ok(false);
+        }
+    } else {
+        prep_txn.commit().await.map_err(map_db_error_to_status)?;
+    }
+
+    let persist_txn = db.begin().await.map_err(map_db_error_to_status)?;
+    let persist_result: Result<(), TonicStatus> = async {
+        persist_txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE Shipments
+                   SET logistics_status = 'cancelled',
+                       can_customer_cancel = 0,
+                       shipment_status = 'cancelled',
+                       shiprocket_status_label = COALESCE(shiprocket_status_label, 'Cancelled')
+                   WHERE order_id = ?"#,
+                [order_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+
+        if let Err(err) = ensure_local_order_cancelled(&persist_txn, order_id).await {
+            if err.code() != tonic::Code::InvalidArgument {
+                return Err(err);
+            }
+        }
+        cancellation_saga::run_order_settlement(&persist_txn, order_id).await?;
+        Ok(())
+    }
+    .await;
+
+    match persist_result {
+        Ok(()) => {
+            persist_txn.commit().await.map_err(map_db_error_to_status)?;
+            Ok(true)
+        }
+        Err(err) => {
+            persist_txn.rollback().await.ok();
+            let fallback_txn = db.begin().await.map_err(map_db_error_to_status)?;
+            fallback_txn
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    r#"UPDATE Shipments
+                       SET logistics_status = 'cancel_persist_pending',
+                           shipment_status = 'cancelled',
+                           can_customer_cancel = 0
+                       WHERE order_id = ?"#,
+                    [order_id.into()],
+                ))
+                .await
+                .map_err(map_db_error_to_status)?;
+            move_order_to_cancel_pending_logistics(&fallback_txn, order_id).await?;
+            fallback_txn
+                .commit()
+                .await
+                .map_err(map_db_error_to_status)?;
+            Err(err)
+        }
+    }
+}
+
+pub async fn process_cancel_pending_logistics_orders(
+    db: &DatabaseConnection,
+    batch_limit: u64,
+) -> Result<u64, TonicStatus> {
+    let claim_txn = db.begin().await.map_err(map_db_error_to_status)?;
+    let order_ids = claim_cancel_pending_logistics_order_ids(&claim_txn, batch_limit).await?;
+    claim_txn.commit().await.map_err(map_db_error_to_status)?;
+
+    let mut processed = 0_u64;
+    for order_id in order_ids {
+        match process_cancel_pending_logistics_order(db, order_id).await {
+            Ok(true) => processed += 1,
+            Ok(false) => {}
             Err(err) => warn!(order_id, error = %err, "cancel-pending-logistics retry failed"),
         }
     }

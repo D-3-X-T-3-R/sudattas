@@ -6,8 +6,8 @@ use crate::notifications::delivery;
 use core_db_entities::entity::outbox_events;
 use core_db_entities::entity::sea_orm_active_enums::Status as OutboxStatus;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, TransactionTrait,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait, QueryFilter,
+    QueryOrder, QuerySelect, Statement, TransactionTrait,
 };
 use tonic::Status;
 use tracing::warn;
@@ -19,48 +19,79 @@ pub async fn process_pending_outbox_events(
     db: &DatabaseConnection,
     limit: u64,
 ) -> Result<usize, Status> {
-    let conn = db;
     let pending = outbox_events::Entity::find()
         .filter(outbox_events::Column::Status.eq(OutboxStatus::Pending))
         .order_by_asc(outbox_events::Column::CreatedAt)
         .limit(limit)
-        .all(conn)
+        .all(db)
         .await
         .map_err(|e| Status::internal(e.to_string()))?;
 
     let mut processed_count = 0;
-    for row in &pending {
-        // Deliver outside a DB txn so HTTP/email does not hold locks; enrichment uses read-only queries on `conn`.
-        if let Err(e) = delivery::deliver_event(conn, row).await {
+    for row in pending {
+        // Claim first in a short transaction.
+        let claim_txn = db.begin().await.map_err(map_db_error_to_status)?;
+        let claim = claim_txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE OutboxEvents
+                   SET status = 'client_verified',
+                       published_at = UTC_TIMESTAMP()
+                   WHERE event_id = ?
+                     AND status = 'pending'"#,
+                [row.event_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+        if claim.rows_affected() != 1 {
+            claim_txn.rollback().await.ok();
+            continue;
+        }
+        claim_txn.commit().await.map_err(map_db_error_to_status)?;
+
+        // Deliver only after durable claim commit.
+        if let Err(e) = delivery::deliver_event(db, &row).await {
             warn!(
                 event_id = row.event_id,
                 event_type = row.event_type,
                 error = %e.message(),
-                "outbox: delivery failed, event left Pending for retry"
+                "outbox: delivery failed, event returned to Pending for retry"
             );
+            let fail_txn = db.begin().await.map_err(map_db_error_to_status)?;
+            fail_txn
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    r#"UPDATE OutboxEvents
+                       SET status = 'pending',
+                           published_at = NULL
+                       WHERE event_id = ?
+                         AND status = 'client_verified'"#,
+                    [row.event_id.into()],
+                ))
+                .await
+                .map_err(map_db_error_to_status)?;
+            fail_txn.commit().await.map_err(map_db_error_to_status)?;
             continue;
         }
 
-        let txn = conn
-            .begin()
+        let success_txn = db.begin().await.map_err(map_db_error_to_status)?;
+        let updated = success_txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE OutboxEvents
+                   SET status = 'processed',
+                       published_at = UTC_TIMESTAMP()
+                   WHERE event_id = ?
+                     AND status = 'client_verified'"#,
+                [row.event_id.into()],
+            ))
             .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let mut active: outbox_events::ActiveModel = row.clone().into();
-        active.status = ActiveValue::Set(OutboxStatus::Processed);
-        active.published_at = ActiveValue::Set(Some(chrono::Utc::now()));
-        if let Err(e) = active.update(&txn).await.map_err(map_db_error_to_status) {
-            warn!(
-                event_id = row.event_id,
-                "outbox: update failed: {}",
-                e.message()
-            );
-            let _ = txn.rollback().await;
+            .map_err(map_db_error_to_status)?;
+        if updated.rows_affected() != 1 {
+            success_txn.rollback().await.ok();
             continue;
         }
-        if txn.commit().await.is_err() {
-            continue;
-        }
+        success_txn.commit().await.map_err(map_db_error_to_status)?;
         processed_count += 1;
     }
 
