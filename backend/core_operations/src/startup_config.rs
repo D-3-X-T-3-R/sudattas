@@ -25,6 +25,7 @@ impl StartupConfig {
                 "CANCEL_WINDOW_HOURS",
                 "PICKUP_DELAY_HOURS",
                 "FREE_SHIPPING_THRESHOLD_MINOR",
+                "RETURN_WINDOW_DAYS",
                 "R2_ACCOUNT_ID",
                 "R2_ACCESS_KEY_ID",
                 "R2_SECRET_ACCESS_KEY",

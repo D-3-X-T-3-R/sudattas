@@ -362,6 +362,58 @@ message CancelOrderItemsRequest {
   optional int64 acting_user_id = 3;
 }
 
+message ReturnRequestItemInput {
+    int64 order_detail_id = 1;
+    optional int64 quantity = 2;
+}
+
+message RequestReturnRequest {
+    int64 order_id = 1;
+    int64 user_id = 2;
+    repeated ReturnRequestItemInput items = 3;
+    string reason = 4;
+}
+
+message SearchReturnRequestsRequest {
+    optional int64 return_id = 1;
+    optional int64 order_id = 2;
+    optional int64 user_id = 3;
+}
+
+message AdminMarkReturnReceivedRequest {
+    int64 return_id = 1;
+}
+
+message AdminUpdateReturnStatusRequest {
+    int64 return_id = 1;
+    string status = 2;
+    optional string note = 3;
+}
+
+message ReturnRequestItemResponse {
+    int64 return_id = 1;
+    int64 order_detail_id = 2;
+    int64 quantity = 3;
+    int64 refund_amount_minor = 4;
+    string status = 5;
+}
+
+message ReturnRequestResponse {
+    int64 return_id = 1;
+    int64 order_id = 2;
+    int64 user_id = 3;
+    string status = 4;
+    string reason = 5;
+    string created_at = 6;
+    optional string received_at = 7;
+    optional int64 refund_attempt_id = 8;
+    repeated ReturnRequestItemResponse items = 9;
+}
+
+message ReturnRequestsResponse {
+    repeated ReturnRequestResponse items = 1;
+}
+
 // P1 Admin: mark order shipped/delivered with enforced transitions
 message AdminMarkOrderShippedRequest {
     int64 order_id = 1;

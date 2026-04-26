@@ -45,6 +45,10 @@ use crate::resolvers::{
         self,
         schema::{GetRefund, Refund},
     },
+    returns::{
+        self,
+        schema::{ReturnRequest, SearchReturnRequestsInput},
+    },
     reviews::{
         self,
         schema::{Review, SearchReview},
@@ -454,6 +458,30 @@ impl QueryRoot {
             ));
         }
         refunds::handlers::get_refunds(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_return_requests(
+        context: &Context,
+        mut input: SearchReturnRequestsInput,
+    ) -> FieldResult<Vec<ReturnRequest>> {
+        if !context.is_admin() {
+            let uid = require_customer_actor(context)?.to_string();
+            if input.user_id.as_deref().is_some_and(|v| v != uid) {
+                return Err(juniper::FieldError::new(
+                    "Customers can only query their own returns",
+                    juniper::Value::null(),
+                ));
+            }
+            input.user_id = Some(uid);
+            if let Some(order_id) = input.order_id.as_deref() {
+                ensure_customer_can_access_order(context, order_id).await?;
+            }
+        }
+
+        returns::handlers::search_return_requests(input)
             .await
             .map_err(|e| e.into_field_error())
     }

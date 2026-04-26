@@ -20,6 +20,10 @@ pub fn free_shipping_threshold_minor() -> i64 {
     parse_positive_i64_env("FREE_SHIPPING_THRESHOLD_MINOR", i64::MAX)
 }
 
+pub fn return_window_days() -> i64 {
+    parse_positive_i64_env("RETURN_WINDOW_DAYS", 7)
+}
+
 pub fn cancel_window_deadline(order_created_at: DateTime<Utc>) -> DateTime<Utc> {
     order_created_at + Duration::hours(cancel_window_hours())
 }
@@ -42,4 +46,12 @@ pub fn is_booking_open(now: DateTime<Utc>, earliest_booking_at: DateTime<Utc>) -
 
 pub fn is_within_cancel_window(order_created_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
     is_before_deadline(now, cancel_window_deadline(order_created_at))
+}
+
+pub fn return_window_deadline(delivered_at: DateTime<Utc>) -> DateTime<Utc> {
+    delivered_at + Duration::days(return_window_days())
+}
+
+pub fn is_within_return_window(delivered_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
+    now <= return_window_deadline(delivered_at)
 }

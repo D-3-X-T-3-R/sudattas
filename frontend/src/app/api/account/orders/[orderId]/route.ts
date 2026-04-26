@@ -41,6 +41,7 @@ type OrderRow = {
   totalAmountFormatted: string;
   statusId: string;
   refundSettlementStatus?: string | null;
+  paymentMethod?: string | null;
   orderDetails?: OrderDetailRow[];
 };
 
@@ -95,6 +96,24 @@ type AccountOrderDetailResponse = {
   events: OrderEventRow[];
   fulfillmentState: string;
   paymentState: string;
+  returnWindowDays: number;
+  returnRequests: Array<{
+    returnId: string;
+    orderId: string;
+    userId: string;
+    status: string;
+    reason: string;
+    createdAt: string;
+    receivedAt?: string | null;
+    refundAttemptId?: string | null;
+    items: Array<{
+      returnId: string;
+      orderDetailId: string;
+      quantity: string;
+      refundAmountMinor: string;
+      status: string;
+    }>;
+  }>;
   refundSummary: {
     itemRefundMinor: number;
     shippingRefundMinor: number;
@@ -119,6 +138,7 @@ const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
     totalAmountFormatted
     statusId
     refundSettlementStatus
+    paymentMethod
     orderDetails {
       orderDetailId
       variantId
@@ -137,6 +157,26 @@ const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
           thumbnailUrl
         }
       }
+    }
+  }
+}`;
+
+const RETURN_REQUESTS_QUERY = `query AccountOrderReturns($input: SearchReturnRequestsInput!) {
+  searchReturnRequests(input: $input) {
+    returnId
+    orderId
+    userId
+    status
+    reason
+    createdAt
+    receivedAt
+    refundAttemptId
+    items {
+      returnId
+      orderDetailId
+      quantity
+      refundAmountMinor
+      status
     }
   }
 }`;
@@ -358,6 +398,7 @@ function parseRefundBreakdown(
   }
 }
 
+// eslint-disable-next-line max-lines-per-function
 export async function GET(
   _request: Request,
   context: { params: Promise<{ orderId: string }> }
@@ -393,7 +434,7 @@ export async function GET(
       return null;
     });
 
-  const [orderResult, statusesResult, paymentResult, shipmentResult, eventsResult, refundsResult] =
+  const [orderResult, statusesResult, paymentResult, shipmentResult, eventsResult, refundsResult, returnsResult] =
     await Promise.all([
       callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(userId, ORDER_DETAIL_QUERY, {
         search: { userId, orderId: trimmedOrderId, limit: "1", offset: "0" },
@@ -413,6 +454,11 @@ export async function GET(
       callGraphqlAsCustomer<{ getRefunds?: RefundRow[] }>(userId, REFUNDS_QUERY, {
         input: { orderId: trimmedOrderId },
       }),
+      callGraphqlAsCustomer<{
+        searchReturnRequests?: AccountOrderDetailResponse["returnRequests"];
+      }>(userId, RETURN_REQUESTS_QUERY, {
+        input: { orderId: trimmedOrderId },
+      }),
     ]);
 
   const firstError =
@@ -421,7 +467,8 @@ export async function GET(
     paymentResult.errors?.[0]?.message ??
     shipmentResult.errors?.[0]?.message ??
     eventsResult.errors?.[0]?.message ??
-    refundsResult.errors?.[0]?.message;
+    refundsResult.errors?.[0]?.message ??
+    returnsResult.errors?.[0]?.message;
   if (firstError) {
     flowLog("graphql error while loading order detail", {
       orderId: trimmedOrderId,
@@ -459,6 +506,15 @@ export async function GET(
   const shipments = shipmentResult.data?.getShipment ?? [];
   const events = eventsResult.data?.getOrderEvents ?? [];
   const refunds = refundsResult.data?.getRefunds ?? [];
+  const returnRequests = returnsResult.data?.searchReturnRequests ?? [];
+  const returnWindowDays = Number.parseInt(
+    (process.env.RETURN_WINDOW_DAYS ?? "7").trim(),
+    10
+  );
+  const normalizedReturnWindowDays =
+    Number.isFinite(returnWindowDays) && returnWindowDays > 0
+      ? returnWindowDays
+      : 7;
 
   const refundSettlementStatus = order.refundSettlementStatus?.trim() || null;
   const processedRefunds = refunds.filter(
@@ -503,6 +559,8 @@ export async function GET(
     events,
     paymentState: derivePaymentState(paymentIntents),
     fulfillmentState: deriveFulfillmentState(shipments),
+    returnRequests,
+    returnWindowDays: normalizedReturnWindowDays,
     refundSummary: {
       itemRefundMinor,
       shippingRefundMinor,
@@ -540,5 +598,3 @@ export async function GET(
     retryable: false,
   });
 }
-
-

@@ -22,6 +22,7 @@ pub mod product_mood_mappings;
 pub mod product_moods;
 pub mod product_variants;
 pub mod refunds;
+pub mod returns;
 pub mod reviews;
 pub mod shipments;
 pub mod shipping_addresses;

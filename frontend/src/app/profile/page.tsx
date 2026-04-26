@@ -51,6 +51,7 @@ type AuthenticatedSectionProps = {
   refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
   cancelOrderItems: (orderId: string, orderDetailIds: string[]) => Promise<void>;
+  requestReturn: (orderId: string, orderDetailIds: string[], reason: string) => Promise<void>;
 };
 
 type UseAccountDataLoaderArgs = {
@@ -158,6 +159,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     refreshOrderDetail,
     cancelOrder,
     cancelOrderItems,
+    requestReturn,
   } = props;
 
   return (
@@ -192,6 +194,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         refreshOrderDetail={refreshOrderDetail}
         cancelOrder={cancelOrder}
         cancelOrderItems={cancelOrderItems}
+        requestReturn={requestReturn}
         onSignOut={() => void signOut({ callbackUrl: "/" })}
       />
     </>
@@ -361,6 +364,35 @@ export default function ProfilePage() {
         announce("Item cancelled.");
       } catch (e) {
         flowLog("cancel order items failed", {
+          orderId,
+          orderDetailIds,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        const ui = toRouteFailureUi("account", e);
+        setRouteFailure(ui);
+        announce(ui.message, "assertive");
+      }
+    },
+    [announce, loadAccountData]
+  );
+
+  const requestReturn = useCallback(
+    async (orderId: string, orderDetailIds: string[], reason: string) => {
+      if (!orderDetailIds.length) return;
+      const trimmedReason = reason.trim();
+      if (!trimmedReason) return;
+      setRouteFailure(null);
+      flowLog("return requested by customer", { orderId, orderDetailIds });
+      try {
+        await fetchApiEnvelope(`/api/account/orders/${encodeURIComponent(orderId)}/returns`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderDetailIds, reason: trimmedReason }),
+        });
+        await loadAccountData();
+        announce("Return request submitted.");
+      } catch (e) {
+        flowLog("return request failed", {
           orderId,
           orderDetailIds,
           error: e instanceof Error ? e.message : String(e),
@@ -556,6 +588,7 @@ export default function ProfilePage() {
             refreshOrderDetail={refreshOrderDetail}
             cancelOrder={cancelOrder}
             cancelOrderItems={cancelOrderItems}
+            requestReturn={requestReturn}
           />
         )}
       </main>
