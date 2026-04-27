@@ -471,10 +471,39 @@ message OrderResponse {
     optional string earliest_booking_at = 11;
     optional string pickup_target_at = 12;
     optional string fulfillment_status = 13;
+    optional int64 invoice_id = 14;
+    optional string invoice_number = 15;
+    optional string invoice_generated_at = 16;
+    optional string invoice_storage_path = 17;
+    optional bool invoice_available = 18;
 }
 
 message OrdersResponse {
     repeated OrderResponse items = 1;
+}
+
+message GetOrderInvoiceRequest {
+    int64 order_id = 1;
+}
+
+message InvoiceResponse {
+    int64 invoice_id = 1;
+    string invoice_number = 2;
+    int64 order_id = 3;
+    int64 user_id = 4;
+    string generated_at = 5;
+    string storage_path = 6;
+}
+
+message GetOrderInvoiceDownloadRequest {
+    int64 order_id = 1;
+}
+
+message GetOrderInvoiceDownloadResponse {
+    InvoiceResponse invoice = 1;
+    bytes pdf_bytes = 2;
+    string file_name = 3;
+    string content_type = 4;
 }
 
 // OrderStatus (list for admin dropdowns; table OrderStatus)

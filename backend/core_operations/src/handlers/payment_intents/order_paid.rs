@@ -103,6 +103,9 @@ pub async fn finalize_order_paid(
         }
     }
 
+    let _ = crate::handlers::invoices::ensure_invoice_for_order(txn, order_id, "payment_captured")
+        .await?;
+
     crate::observability::log_operational_event(
         "payment_finalized_paid",
         &[("order_id", order_id.to_string())],

@@ -23,6 +23,7 @@ $BackendRoot = $PSScriptRoot
 $DbContainerName = "sudattas-mysql"
 $EnvFile = Join-Path $BackendRoot ".env"
 $SchemaFile = Join-Path $BackendRoot "database\sql_dump\01_schema.sql"
+$AssertSchemaScript = Join-Path $BackendRoot "assert-required-schema.ps1"
 
 if ($Fresh -and $PreserveData) {
     throw "Use either -Fresh or -PreserveData, not both."
@@ -148,6 +149,13 @@ if ($DbMode -eq "fresh") {
 Write-Host "Applying forward DB migrations..." -ForegroundColor Yellow
 & "$BackendRoot\apply-db-migrations.ps1"
 if ($LASTEXITCODE -ne 0) { throw "apply-db-migrations.ps1 failed" }
+
+Write-Host "Validating required DB schema..." -ForegroundColor Yellow
+if (-not (Test-Path -Path $AssertSchemaScript -PathType Leaf)) {
+    throw "Required schema validator not found: $AssertSchemaScript"
+}
+& $AssertSchemaScript
+if ($LASTEXITCODE -ne 0) { throw "assert-required-schema.ps1 failed" }
 
 Write-Host "Regenerating SeaORM entities..." -ForegroundColor Yellow
 $entityGenerateScript = Join-Path $BackendRoot "core_db_entities\src\entity\generate.ps1"

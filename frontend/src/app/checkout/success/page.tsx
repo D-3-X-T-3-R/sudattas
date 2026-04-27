@@ -57,6 +57,14 @@ export default async function CheckoutSuccessPage({
           </div>
         </div>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          {orderId ? (
+            <Link
+              href={`/api/account/orders/${encodeURIComponent(orderId)}/invoice`}
+              className="inline-flex h-12 items-center justify-center rounded-full border border-[#0F3D2E]/25 bg-[#F7F3EA] px-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#0F3D2E] transition hover:border-[#0F3D2E]/45"
+            >
+              Download Invoice
+            </Link>
+          ) : null}
           <Link
             href="/profile"
             className="inline-flex h-12 items-center justify-center rounded-full bg-[#0F3D2E] px-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#F6F3EA] transition hover:bg-[#0C3126]"

@@ -42,6 +42,11 @@ export type AccountOrderRow = {
   totalAmountFormatted: string;
   statusId: string;
   statusName: string;
+  invoiceId?: string | null;
+  invoiceNumber?: string | null;
+  invoiceGeneratedAt?: string | null;
+  invoiceAvailable?: boolean | null;
+  invoiceUrl?: string | null;
   cancelWindowHours?: number;
   returnWindowDays?: number;
 };
@@ -1296,6 +1301,14 @@ export function ProfileAuthenticatedContent({
                                   ? "Refresh refund"
                                   : "Refresh tracking"}
                             </button>
+                            {detail?.order?.invoiceAvailable ? (
+                              <a
+                                href={`/api/account/orders/${encodeURIComponent(o.orderId)}/invoice`}
+                                className="inline-flex items-center justify-center rounded-full border border-[#0F3D2E]/25 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#0F3D2E] transition hover:bg-[#f4efe4]"
+                              >
+                                Download Invoice
+                              </a>
+                            ) : null}
                           </div>
                         </article>
                       );
@@ -1839,5 +1852,3 @@ export function ProfileAuthenticatedContent({
     </section>
   );
 }
-
-

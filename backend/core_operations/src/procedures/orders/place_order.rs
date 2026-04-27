@@ -851,6 +851,13 @@ async fn place_order_in_txn(
             }),
         )
         .await;
+
+        let _ = crate::handlers::invoices::ensure_invoice_for_order(
+            txn,
+            create_order.order_id,
+            "cod_confirmed",
+        )
+        .await?;
     }
 
     // Emit audit event: order placed

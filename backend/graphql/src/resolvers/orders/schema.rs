@@ -22,6 +22,10 @@ pub struct Order {
     pub earliest_booking_at: Option<String>,
     pub pickup_target_at: Option<String>,
     pub fulfillment_status: Option<String>,
+    pub invoice_id: Option<String>,
+    pub invoice_number: Option<String>,
+    pub invoice_generated_at: Option<String>,
+    pub invoice_available: bool,
 }
 
 #[graphql_object]
@@ -88,6 +92,30 @@ impl Order {
 
     async fn fulfillment_status(&self) -> Option<&String> {
         self.fulfillment_status.as_ref()
+    }
+
+    async fn invoice_id(&self) -> Option<&String> {
+        self.invoice_id.as_ref()
+    }
+
+    async fn invoice_number(&self) -> Option<&String> {
+        self.invoice_number.as_ref()
+    }
+
+    async fn invoice_generated_at(&self) -> Option<&String> {
+        self.invoice_generated_at.as_ref()
+    }
+
+    async fn invoice_available(&self) -> bool {
+        self.invoice_available
+    }
+
+    async fn invoice_url(&self) -> Option<String> {
+        if self.invoice_available {
+            Some(format!("/api/account/orders/{}/invoice", self.order_id))
+        } else {
+            None
+        }
     }
 
     async fn order_details(&self) -> FieldResult<Vec<OrderDetails>> {

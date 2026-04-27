@@ -126,7 +126,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let addr = startup.grpc_server_addr;
     let mut service = MyGRPCServices::default();
-    service.init().await;
+    service
+        .init()
+        .await
+        .map_err(|e| format!("service initialization failed: {}", e.message()))?;
 
     let outbox_disabled = std::env::var("OUTBOX_DISABLE_WORKER")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))

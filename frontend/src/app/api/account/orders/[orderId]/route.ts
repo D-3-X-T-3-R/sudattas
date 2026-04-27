@@ -42,6 +42,11 @@ type OrderRow = {
   statusId: string;
   refundSettlementStatus?: string | null;
   paymentMethod?: string | null;
+  invoiceId?: string | null;
+  invoiceNumber?: string | null;
+  invoiceGeneratedAt?: string | null;
+  invoiceAvailable?: boolean | null;
+  invoiceUrl?: string | null;
   orderDetails?: OrderDetailRow[];
 };
 
@@ -139,6 +144,11 @@ const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
     statusId
     refundSettlementStatus
     paymentMethod
+    invoiceId
+    invoiceNumber
+    invoiceGeneratedAt
+    invoiceAvailable
+    invoiceUrl
     orderDetails {
       orderDetailId
       variantId

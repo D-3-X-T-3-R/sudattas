@@ -7,6 +7,7 @@ pub mod error;
 pub mod event_logs;
 pub mod fabrics;
 pub mod grpc_client;
+pub mod invoices;
 pub mod inventory;
 pub mod inventory_logs;
 pub mod money;

@@ -52,6 +52,12 @@ pub struct Model {
     pub applied_discount_paise: Option<i32>,
     pub refund_settlement_status: Option<String>,
     pub fulfillment_status: FulfillmentStatus,
+    #[sea_orm(unique)]
+    pub invoice_id: Option<i64>,
+    #[sea_orm(unique)]
+    pub invoice_number: Option<String>,
+    pub invoice_generated_at: Option<DateTimeUtc>,
+    pub invoice_storage_path: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -66,6 +72,14 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Coupons,
+    #[sea_orm(
+        belongs_to = "super::invoices::Entity",
+        from = "Column::InvoiceId",
+        to = "super::invoices::Column::InvoiceId",
+        on_update = "NoAction",
+        on_delete = "SetNull"
+    )]
+    Invoices,
     #[sea_orm(has_many = "super::order_details::Entity")]
     OrderDetails,
     #[sea_orm(has_many = "super::order_events::Entity")]
@@ -119,6 +133,12 @@ impl Related<super::coupon_redemptions::Entity> for Entity {
 impl Related<super::coupons::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Coupons.def()
+    }
+}
+
+impl Related<super::invoices::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Invoices.def()
     }
 }
 

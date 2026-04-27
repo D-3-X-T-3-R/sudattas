@@ -3,7 +3,8 @@
 //! Returns Err on transport failure so the worker leaves the event Pending for retry.
 
 use crate::handlers::outbox::{
-    ABANDONED_CART, DELIVERED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
+    ABANDONED_CART, DELIVERED, INVOICE_GENERATED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED,
+    SHIPPED,
 };
 use crate::notifications::email_provider::send_transactional_email;
 use crate::notifications::order_mail::{
@@ -11,8 +12,8 @@ use crate::notifications::order_mail::{
     build_refunded_email, build_shipped_email, load_order_mail_snapshot,
     parse_abandoned_cart_email, parse_payload_order_id,
 };
-use core_db_entities::entity::outbox_events;
-use sea_orm::DatabaseConnection;
+use core_db_entities::entity::{invoices, outbox_events};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use tonic::Status;
 use tracing::{info, warn};
 
@@ -39,6 +40,7 @@ pub async fn deliver_event(
         SHIPPED => deliver_order_typed(db, event, OrderEmailKind::Shipped).await,
         DELIVERED => deliver_order_typed(db, event, OrderEmailKind::Delivered).await,
         REFUNDED => deliver_order_typed(db, event, OrderEmailKind::Refunded).await,
+        INVOICE_GENERATED => deliver_invoice_generated(db, event).await,
         ABANDONED_CART => deliver_abandoned_cart(event).await,
         other => {
             info!(
@@ -102,4 +104,83 @@ async fn deliver_abandoned_cart(event: &outbox_events::Model) -> Result<(), Stat
     let name = "there";
     let (subject, text, html) = build_abandoned_cart_email(name);
     send_transactional_email(&to, &subject, &text, &html).await
+}
+
+async fn deliver_invoice_generated(
+    db: &DatabaseConnection,
+    event: &outbox_events::Model,
+) -> Result<(), Status> {
+    let Some(order_id) = parse_payload_order_id(&event.payload) else {
+        warn!(
+            event_id = event.event_id,
+            "outbox: InvoiceGenerated missing order_id; skip"
+        );
+        return Ok(());
+    };
+
+    let Some(invoice) = invoices::Entity::find()
+        .filter(invoices::Column::OrderId.eq(order_id))
+        .one(db)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?
+    else {
+        warn!(
+            event_id = event.event_id,
+            order_id,
+            "outbox: invoice row not found; skip"
+        );
+        return Ok(());
+    };
+
+    let snapshot: crate::handlers::invoices::InvoiceDocumentSnapshot =
+        match serde_json::from_value(invoice.snapshot_json.clone()) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!(
+                    event_id = event.event_id,
+                    order_id,
+                    error = %e,
+                    "outbox: invoice snapshot parse failed; skip"
+                );
+                return Ok(());
+            }
+        };
+
+    let recipient = snapshot.customer_email.trim().to_string();
+    if recipient.is_empty() {
+        warn!(
+            event_id = event.event_id,
+            order_id,
+            "outbox: invoice recipient missing email; skip"
+        );
+        return Ok(());
+    }
+
+    let storefront = std::env::var("STOREFRONT_URL").unwrap_or_else(|_| "https://sudattas.com".to_string());
+    let download_url = format!(
+        "{}/api/account/orders/{}/invoice",
+        storefront.trim_end_matches('/'),
+        order_id
+    );
+    let subject = format!("Your Sudatta's invoice for order #{}", order_id);
+    let text = format!(
+        "Hi {},\n\nYour invoice is ready.\nOrder number: {}\nInvoice number: {}\nTotal amount: {}\nPayment mode: {}\nDownload invoice: {}\n",
+        snapshot.customer_name,
+        order_id,
+        snapshot.invoice_number,
+        snapshot.grand_total_formatted,
+        snapshot.payment_mode,
+        download_url
+    );
+    let html = format!(
+        "<p>Hi {},</p><p>Your invoice is ready.</p><ul><li>Order number: <strong>{}</strong></li><li>Invoice number: <strong>{}</strong></li><li>Total amount: <strong>{}</strong></li><li>Payment mode: <strong>{}</strong></li></ul><p><a href=\"{}\">Download invoice</a></p>",
+        snapshot.customer_name,
+        order_id,
+        snapshot.invoice_number,
+        snapshot.grand_total_formatted,
+        snapshot.payment_mode,
+        download_url
+    );
+
+    send_transactional_email(&recipient, &subject, &text, &html).await
 }
