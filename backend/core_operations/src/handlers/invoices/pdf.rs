@@ -639,6 +639,11 @@ pub fn render_invoice_pdf(snapshot: &InvoiceDocumentSnapshot) -> Vec<u8> {
 mod tests {
     use super::*;
     use crate::handlers::invoices::{InvoiceDocumentLineSnapshot, InvoiceDocumentSnapshot};
+    use pdf_extract::extract_text_from_mem;
+
+    fn normalize_ws(input: &str) -> String {
+        input.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
 
     fn snapshot_with_lines(lines: Vec<InvoiceDocumentLineSnapshot>) -> InvoiceDocumentSnapshot {
         InvoiceDocumentSnapshot {
@@ -742,6 +747,55 @@ mod tests {
             "invoice PDF size {} exceeds limit {}",
             bytes.len(),
             MAX_EXPECTED_PDF_BYTES
+        );
+    }
+
+    #[test]
+    fn render_invoice_pdf_text_extraction_preserves_spaces() {
+        let mut snapshot = snapshot_with_lines(vec![
+            InvoiceDocumentLineSnapshot {
+                title: "Premium Silk Saree - Handwoven".to_string(),
+                quantity: 1,
+                unit_price_minor: 120_000,
+                unit_price_formatted: "INR 1200.00".to_string(),
+                line_total_minor: 120_000,
+                line_total_formatted: "INR 1200.00".to_string(),
+            },
+            InvoiceDocumentLineSnapshot {
+                title: "Blouse".to_string(),
+                quantity: 2,
+                unit_price_minor: 25_000,
+                unit_price_formatted: "INR 250.00".to_string(),
+                line_total_minor: 50_000,
+                line_total_formatted: "INR 500.00".to_string(),
+            },
+        ]);
+        snapshot.payment_mode = "cod".to_string();
+        snapshot.payment_status = "pending".to_string();
+
+        let bytes = render_invoice_pdf(&snapshot);
+        let text = extract_text_from_mem(&bytes).expect("extractable pdf text");
+        let normalized = normalize_ws(&text);
+
+        assert!(
+            normalized.contains("TAX INVOICE"),
+            "missing phrase TAX INVOICE in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("Invoice Number"),
+            "missing phrase Invoice Number in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("Sold By"),
+            "missing phrase Sold By in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("Cash on Delivery"),
+            "missing phrase Cash on Delivery in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("To be collected on delivery"),
+            "missing phrase To be collected on delivery in extracted text: {normalized}"
         );
     }
 }
