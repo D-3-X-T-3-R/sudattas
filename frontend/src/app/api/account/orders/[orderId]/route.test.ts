@@ -156,8 +156,7 @@ describe("GET /api/account/orders/[orderId]", () => {
     expect(json.data.order.pickupTargetAt).toBe("2026-04-12T00:00:00Z");
     expect(json.data.order.fulfillmentStatus).toBe("not_created");
     expect(json.data.order.refundSettlementStatus).toBe("refund_pending");
-    // processed does not map to paid in this endpoint yet; document current behavior.
-    expect(json.data.paymentState).toBe("processed");
+    expect(json.data.paymentState).toBe("paid");
     expect(json.data.shipments[0]?.shiprocketStatusId).toBe("8");
     expect(json.data.events.some((e) => e.eventType === "refund_initiated")).toBe(true);
   });

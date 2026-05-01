@@ -61,7 +61,7 @@ use proto::proto::core::{
     GetProductsByIdRequest, GetRefundsRequest, GetRelatedProductsRequest, GetShipmentRequest,
     GetShippingAddressRequest, GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse,
     GetUserPiiExportRequest, GetUserPiiExportResponse, IngestWebhookRequest,
-    InventoryItemsResponse, InventoryLogsResponse, NewsletterSubscribersResponse,
+    InventoryItemsResponse, InventoryLogsResponse, InvoiceResponse, NewsletterSubscribersResponse,
     OccasionsResponse, OrderDetailsResponse, OrderEventsResponse, OrderStatusesResponse,
     OrdersResponse, PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse,
     ProductImagesResponse, ProductMoodMappingsResponse, ProductMoodsResponse,
@@ -89,7 +89,7 @@ use proto::proto::core::{
     UpdateTransactionRequest, UpdateUserActivityRequest, UpdateUserRequest, UpdateUserRoleRequest,
     UpdateWeaveRequest, UserActivitiesResponse, UserRolesResponse, UsersResponse,
     ValidateCouponRequest, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
-    WeavesResponse, WebhookEventsResponse, WishlistItemsResponse, InvoiceResponse,
+    WeavesResponse, WebhookEventsResponse, WishlistItemsResponse,
 };
 
 use sea_orm::TransactionTrait;

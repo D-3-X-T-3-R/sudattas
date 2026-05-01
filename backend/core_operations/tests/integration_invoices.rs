@@ -6,7 +6,9 @@
 mod integration_common;
 
 use chrono::Utc;
-use core_db_entities::entity::sea_orm_active_enums::{AuthProvider, FulfillmentStatus, PaymentStatus, Status as OutboxStatus};
+use core_db_entities::entity::sea_orm_active_enums::{
+    AuthProvider, FulfillmentStatus, PaymentStatus, Status as OutboxStatus,
+};
 use core_db_entities::entity::{
     invoices, order_details, order_status, orders, outbox_events, shipping_addresses, users,
 };
@@ -16,8 +18,8 @@ use core_operations::handlers::payment_intents::finalize_order_paid;
 use core_operations::procedures::outbox_worker::process_pending_outbox_events;
 use rust_decimal::Decimal;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
-    PaginatorTrait, QueryOrder, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, TransactionTrait,
 };
 
 async fn db_conn() -> sea_orm::DatabaseConnection {
@@ -26,7 +28,10 @@ async fn db_conn() -> sea_orm::DatabaseConnection {
 }
 
 fn unique_tag(prefix: &str) -> String {
-    format!("{prefix}_{}", Utc::now().timestamp_nanos_opt().unwrap_or_default())
+    format!(
+        "{prefix}_{}",
+        Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    )
 }
 
 async fn ensure_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
@@ -213,7 +218,9 @@ async fn invoice_generated_exactly_once_and_outbox_not_duplicated() {
     )
     .await;
 
-    let first = ensure_invoice_for_order(&txn, seeded.order_id, "itest").await.expect("invoice")
+    let first = ensure_invoice_for_order(&txn, seeded.order_id, "itest")
+        .await
+        .expect("invoice")
         .expect("invoice should be created");
     let second = ensure_invoice_for_order(&txn, seeded.order_id, "itest")
         .await
@@ -235,7 +242,11 @@ async fn invoice_generated_exactly_once_and_outbox_not_duplicated() {
         .all(&db)
         .await
         .expect("query outbox");
-    assert_eq!(outbox_rows.len(), 1, "invoice email event must be queued once");
+    assert_eq!(
+        outbox_rows.len(),
+        1,
+        "invoice email event must be queued once"
+    );
 }
 
 #[tokio::test]
@@ -278,7 +289,10 @@ async fn cancelled_before_payment_does_not_generate_invoice() {
     let row = ensure_invoice_for_order(&txn, seeded.order_id, "itest")
         .await
         .expect("no invoice failure");
-    assert!(row.is_none(), "cancelled-before-payment order should not have invoice");
+    assert!(
+        row.is_none(),
+        "cancelled-before-payment order should not have invoice"
+    );
     txn.rollback().await.expect("rollback");
 }
 
@@ -380,7 +394,11 @@ async fn duplicate_payment_finalization_does_not_regenerate_invoice_or_email_eve
         .all(&db)
         .await
         .expect("query outbox");
-    assert_eq!(email_events.len(), 1, "duplicate payment must not queue duplicate invoice email");
+    assert_eq!(
+        email_events.len(),
+        1,
+        "duplicate payment must not queue duplicate invoice email"
+    );
 }
 
 #[tokio::test]
@@ -410,12 +428,18 @@ async fn invoice_generation_survives_email_delivery_failure() {
         .expect("outbox worker should continue on delivery failures");
     std::env::remove_var("OUTBOX_DELIVER_FAIL");
 
-    assert_eq!(processed, 0, "failed email send should not mark invoice event processed");
+    assert_eq!(
+        processed, 0,
+        "failed email send should not mark invoice event processed"
+    );
     let persisted_invoice = invoices::Entity::find_by_id(invoice.invoice_id)
         .one(&db)
         .await
         .expect("query persisted invoice");
-    assert!(persisted_invoice.is_some(), "invoice row must persist even when email fails");
+    assert!(
+        persisted_invoice.is_some(),
+        "invoice row must persist even when email fails"
+    );
 
     let invoice_event = outbox_events::Entity::find()
         .filter(outbox_events::Column::EventType.eq(INVOICE_GENERATED))

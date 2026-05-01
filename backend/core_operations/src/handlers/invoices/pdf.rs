@@ -3,13 +3,7 @@ use super::InvoiceDocumentSnapshot;
 fn sanitize_pdf_text(input: &str) -> String {
     input
         .chars()
-        .map(|c| {
-            if c.is_ascii() {
-                c
-            } else {
-                '?'
-            }
-        })
+        .map(|c| if c.is_ascii() { c } else { '?' })
         .collect()
 }
 
@@ -44,7 +38,10 @@ fn build_lines(snapshot: &InvoiceDocumentSnapshot) -> Vec<String> {
     lines.push(String::new());
     lines.push(format!("Invoice Number: {}", snapshot.invoice_number));
     lines.push(format!("Order ID: {}", snapshot.order_id));
-    lines.push(format!("Generated At (UTC): {}", snapshot.generated_at_rfc3339));
+    lines.push(format!(
+        "Generated At (UTC): {}",
+        snapshot.generated_at_rfc3339
+    ));
     lines.push(String::new());
     lines.push(format!("Customer Name: {}", snapshot.customer_name));
     lines.push(format!("Customer Email: {}", snapshot.customer_email));
@@ -57,17 +54,11 @@ fn build_lines(snapshot: &InvoiceDocumentSnapshot) -> Vec<String> {
     for line in &snapshot.lines {
         lines.push(format!(
             "  - {} | Qty {} | Unit {} | Line {}",
-            line.title,
-            line.quantity,
-            line.unit_price_formatted,
-            line.line_total_formatted
+            line.title, line.quantity, line.unit_price_formatted, line.line_total_formatted
         ));
     }
     lines.push(String::new());
-    lines.push(format!(
-        "Item Total: {}",
-        snapshot.item_total_formatted
-    ));
+    lines.push(format!("Item Total: {}", snapshot.item_total_formatted));
     lines.push(format!("Discount: {}", snapshot.discount_formatted));
     lines.push(format!("Shipping: {}", snapshot.shipping_formatted));
     lines.push(format!("Grand Total: {}", snapshot.grand_total_formatted));

@@ -3,8 +3,7 @@
 //! Returns Err on transport failure so the worker leaves the event Pending for retry.
 
 use crate::handlers::outbox::{
-    ABANDONED_CART, DELIVERED, INVOICE_GENERATED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED,
-    SHIPPED,
+    ABANDONED_CART, DELIVERED, INVOICE_GENERATED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
 };
 use crate::notifications::email_provider::send_transactional_email;
 use crate::notifications::order_mail::{
@@ -126,8 +125,7 @@ async fn deliver_invoice_generated(
     else {
         warn!(
             event_id = event.event_id,
-            order_id,
-            "outbox: invoice row not found; skip"
+            order_id, "outbox: invoice row not found; skip"
         );
         return Ok(());
     };
@@ -150,13 +148,13 @@ async fn deliver_invoice_generated(
     if recipient.is_empty() {
         warn!(
             event_id = event.event_id,
-            order_id,
-            "outbox: invoice recipient missing email; skip"
+            order_id, "outbox: invoice recipient missing email; skip"
         );
         return Ok(());
     }
 
-    let storefront = std::env::var("STOREFRONT_URL").unwrap_or_else(|_| "https://sudattas.com".to_string());
+    let storefront =
+        std::env::var("STOREFRONT_URL").unwrap_or_else(|_| "https://sudattas.com".to_string());
     let download_url = format!(
         "{}/api/account/orders/{}/invoice",
         storefront.trim_end_matches('/'),

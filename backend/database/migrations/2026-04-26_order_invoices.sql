@@ -23,17 +23,115 @@ CREATE TABLE IF NOT EXISTS Invoices (
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-ALTER TABLE Orders
-    ADD COLUMN invoice_id BIGINT NULL,
-    ADD COLUMN invoice_number VARCHAR(64) NULL,
-    ADD COLUMN invoice_generated_at TIMESTAMP NULL DEFAULT NULL,
-    ADD COLUMN invoice_storage_path VARCHAR(255) NULL;
+SET @orders_invoice_id_col_exists := (
+  SELECT COUNT(1)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'Orders'
+    AND column_name = 'invoice_id'
+);
+SET @orders_add_invoice_id_col_sql := IF(
+  @orders_invoice_id_col_exists = 0,
+  'ALTER TABLE `Orders` ADD COLUMN `invoice_id` BIGINT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @orders_add_invoice_id_col_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-ALTER TABLE Orders
-    ADD UNIQUE KEY uq_orders_invoice_id (invoice_id),
-    ADD UNIQUE KEY uq_orders_invoice_number (invoice_number);
+SET @orders_invoice_number_col_exists := (
+  SELECT COUNT(1)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'Orders'
+    AND column_name = 'invoice_number'
+);
+SET @orders_add_invoice_number_col_sql := IF(
+  @orders_invoice_number_col_exists = 0,
+  'ALTER TABLE `Orders` ADD COLUMN `invoice_number` VARCHAR(64) NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @orders_add_invoice_number_col_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-ALTER TABLE Orders
-    ADD CONSTRAINT fk_orders_invoice
-        FOREIGN KEY (invoice_id) REFERENCES Invoices (invoice_id)
-        ON DELETE SET NULL;
+SET @orders_invoice_generated_at_col_exists := (
+  SELECT COUNT(1)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'Orders'
+    AND column_name = 'invoice_generated_at'
+);
+SET @orders_add_invoice_generated_at_col_sql := IF(
+  @orders_invoice_generated_at_col_exists = 0,
+  'ALTER TABLE `Orders` ADD COLUMN `invoice_generated_at` TIMESTAMP NULL DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @orders_add_invoice_generated_at_col_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @orders_invoice_storage_path_col_exists := (
+  SELECT COUNT(1)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'Orders'
+    AND column_name = 'invoice_storage_path'
+);
+SET @orders_add_invoice_storage_path_col_sql := IF(
+  @orders_invoice_storage_path_col_exists = 0,
+  'ALTER TABLE `Orders` ADD COLUMN `invoice_storage_path` VARCHAR(255) NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @orders_add_invoice_storage_path_col_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @orders_invoice_id_uq_exists := (
+  SELECT COUNT(1)
+  FROM information_schema.statistics
+  WHERE table_schema = DATABASE()
+    AND table_name = 'Orders'
+    AND index_name = 'uq_orders_invoice_id'
+);
+SET @orders_add_invoice_id_uq_sql := IF(
+  @orders_invoice_id_uq_exists = 0,
+  'ALTER TABLE `Orders` ADD UNIQUE KEY `uq_orders_invoice_id` (`invoice_id`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @orders_add_invoice_id_uq_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @orders_invoice_number_uq_exists := (
+  SELECT COUNT(1)
+  FROM information_schema.statistics
+  WHERE table_schema = DATABASE()
+    AND table_name = 'Orders'
+    AND index_name = 'uq_orders_invoice_number'
+);
+SET @orders_add_invoice_number_uq_sql := IF(
+  @orders_invoice_number_uq_exists = 0,
+  'ALTER TABLE `Orders` ADD UNIQUE KEY `uq_orders_invoice_number` (`invoice_number`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @orders_add_invoice_number_uq_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @orders_invoice_fk_exists := (
+  SELECT COUNT(1)
+  FROM information_schema.table_constraints
+  WHERE table_schema = DATABASE()
+    AND table_name = 'Orders'
+    AND constraint_type = 'FOREIGN KEY'
+    AND constraint_name = 'fk_orders_invoice'
+);
+SET @orders_add_invoice_fk_sql := IF(
+  @orders_invoice_fk_exists = 0,
+  'ALTER TABLE `Orders` ADD CONSTRAINT `fk_orders_invoice` FOREIGN KEY (`invoice_id`) REFERENCES `Invoices` (`invoice_id`) ON DELETE SET NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @orders_add_invoice_fk_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

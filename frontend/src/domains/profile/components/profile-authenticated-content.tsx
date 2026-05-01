@@ -266,8 +266,7 @@ function customerOrderStatusHeadline(
   if (sn.includes("partially_cancelled")) return "Partially cancelled";
   if (sn.includes("cancel_pending")) return "Cancellation in progress · awaiting courier";
   const paid =
-    (detail?.paymentState ?? "").toLowerCase().includes("paid") ||
-    (detail?.paymentState ?? "").toLowerCase().includes("captured");
+    (detail?.paymentState ?? "").toLowerCase().includes("paid");
   const refundState = refundTrackingStateForOrder(statusName, detail);
   if ((sn.includes("cancelled") || sn.includes("canceled")) && paid) {
     if (refundState === "failed") return "Cancelled · refund failed";

@@ -6,7 +6,9 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
-use core_db_entities::entity::{invoices, order_details, order_status, orders, shipping_addresses, users};
+use core_db_entities::entity::{
+    invoices, order_details, order_status, orders, outbox_events, shipping_addresses, users,
+};
 use proto::proto::core::{
     GetOrderInvoiceDownloadRequest, GetOrderInvoiceDownloadResponse, GetOrderInvoiceRequest,
     InvoiceResponse,
@@ -139,7 +141,12 @@ fn shipping_snapshot(address: &shipping_addresses::Model) -> String {
     {
         parts.push(apartment.to_string());
     }
-    if let Some(road) = address.road.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+    if let Some(road) = address
+        .road
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
         parts.push(road.to_string());
     }
     parts.push(format!(
@@ -184,6 +191,43 @@ async fn find_invoice_by_order_id(
         .map_err(map_db_error_to_status)
 }
 
+async fn ensure_invoice_outbox_event(
+    txn: &DatabaseTransaction,
+    order_id: i64,
+    invoice_id: i64,
+    user_id: i64,
+    trigger: &str,
+) -> Result<(), Status> {
+    let aggregate_id = order_id.to_string();
+    let existing = outbox_events::Entity::find()
+        .filter(outbox_events::Column::EventType.eq(INVOICE_GENERATED))
+        .filter(outbox_events::Column::AggregateType.eq("order"))
+        .filter(outbox_events::Column::AggregateId.eq(aggregate_id.clone()))
+        .one(txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+    if existing.is_some() {
+        return Ok(());
+    }
+
+    crate::observability::record_invoice_outbox_repair_total();
+    crate::observability::log_operational_event(
+        "invoice_outbox_repaired",
+        &[
+            ("order_id", order_id.to_string()),
+            ("invoice_id", invoice_id.to_string()),
+        ],
+    );
+    let payload = json!({
+        "order_id": order_id,
+        "user_id": user_id,
+        "invoice_id": invoice_id,
+        "trigger": trigger,
+        "repair": true,
+    });
+    enqueue_outbox_event(txn, INVOICE_GENERATED, "order", &aggregate_id, payload).await
+}
+
 pub async fn ensure_invoice_for_order(
     txn: &DatabaseTransaction,
     order_id: i64,
@@ -196,6 +240,16 @@ pub async fn ensure_invoice_for_order(
             .one(txn)
             .await
             .map_err(map_db_error_to_status)?;
+        if let Some(ref invoice) = existing {
+            ensure_invoice_outbox_event(
+                txn,
+                order_id,
+                invoice.invoice_id,
+                invoice.user_id,
+                "invoice_exists_missing_outbox",
+            )
+            .await?;
+        }
         return Ok(existing);
     }
 
@@ -206,6 +260,14 @@ pub async fn ensure_invoice_for_order(
         active.invoice_generated_at = ActiveValue::Set(Some(existing.generated_at));
         active.invoice_storage_path = ActiveValue::Set(Some(existing.storage_path.clone()));
         let _ = active.update(txn).await.map_err(map_db_error_to_status)?;
+        ensure_invoice_outbox_event(
+            txn,
+            order_id,
+            existing.invoice_id,
+            existing.user_id,
+            "invoice_relinked_missing_outbox",
+        )
+        .await?;
         return Ok(Some(existing));
     }
 
@@ -334,21 +396,14 @@ pub async fn ensure_invoice_for_order(
         .await
         .map_err(map_db_error_to_status)?;
 
-    let payload = json!({
-        "order_id": order_id,
-        "user_id": inserted.user_id,
-        "invoice_id": inserted.invoice_id,
-        "invoice_number": inserted.invoice_number,
-        "trigger": trigger,
-    });
-    let _ = enqueue_outbox_event(
+    ensure_invoice_outbox_event(
         txn,
-        INVOICE_GENERATED,
-        "order",
-        &order_id.to_string(),
-        payload,
+        order_id,
+        inserted.invoice_id,
+        inserted.user_id,
+        trigger,
     )
-    .await;
+    .await?;
 
     info!(
         order_id,
@@ -367,7 +422,9 @@ pub async fn get_order_invoice(
     let req = request.into_inner();
     let invoice = find_invoice_by_order_id(txn, req.order_id)
         .await?
-        .ok_or_else(|| Status::not_found(format!("Invoice for order {} not found", req.order_id)))?;
+        .ok_or_else(|| {
+            Status::not_found(format!("Invoice for order {} not found", req.order_id))
+        })?;
     Ok(Response::new(to_invoice_response(&invoice)))
 }
 
@@ -378,7 +435,9 @@ pub async fn get_order_invoice_download(
     let req = request.into_inner();
     let invoice = find_invoice_by_order_id(txn, req.order_id)
         .await?
-        .ok_or_else(|| Status::not_found(format!("Invoice for order {} not found", req.order_id)))?;
+        .ok_or_else(|| {
+            Status::not_found(format!("Invoice for order {} not found", req.order_id))
+        })?;
     let pdf_bytes = BASE64_STANDARD
         .decode(invoice.pdf_blob.as_bytes())
         .map_err(|_| Status::internal("Invoice document is corrupted"))?;

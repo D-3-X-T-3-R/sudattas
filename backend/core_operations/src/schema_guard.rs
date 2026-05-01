@@ -84,10 +84,7 @@ fn is_missing_table_error(error_message: &str) -> bool {
 }
 
 async fn table_exists(db: &CoreDatabaseConnection, table_name: &str) -> Result<bool, String> {
-    let sql = format!(
-        "SELECT 1 FROM `{}` LIMIT 1",
-        table_name.replace('`', "``")
-    );
+    let sql = format!("SELECT 1 FROM `{}` LIMIT 1", table_name.replace('`', "``"));
     match db
         .query_all(Statement::from_string(DbBackend::MySql, sql))
         .await
@@ -137,7 +134,10 @@ mod tests {
 
     #[test]
     fn validate_required_tables_accepts_full_schema() {
-        let found = REQUIRED_TABLES.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let found = REQUIRED_TABLES
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
         assert!(validate_required_tables_from_found(found).is_ok());
     }
 

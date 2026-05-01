@@ -8,7 +8,9 @@ use proto::proto::core::GetOrderInvoiceDownloadRequest;
 use tracing::instrument;
 
 #[instrument]
-pub(crate) async fn get_order_invoice_download(order_id: String) -> Result<InvoiceDownload, GqlError> {
+pub(crate) async fn get_order_invoice_download(
+    order_id: String,
+) -> Result<InvoiceDownload, GqlError> {
     let mut client = connect_grpc_client().await?;
     let response = client
         .get_order_invoice_download(GetOrderInvoiceDownloadRequest {
@@ -16,9 +18,12 @@ pub(crate) async fn get_order_invoice_download(order_id: String) -> Result<Invoi
         })
         .await?;
     let row = response.into_inner();
-    let invoice = row
-        .invoice
-        .ok_or_else(|| GqlError::new("invoice payload missing", crate::resolvers::error::Code::Internal))?;
+    let invoice = row.invoice.ok_or_else(|| {
+        GqlError::new(
+            "invoice payload missing",
+            crate::resolvers::error::Code::Internal,
+        )
+    })?;
     let pdf_base64 = base64::engine::general_purpose::STANDARD.encode(row.pdf_bytes);
 
     Ok(InvoiceDownload {

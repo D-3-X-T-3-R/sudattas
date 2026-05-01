@@ -13,13 +13,10 @@ use core_operations::handlers::orders::delete_order;
 use core_operations::handlers::payment_intents::verify_razorpay_payment;
 use core_operations::handlers::shipments::logistics_workflow::{
     cancel_order_via_logistics, ensure_shiprocket_booking_for_paid_order,
-    process_booking_intents_batch,
+    process_booking_intents_batch, process_cancel_pending_logistics_order,
 };
 use core_operations::procedures::orders::place_order;
-use core_operations::procedures::{
-    cancel_pending_logistics::process_cancel_pending_logistics,
-    refund_attempts_worker::process_refund_attempts,
-};
+use core_operations::procedures::refund_attempts_worker::process_refund_attempts;
 use hmac::{Hmac, Mac};
 use integration_common::test_db_url_optional;
 use proto::proto::core::{
@@ -30,7 +27,7 @@ use sea_orm::{
     EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Statement, TransactionTrait,
 };
 use sha2::Sha256;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -241,6 +238,92 @@ async fn capture_created_shiprocket_order(
     }
 }
 
+async fn current_shiprocket_binding_for_order(
+    db: &DatabaseConnection,
+    internal_order_id: i64,
+) -> Result<(Option<String>, Option<String>, Option<String>), String> {
+    let shipment = shipment_meta(db, internal_order_id).await?;
+    let shiprocket_order_id = non_empty_trimmed(
+        shipment
+            .try_get::<Option<String>>("", "shiprocket_order_id")
+            .ok()
+            .flatten(),
+    );
+    let external_order_id = non_empty_trimmed(
+        shipment
+            .try_get::<Option<String>>("", "shiprocket_external_order_id")
+            .ok()
+            .flatten(),
+    );
+    let awb_code = non_empty_trimmed(
+        shipment
+            .try_get::<Option<String>>("", "awb_code")
+            .ok()
+            .flatten(),
+    );
+    Ok((shiprocket_order_id, external_order_id, awb_code))
+}
+
+async fn assert_shiprocket_cancel_target_ownership(
+    db: &DatabaseConnection,
+    internal_order_id: i64,
+    expected: Option<&CreatedShiprocketOrder>,
+) -> Result<(), String> {
+    let (current_shiprocket_order_id, current_external_order_id, current_awb) =
+        current_shiprocket_binding_for_order(db, internal_order_id).await?;
+
+    if let Some(expected_created) = expected {
+        if expected_created.internal_order_id != internal_order_id {
+            return Err(format!(
+                "cleanup ownership mismatch: expected internal_order_id={} but got {}",
+                expected_created.internal_order_id, internal_order_id
+            ));
+        }
+        if current_shiprocket_order_id.as_deref()
+            != Some(expected_created.shiprocket_order_id.as_str())
+        {
+            return Err(format!(
+                "cleanup ownership mismatch for internal_order_id={internal_order_id}: shiprocket_order_id changed from tracked={} to current={:?}",
+                expected_created.shiprocket_order_id, current_shiprocket_order_id
+            ));
+        }
+        if current_external_order_id.as_deref() != Some(expected_created.external_order_id.as_str())
+        {
+            return Err(format!(
+                "cleanup ownership mismatch for internal_order_id={internal_order_id}: external_order_id changed from tracked={} to current={:?}",
+                expected_created.external_order_id, current_external_order_id
+            ));
+        }
+        if let Some(expected_awb) = expected_created.awb_code.as_deref() {
+            if current_awb.as_deref() != Some(expected_awb) {
+                return Err(format!(
+                    "cleanup ownership mismatch for internal_order_id={internal_order_id}: awb changed from tracked={} to current={:?}",
+                    expected_awb, current_awb
+                ));
+            }
+        }
+        return Ok(());
+    }
+
+    if current_shiprocket_order_id.is_some() || current_external_order_id.is_some() {
+        return Err(format!(
+            "cleanup cannot prove Shiprocket ownership for internal_order_id={internal_order_id}; provider identifiers exist but are not tracked by this test"
+        ));
+    }
+    Ok(())
+}
+
+async fn process_cancel_pending_logistics_for_order(
+    db: &DatabaseConnection,
+    internal_order_id: i64,
+    expected: Option<&CreatedShiprocketOrder>,
+) -> Result<bool, String> {
+    assert_shiprocket_cancel_target_ownership(db, internal_order_id, expected).await?;
+    process_cancel_pending_logistics_order(db, internal_order_id)
+        .await
+        .map_err(|status| status.to_string())
+}
+
 async fn shiprocket_auth_token(client: &reqwest::Client) -> Result<String, String> {
     load_live_env_from_repo();
     let email = std::env::var("SHIPROCKET_EMAIL")
@@ -277,10 +360,13 @@ async fn shiprocket_auth_token(client: &reqwest::Client) -> Result<String, Strin
 }
 
 async fn shiprocket_cancel_and_verify(
+    db: &DatabaseConnection,
     client: &reqwest::Client,
     bearer_token: &str,
     created: &CreatedShiprocketOrder,
 ) -> Result<(), String> {
+    assert_shiprocket_cancel_target_ownership(db, created.internal_order_id, Some(created)).await?;
+
     let cancel_reference = created
         .external_order_id
         .parse::<i64>()
@@ -430,6 +516,7 @@ async fn shiprocket_cancel_and_verify(
 }
 
 async fn cleanup_created_shiprocket_orders(
+    db: &DatabaseConnection,
     created_orders: &[CreatedShiprocketOrder],
 ) -> Result<(), String> {
     if created_orders.is_empty() {
@@ -449,7 +536,7 @@ async fn cleanup_created_shiprocket_orders(
             continue;
         }
         if let Err(error) =
-            shiprocket_cancel_and_verify(&client, bearer_token.as_str(), created).await
+            shiprocket_cancel_and_verify(db, &client, bearer_token.as_str(), created).await
         {
             failures.push(error);
         }
@@ -465,6 +552,7 @@ async fn cleanup_created_shiprocket_orders(
 async fn cleanup_local_live_orders(
     db: &DatabaseConnection,
     local_orders: &[(i64, i64)],
+    created_orders_by_internal_order: &HashMap<i64, CreatedShiprocketOrder>,
 ) -> Result<(), String> {
     if local_orders.is_empty() {
         return Ok(());
@@ -476,7 +564,8 @@ async fn cleanup_local_live_orders(
         if !seen.insert((order_id, user_id)) {
             continue;
         }
-        if let Err(error) = cleanup_live_order(db, order_id, user_id).await {
+        let expected_created = created_orders_by_internal_order.get(&order_id);
+        if let Err(error) = cleanup_live_order(db, order_id, user_id, expected_created).await {
             failures.push(format!(
                 "local cleanup failed for internal_order_id={order_id} user_id={user_id}: {error}"
             ));
@@ -499,11 +588,22 @@ async fn finalize_live_test_with_cleanup(
 
     let created_orders = tracker.snapshot_shiprocket_orders()?;
     let local_orders = tracker.snapshot_local_orders()?;
+    let created_orders_by_internal_order: HashMap<i64, CreatedShiprocketOrder> = created_orders
+        .iter()
+        .cloned()
+        .map(|created| (created.internal_order_id, created))
+        .collect();
 
-    if let Err(error) = cleanup_created_shiprocket_orders(created_orders.as_slice()).await {
+    if let Err(error) = cleanup_created_shiprocket_orders(db, created_orders.as_slice()).await {
         failures.push(format!("provider cleanup failure:\n{error}"));
     }
-    if let Err(error) = cleanup_local_live_orders(db, local_orders.as_slice()).await {
+    if let Err(error) = cleanup_local_live_orders(
+        db,
+        local_orders.as_slice(),
+        &created_orders_by_internal_order,
+    )
+    .await
+    {
         failures.push(format!("local cleanup failure:\n{error}"));
     }
 
@@ -1143,7 +1243,10 @@ async fn cleanup_live_order(
     db: &DatabaseConnection,
     order_id: i64,
     user_id: i64,
+    expected_created: Option<&CreatedShiprocketOrder>,
 ) -> Result<(), String> {
+    assert_shiprocket_cancel_target_ownership(db, order_id, expected_created).await?;
+
     let mut cancel_requested = false;
     {
         let txn = db.begin().await.map_err(|e| e.to_string())?;
@@ -1181,9 +1284,11 @@ async fn cleanup_live_order(
     }
 
     for _ in 0..8 {
-        process_cancel_pending_logistics(db, 25)
+        process_cancel_pending_logistics_for_order(db, order_id, expected_created)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|error| {
+                format!("order-scoped cancellation processing failed for order {order_id}: {error}")
+            })?;
         let shipment = shipment_meta(db, order_id).await?;
         let logistics_status: Option<String> = shipment.try_get("", "logistics_status").ok();
         if logistics_status.as_deref() == Some("cancelled") {
@@ -1359,10 +1464,10 @@ async fn live_pre_pickup_cancel_refunds_once_and_is_idempotent() {
             created.awb_code.as_deref().unwrap_or("")
         );
 
-        cleanup_live_order(&body_db, order_id, user_id)
+        cleanup_live_order(&body_db, order_id, user_id, Some(&created))
             .await
             .map_err(|error| format!("live cleanup failed for order {order_id}: {error}"))?;
-        cleanup_live_order(&body_db, order_id, user_id)
+        cleanup_live_order(&body_db, order_id, user_id, Some(&created))
             .await
             .map_err(|error| format!("live cancel replay failed for order {order_id}: {error}"))?;
 

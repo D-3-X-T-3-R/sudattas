@@ -46,6 +46,14 @@ fn map_shipping_quote_error(error: ShiprocketError) -> Status {
     Status::unavailable(message)
 }
 
+fn pending_idempotency_ttl_minutes() -> i64 {
+    std::env::var("IDEMPOTENCY_PENDING_TIMEOUT_MINUTES")
+        .ok()
+        .and_then(|value| value.parse::<i64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(15)
+}
+
 #[allow(clippy::result_large_err)]
 fn validate_selected_cart_ids(selected_cart_ids: &[i64]) -> Result<Vec<i64>, Status> {
     if selected_cart_ids.is_empty() {
@@ -345,9 +353,25 @@ async fn place_order_in_txn(
                     }));
                 }
                 IdempotencyStatus::Pending => {
-                    return Err(Status::unavailable(
-                        "Idempotent place_order still in progress; retry later",
-                    ));
+                    let stale_before =
+                        Utc::now() - chrono::Duration::minutes(pending_idempotency_ttl_minutes());
+                    if existing.created_at < stale_before {
+                        warn!(
+                            idempotency_key = %key,
+                            created_at = %existing.created_at,
+                            "stale pending idempotency key detected; marking failed for safe retry"
+                        );
+                        let mut active: idempotency_keys::ActiveModel = existing.into();
+                        active.status = Set(IdempotencyStatus::Failed);
+                        active
+                            .update(txn)
+                            .await
+                            .map_err(|e| Status::internal(e.to_string()))?;
+                    } else {
+                        return Err(Status::unavailable(
+                            "Idempotent place_order still in progress; retry later",
+                        ));
+                    }
                 }
                 IdempotencyStatus::Failed => {
                     // Allow retry; fall through to place order and update row later.

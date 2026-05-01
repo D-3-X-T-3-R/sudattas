@@ -69,6 +69,51 @@ async fn refresh_backlog_metrics(db: &core_db_entities::CoreDatabaseConnection) 
     .await
     .unwrap_or(0.0);
     observability::record_outbox_backlog_gauge(outbox_backlog);
+    let outbox_pending_max_age = query_count(
+        db,
+        "SELECT COALESCE(MAX(TIMESTAMPDIFF(SECOND, created_at, UTC_TIMESTAMP())), 0) AS count FROM OutboxEvents WHERE status = 'pending'",
+    )
+    .await
+    .unwrap_or(0.0);
+    observability::record_outbox_pending_max_age_seconds_gauge(outbox_pending_max_age);
+    let outbox_retry_backlog = query_count(
+        db,
+        "SELECT COUNT(*) AS count FROM OutboxEvents WHERE status = 'pending' AND published_at IS NOT NULL",
+    )
+    .await
+    .unwrap_or(0.0);
+    observability::record_outbox_retry_backlog_gauge(outbox_retry_backlog);
+
+    let webhook_failed_backlog = query_count(
+        db,
+        "SELECT COUNT(*) AS count FROM WebhookEvents WHERE status = 'failed'",
+    )
+    .await
+    .unwrap_or(0.0);
+    observability::record_webhook_failed_backlog_gauge(webhook_failed_backlog);
+    let webhook_pending_max_age = query_count(
+        db,
+        "SELECT COALESCE(MAX(TIMESTAMPDIFF(SECOND, received_at, UTC_TIMESTAMP())), 0) AS count FROM WebhookEvents WHERE status = 'pending'",
+    )
+    .await
+    .unwrap_or(0.0);
+    observability::record_webhook_pending_max_age_seconds_gauge(webhook_pending_max_age);
+
+    let refund_attempts_stuck = query_count(
+        db,
+        "SELECT COUNT(*) AS count FROM RefundAttempts WHERE status IN ('pending_external','submitted','submitting') AND created_at < (UTC_TIMESTAMP() - INTERVAL 15 MINUTE)",
+    )
+    .await
+    .unwrap_or(0.0);
+    observability::record_refund_attempts_stuck_gauge(refund_attempts_stuck);
+
+    let shipments_retry_backlog = query_count(
+        db,
+        "SELECT COUNT(*) AS count FROM Shipments WHERE logistics_status IN ('booking_failed','booking_persist_pending','cancel_pending_logistics','cancel_persist_pending')",
+    )
+    .await
+    .unwrap_or(0.0);
+    observability::record_shipments_retry_backlog_gauge(shipments_retry_backlog);
 
     let stuck_intents = query_count(
         db,
@@ -77,6 +122,14 @@ async fn refresh_backlog_metrics(db: &core_db_entities::CoreDatabaseConnection) 
     .await
     .unwrap_or(0.0);
     observability::record_stuck_payment_intents_gauge(stuck_intents);
+
+    let stale_idempotency_pending = query_count(
+        db,
+        "SELECT COUNT(*) AS count FROM IdempotencyKeys WHERE status = 'pending' AND created_at < (UTC_TIMESTAMP() - INTERVAL 15 MINUTE)",
+    )
+    .await
+    .unwrap_or(0.0);
+    observability::record_stale_idempotency_pending_gauge(stale_idempotency_pending);
 }
 
 #[tokio::main]

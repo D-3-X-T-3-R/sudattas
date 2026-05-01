@@ -3,6 +3,7 @@ import {
   callGraphqlAsCustomer,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
+import { canonicalOrderStatusName, statusNameFromId } from "@/lib/order-state";
 
 function flowLog(message: string, meta?: Record<string, unknown>) {
   if (meta) {
@@ -42,10 +43,6 @@ const ORDER_STATUS_QUERY = `query AccountOrderStatuses {
     statusName
   }
 }`;
-
-function formatOrderStatusName(statusName: string): string {
-  return statusName.trim().toLowerCase() === "processing" ? "processing order" : statusName;
-}
 
 export async function GET() {
   flowLog("orders list request received");
@@ -108,13 +105,13 @@ export async function GET() {
   const statusNameById = new Map(
     (statusesResult.data?.searchOrderStatus ?? []).map((s) => [
       s.statusId,
-      formatOrderStatusName(s.statusName),
+      canonicalOrderStatusName(s.statusName),
     ])
   );
 
   const orders = (ordersResult.data?.searchOrder ?? []).map((order) => ({
     ...order,
-    statusName: statusNameById.get(order.statusId) ?? order.statusId,
+    statusName: statusNameFromId(order.statusId, statusNameById),
     cancelWindowHours: normalizedCancelWindowHours,
     returnWindowDays: normalizedReturnWindowDays,
   }));
