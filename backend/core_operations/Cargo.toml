@@ -66,6 +66,7 @@ tracing = { version = "0.1.44", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "json"] }
 metrics = "0.21"
 metrics-exporter-prometheus = "0.13"
+genpdf = "0.2"
 
 [dev-dependencies]
 # Test dependencies

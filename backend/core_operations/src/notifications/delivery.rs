@@ -5,16 +5,28 @@
 use crate::handlers::outbox::{
     ABANDONED_CART, DELIVERED, INVOICE_GENERATED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
 };
-use crate::notifications::email_provider::send_transactional_email;
+use crate::notifications::email_provider::{
+    send_transactional_email, send_transactional_email_with_attachments, EmailAttachment,
+};
 use crate::notifications::order_mail::{
     build_abandoned_cart_email, build_delivered_email, build_payment_captured_email,
     build_refunded_email, build_shipped_email, load_order_mail_snapshot,
     parse_abandoned_cart_email, parse_payload_order_id,
 };
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use core_db_entities::entity::{invoices, outbox_events};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use tonic::Status;
 use tracing::{info, warn};
+
+fn payment_mode_label(raw: &str) -> &'static str {
+    if raw.eq_ignore_ascii_case("cod") {
+        "Cash on Delivery"
+    } else {
+        "Prepaid"
+    }
+}
 
 /// Deliver one outbox event. Uses `db` for read-only enrichment (no long-held txn during HTTP).
 /// Set env `OUTBOX_DELIVER_FAIL=1` to simulate delivery failure (for retry-path tests).
@@ -153,32 +165,51 @@ async fn deliver_invoice_generated(
         return Ok(());
     }
 
-    let storefront =
-        std::env::var("STOREFRONT_URL").unwrap_or_else(|_| "https://sudattas.com".to_string());
-    let download_url = format!(
-        "{}/api/account/orders/{}/invoice",
-        storefront.trim_end_matches('/'),
-        order_id
-    );
+    let pdf_bytes = match BASE64_STANDARD.decode(invoice.pdf_blob.as_bytes()) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            warn!(
+                event_id = event.event_id,
+                order_id,
+                error = %e,
+                "outbox: invoice PDF payload decode failed; skip"
+            );
+            return Ok(());
+        }
+    };
+    if !pdf_bytes.starts_with(b"%PDF-") {
+        warn!(
+            event_id = event.event_id,
+            order_id, "outbox: invoice PDF payload malformed; skip"
+        );
+        return Ok(());
+    }
+
+    let attachment = EmailAttachment {
+        filename: format!("Invoice_{}.pdf", snapshot.invoice_number),
+        content_base64: BASE64_STANDARD.encode(&pdf_bytes),
+        mime_type: "application/pdf".to_string(),
+    };
+    let attachments = vec![attachment];
+
     let subject = format!("Your Sudatta's invoice for order #{}", order_id);
     let text = format!(
-        "Hi {},\n\nYour invoice is ready.\nOrder number: {}\nInvoice number: {}\nTotal amount: {}\nPayment mode: {}\nDownload invoice: {}\n",
+        "Hi {},\n\nYour invoice is ready.\nOrder number: {}\nInvoice number: {}\nTotal amount: {}\nPayment mode: {}\n\nPlease find the invoice attached as a PDF.\n",
         snapshot.customer_name,
         order_id,
         snapshot.invoice_number,
         snapshot.grand_total_formatted,
-        snapshot.payment_mode,
-        download_url
+        payment_mode_label(&snapshot.payment_mode),
     );
     let html = format!(
-        "<p>Hi {},</p><p>Your invoice is ready.</p><ul><li>Order number: <strong>{}</strong></li><li>Invoice number: <strong>{}</strong></li><li>Total amount: <strong>{}</strong></li><li>Payment mode: <strong>{}</strong></li></ul><p><a href=\"{}\">Download invoice</a></p>",
+        "<p>Hi {},</p><p>Your invoice is ready.</p><ul><li>Order number: <strong>{}</strong></li><li>Invoice number: <strong>{}</strong></li><li>Total amount: <strong>{}</strong></li><li>Payment mode: <strong>{}</strong></li></ul><p>Please find your invoice attached as a PDF.</p>",
         snapshot.customer_name,
         order_id,
         snapshot.invoice_number,
         snapshot.grand_total_formatted,
-        snapshot.payment_mode,
-        download_url
+        payment_mode_label(&snapshot.payment_mode)
     );
 
-    send_transactional_email(&recipient, &subject, &text, &html).await
+    send_transactional_email_with_attachments(&recipient, &subject, &text, &html, &attachments)
+        .await
 }

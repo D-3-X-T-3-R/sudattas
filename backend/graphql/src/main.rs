@@ -4,6 +4,8 @@ use graphql::graphql_handler;
 use graphql::health;
 use graphql::query_handler::admin_roles;
 use graphql::query_handler::{AuthSource, Context};
+use graphql::resolvers::error::Code as GqlCode;
+use graphql::resolvers::invoices::handlers as invoice_handlers;
 use graphql::schema;
 use graphql::security::csrf;
 use graphql::security::guest_session;
@@ -120,6 +122,18 @@ fn resolve_graphql_rate_limit_key(
         }
     }
     None
+}
+
+fn status_from_gql_code(code: GqlCode) -> StatusCode {
+    match code {
+        GqlCode::InvalidArgument => StatusCode::BAD_REQUEST,
+        GqlCode::NotFound => StatusCode::NOT_FOUND,
+        GqlCode::PermissionDenied => StatusCode::FORBIDDEN,
+        GqlCode::Unauthenticated => StatusCode::UNAUTHORIZED,
+        GqlCode::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+        GqlCode::FailedPrecondition => StatusCode::PRECONDITION_FAILED,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
 }
 
 #[tokio::main]
@@ -511,6 +525,36 @@ async fn main() {
         .and(graphql_route)
         .map(|_, reply| reply);
 
+    let invoice_download_route = warp::get()
+        .and(warp::path("invoices"))
+        .and(warp::path::param::<String>())
+        .and(warp::path("download"))
+        .and(warp::path::end())
+        .and(context_filter.clone())
+        .and_then(|invoice_number: String, ctx: Context| async move {
+            match invoice_handlers::download_invoice_pdf(&ctx, invoice_number.as_str()).await {
+                Ok(payload) => {
+                    let reply = reply::with_header(
+                        reply::with_header(
+                            reply::with_header(
+                                reply::with_status(payload.pdf_bytes, StatusCode::OK),
+                                "Content-Type",
+                                payload.content_type,
+                            ),
+                            "Content-Disposition",
+                            format!("attachment; filename=\"{}\"", payload.file_name),
+                        ),
+                        "Cache-Control",
+                        "private, no-store",
+                    );
+                    Ok::<_, Rejection>(reply.into_response())
+                }
+                Err(err) => Ok::<_, Rejection>(
+                    reply::with_status(err.message, status_from_gql_code(err.code)).into_response(),
+                ),
+            }
+        });
+
     let options_routes = warp::options().map(warp::reply).with(cors.clone());
 
     let shiprocket_webhook_route_inner = warp::post()
@@ -769,6 +813,7 @@ async fn main() {
         .or(otp_verify_route.with(cors.clone()))
         .or(robots_route)
         .or(sitemap_route)
+        .or(invoice_download_route.with(cors.clone()))
         .or(graphql_copy)
         .or(webhook_route)
         .or(options_routes)
