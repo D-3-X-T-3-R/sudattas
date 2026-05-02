@@ -199,6 +199,39 @@ async fn process_payment_captured(
         "process_payment_captured resolved payment_intent for webhook"
     );
 
+    if matches!(intent.status, Status::Failed) {
+        warn!(
+            payment_intent_id = intent.intent_id,
+            webhook_payment_id = %payment_id,
+            "payment.captured received for failed/expired intent; marking needs_review"
+        );
+        txn.execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "UPDATE PaymentIntents SET status = 'needs_review' WHERE intent_id = ?",
+            [intent.intent_id.into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?;
+        if let Some(order_id) = intent.order_id {
+            let _ = create_order_event(
+                txn,
+                Request::new(CreateOrderEventRequest {
+                    order_id,
+                    event_type: "late_payment_capture_needs_review".to_string(),
+                    from_status: None,
+                    to_status: Some("needs_review".to_string()),
+                    actor_type: "system".to_string(),
+                    message: Some(
+                        "Captured payment arrived after system expiry; manual review required"
+                            .to_string(),
+                    ),
+                }),
+            )
+            .await;
+        }
+        return Ok(());
+    }
+
     // Phase 5: Verify amount and currency before treating as paid.
     let intent_paise = intent.amount_paise as i64;
     let order = match intent.order_id {
@@ -218,6 +251,46 @@ async fn process_payment_captured(
     };
     let order_grand_paise: Option<i64> = order.as_ref().map(|o| o.grand_total_minor);
     let intent_currency = intent.currency.as_deref().unwrap_or("").to_uppercase();
+
+    if let Some(order_row) = order.as_ref() {
+        let status_name = order_state_machine::get_status_name(txn, order_row.status_id)
+            .await?
+            .unwrap_or_default();
+        if status_name.eq_ignore_ascii_case("cancelled")
+            || status_name.eq_ignore_ascii_case("refunded")
+        {
+            warn!(
+                order_id = order_row.order_id,
+                order_status = %status_name,
+                payment_intent_id = intent.intent_id,
+                webhook_payment_id = %payment_id,
+                "payment.captured arrived for terminal order; marking payment intent needs_review"
+            );
+            txn.execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "UPDATE PaymentIntents SET status = 'needs_review' WHERE intent_id = ?",
+                [intent.intent_id.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+            let _ = create_order_event(
+                txn,
+                Request::new(CreateOrderEventRequest {
+                    order_id: order_row.order_id,
+                    event_type: "late_payment_capture_needs_review".to_string(),
+                    from_status: Some(status_name),
+                    to_status: Some("needs_review".to_string()),
+                    actor_type: "system".to_string(),
+                    message: Some(
+                        "Captured payment arrived after order reached terminal state; manual review required"
+                            .to_string(),
+                    ),
+                }),
+            )
+            .await;
+            return Ok(());
+        }
+    }
 
     // When intent has no order, verify only webhook vs intent; when it has an order, require order grand total to match too.
     let amount_ok =
