@@ -10,6 +10,7 @@ use crate::handlers::shipments::logistics_workflow::load_shipment_for_order;
 use crate::money::paise_to_decimal;
 use crate::observability;
 use crate::razorpay;
+use chrono::{DateTime, Duration, Utc};
 use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status as DbStatus};
 use core_db_entities::entity::{
     order_details, order_inventory_restore_items, orders, payment_intents, refund_attempts, refunds,
@@ -68,6 +69,30 @@ fn active_items_total_minor(details: &[order_details::Model]) -> i64 {
 
 fn remaining_after_processed_refunds(target_refund_minor: i64, settled_processed: i64) -> i64 {
     target_refund_minor.saturating_sub(settled_processed).max(0)
+}
+
+fn refund_attempt_is_stale_submitting(
+    status: &str,
+    updated_at: DateTime<Utc>,
+    stale_before: DateTime<Utc>,
+) -> bool {
+    status.eq_ignore_ascii_case("submitting") && updated_at < stale_before
+}
+
+fn refund_attempt_is_claimable(
+    status: &str,
+    updated_at: DateTime<Utc>,
+    stale_before: DateTime<Utc>,
+) -> bool {
+    status.eq_ignore_ascii_case("pending_external")
+        || status.eq_ignore_ascii_case("submitted")
+        || refund_attempt_is_stale_submitting(status, updated_at, stale_before)
+}
+
+fn should_call_gateway_refund(gateway_refund_id: Option<&str>) -> bool {
+    gateway_refund_id
+        .map(|id| id.trim().is_empty())
+        .unwrap_or(true)
 }
 
 async fn set_order_refund_settlement_status(
@@ -614,38 +639,79 @@ async fn claim_refund_attempt_ids(
     txn: &DatabaseTransaction,
     batch_limit: u64,
 ) -> Result<Vec<i64>, TonicStatus> {
+    let reclaim_timeout_minutes = crate::order_policy::refund_reclaim_timeout_minutes();
+    let stale_before = Utc::now() - Duration::minutes(reclaim_timeout_minutes);
     let rows = txn
         .query_all(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"SELECT attempt_id
+                     , status
+                     , updated_at
                FROM RefundAttempts
                WHERE status IN ('pending_external', 'submitted')
+                  OR (
+                      status = 'submitting'
+                      AND updated_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)
+                  )
                ORDER BY attempt_id ASC
                LIMIT ?
                FOR UPDATE SKIP LOCKED"#,
-            [i64::try_from(batch_limit).unwrap_or(i64::MAX).into()],
+            [
+                reclaim_timeout_minutes.into(),
+                i64::try_from(batch_limit).unwrap_or(i64::MAX).into(),
+            ],
         ))
         .await
         .map_err(map_db_error_to_status)?;
 
     let mut ids = Vec::with_capacity(rows.len());
+    let mut stale_submitting_reclaimed = 0_u64;
     for row in rows {
         let attempt_id = row
             .try_get::<i64>("", "attempt_id")
             .map_err(|e| TonicStatus::internal(e.to_string()))?;
-        txn.execute(Statement::from_sql_and_values(
-            DbBackend::MySql,
-            r#"UPDATE RefundAttempts
-               SET status = 'submitting',
-                   provider_error = NULL,
-                   updated_at = UTC_TIMESTAMP()
-               WHERE attempt_id = ?
-                 AND status IN ('pending_external', 'submitted')"#,
-            [attempt_id.into()],
-        ))
-        .await
-        .map_err(map_db_error_to_status)?;
-        ids.push(attempt_id);
+        let status = row
+            .try_get::<String>("", "status")
+            .map_err(|e| TonicStatus::internal(e.to_string()))?;
+        let updated_at = row
+            .try_get::<DateTime<Utc>>("", "updated_at")
+            .map_err(|e| TonicStatus::internal(e.to_string()))?;
+        let claimable = refund_attempt_is_claimable(&status, updated_at, stale_before);
+        if !claimable {
+            continue;
+        }
+        if refund_attempt_is_stale_submitting(&status, updated_at, stale_before) {
+            stale_submitting_reclaimed += 1;
+        }
+
+        let claim = txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                r#"UPDATE RefundAttempts
+                   SET status = 'submitting',
+                       provider_error = NULL,
+                       updated_at = UTC_TIMESTAMP()
+                   WHERE attempt_id = ?
+                     AND (
+                         status IN ('pending_external', 'submitted')
+                         OR (
+                             status = 'submitting'
+                             AND updated_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)
+                         )
+                     )"#,
+                [attempt_id.into(), reclaim_timeout_minutes.into()],
+            ))
+            .await
+            .map_err(map_db_error_to_status)?;
+        if claim.rows_affected() > 0 {
+            ids.push(attempt_id);
+        }
+    }
+    if stale_submitting_reclaimed > 0 {
+        warn!(
+            stale_submitting_reclaimed,
+            reclaim_timeout_minutes, "refund worker: reclaiming stale submitting attempts"
+        );
     }
     Ok(ids)
 }
@@ -878,9 +944,7 @@ async fn process_claimed_refund_attempt(
     let known_gateway_refund_id = attempt.gateway_refund_id.clone();
     prep_txn.commit().await.map_err(map_db_error_to_status)?;
 
-    let gateway_refund_id = if let Some(existing_gateway_id) = known_gateway_refund_id {
-        existing_gateway_id
-    } else {
+    let gateway_refund_id = if should_call_gateway_refund(known_gateway_refund_id.as_deref()) {
         match razorpay::create_refund(&payment_id, amount_to_send, &idempotency_key).await {
             Ok(gateway_refund) => {
                 observability::log_operational_event(
@@ -955,6 +1019,8 @@ async fn process_claimed_refund_attempt(
                 return Ok(false);
             }
         }
+    } else {
+        known_gateway_refund_id.unwrap_or_default()
     };
 
     let persist_txn = db.begin().await.map_err(map_db_error_to_status)?;
@@ -1062,11 +1128,14 @@ pub async fn restored_items_count_for_order(
 #[cfg(test)]
 mod tests {
     use super::{
-        compute_target_refund_minor, line_total_minor_from_detail,
-        remaining_after_processed_refunds,
+        claim_refund_attempt_ids, compute_target_refund_minor, line_total_minor_from_detail,
+        refund_attempt_is_claimable, refund_attempt_is_stale_submitting,
+        remaining_after_processed_refunds, should_call_gateway_refund,
     };
-    use core_db_entities::entity::order_details;
+    use chrono::{Duration, Utc};
+    use core_db_entities::entity::{order_details, refund_attempts};
     use sea_orm::prelude::DateTimeUtc;
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
 
     fn sample_detail(
         order_detail_id: i64,
@@ -1091,6 +1160,27 @@ mod tests {
             line_attrs: None,
             item_status: item_status.to_string(),
             cancelled_at: None::<DateTimeUtc>,
+        }
+    }
+
+    fn sample_refund_attempt(
+        attempt_id: i64,
+        status: &str,
+        updated_at: DateTimeUtc,
+    ) -> refund_attempts::Model {
+        refund_attempts::Model {
+            attempt_id,
+            order_id: 1,
+            payment_intent_id: Some(1),
+            razorpay_payment_id: Some("pay_test_1".to_string()),
+            amount_requested_paise: 500,
+            amount_sent_to_gateway_paise: 500,
+            gateway_refund_id: None,
+            status: status.to_string(),
+            provider_error: None,
+            idempotency_key: format!("idem_{attempt_id}"),
+            created_at: updated_at,
+            updated_at,
         }
     }
 
@@ -1125,5 +1215,110 @@ mod tests {
         assert_eq!(remaining_after_processed_refunds(4000, 1500), 2500);
         assert_eq!(remaining_after_processed_refunds(4000, 4000), 0);
         assert_eq!(remaining_after_processed_refunds(4000, 4500), 0);
+    }
+
+    #[test]
+    fn stale_submitting_refund_attempt_is_claimable() {
+        let now = Utc::now();
+        let stale_before = now - Duration::minutes(12);
+        let updated_at = now - Duration::minutes(20);
+        assert!(refund_attempt_is_stale_submitting(
+            "submitting",
+            updated_at,
+            stale_before
+        ));
+        assert!(refund_attempt_is_claimable(
+            "submitting",
+            updated_at,
+            stale_before
+        ));
+    }
+
+    #[test]
+    fn fresh_submitting_refund_attempt_is_not_claimable() {
+        let now = Utc::now();
+        let stale_before = now - Duration::minutes(12);
+        let updated_at = now - Duration::minutes(1);
+        assert!(!refund_attempt_is_stale_submitting(
+            "submitting",
+            updated_at,
+            stale_before
+        ));
+        assert!(!refund_attempt_is_claimable(
+            "submitting",
+            updated_at,
+            stale_before
+        ));
+    }
+
+    #[test]
+    fn pending_external_refund_attempt_remains_claimable() {
+        let now = Utc::now();
+        let stale_before = now - Duration::minutes(12);
+        assert!(refund_attempt_is_claimable(
+            "pending_external",
+            now,
+            stale_before
+        ));
+    }
+
+    #[test]
+    fn existing_gateway_refund_id_skips_new_gateway_call() {
+        assert!(!should_call_gateway_refund(Some("rfnd_123")));
+        assert!(should_call_gateway_refund(Some(" ")));
+        assert!(should_call_gateway_refund(None));
+    }
+
+    #[tokio::test]
+    async fn claim_refund_attempt_ids_reclaims_stale_submitting() {
+        let now = Utc::now();
+        let stale_attempt = sample_refund_attempt(9, "submitting", now - Duration::minutes(40));
+        let db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results(vec![vec![stale_attempt]])
+            .append_exec_results(vec![MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let txn = db.begin().await.expect("begin");
+        let ids = claim_refund_attempt_ids(&txn, 10)
+            .await
+            .expect("claim stale submitting");
+        assert_eq!(ids, vec![9]);
+    }
+
+    #[tokio::test]
+    async fn claim_refund_attempt_ids_does_not_reclaim_fresh_submitting() {
+        let now = Utc::now();
+        let fresh_attempt = sample_refund_attempt(10, "submitting", now - Duration::minutes(1));
+        let db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results(vec![vec![fresh_attempt]])
+            .into_connection();
+        let txn = db.begin().await.expect("begin");
+        let ids = claim_refund_attempt_ids(&txn, 10)
+            .await
+            .expect("claim fresh submitting");
+        assert!(
+            ids.is_empty(),
+            "fresh submitting attempts must not be reclaimed early"
+        );
+    }
+
+    #[tokio::test]
+    async fn claim_refund_attempt_ids_still_claims_pending_external() {
+        let now = Utc::now();
+        let pending_attempt = sample_refund_attempt(11, "pending_external", now);
+        let db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results(vec![vec![pending_attempt]])
+            .append_exec_results(vec![MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let txn = db.begin().await.expect("begin");
+        let ids = claim_refund_attempt_ids(&txn, 10)
+            .await
+            .expect("claim pending_external");
+        assert_eq!(ids, vec![11]);
     }
 }

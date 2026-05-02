@@ -5,7 +5,7 @@ use crate::handlers::orders::update_order;
 use crate::integrations::shiprocket;
 use crate::money::paise_to_decimal;
 use crate::order_state_machine;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use core_db_entities::entity::orders;
 use proto::proto::core::{CreateOrderEventRequest, UpdateOrderRequest};
 use sea_orm::{
@@ -124,6 +124,30 @@ fn cod_status_allows_booking(status_name: &str) -> bool {
 
 fn shipment_is_fully_booked(shipment: &ShipmentLogisticsRecord) -> bool {
     shipment.awb_code.is_some() && shipment.shiprocket_order_id.is_some()
+}
+
+fn has_non_empty_ref(value: Option<&str>) -> bool {
+    value.map(|v| !v.trim().is_empty()).unwrap_or(false)
+}
+
+fn shipment_has_provider_booking_reference(shipment: &ShipmentLogisticsRecord) -> bool {
+    has_non_empty_ref(shipment.shiprocket_order_id.as_deref())
+        || has_non_empty_ref(shipment.shiprocket_external_order_id.as_deref())
+        || has_non_empty_ref(shipment.awb_code.as_deref())
+}
+
+fn shipment_booking_claimable(
+    logistics_status: Option<&str>,
+    order_updated_at: DateTime<Utc>,
+    stale_before: DateTime<Utc>,
+) -> bool {
+    match logistics_status.unwrap_or_default() {
+        "booking_pending" | "booking_failed" | "booking_claimed" | "booking_persist_pending" => {
+            true
+        }
+        "booking_in_progress" => order_updated_at < stale_before,
+        _ => false,
+    }
 }
 
 async fn upsert_booking_intent(
@@ -607,6 +631,34 @@ pub async fn process_booking_intent(
             prep_txn.commit().await.map_err(map_db_error_to_status)?;
             return Ok(false);
         }
+
+        if shipment_has_provider_booking_reference(existing) {
+            prep_txn
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    r#"UPDATE Shipments
+                       SET logistics_status = 'booking_persist_pending'
+                       WHERE shipment_id = ?
+                         AND logistics_status IN (
+                             'booking_pending',
+                             'booking_failed',
+                             'booking_claimed',
+                             'booking_in_progress',
+                             'booking_persist_pending'
+                         )"#,
+                    [existing.shipment_id.into()],
+                ))
+                .await
+                .map_err(map_db_error_to_status)?;
+            prep_txn.commit().await.map_err(map_db_error_to_status)?;
+            warn!(
+                order_id,
+                shipment_id = existing.shipment_id,
+                logistics_status = ?existing.logistics_status,
+                "shipment booking skipped because provider references already exist; avoiding duplicate Shiprocket booking"
+            );
+            return Ok(false);
+        }
     }
 
     let validation = validate_order_can_be_booked(&prep_txn, order_id, Utc::now(), true).await?;
@@ -635,6 +687,14 @@ pub async fn process_booking_intent(
                SET logistics_status = 'booking_in_progress'
                WHERE shipment_id = ?"#,
             [shipment.shipment_id.into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?;
+    prep_txn
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "UPDATE Orders SET updated_at = UTC_TIMESTAMP() WHERE OrderID = ?",
+            [order_id.into()],
         ))
         .await
         .map_err(map_db_error_to_status)?;
@@ -1058,50 +1118,95 @@ pub async fn process_booking_intents_batch(
     db: &DatabaseConnection,
     batch_limit: u64,
 ) -> Result<u64, TonicStatus> {
+    let reclaim_timeout_minutes = crate::order_policy::shipment_booking_reclaim_timeout_minutes();
+    let stale_before = Utc::now() - Duration::minutes(reclaim_timeout_minutes);
     let claim_txn = db.begin().await.map_err(map_db_error_to_status)?;
     let rows = claim_txn
         .query_all(Statement::from_sql_and_values(
             DbBackend::MySql,
-            r#"SELECT order_id
-               FROM Shipments
-               WHERE logistics_status IN (
+            r#"SELECT s.order_id,
+                      s.logistics_status,
+                      o.updated_at AS order_updated_at
+               FROM Shipments s
+               JOIN Orders o ON o.OrderID = s.order_id
+               WHERE s.logistics_status IN (
                        'booking_pending',
                        'booking_failed',
                        'booking_claimed',
                        'booking_persist_pending'
                     )
-               ORDER BY shipment_id ASC
+                  OR (
+                      s.logistics_status = 'booking_in_progress'
+                      AND o.updated_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)
+                  )
+               ORDER BY s.shipment_id ASC
                LIMIT ?
                FOR UPDATE SKIP LOCKED"#,
-            [i64::try_from(batch_limit).unwrap_or(i64::MAX).into()],
+            [
+                reclaim_timeout_minutes.into(),
+                i64::try_from(batch_limit).unwrap_or(i64::MAX).into(),
+            ],
         ))
         .await
         .map_err(map_db_error_to_status)?;
 
     let mut order_ids = Vec::with_capacity(rows.len());
+    let mut stale_in_progress_reclaimed = 0_u64;
     for row in rows {
         let order_id = row
             .try_get::<i64>("", "order_id")
             .map_err(map_db_error_to_status)?;
+        let logistics_status = row
+            .try_get::<Option<String>>("", "logistics_status")
+            .map_err(map_db_error_to_status)?;
+        let order_updated_at = row
+            .try_get::<DateTime<Utc>>("", "order_updated_at")
+            .map_err(map_db_error_to_status)?;
+        let claimable =
+            shipment_booking_claimable(logistics_status.as_deref(), order_updated_at, stale_before);
+        if !claimable {
+            continue;
+        }
+        if logistics_status.as_deref() == Some("booking_in_progress") {
+            stale_in_progress_reclaimed += 1;
+        }
+
         let claim = claim_txn
             .execute(Statement::from_sql_and_values(
                 DbBackend::MySql,
                 r#"UPDATE Shipments
                    SET logistics_status = 'booking_claimed'
                    WHERE order_id = ?
-                     AND logistics_status IN (
-                         'booking_pending',
-                         'booking_failed',
-                         'booking_claimed',
-                         'booking_persist_pending'
+                     AND (
+                         logistics_status IN (
+                             'booking_pending',
+                             'booking_failed',
+                             'booking_claimed',
+                             'booking_persist_pending'
+                         )
+                         OR (
+                             logistics_status = 'booking_in_progress'
+                             AND EXISTS (
+                                 SELECT 1
+                                 FROM Orders o
+                                 WHERE o.OrderID = Shipments.order_id
+                                   AND o.updated_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)
+                             )
+                         )
                      )"#,
-                [order_id.into()],
+                [order_id.into(), reclaim_timeout_minutes.into()],
             ))
             .await
             .map_err(map_db_error_to_status)?;
         if claim.rows_affected() > 0 {
             order_ids.push(order_id);
         }
+    }
+    if stale_in_progress_reclaimed > 0 {
+        warn!(
+            stale_in_progress_reclaimed,
+            reclaim_timeout_minutes, "shipment worker: reclaiming stale booking_in_progress rows"
+        );
     }
     claim_txn.commit().await.map_err(map_db_error_to_status)?;
 
@@ -1364,4 +1469,176 @@ async fn move_order_to_cancel_pending_logistics(
     )
     .await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        process_booking_intent, process_booking_intents_batch, shipment_booking_claimable,
+        shipment_has_provider_booking_reference, ShipmentLogisticsRecord,
+    };
+    use chrono::{Duration, Utc};
+    use core_db_entities::entity::sea_orm_active_enums::ShipmentStatus;
+    use core_db_entities::entity::shipments;
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
+
+    fn sample_shipment() -> ShipmentLogisticsRecord {
+        ShipmentLogisticsRecord {
+            shipment_id: 1,
+            order_id: 101,
+            shiprocket_order_id: None,
+            shiprocket_external_order_id: None,
+            shipment_status: None,
+            awb_code: None,
+            carrier: None,
+            selected_courier_id: None,
+            selected_courier_name: None,
+            quoted_shipping_cost: None,
+            pickup_scheduled_for: None,
+            logistics_status: Some("booking_in_progress".to_string()),
+            can_customer_cancel: true,
+            razorpay_refund_id: None,
+            refund_status: None,
+        }
+    }
+
+    #[test]
+    fn stale_booking_in_progress_is_claimable() {
+        let now = Utc::now();
+        let stale_before = now - Duration::minutes(12);
+        let updated_at = now - Duration::minutes(30);
+        assert!(shipment_booking_claimable(
+            Some("booking_in_progress"),
+            updated_at,
+            stale_before
+        ));
+    }
+
+    #[test]
+    fn fresh_booking_in_progress_is_not_claimable() {
+        let now = Utc::now();
+        let stale_before = now - Duration::minutes(12);
+        let updated_at = now - Duration::minutes(2);
+        assert!(!shipment_booking_claimable(
+            Some("booking_in_progress"),
+            updated_at,
+            stale_before
+        ));
+    }
+
+    #[test]
+    fn booking_pending_is_always_claimable() {
+        let now = Utc::now();
+        let stale_before = now - Duration::minutes(12);
+        assert!(shipment_booking_claimable(
+            Some("booking_pending"),
+            now,
+            stale_before
+        ));
+    }
+
+    #[test]
+    fn provider_identifiers_block_rebooking() {
+        let mut shipment = sample_shipment();
+        shipment.shiprocket_order_id = Some("555001".to_string());
+        assert!(
+            shipment_has_provider_booking_reference(&shipment),
+            "existing provider references must block duplicate booking calls"
+        );
+    }
+
+    #[test]
+    fn no_provider_identifiers_allows_booking_attempt() {
+        let shipment = sample_shipment();
+        assert!(!shipment_has_provider_booking_reference(&shipment));
+    }
+
+    #[tokio::test]
+    async fn provider_reference_path_skips_duplicate_external_booking_call() {
+        let now = Utc::now();
+        let shipment_row = shipments::Model {
+            shipment_id: 11,
+            order_id: 4011,
+            shiprocket_order_id: Some("555001".to_string()),
+            shiprocket_external_order_id: None,
+            awb_code: None,
+            carrier: None,
+            selected_courier_id: None,
+            selected_courier_name: None,
+            quoted_shipping_cost: None,
+            quoted_shipping_quote_payload: None,
+            shiprocket_status_id: None,
+            shiprocket_status_label: None,
+            shipment_status: ShipmentStatus::Pending,
+            tracking_events: None,
+            created_at: Some(now),
+            delivered_at: None,
+            pickup_scheduled_for: None,
+            logistics_status: Some("booking_in_progress".to_string()),
+            can_customer_cancel: 1,
+            razorpay_refund_id: None,
+            refund_status: None,
+            refund_initiated_at: None,
+        };
+        let db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results(vec![vec![shipment_row]])
+            .append_exec_results(vec![MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+
+        let processed = process_booking_intent(&db, 4011)
+            .await
+            .expect("provider-reference short-circuit should succeed");
+        assert!(
+            !processed,
+            "row should be kept retryable without invoking provider again"
+        );
+
+        let logs = db.into_transaction_log();
+        let sql: Vec<String> = logs
+            .iter()
+            .flat_map(|txn| {
+                txn.statements()
+                    .iter()
+                    .map(|stmt| stmt.sql.to_ascii_lowercase())
+            })
+            .collect();
+        let persist_pending_update = sql.iter().any(|stmt| {
+            stmt.contains("update shipments")
+                && stmt.contains("set logistics_status = 'booking_persist_pending'")
+        });
+        assert!(
+            persist_pending_update,
+            "existing provider ids should move record to booking_persist_pending instead of re-booking"
+        );
+    }
+
+    #[tokio::test]
+    async fn booking_claim_query_includes_stale_in_progress_reclaim_clause() {
+        let db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results(vec![Vec::<shipments::Model>::new()])
+            .into_connection();
+        let processed = process_booking_intents_batch(&db, 25)
+            .await
+            .expect("batch claim should succeed");
+        assert_eq!(processed, 0);
+
+        let logs = db.into_transaction_log();
+        let sql: Vec<String> = logs
+            .iter()
+            .flat_map(|txn| {
+                txn.statements()
+                    .iter()
+                    .map(|stmt| stmt.sql.to_ascii_lowercase())
+            })
+            .collect();
+        let claim_select = sql
+            .iter()
+            .find(|stmt| stmt.contains("from shipments s"))
+            .expect("shipment claim query present");
+        assert!(claim_select.contains("booking_in_progress"));
+        assert!(claim_select.contains("date_sub(utc_timestamp(), interval ? minute)"));
+    }
 }
