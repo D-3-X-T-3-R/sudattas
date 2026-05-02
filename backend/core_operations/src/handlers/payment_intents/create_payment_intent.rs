@@ -23,6 +23,10 @@ fn is_duplicate_entry(err: &sea_orm::DbErr) -> bool {
     }
 }
 
+fn is_valid_razorpay_order_id(value: &str) -> bool {
+    value.starts_with("order_")
+}
+
 fn model_to_response(model: payment_intents::Model) -> PaymentIntentResponse {
     let razorpay_key_id = razorpay::key_id_for_frontend();
     PaymentIntentResponse {
@@ -45,6 +49,11 @@ pub async fn create_payment_intent(
     request: Request<CreatePaymentIntentRequest>,
 ) -> Result<Response<PaymentIntentsResponse>, TonicStatus> {
     let req = request.into_inner();
+    let requested_gateway_order_id = req
+        .razorpay_order_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     let existing_intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(req.order_id))
         .order_by_desc(payment_intents::Column::IntentId)
@@ -53,23 +62,29 @@ pub async fn create_payment_intent(
         .map_err(map_db_error_to_status)?;
 
     if let Some(existing) = existing_intent {
-        let can_refresh_placeholder = existing.razorpay_order_id.starts_with("rzp_pending_")
-            && req
-                .razorpay_order_id
-                .as_deref()
-                .is_none_or(|value| value.trim().is_empty())
-            && !matches!(existing.status, Status::Processed);
-        if !can_refresh_placeholder {
+        let existing_is_invalid = !is_valid_razorpay_order_id(existing.razorpay_order_id.as_str());
+        let request_has_valid_override = requested_gateway_order_id
+            .map(is_valid_razorpay_order_id)
+            .unwrap_or(false);
+        let can_refresh_invalid_existing = existing_is_invalid
+            && !matches!(existing.status, Status::Processed)
+            && (requested_gateway_order_id.is_none() || request_has_valid_override);
+        if !can_refresh_invalid_existing {
             return Ok(Response::new(PaymentIntentsResponse {
                 items: vec![model_to_response(existing)],
             }));
         }
     }
 
-    let (razorpay_order_id, amount_paise, currency) = match req.razorpay_order_id.as_deref() {
-        Some(s) if !s.trim().is_empty() => {
+    let (razorpay_order_id, amount_paise, currency) = match requested_gateway_order_id {
+        Some(s) => {
+            if !is_valid_razorpay_order_id(s) {
+                return Err(TonicStatus::invalid_argument(
+                    "razorpay_order_id must start with 'order_'",
+                ));
+            }
             let currency = req.currency.unwrap_or_else(|| "INR".to_string());
-            (s.trim().to_string(), req.amount_paise, currency)
+            (s.to_string(), req.amount_paise, currency)
         }
         _ => {
             // Server-authoritative: create Razorpay order from backend.
@@ -90,20 +105,21 @@ pub async fn create_payment_intent(
                 ));
             }
 
-            match razorpay::create_order(amount_paise, &currency, &receipt).await {
-                Ok(razorpay_order_id) => (razorpay_order_id, amount_paise, currency),
-                Err(e) => {
-                    // CI / dev without RAZORPAY_KEY_*: create intent with placeholder id so
-                    // place_order still produces a row and webhooks/tests can find it by order.
-                    tracing::warn!(
-                        "Razorpay order create failed ({}), using placeholder razorpay_order_id for order {}",
-                        e,
-                        req.order_id
-                    );
-                    let placeholder = format!("rzp_pending_{}", req.order_id);
-                    (placeholder, amount_paise, currency)
-                }
+            let razorpay_order_id = razorpay::create_order(amount_paise, &currency, &receipt)
+                .await
+                .map_err(|e| {
+                    TonicStatus::unavailable(format!(
+                        "Unable to create Razorpay order for order {}: {}",
+                        req.order_id, e
+                    ))
+                })?;
+            if !is_valid_razorpay_order_id(razorpay_order_id.as_str()) {
+                return Err(TonicStatus::internal(format!(
+                    "Razorpay returned invalid order id '{}' for order {}",
+                    razorpay_order_id, req.order_id
+                )));
             }
+            (razorpay_order_id, amount_paise, currency)
         }
     };
 

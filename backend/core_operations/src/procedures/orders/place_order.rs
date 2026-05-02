@@ -828,8 +828,8 @@ async fn place_order_in_txn(
     }
 
     if !is_cod_checkout {
-        // Create a pending payment intent record without calling Razorpay pre-commit.
-        // A later post-commit/payment step can refresh placeholder ids to real gateway ids.
+        // Create a pending payment intent with a real gateway order id before
+        // returning checkout data to the frontend.
         let amount_paise = grand_total_paise;
         let _payment_intent = create_payment_intent(
             txn,
@@ -838,7 +838,7 @@ async fn place_order_in_txn(
                 user_id: req.user_id,
                 amount_paise,
                 currency: Some("INR".to_string()),
-                razorpay_order_id: Some(format!("rzp_pending_{}", create_order.order_id)),
+                razorpay_order_id: None,
             }),
         )
         .await?

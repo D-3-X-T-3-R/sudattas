@@ -2,7 +2,7 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use crate::razorpay;
 use core_db_entities::entity::payment_intents;
 use proto::proto::core::{GetPaymentIntentRequest, PaymentIntentResponse, PaymentIntentsResponse};
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder};
 use tonic::{Request, Response, Status};
 
 pub async fn get_payment_intent(
@@ -16,7 +16,9 @@ pub async fn get_payment_intent(
     let query = if let Some(intent_id) = req.intent_id {
         query.filter(payment_intents::Column::IntentId.eq(intent_id))
     } else if let Some(order_id) = req.order_id {
-        query.filter(payment_intents::Column::OrderId.eq(order_id))
+        query
+            .filter(payment_intents::Column::OrderId.eq(order_id))
+            .order_by_desc(payment_intents::Column::IntentId)
     } else {
         return Err(Status::invalid_argument(
             "Either intent_id or order_id must be set",

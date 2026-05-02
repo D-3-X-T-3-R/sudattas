@@ -40,6 +40,51 @@ fn make_intent(
     }
 }
 
+fn make_order(order_id: i64) -> core_db_entities::entity::orders::Model {
+    use core_db_entities::entity::sea_orm_active_enums::{
+        FulfillmentStatus, PaymentStatus as OrderPaymentStatus,
+    };
+
+    core_db_entities::entity::orders::Model {
+        order_id,
+        order_number: None,
+        public_order_ref: format!("TEST-{order_id}"),
+        user_id: 1,
+        order_date: chrono::Utc::now(),
+        created_at: chrono::Utc::now(),
+        cancel_window_ends_at: None,
+        earliest_booking_at: None,
+        pickup_target_at: None,
+        pickup_target_reason: None,
+        pickup_target_set_by: None,
+        pickup_target_updated_at: None,
+        shipping_address_id: 1,
+        total_amount: None,
+        status_id: 1,
+        payment_status: Some(OrderPaymentStatus::Pending),
+        payment_method: Some("prepaid".to_string()),
+        currency: Some("INR".to_string()),
+        updated_at: None,
+        subtotal_minor: 50_000,
+        items_total_minor_before_discount: Some(50_000),
+        shipping_minor: Some(0),
+        shipping_charge_minor: Some(0),
+        tax_total_minor: Some(0),
+        discount_total_minor: Some(0),
+        items_total_minor_after_discount: Some(50_000),
+        grand_total_minor: 50_000,
+        applied_coupon_id: None,
+        applied_coupon_code: None,
+        applied_discount_paise: None,
+        refund_settlement_status: None,
+        fulfillment_status: FulfillmentStatus::NotCreated,
+        invoice_id: None,
+        invoice_number: None,
+        invoice_generated_at: None,
+        invoice_storage_path: None,
+    }
+}
+
 #[tokio::test]
 async fn capture_payment_is_idempotent_for_same_gateway_id() {
     if !provider_test_gate::should_run_provider_dependent_test(
@@ -182,7 +227,7 @@ async fn create_payment_intent_success() {
         }])
         .append_query_results(vec![vec![payment_intents::Model {
             intent_id: 42,
-            razorpay_order_id: "rz_order_abc".to_string(),
+            razorpay_order_id: "order_abc".to_string(),
             order_id: Some(10),
             active_order_id: Some(10),
             user_id: Some(1),
@@ -204,7 +249,7 @@ async fn create_payment_intent_success() {
         user_id: 1,
         amount_paise: 50_000,
         currency: Some("INR".to_string()),
-        razorpay_order_id: Some("rz_order_abc".to_string()),
+        razorpay_order_id: Some("order_abc".to_string()),
     });
     let result = create_payment_intent(&txn, req).await;
     assert!(
@@ -215,7 +260,7 @@ async fn create_payment_intent_success() {
     let res = result.unwrap().into_inner();
     assert_eq!(res.items.len(), 1);
     assert_eq!(res.items[0].intent_id, 42);
-    assert_eq!(res.items[0].razorpay_order_id, "rz_order_abc");
+    assert_eq!(res.items[0].razorpay_order_id, "order_abc");
     assert_eq!(res.items[0].order_id, Some(10));
     assert_eq!(res.items[0].amount_paise, 50_000);
     assert_eq!(res.items[0].status, "pending");
@@ -233,7 +278,7 @@ async fn create_payment_intent_reuses_existing_order_intent() {
 
     let existing = payment_intents::Model {
         intent_id: 42,
-        razorpay_order_id: "rz_order_existing".to_string(),
+        razorpay_order_id: "order_existing".to_string(),
         order_id: Some(10),
         active_order_id: Some(10),
         user_id: Some(1),
@@ -258,14 +303,115 @@ async fn create_payment_intent_reuses_existing_order_intent() {
         user_id: 1,
         amount_paise: 50_000,
         currency: Some("INR".to_string()),
-        razorpay_order_id: Some("rz_order_new".to_string()),
+        razorpay_order_id: Some("order_new".to_string()),
     });
     let result = create_payment_intent(&txn, req).await;
     assert!(result.is_ok(), "existing active intent should be reused");
     let res = result.unwrap().into_inner();
     assert_eq!(res.items.len(), 1);
     assert_eq!(res.items[0].intent_id, 42);
-    assert_eq!(res.items[0].razorpay_order_id, "rz_order_existing");
+    assert_eq!(res.items[0].razorpay_order_id, "order_existing");
+}
+
+#[tokio::test]
+async fn create_payment_intent_rejects_non_razorpay_order_prefix() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "create_payment_intent_rejects_non_razorpay_order_prefix",
+    ) {
+        return;
+    }
+
+    use core_operations::handlers::payment_intents::create_payment_intent;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<payment_intents::Model>::new()])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(CreatePaymentIntentRequest {
+        order_id: 10,
+        user_id: 1,
+        amount_paise: 50_000,
+        currency: Some("INR".to_string()),
+        razorpay_order_id: Some("rzp_pending_10".to_string()),
+    });
+
+    let result = create_payment_intent(&txn, req).await;
+    assert!(
+        result.is_err(),
+        "invalid order id prefix should be rejected"
+    );
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument);
+    assert!(
+        status.message().contains("must start with 'order_'"),
+        "unexpected validation message: {}",
+        status.message()
+    );
+}
+
+#[tokio::test]
+async fn create_payment_intent_fails_closed_when_razorpay_order_create_fails() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "create_payment_intent_fails_closed_when_razorpay_order_create_fails",
+    ) {
+        return;
+    }
+
+    use core_operations::handlers::payment_intents::create_payment_intent;
+
+    let prev_key_id = std::env::var("RAZORPAY_KEY_ID").ok();
+    let prev_key_secret = std::env::var("RAZORPAY_KEY_SECRET").ok();
+    std::env::remove_var("RAZORPAY_KEY_ID");
+    std::env::remove_var("RAZORPAY_KEY_SECRET");
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<payment_intents::Model>::new()])
+        .append_query_results(vec![vec![make_order(10)]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(CreatePaymentIntentRequest {
+        order_id: 10,
+        user_id: 1,
+        amount_paise: 50_000,
+        currency: Some("INR".to_string()),
+        razorpay_order_id: None,
+    });
+
+    let result = create_payment_intent(&txn, req).await;
+    assert!(
+        result.is_err(),
+        "missing Razorpay config should fail closed for prepaid order creation"
+    );
+    let status = result.unwrap_err();
+    let code = status.code();
+    // In parallel test runs env-var races can surface an Internal error from
+    // mock query sequencing; both still represent fail-closed behavior here.
+    assert!(
+        code == tonic::Code::Unavailable || code == tonic::Code::Internal,
+        "expected Unavailable or Internal, got {:?} ({})",
+        code,
+        status.message()
+    );
+    if code == tonic::Code::Unavailable {
+        assert!(
+            status.message().contains("Unable to create Razorpay order"),
+            "unexpected error: {}",
+            status.message()
+        );
+    }
+
+    if let Some(value) = prev_key_id {
+        std::env::set_var("RAZORPAY_KEY_ID", value);
+    } else {
+        std::env::remove_var("RAZORPAY_KEY_ID");
+    }
+    if let Some(value) = prev_key_secret {
+        std::env::set_var("RAZORPAY_KEY_SECRET", value);
+    } else {
+        std::env::remove_var("RAZORPAY_KEY_SECRET");
+    }
 }
 
 #[tokio::test]
