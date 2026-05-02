@@ -310,7 +310,7 @@ fn format_inr_major(value: u64) -> String {
     let digits = value.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 4);
     for (idx, ch) in digits.chars().enumerate() {
-        if idx > 0 && (digits.len() - idx) % 3 == 0 {
+        if idx > 0 && (digits.len() - idx).is_multiple_of(3) {
             out.push(',');
         }
         out.push(ch);
@@ -329,10 +329,8 @@ fn payment_mode_label(raw: &str) -> &'static str {
 fn payment_status_label(raw_mode: &str, raw_status: &str) -> &'static str {
     if raw_mode.eq_ignore_ascii_case("cod") {
         "To be collected on delivery"
-    } else if raw_status.eq_ignore_ascii_case("captured") || raw_status.eq_ignore_ascii_case("paid")
-    {
-        "Paid"
     } else {
+        let _ = raw_status;
         "Paid"
     }
 }
@@ -969,13 +967,11 @@ India
             "missing Ship To phone line in extracted text: {normalized}"
         );
         assert!(
-            normalized.contains("invoice_content+")
-                && normalized.contains("12345678@example.com"),
+            normalized.contains("invoice_content+") && normalized.contains("12345678@example.com"),
             "missing Bill To email in extracted text: {normalized}"
         );
         assert!(
-            normalized.contains("sudattasdesigner")
-                && normalized.contains("boutique@gmail.com"),
+            normalized.contains("sudattasdesigner") && normalized.contains("boutique@gmail.com"),
             "missing seller email in extracted text: {normalized}"
         );
         assert!(
