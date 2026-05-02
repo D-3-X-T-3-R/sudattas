@@ -697,12 +697,13 @@ async fn integration_late_captured_webhook_after_system_expiry_marks_needs_revie
             }
         }
     });
+    let webhook_id = format!("razorpay:late_capture:{now_tag}");
     let ingest = core_operations::handlers::webhooks::ingest_webhook(
         &webhook_txn,
         Request::new(IngestWebhookRequest {
             provider: "razorpay".to_string(),
             event_type: "payment.captured".to_string(),
-            webhook_id: format!("razorpay:late_capture:{now_tag}"),
+            webhook_id: webhook_id.clone(),
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
@@ -713,6 +714,34 @@ async fn integration_late_captured_webhook_after_system_expiry_marks_needs_revie
         ingest.is_ok(),
         "late capture webhook should be accepted and flagged for review"
     );
+    let first_event = ingest
+        .expect("already asserted ingest ok")
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .expect("first webhook response item");
+
+    let replay = core_operations::handlers::webhooks::ingest_webhook(
+        &webhook_txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id,
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("duplicate replay should be idempotent")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("replay webhook response item");
+    assert_eq!(replay.event_id, first_event.event_id);
+    assert_eq!(replay.status, "processed");
 
     let refreshed_intent = payment_intents::Entity::find_by_id(intent.intent_id)
         .one(&webhook_txn)

@@ -6,7 +6,7 @@ use crate::handlers::payment_intents::finalize_order_paid;
 use crate::handlers::refunds::create_refund;
 use crate::handlers::shipments::{ensure_local_order_cancelled, update_cancelability_from_webhook};
 use crate::order_state_machine;
-use chrono::Utc;
+use chrono::{DateTime, Duration, Utc};
 use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status};
 use core_db_entities::entity::webhook_events;
 use core_db_entities::entity::{orders, payment_intents, refunds};
@@ -27,6 +27,278 @@ use crate::handlers::shipments::apply_shiprocket_scan::{
     find_shipment_for_shiprocket_event, flatten_shiprocket_webhook_items,
 };
 
+fn normalize_provider_event_id(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn parse_payload_or_null(payload_json: &str) -> serde_json::Value {
+    serde_json::from_str(payload_json).unwrap_or(serde_json::Value::Null)
+}
+
+fn processing_status_outcome(status: Option<&Status>) -> &'static str {
+    match status {
+        Some(Status::Processed) => "processed",
+        Some(Status::Failed) => "failed",
+        Some(Status::ClientVerified) => "in_progress",
+        _ => "pending",
+    }
+}
+
+fn is_fresh_in_progress(
+    status: Option<&Status>,
+    received_at: Option<DateTime<Utc>>,
+    stale_before: DateTime<Utc>,
+) -> bool {
+    matches!(
+        status,
+        Some(s) if *s == Status::Pending || *s == Status::ClientVerified
+    ) && received_at.map(|ts| ts >= stale_before).unwrap_or(false)
+}
+
+fn is_stale_in_progress(
+    status: Option<&Status>,
+    received_at: Option<DateTime<Utc>>,
+    stale_before: DateTime<Utc>,
+) -> bool {
+    matches!(
+        status,
+        Some(s) if *s == Status::Pending || *s == Status::ClientVerified
+    ) && received_at.map(|ts| ts < stale_before).unwrap_or(true)
+}
+
+fn is_replayable_failure(status: Option<&Status>) -> bool {
+    matches!(
+        status,
+        Some(s) if *s == Status::Failed || *s == Status::NeedsReview
+    )
+}
+
+fn event_identity_matches(existing: &webhook_events::Model, req: &IngestWebhookRequest) -> bool {
+    existing.provider.eq_ignore_ascii_case(&req.provider)
+        && existing.event_type.eq_ignore_ascii_case(&req.event_type)
+}
+
+async fn claim_existing_webhook_for_replay(
+    txn: &DatabaseTransaction,
+    event_id: i64,
+    reclaim_timeout_minutes: i64,
+) -> Result<bool, TonicStatus> {
+    let claim = txn
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            r#"UPDATE WebhookEvents
+               SET status = 'client_verified',
+                   received_at = UTC_TIMESTAMP()
+               WHERE event_id = ?
+                 AND (
+                     status IN ('failed', 'needs_review')
+                     OR (
+                         status IN ('pending', 'client_verified')
+                         AND (
+                             received_at IS NULL
+                             OR received_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)
+                         )
+                     )
+                 )"#,
+            [event_id.into(), reclaim_timeout_minutes.into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?;
+    Ok(claim.rows_affected() == 1)
+}
+
+fn choose_replay_payload(
+    existing: &webhook_events::Model,
+    incoming_payload: &serde_json::Value,
+) -> serde_json::Value {
+    if !incoming_payload.is_null() {
+        incoming_payload.clone()
+    } else {
+        existing.payload.clone()
+    }
+}
+
+async fn process_webhook_payload(
+    txn: &DatabaseTransaction,
+    req: &IngestWebhookRequest,
+    payload_json: &serde_json::Value,
+) -> Status {
+    if req.event_type == "payment.captured" && req.signature_verified {
+        match process_payment_captured(txn, payload_json).await {
+            Ok(_) => Status::Processed,
+            Err(e) => {
+                warn!("payment.captured processing failed: {}", e);
+                crate::observability::record_webhook_processing_failed_total();
+                Status::Failed
+            }
+        }
+    } else if req.provider == "shiprocket" && req.signature_verified {
+        match process_shiprocket_shipment_updates(txn, payload_json, &req.event_type).await {
+            Ok(_) => Status::Processed,
+            Err(e) => {
+                warn!("shiprocket webhook processing failed: {}", e);
+                crate::observability::record_webhook_processing_failed_total();
+                Status::Failed
+            }
+        }
+    } else if req.provider == "razorpay"
+        && req.signature_verified
+        && razorpay_event_is_refund_like(&req.event_type)
+    {
+        match process_razorpay_refund_updates(txn, payload_json, &req.event_type).await {
+            Ok(_) => Status::Processed,
+            Err(e) => {
+                warn!("razorpay refund webhook processing failed: {}", e);
+                crate::observability::record_webhook_processing_failed_total();
+                Status::Failed
+            }
+        }
+    } else if req.signature_verified {
+        Status::Processed
+    } else {
+        Status::Failed
+    }
+}
+
+async fn finalize_webhook_row(
+    txn: &DatabaseTransaction,
+    row: webhook_events::Model,
+    payload_json: &serde_json::Value,
+    status: Status,
+) -> Result<webhook_events::Model, TonicStatus> {
+    let mut active = row.into_active_model();
+    active.payload = ActiveValue::Set(payload_json.clone());
+    active.status = ActiveValue::Set(Some(status));
+    active.update(txn).await.map_err(map_db_error_to_status)
+}
+
+async fn handle_existing_webhook(
+    txn: &DatabaseTransaction,
+    req: &IngestWebhookRequest,
+    existing: webhook_events::Model,
+    incoming_payload: &serde_json::Value,
+    reclaim_timeout_minutes: i64,
+    stale_before: DateTime<Utc>,
+    dedupe_key: &str,
+) -> Result<webhook_events::Model, TonicStatus> {
+    if matches!(existing.status, Some(Status::Processed)) {
+        info!(
+            webhook_id = %existing.webhook_id,
+            provider_event_id = ?existing.provider_event_id,
+            dedupe_key,
+            "webhook duplicate already processed; returning idempotent no-op"
+        );
+        return Ok(existing);
+    }
+
+    if is_fresh_in_progress(existing.status.as_ref(), existing.received_at, stale_before) {
+        info!(
+            webhook_id = %existing.webhook_id,
+            provider_event_id = ?existing.provider_event_id,
+            dedupe_key,
+            "webhook duplicate currently in progress and fresh; returning existing row without reprocessing"
+        );
+        return Ok(existing);
+    }
+
+    if !event_identity_matches(&existing, req) {
+        return Err(TonicStatus::already_exists(format!(
+            "Webhook conflict for dedupe key {}: existing provider/event_type = {}/{}",
+            dedupe_key, existing.provider, existing.event_type
+        )));
+    }
+
+    if is_stale_in_progress(existing.status.as_ref(), existing.received_at, stale_before) {
+        let age_seconds = existing
+            .received_at
+            .map(|ts| (Utc::now() - ts).num_seconds())
+            .unwrap_or(-1);
+        warn!(
+            webhook_id = %existing.webhook_id,
+            provider_event_id = ?existing.provider_event_id,
+            dedupe_key,
+            reclaim_timeout_minutes,
+            age_seconds,
+            status = ?existing.status.as_ref(),
+            "webhook stale in-progress row reclaimed for replay"
+        );
+    } else if is_replayable_failure(existing.status.as_ref()) {
+        info!(
+            webhook_id = %existing.webhook_id,
+            provider_event_id = ?existing.provider_event_id,
+            dedupe_key,
+            status = ?existing.status.as_ref(),
+            "webhook failed row replay requested"
+        );
+    } else {
+        return Ok(existing);
+    }
+
+    let claimed =
+        claim_existing_webhook_for_replay(txn, existing.event_id, reclaim_timeout_minutes).await?;
+    if !claimed {
+        let latest = webhook_events::Entity::find_by_id(existing.event_id)
+            .one(txn)
+            .await
+            .map_err(map_db_error_to_status)?
+            .ok_or_else(|| {
+                TonicStatus::internal(format!(
+                    "webhook event {} disappeared during replay claim",
+                    existing.event_id
+                ))
+            })?;
+        return Ok(latest);
+    }
+
+    let replay_payload = choose_replay_payload(&existing, incoming_payload);
+    let replay_status = process_webhook_payload(txn, req, &replay_payload).await;
+    finalize_webhook_row(txn, existing, &replay_payload, replay_status).await
+}
+
+pub async fn replay_webhook_by_id(
+    txn: &DatabaseTransaction,
+    webhook_id: &str,
+) -> Result<Response<WebhookEventsResponse>, TonicStatus> {
+    let Some(existing) = webhook_events::Entity::find()
+        .filter(webhook_events::Column::WebhookId.eq(webhook_id))
+        .one(txn)
+        .await
+        .map_err(map_db_error_to_status)?
+    else {
+        return Err(TonicStatus::not_found(format!(
+            "Webhook {} not found",
+            webhook_id
+        )));
+    };
+
+    let req = IngestWebhookRequest {
+        provider: existing.provider.clone(),
+        event_type: existing.event_type.clone(),
+        webhook_id: existing.webhook_id.clone(),
+        payload_json: existing.payload.to_string(),
+        signature_verified: true,
+        provider_event_id: existing.provider_event_id.clone(),
+    };
+    let reclaim_timeout_minutes = crate::order_policy::webhook_reclaim_timeout_minutes();
+    let stale_before = Utc::now() - Duration::minutes(reclaim_timeout_minutes);
+    let updated = handle_existing_webhook(
+        txn,
+        &req,
+        existing,
+        &parse_payload_or_null(&req.payload_json),
+        reclaim_timeout_minutes,
+        stale_before,
+        "webhook_id",
+    )
+    .await?;
+    Ok(Response::new(WebhookEventsResponse {
+        items: vec![model_to_response(updated)],
+    }))
+}
+
 pub async fn ingest_webhook(
     txn: &DatabaseTransaction,
     request: Request<IngestWebhookRequest>,
@@ -42,57 +314,76 @@ pub async fn ingest_webhook(
         "ingest_webhook received event"
     );
 
-    // Idempotency: if we've already seen this webhook_id, return it as-is.
+    let reclaim_timeout_minutes = crate::order_policy::webhook_reclaim_timeout_minutes();
+    let stale_before = Utc::now() - Duration::minutes(reclaim_timeout_minutes);
+    let payload_json = parse_payload_or_null(&req.payload_json);
+
+    // Idempotency + replay by webhook_id.
     if let Some(existing) = webhook_events::Entity::find()
+        .filter(webhook_events::Column::Provider.eq(&req.provider))
         .filter(webhook_events::Column::WebhookId.eq(&req.webhook_id))
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
     {
-        info!(
-            webhook_id = %req.webhook_id,
-            "ingest_webhook idempotent replay - returning existing event"
+        let updated = handle_existing_webhook(
+            txn,
+            &req,
+            existing,
+            &payload_json,
+            reclaim_timeout_minutes,
+            stale_before,
+            "webhook_id",
+        )
+        .await?;
+        let duration_sec = started.elapsed().as_secs_f64();
+        crate::observability::record_webhook_processing_duration_seconds(
+            duration_sec,
+            processing_status_outcome(updated.status.as_ref()),
         );
         return Ok(Response::new(WebhookEventsResponse {
-            items: vec![model_to_response(existing)],
+            items: vec![model_to_response(updated)],
         }));
     }
 
-    // Phase 6 replay protection: reject duplicate provider_event_id (e.g. x-razorpay-event-id).
-    if let Some(ref peid) = req.provider_event_id {
-        let peid = peid.trim();
-        if !peid.is_empty()
-            && webhook_events::Entity::find()
-                .filter(webhook_events::Column::ProviderEventId.eq(peid))
-                .one(txn)
-                .await
-                .map_err(map_db_error_to_status)?
-                .is_some()
+    // Replay protection + safe reprocessing by provider_event_id.
+    if let Some(peid) = normalize_provider_event_id(req.provider_event_id.as_deref()) {
+        if let Some(existing) = webhook_events::Entity::find()
+            .filter(webhook_events::Column::ProviderEventId.eq(peid.as_str()))
+            .one(txn)
+            .await
+            .map_err(map_db_error_to_status)?
         {
-            return Err(TonicStatus::already_exists(format!(
-                "Replay: provider_event_id already processed: {}",
-                peid
-            )));
+            let updated = handle_existing_webhook(
+                txn,
+                &req,
+                existing,
+                &payload_json,
+                reclaim_timeout_minutes,
+                stale_before,
+                "provider_event_id",
+            )
+            .await?;
+            let duration_sec = started.elapsed().as_secs_f64();
+            crate::observability::record_webhook_processing_duration_seconds(
+                duration_sec,
+                processing_status_outcome(updated.status.as_ref()),
+            );
+            return Ok(Response::new(WebhookEventsResponse {
+                items: vec![model_to_response(updated)],
+            }));
         }
     }
 
     // Persist with Pending status.
-    let payload_json: serde_json::Value =
-        serde_json::from_str(&req.payload_json).unwrap_or(serde_json::Value::Null);
-
-    let provider_event_id_value = req
-        .provider_event_id
-        .as_ref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(String::from);
-
     let event = webhook_events::ActiveModel {
         event_id: ActiveValue::NotSet,
         provider: ActiveValue::Set(req.provider.clone()),
         event_type: ActiveValue::Set(req.event_type.clone()),
         webhook_id: ActiveValue::Set(req.webhook_id.clone()),
-        provider_event_id: ActiveValue::Set(provider_event_id_value),
+        provider_event_id: ActiveValue::Set(normalize_provider_event_id(
+            req.provider_event_id.as_deref(),
+        )),
         payload: ActiveValue::Set(payload_json.clone()),
         status: ActiveValue::Set(Some(Status::Pending)),
         received_at: ActiveValue::Set(Some(Utc::now())),
@@ -100,62 +391,20 @@ pub async fn ingest_webhook(
 
     let inserted = event.insert(txn).await.map_err(map_db_error_to_status)?;
 
-    // Process: payment.captured -> trigger capture_payment; shiprocket -> update Shipments from payload.
-    let new_status = if req.event_type == "payment.captured" && req.signature_verified {
-        match process_payment_captured(txn, &payload_json).await {
-            Ok(_) => Status::Processed,
-            Err(e) => {
-                log::warn!("payment.captured processing failed: {}", e);
-                crate::observability::record_webhook_processing_failed_total();
-                Status::Failed
-            }
-        }
-    } else if req.provider == "shiprocket" && req.signature_verified {
-        match process_shiprocket_shipment_updates(txn, &payload_json, &req.event_type).await {
-            Ok(_) => Status::Processed,
-            Err(e) => {
-                warn!("shiprocket webhook processing failed: {}", e);
-                crate::observability::record_webhook_processing_failed_total();
-                Status::Failed
-            }
-        }
-    } else if req.provider == "razorpay"
-        && req.signature_verified
-        && razorpay_event_is_refund_like(&req.event_type)
-    {
-        match process_razorpay_refund_updates(txn, &payload_json, &req.event_type).await {
-            Ok(_) => Status::Processed,
-            Err(e) => {
-                warn!("razorpay refund webhook processing failed: {}", e);
-                crate::observability::record_webhook_processing_failed_total();
-                Status::Failed
-            }
-        }
-    } else if req.signature_verified {
-        // Other known events: mark processed (no additional logic needed yet).
-        Status::Processed
-    } else {
-        Status::Failed
-    };
-
-    // Update status.
-    let mut active = inserted.clone().into_active_model();
-    active.status = ActiveValue::Set(Some(new_status));
-    let updated = active.update(txn).await.map_err(map_db_error_to_status)?;
+    let new_status = process_webhook_payload(txn, &req, &payload_json).await;
+    let updated = finalize_webhook_row(txn, inserted, &payload_json, new_status).await?;
 
     let duration_sec = started.elapsed().as_secs_f64();
-    let outcome = match updated.status {
-        Some(Status::Processed) => "processed",
-        Some(Status::Failed) => "failed",
-        _ => "pending",
-    };
-    crate::observability::record_webhook_processing_duration_seconds(duration_sec, outcome);
+    crate::observability::record_webhook_processing_duration_seconds(
+        duration_sec,
+        processing_status_outcome(updated.status.as_ref()),
+    );
 
     info!(
         webhook_id = %updated.webhook_id,
         provider = %updated.provider,
         event_type = %updated.event_type,
-        status = ?updated.status,
+        status = ?updated.status.as_ref(),
         processing_duration_ms = (duration_sec * 1000.0).round() as i64,
         "ingest_webhook completed"
     );
@@ -859,5 +1108,54 @@ mod tests {
         assert_eq!(map_refund_status("processed"), Status::Processed);
         assert_eq!(map_refund_status("refund.processed"), Status::Processed);
         assert_eq!(map_refund_status("failed"), Status::Failed);
+    }
+
+    #[test]
+    fn helper_classifies_fresh_vs_stale_in_progress_rows() {
+        let now = Utc::now();
+        let stale_before = now - Duration::minutes(12);
+        assert!(is_fresh_in_progress(
+            Some(&Status::Pending),
+            Some(now - Duration::minutes(1)),
+            stale_before
+        ));
+        assert!(!is_stale_in_progress(
+            Some(&Status::Pending),
+            Some(now - Duration::minutes(1)),
+            stale_before
+        ));
+
+        assert!(is_stale_in_progress(
+            Some(&Status::ClientVerified),
+            Some(now - Duration::minutes(30)),
+            stale_before
+        ));
+        assert!(!is_fresh_in_progress(
+            Some(&Status::ClientVerified),
+            Some(now - Duration::minutes(30)),
+            stale_before
+        ));
+    }
+
+    #[test]
+    fn helper_detects_replayable_failure_statuses() {
+        assert!(is_replayable_failure(Some(&Status::Failed)));
+        assert!(is_replayable_failure(Some(&Status::NeedsReview)));
+        assert!(!is_replayable_failure(Some(&Status::Processed)));
+        assert!(!is_replayable_failure(Some(&Status::Pending)));
+    }
+
+    #[test]
+    fn helper_processing_outcome_labels() {
+        assert_eq!(
+            processing_status_outcome(Some(&Status::Processed)),
+            "processed"
+        );
+        assert_eq!(processing_status_outcome(Some(&Status::Failed)), "failed");
+        assert_eq!(
+            processing_status_outcome(Some(&Status::ClientVerified)),
+            "in_progress"
+        );
+        assert_eq!(processing_status_outcome(Some(&Status::Pending)), "pending");
     }
 }

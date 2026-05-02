@@ -49,6 +49,13 @@ pub fn refund_reclaim_timeout_minutes() -> i64 {
     )
 }
 
+pub fn webhook_reclaim_timeout_minutes() -> i64 {
+    parse_positive_i64_env(
+        "WEBHOOK_RECLAIM_TIMEOUT_MINUTES",
+        worker_reclaim_timeout_minutes(),
+    )
+}
+
 pub fn cancel_window_deadline(order_created_at: DateTime<Utc>) -> DateTime<Utc> {
     order_created_at + Duration::hours(cancel_window_hours())
 }

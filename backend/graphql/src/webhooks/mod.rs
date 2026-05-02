@@ -320,4 +320,30 @@ mod tests {
             "expected fail-closed status when webhook secret is unavailable, got {status}"
         );
     }
+
+    #[tokio::test]
+    async fn webhook_invalid_signature_retry_stays_fail_closed() {
+        std::env::set_var("RAZORPAY_WEBHOOK_SECRET", "test_secret");
+        let body = minimal_razorpay_body();
+
+        for _ in 0..2 {
+            let reply = handle_webhook(
+                "razorpay".to_string(),
+                Some("bad_signature".to_string()),
+                Some("evt_retry_fail_closed".to_string()),
+                None,
+                body.clone(),
+            )
+            .await
+            .unwrap();
+            let status = reply.into_response().status();
+            assert!(
+                status == warp::http::StatusCode::UNAUTHORIZED
+                    || status == warp::http::StatusCode::SERVICE_UNAVAILABLE,
+                "invalid signature retry must remain fail-closed, got {status}"
+            );
+        }
+
+        std::env::remove_var("RAZORPAY_WEBHOOK_SECRET");
+    }
 }
