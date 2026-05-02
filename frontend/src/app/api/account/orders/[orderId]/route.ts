@@ -3,6 +3,12 @@
   callGraphqlAsCustomer,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
+import {
+  canonicalOrderStatusName,
+  derivePaymentStateFromIntents,
+  deriveShipmentState,
+  statusNameFromId,
+} from "@/lib/order-state";
 
 function flowLog(message: string, meta?: Record<string, unknown>) {
   if (meta) {
@@ -42,6 +48,11 @@ type OrderRow = {
   statusId: string;
   refundSettlementStatus?: string | null;
   paymentMethod?: string | null;
+  invoiceId?: string | null;
+  invoiceNumber?: string | null;
+  invoiceGeneratedAt?: string | null;
+  invoiceAvailable?: boolean | null;
+  invoiceUrl?: string | null;
   orderDetails?: OrderDetailRow[];
 };
 
@@ -139,6 +150,11 @@ const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
     statusId
     refundSettlementStatus
     paymentMethod
+    invoiceId
+    invoiceNumber
+    invoiceGeneratedAt
+    invoiceAvailable
+    invoiceUrl
     orderDetails {
       orderDetailId
       variantId
@@ -244,95 +260,6 @@ const SYNC_SHIPMENTS_MUTATION = `mutation AccountSyncOrderShipments($orderId: St
   }
 }`;
 
-function formatOrderStatusName(statusName: string): string {
-  return statusName.trim().toLowerCase() === "processing" ? "processing order" : statusName;
-}
-
-function derivePaymentState(intents: PaymentIntentRow[]): string {
-  if (!intents.length) return "not_started";
-  const statuses = intents.map((i) => i.status.toLowerCase());
-  if (statuses.some((s) => s.includes("needs_review"))) return "needs_review";
-  if (statuses.some((s) => s.includes("refunded"))) return "refunded";
-  if (statuses.some((s) => s.includes("paid") || s.includes("captured"))) return "paid";
-  if (statuses.some((s) => s.includes("failed"))) return "failed";
-  if (statuses.some((s) => s.includes("verified"))) return "verified";
-  return statuses[0] ?? "pending";
-}
-
-function deriveFulfillmentState(shipments: ShipmentRow[]): string {
-  if (!shipments.length) return "not_shipped";
-  const fromShiprocket = (s: ShipmentRow) => {
-    const id = s.shiprocketStatusId?.trim();
-    if (id === "7" || id === "23") return "delivered";
-    if (id === "8") return "issue";
-    if (id === "9" || id === "10" || id === "14" || id === "15" || id === "16")
-      return "issue";
-    if (id === "17" || id === "38" || id === "56") return "out_for_delivery";
-    if (
-      id === "18" ||
-      id === "6" ||
-      id === "41" ||
-      id === "45" ||
-      id === "42"
-    )
-      return "in_transit";
-    return null;
-  };
-  for (const s of shipments) {
-    if (fromShiprocket(s) === "delivered") return "delivered";
-  }
-  let best: string | null = null;
-  for (const s of shipments) {
-    const sr = fromShiprocket(s);
-    if (!sr) continue;
-    if (sr === "issue") {
-      best = "issue";
-      break;
-    }
-    if (sr === "out_for_delivery") best = best ?? "out_for_delivery";
-    else if (sr === "in_transit") best = best ?? "in_transit";
-  }
-  if (best) return best;
-  const statuses = shipments.map((s) => s.status.toLowerCase());
-  const labels = shipments
-    .map((s) => s.shiprocketStatusLabel?.toLowerCase() ?? "")
-    .filter(Boolean);
-  if (
-    statuses.some((x) => x.includes("delivered")) ||
-    labels.some((x) => x.includes("delivered"))
-  )
-    return "delivered";
-  if (
-    statuses.some(
-      (x) =>
-        x.includes("failed") ||
-        x.includes("returned") ||
-        x.includes("rto") ||
-        x.includes("cancelled")
-    ) ||
-    labels.some((x) => x.includes("rto") || x.includes("cancel"))
-  )
-    return "issue";
-  if (
-    statuses.some(
-      (x) =>
-        x.includes("shipped") ||
-        x.includes("in_transit") ||
-        x.includes("picked_up") ||
-        x.includes("out_for_delivery") ||
-        x.includes("awb_assigned")
-    ) ||
-    labels.some(
-      (x) =>
-        x.includes("transit") ||
-        x.includes("picked") ||
-        x.includes("delivery") ||
-        x.includes("awb")
-    )
-  )
-    return "in_transit";
-  return statuses[0] ?? "pending";
-}
 
 function parseMinorAmount(raw: unknown): number | null {
   const value = Number(raw);
@@ -498,10 +425,10 @@ export async function GET(
   const statusNameById = new Map(
     (statusesResult.data?.searchOrderStatus ?? []).map((s) => [
       s.statusId,
-      formatOrderStatusName(s.statusName),
+      canonicalOrderStatusName(s.statusName),
     ])
   );
-  const statusName = statusNameById.get(order.statusId) ?? order.statusId;
+  const statusName = statusNameFromId(order.statusId, statusNameById);
   const paymentIntents = paymentResult.data?.getPaymentIntent ?? [];
   const shipments = shipmentResult.data?.getShipment ?? [];
   const events = eventsResult.data?.getOrderEvents ?? [];
@@ -557,8 +484,8 @@ export async function GET(
     paymentIntents,
     shipments,
     events,
-    paymentState: derivePaymentState(paymentIntents),
-    fulfillmentState: deriveFulfillmentState(shipments),
+    paymentState: derivePaymentStateFromIntents(paymentIntents),
+    fulfillmentState: deriveShipmentState(shipments),
     returnRequests,
     returnWindowDays: normalizedReturnWindowDays,
     refundSummary: {

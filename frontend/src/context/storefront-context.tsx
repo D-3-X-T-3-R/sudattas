@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import type { CartLine, Product } from "@/lib/schemas";
 import { useToast } from "@/components/ui/toast";
 import { useLiveAnnouncer } from "@/components/ui/live-announcer";
@@ -31,7 +32,26 @@ type StorefrontContextValue = {
 
 const StorefrontContext = createContext<StorefrontContextValue | null>(null);
 
-export function StorefrontProvider({ children }: { children: ReactNode }) {
+const DISABLED_STOREFRONT_CONTEXT: StorefrontContextValue = {
+  wishlist: {},
+  toggleWish: () => undefined,
+  addToCart: () => undefined,
+  decCart: () => undefined,
+  incCart: () => undefined,
+  removeCart: () => undefined,
+  cartLines: [],
+  cartCount: 0,
+  cartSubtotal: 0,
+  wishCount: 0,
+  cartLoading: false,
+};
+
+function isAdminRoute(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return pathname === "/imtheboss" || pathname.startsWith("/imtheboss/");
+}
+
+function StorefrontProviderActive({ children }: { children: ReactNode }) {
   const { status } = useSession();
   const { showToast } = useToast();
   const { announce } = useLiveAnnouncer();
@@ -105,6 +125,18 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
   );
 
   return <StorefrontContext.Provider value={value}>{children}</StorefrontContext.Provider>;
+}
+
+export function StorefrontProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  if (isAdminRoute(pathname)) {
+    return (
+      <StorefrontContext.Provider value={DISABLED_STOREFRONT_CONTEXT}>
+        {children}
+      </StorefrontContext.Provider>
+    );
+  }
+  return <StorefrontProviderActive>{children}</StorefrontProviderActive>;
 }
 
 export function useStorefront(): StorefrontContextValue {

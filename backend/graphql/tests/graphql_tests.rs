@@ -590,6 +590,107 @@ async fn test_search_inventory_item_requires_admin() {
 }
 
 #[tokio::test]
+async fn test_search_inventory_log_requires_admin_for_customer() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"{ searchInventoryLog(input: {}) { logId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "searchInventoryLog should reject customer auth"
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"));
+}
+
+#[tokio::test]
+async fn test_search_inventory_log_requires_admin_for_guest_session() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: Some("redis://127.0.0.1".to_string()),
+        auth: Some(AuthSource::Session("guest_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: Some("guest-session".to_string()),
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("none".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"{ searchInventoryLog(input: {}) { logId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "searchInventoryLog should reject guest auth"
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"));
+}
+
+#[tokio::test]
+async fn test_search_inventory_log_allows_admin_context() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("google_sub_admin".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: Some("google_sub_admin".to_string()),
+        admin_authorized: Some(true),
+        admin_resolution_source: Some("db".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"{ searchInventoryLog(input: {}) { logId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    if !errors.is_empty() {
+        let err = format!("{:?}", errors[0]).to_lowercase();
+        assert!(
+            !err.contains("admin authorization required"),
+            "admin context should not fail authz: {}",
+            err
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_search_user_requires_admin_authorization() {
     let ctx = Context {
         jwks: JWKSet { keys: vec![] },
@@ -621,6 +722,142 @@ async fn test_search_user_requires_admin_authorization() {
     );
     let err = format!("{:?}", errors[0]).to_lowercase();
     assert!(err.contains("admin authorization required"));
+}
+
+#[tokio::test]
+async fn test_record_security_audit_event_rejects_customer_auth() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { recordSecurityAuditEvent(input: { eventType: "secrets_rotation" }) }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "recordSecurityAuditEvent should reject customer auth"
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("privileged authorization required"));
+}
+
+#[tokio::test]
+async fn test_record_security_audit_event_rejects_guest_session() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: Some("redis://127.0.0.1".to_string()),
+        auth: Some(AuthSource::Session("guest_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: Some("guest-session".to_string()),
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("none".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { recordSecurityAuditEvent(input: { eventType: "secrets_rotation" }) }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "recordSecurityAuditEvent should reject guest auth"
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("privileged authorization required"));
+}
+
+#[tokio::test]
+async fn test_record_security_audit_event_allows_admin_context() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("google_sub_admin".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: Some("google_sub_admin".to_string()),
+        admin_authorized: Some(true),
+        admin_resolution_source: Some("db".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { recordSecurityAuditEvent(input: { eventType: "secrets_rotation" }) }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    if !errors.is_empty() {
+        let err = format!("{:?}", errors[0]).to_lowercase();
+        assert!(
+            !err.contains("privileged authorization required"),
+            "admin context should not fail authz: {}",
+            err
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_record_security_audit_event_allows_internal_service() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::InternalService),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("internal".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { recordSecurityAuditEvent(input: { eventType: "secrets_rotation" }) }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    if !errors.is_empty() {
+        let err = format!("{:?}", errors[0]).to_lowercase();
+        assert!(
+            !err.contains("privileged authorization required"),
+            "internal service context should not fail authz: {}",
+            err
+        );
+    }
 }
 
 #[tokio::test]

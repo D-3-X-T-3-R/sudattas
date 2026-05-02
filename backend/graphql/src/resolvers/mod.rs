@@ -9,6 +9,7 @@ pub mod fabrics;
 pub mod grpc_client;
 pub mod inventory;
 pub mod inventory_logs;
+pub mod invoices;
 pub mod money;
 pub mod newsletter_subscribers;
 pub mod occasions;

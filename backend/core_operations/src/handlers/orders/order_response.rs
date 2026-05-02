@@ -30,5 +30,10 @@ pub fn from_model(model: &orders::Model) -> OrderResponse {
         fulfillment_status: Some(
             fulfillment_status_to_string(model.fulfillment_status.clone()).to_string(),
         ),
+        invoice_id: model.invoice_id,
+        invoice_number: model.invoice_number.clone(),
+        invoice_generated_at: model.invoice_generated_at.map(|v| v.to_rfc3339()),
+        invoice_storage_path: model.invoice_storage_path.clone(),
+        invoice_available: Some(model.invoice_id.is_some()),
     }
 }

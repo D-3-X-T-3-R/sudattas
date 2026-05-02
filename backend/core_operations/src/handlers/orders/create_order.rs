@@ -77,6 +77,10 @@ pub async fn create_order(
             grand_total_minor: grand_total_minor
                 .map(ActiveValue::Set)
                 .unwrap_or(ActiveValue::NotSet),
+            invoice_id: ActiveValue::NotSet,
+            invoice_number: ActiveValue::NotSet,
+            invoice_generated_at: ActiveValue::NotSet,
+            invoice_storage_path: ActiveValue::NotSet,
             applied_coupon_id: applied_coupon_id
                 .map(ActiveValue::Set)
                 .unwrap_or(ActiveValue::NotSet)

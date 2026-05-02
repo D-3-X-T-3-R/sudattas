@@ -42,6 +42,11 @@ export type AccountOrderRow = {
   totalAmountFormatted: string;
   statusId: string;
   statusName: string;
+  invoiceId?: string | null;
+  invoiceNumber?: string | null;
+  invoiceGeneratedAt?: string | null;
+  invoiceAvailable?: boolean | null;
+  invoiceUrl?: string | null;
   cancelWindowHours?: number;
   returnWindowDays?: number;
 };
@@ -261,8 +266,7 @@ function customerOrderStatusHeadline(
   if (sn.includes("partially_cancelled")) return "Partially cancelled";
   if (sn.includes("cancel_pending")) return "Cancellation in progress · awaiting courier";
   const paid =
-    (detail?.paymentState ?? "").toLowerCase().includes("paid") ||
-    (detail?.paymentState ?? "").toLowerCase().includes("captured");
+    (detail?.paymentState ?? "").toLowerCase().includes("paid");
   const refundState = refundTrackingStateForOrder(statusName, detail);
   if ((sn.includes("cancelled") || sn.includes("canceled")) && paid) {
     if (refundState === "failed") return "Cancelled · refund failed";
@@ -1296,6 +1300,14 @@ export function ProfileAuthenticatedContent({
                                   ? "Refresh refund"
                                   : "Refresh tracking"}
                             </button>
+                            {detail?.order?.invoiceAvailable ? (
+                              <a
+                                href={`/api/account/orders/${encodeURIComponent(o.orderId)}/invoice`}
+                                className="inline-flex items-center justify-center rounded-full border border-[#0F3D2E]/25 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#0F3D2E] transition hover:bg-[#f4efe4]"
+                              >
+                                Download Invoice
+                              </a>
+                            ) : null}
                           </div>
                         </article>
                       );
@@ -1839,5 +1851,3 @@ export function ProfileAuthenticatedContent({
     </section>
   );
 }
-
-

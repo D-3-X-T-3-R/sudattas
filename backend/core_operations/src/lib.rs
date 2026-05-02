@@ -56,11 +56,12 @@ use proto::proto::core::{
     DeleteUserRoleRequest, DeleteWeaveRequest, DeleteWishlistItemRequest,
     EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse, EstimateCheckoutShippingRequest,
     EstimateCheckoutShippingResponse, EventLogsResponse, FabricsResponse, GetCartItemsRequest,
-    GetOrderEventsRequest, GetPaymentIntentRequest, GetPresignedUploadUrlRequest,
+    GetOrderEventsRequest, GetOrderInvoiceDownloadRequest, GetOrderInvoiceDownloadResponse,
+    GetOrderInvoiceRequest, GetPaymentIntentRequest, GetPresignedUploadUrlRequest,
     GetProductsByIdRequest, GetRefundsRequest, GetRelatedProductsRequest, GetShipmentRequest,
     GetShippingAddressRequest, GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse,
     GetUserPiiExportRequest, GetUserPiiExportResponse, IngestWebhookRequest,
-    InventoryItemsResponse, InventoryLogsResponse, NewsletterSubscribersResponse,
+    InventoryItemsResponse, InventoryLogsResponse, InvoiceResponse, NewsletterSubscribersResponse,
     OccasionsResponse, OrderDetailsResponse, OrderEventsResponse, OrderStatusesResponse,
     OrdersResponse, PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse,
     ProductImagesResponse, ProductMoodMappingsResponse, ProductMoodsResponse,
@@ -99,6 +100,7 @@ pub mod integrations;
 pub mod notifications;
 pub mod order_state_machine;
 pub mod procedures;
+pub mod schema_guard;
 
 #[derive(Default, Debug)]
 pub struct MyGRPCServices {
@@ -138,8 +140,13 @@ pub fn check_auth(req: Request<()>) -> Result<Request<()>, Status> {
 }
 
 impl MyGRPCServices {
-    pub async fn init(&mut self) {
-        let db = get_db().await.unwrap();
+    pub async fn init(&mut self) -> Result<(), Status> {
+        let db = get_db()
+            .await
+            .map_err(|e| Status::unavailable(format!("Database initialization failed: {e}")))?;
+        crate::schema_guard::validate_required_schema(&db)
+            .await
+            .map_err(|e| Status::failed_precondition(e.to_string()))?;
         self.db = Some(db);
 
         if let Ok(redis_url) = std::env::var("REDIS_URL") {
@@ -148,6 +155,7 @@ impl MyGRPCServices {
                 Err(e) => log::warn!("Redis session manager not available: {}", e),
             }
         }
+        Ok(())
     }
 }
 
@@ -728,6 +736,38 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::search_order_status(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_order_invoice(
+        &self,
+        request: Request<GetOrderInvoiceRequest>,
+    ) -> Result<Response<InvoiceResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::invoices::get_order_invoice(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_order_invoice_download(
+        &self,
+        request: Request<GetOrderInvoiceDownloadRequest>,
+    ) -> Result<Response<GetOrderInvoiceDownloadResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .unwrap()
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::invoices::get_order_invoice_download(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

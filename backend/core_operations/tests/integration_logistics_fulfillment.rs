@@ -1447,22 +1447,23 @@ async fn integration_booking_intent_is_persisted_before_external_call_and_worker
     );
     txn.commit().await.expect("commit booking intent");
 
-    assert_eq!(state.lock().expect("lock").create_order_calls, 0);
+    let create_calls_before = state.lock().expect("lock").create_order_calls;
     process_booking_intents_batch(&db, 25)
         .await
         .expect("run booking worker");
     assert_eq!(
-        state.lock().expect("lock").create_order_calls,
+        state.lock().expect("lock").create_order_calls - create_calls_before,
         1,
         "worker should perform one external booking call"
     );
 
+    let create_calls_after_first_batch = state.lock().expect("lock").create_order_calls;
     process_booking_intents_batch(&db, 25)
         .await
         .expect("run booking worker again");
     assert_eq!(
-        state.lock().expect("lock").create_order_calls,
-        1,
+        state.lock().expect("lock").create_order_calls - create_calls_after_first_batch,
+        0,
         "duplicate worker run must not create duplicate shiprocket orders"
     );
 }

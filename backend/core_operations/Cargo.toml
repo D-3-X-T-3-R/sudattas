@@ -66,12 +66,14 @@ tracing = { version = "0.1.44", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "json"] }
 metrics = "0.21"
 metrics-exporter-prometheus = "0.13"
+genpdf = "0.2"
 
 [dev-dependencies]
 # Test dependencies
 tokio-test = "0.4"
 proptest = "1.5"
 dotenvy = "0.15"
+pdf-extract = "0.10.0"
 
 [build-dependencies]
 tonic-build = "0.10.2"

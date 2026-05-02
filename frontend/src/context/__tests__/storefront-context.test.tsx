@@ -2,12 +2,17 @@ import { render } from "@testing-library/react";
 import { StorefrontProvider } from "@/context/storefront-context";
 
 const useSessionMock = vi.fn();
+const usePathnameMock = vi.fn();
 const useStorefrontWishlistMock = vi.fn();
 const useStorefrontCartMock = vi.fn();
 const reloadCartFromBackendMock = vi.fn();
 
 vi.mock("next-auth/react", () => ({
   useSession: () => useSessionMock(),
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => usePathnameMock(),
 }));
 
 vi.mock("@/components/ui/toast", () => ({
@@ -29,6 +34,7 @@ vi.mock("@/domains/storefront/hooks/use-storefront-cart", () => ({
 describe("StorefrontProvider", () => {
   beforeEach(() => {
     reloadCartFromBackendMock.mockReset();
+    usePathnameMock.mockReturnValue("/");
     useSessionMock.mockReturnValue({ status: "authenticated", data: null });
     useStorefrontWishlistMock.mockReturnValue({
       wishlist: {},
@@ -44,6 +50,21 @@ describe("StorefrontProvider", () => {
       removeCart: vi.fn(),
       reloadCartFromBackend: reloadCartFromBackendMock,
     });
+  });
+
+  it("disables storefront hooks on admin routes", () => {
+    usePathnameMock.mockReturnValue("/imtheboss/orders");
+
+    render(
+      <StorefrontProvider>
+        <div>child</div>
+      </StorefrontProvider>
+    );
+
+    window.dispatchEvent(new Event("sudattas-auth-changed"));
+    expect(useStorefrontCartMock).not.toHaveBeenCalled();
+    expect(useStorefrontWishlistMock).not.toHaveBeenCalled();
+    expect(reloadCartFromBackendMock).not.toHaveBeenCalled();
   });
 
   it("reloads cart when auth-changed event is emitted (cart merge path)", () => {

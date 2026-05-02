@@ -60,6 +60,8 @@ service GRPCServices {
     rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);
     rpc UpdatePickupTarget(UpdatePickupTargetRequest) returns (UpdatePickupTargetResponse);
     rpc SearchOrderStatus(SearchOrderStatusRequest) returns (OrderStatusesResponse);
+    rpc GetOrderInvoice(GetOrderInvoiceRequest) returns (InvoiceResponse);
+    rpc GetOrderInvoiceDownload(GetOrderInvoiceDownloadRequest) returns (GetOrderInvoiceDownloadResponse);
 
     // OrderDetails
     rpc CreateOrderDetails(CreateOrderDetailsRequest) returns (OrderDetailsResponse);

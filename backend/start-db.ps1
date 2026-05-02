@@ -1,13 +1,17 @@
-# Start database and regenerate entities.
+# Start database, apply migrations, validate schema, and regenerate entities.
 # 1. Stop any running container using an image whose name starts with sudattas_
 # 2. Run run_database_windows.bat (build and start container)
-# 3. Run generate.ps1 to regenerate SeaORM entities
+# 3. Apply forward migrations
+# 4. Validate required migration-created tables
+# 5. Run generate.ps1 to regenerate SeaORM entities
 
 $ErrorActionPreference = "Stop"
 
 $BackendRoot = $PSScriptRoot
 $DatabaseDir = Join-Path $BackendRoot "database"
 $EntityDir = Join-Path $BackendRoot "core_db_entities\src\entity"
+$ApplyMigrationsScript = Join-Path $BackendRoot "apply-db-migrations.ps1"
+$AssertSchemaScript = Join-Path $BackendRoot "assert-required-schema.ps1"
 
 # 1. Check for running containers with image name matching sudattas_* and stop them
 $running = docker ps --format "{{.ID}} {{.Image}}" 2>$null
@@ -42,7 +46,27 @@ try {
 Write-Host "Waiting for MySQL to be ready..." -ForegroundColor Cyan
 Start-Sleep -Seconds 15
 
-# 3. Execute generate.ps1 (must run from entity directory)
+# 3. Apply forward DB migrations
+if (-not (Test-Path -Path $ApplyMigrationsScript -PathType Leaf)) {
+    throw "Migration script not found: $ApplyMigrationsScript"
+}
+Write-Host "Applying forward DB migrations..." -ForegroundColor Cyan
+& $ApplyMigrationsScript
+if ($LASTEXITCODE -ne 0) {
+    throw "apply-db-migrations.ps1 exited with $LASTEXITCODE"
+}
+
+# 4. Validate required migration-created schema
+if (-not (Test-Path -Path $AssertSchemaScript -PathType Leaf)) {
+    throw "Schema validation script not found: $AssertSchemaScript"
+}
+Write-Host "Validating required DB schema..." -ForegroundColor Cyan
+& $AssertSchemaScript
+if ($LASTEXITCODE -ne 0) {
+    throw "assert-required-schema.ps1 exited with $LASTEXITCODE"
+}
+
+# 5. Execute generate.ps1 (must run from entity directory)
 $generatePath = Join-Path $EntityDir "generate.ps1"
 if (-not (Test-Path $generatePath)) {
     throw "Generate script not found: $generatePath"
@@ -57,4 +81,4 @@ try {
 }
 
 Write-Host ""
-Write-Host "Done. Database is running and entities were regenerated." -ForegroundColor Green
+Write-Host "Done. Database is running, migrations were applied, schema validated, and entities were regenerated." -ForegroundColor Green

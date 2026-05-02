@@ -35,6 +35,11 @@ describe("checkout verify-payment contract", () => {
         data: {
           searchOrder: [{ orderId: "o1", statusId: "2" }],
         },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          searchOrderStatus: [{ statusId: "2", statusName: "processing" }],
+        },
       });
 
     const req = new Request("http://localhost/api/checkout/verify-payment", {
@@ -54,7 +59,13 @@ describe("checkout verify-payment contract", () => {
       ok: boolean;
       errorCode: string | null;
       retryable: boolean;
-      data: { verified: boolean; paymentState: string; orderUiState: string; verifyKey: string };
+      data: {
+        verified: boolean;
+        paymentState: string;
+        orderStatusName: string;
+        orderUiState: string;
+        verifyKey: string;
+      };
     };
 
     expect(res.status).toBe(200);
@@ -63,6 +74,7 @@ describe("checkout verify-payment contract", () => {
     expect(json.retryable).toBe(false);
     expect(json.data.verified).toBe(true);
     expect(json.data.paymentState).toBe("paid");
+    expect(json.data.orderStatusName).toBe("processing order");
     expect(json.data.orderUiState).toBe("processing");
     expect(json.data.verifyKey).toBe("verify-key-1");
 
@@ -73,5 +85,50 @@ describe("checkout verify-payment contract", () => {
       expect.any(Object),
       { "Idempotency-Key": "verify-key-1" }
     );
+  });
+
+  it("handles unknown status ids without numeric mapping assumptions", async () => {
+    mocks.requireAuthenticatedCustomerUserId.mockResolvedValue("44");
+    mocks.callGraphqlAsCustomer
+      .mockResolvedValueOnce({
+        data: {
+          verifyRazorpayPayment: {
+            verified: true,
+            paymentIntent: { intentId: "pi1", status: "processed", razorpayPaymentId: "pay_1" },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          searchOrder: [{ orderId: "o1", statusId: "99" }],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          searchOrderStatus: [{ statusId: "99", statusName: "needs_review" }],
+        },
+      });
+
+    const req = new Request("http://localhost/api/checkout/verify-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId: "o1",
+        razorpayPaymentId: "pay_1",
+        razorpayOrderId: "order_1",
+        razorpaySignature: "sig_1",
+      }),
+    });
+
+    const res = await POST(req);
+    const json = (await res.json()) as {
+      ok: boolean;
+      data: { paymentState: string; orderStatusName: string; orderUiState: string };
+    };
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.data.paymentState).toBe("paid");
+    expect(json.data.orderStatusName).toBe("needs_review");
+    expect(json.data.orderUiState).toBe("needs_review");
   });
 });

@@ -360,8 +360,10 @@ impl MutationRoot {
     /// P2 security audit hook (e.g. secrets rotation).
     #[instrument(err, ret)]
     async fn record_security_audit_event(
+        context: &Context,
         input: RecordSecurityAuditEventInput,
     ) -> FieldResult<bool> {
+        require_admin_or_internal_service(context)?;
         users::handlers::record_security_audit_event(input)
             .await
             .map_err(|e| e.into_field_error())

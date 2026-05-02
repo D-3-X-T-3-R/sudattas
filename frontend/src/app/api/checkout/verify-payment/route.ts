@@ -3,6 +3,12 @@ import {
   callGraphqlAsCustomer,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
+import {
+  canonicalOrderStatusName,
+  deriveOrderUiState,
+  normalizePaymentState,
+  statusNameFromId,
+} from "@/lib/order-state";
 
 type VerifyRow = {
   verified: boolean;
@@ -16,6 +22,11 @@ type VerifyRow = {
 type OrderRow = {
   orderId: string;
   statusId: string;
+};
+
+type OrderStatusRow = {
+  statusId: string;
+  statusName: string;
 };
 
 const VERIFY_MUTATION = `mutation VerifyRazorpayPayment($input: VerifyRazorpayPaymentInput!) {
@@ -35,27 +46,12 @@ const ORDER_STATUS_QUERY = `query CheckoutOrderStatus($search: SearchOrder!) {
     statusId
   }
 }`;
-
-function derivePaymentState(rawStatus?: string | null): string {
-  const status = (rawStatus ?? "").toLowerCase();
-  if (!status) return "pending";
-  if (status.includes("needs_review")) return "needs_review";
-  if (status.includes("captured") || status.includes("paid")) return "paid";
-  if (status.includes("verified")) return "verified";
-  if (status.includes("failed")) return "failed";
-  if (status.includes("refunded")) return "refunded";
-  return status;
-}
-
-function deriveOrderUiState(statusId?: string): string {
-  if (!statusId) return "unknown";
-  if (statusId === "1") return "pending";
-  if (statusId === "2") return "processing";
-  if (statusId === "3") return "shipped";
-  if (statusId === "4") return "delivered";
-  if (statusId === "5") return "cancelled";
-  return statusId;
-}
+const STATUS_LOOKUP_QUERY = `query CheckoutStatusLookup {
+  searchOrderStatus {
+    statusId
+    statusName
+  }
+}`;
 
 export async function POST(request: Request) {
   const customerUserId = await requireAuthenticatedCustomerUserId();
@@ -106,11 +102,15 @@ export async function POST(request: Request) {
     return apiError("Payment verification result missing", 400, "GRAPHQL_ERROR");
   }
 
-  const orderResult = await callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(
-    customerUserId,
-    ORDER_STATUS_QUERY,
-    { search: { orderId, limit: "1", offset: "0", userId: "" } }
-  );
+  const [orderResult, statusesResult] = await Promise.all([
+    callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(customerUserId, ORDER_STATUS_QUERY, {
+      search: { orderId, limit: "1", offset: "0", userId: "" },
+    }),
+    callGraphqlAsCustomer<{ searchOrderStatus?: OrderStatusRow[] }>(
+      customerUserId,
+      STATUS_LOOKUP_QUERY
+    ),
+  ]);
   if (orderResult.errors?.length) {
     return apiError(
       orderResult.errors[0]?.message ?? "Could not load updated order state",
@@ -118,15 +118,30 @@ export async function POST(request: Request) {
       "GRAPHQL_ERROR"
     );
   }
+  if (statusesResult.errors?.length) {
+    return apiError(
+      statusesResult.errors[0]?.message ?? "Could not resolve order status labels",
+      400,
+      "GRAPHQL_ERROR"
+    );
+  }
   const order = orderResult.data?.searchOrder?.[0] ?? null;
+  const statusNameById = new Map(
+    (statusesResult.data?.searchOrderStatus ?? []).map((status) => [
+      status.statusId,
+      canonicalOrderStatusName(status.statusName),
+    ])
+  );
+  const orderStatusName = statusNameFromId(order?.statusId, statusNameById);
 
   return Response.json({
     ok: true,
     data: {
       verified: verified.verified,
-      paymentState: derivePaymentState(verified.paymentIntent?.status),
+      paymentState: normalizePaymentState(verified.paymentIntent?.status),
       orderStatusId: order?.statusId ?? null,
-      orderUiState: deriveOrderUiState(order?.statusId),
+      orderStatusName,
+      orderUiState: deriveOrderUiState(orderStatusName),
       verifyKey,
     },
     errorCode: null,

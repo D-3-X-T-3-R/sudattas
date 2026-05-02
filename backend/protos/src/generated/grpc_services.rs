@@ -870,6 +870,16 @@ pub struct OrderResponse {
     pub pickup_target_at: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "13")]
     pub fulfillment_status: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, optional, tag = "14")]
+    pub invoice_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "15")]
+    pub invoice_number: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "16")]
+    pub invoice_generated_at: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "17")]
+    pub invoice_storage_path: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bool, optional, tag = "18")]
+    pub invoice_available: ::core::option::Option<bool>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -877,6 +887,50 @@ pub struct OrderResponse {
 pub struct OrdersResponse {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<OrderResponse>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetOrderInvoiceRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InvoiceResponse {
+    #[prost(int64, tag = "1")]
+    pub invoice_id: i64,
+    #[prost(string, tag = "2")]
+    pub invoice_number: ::prost::alloc::string::String,
+    #[prost(int64, tag = "3")]
+    pub order_id: i64,
+    #[prost(int64, tag = "4")]
+    pub user_id: i64,
+    #[prost(string, tag = "5")]
+    pub generated_at: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub storage_path: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetOrderInvoiceDownloadRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetOrderInvoiceDownloadResponse {
+    #[prost(message, optional, tag = "1")]
+    pub invoice: ::core::option::Option<InvoiceResponse>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub pdf_bytes: ::prost::alloc::vec::Vec<u8>,
+    #[prost(string, tag = "3")]
+    pub file_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub content_type: ::prost::alloc::string::String,
 }
 /// OrderStatus (list for admin dropdowns; table OrderStatus)
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -3868,6 +3922,63 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_order_invoice(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetOrderInvoiceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::InvoiceResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/GetOrderInvoice",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "GetOrderInvoice"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_order_invoice_download(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetOrderInvoiceDownloadRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetOrderInvoiceDownloadResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/GetOrderInvoiceDownload",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "GetOrderInvoiceDownload",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         /// OrderDetails
         pub async fn create_order_details(
             &mut self,
@@ -6807,6 +6918,17 @@ pub mod grpc_services_server {
             tonic::Response<super::OrderStatusesResponse>,
             tonic::Status,
         >;
+        async fn get_order_invoice(
+            &self,
+            request: tonic::Request<super::GetOrderInvoiceRequest>,
+        ) -> std::result::Result<tonic::Response<super::InvoiceResponse>, tonic::Status>;
+        async fn get_order_invoice_download(
+            &self,
+            request: tonic::Request<super::GetOrderInvoiceDownloadRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetOrderInvoiceDownloadResponse>,
+            tonic::Status,
+        >;
         /// OrderDetails
         async fn create_order_details(
             &self,
@@ -9481,6 +9603,105 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = SearchOrderStatusSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/GetOrderInvoice" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetOrderInvoiceSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::GetOrderInvoiceRequest>
+                    for GetOrderInvoiceSvc<T> {
+                        type Response = super::InvoiceResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetOrderInvoiceRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::get_order_invoice(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetOrderInvoiceSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/GetOrderInvoiceDownload" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetOrderInvoiceDownloadSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::GetOrderInvoiceDownloadRequest>
+                    for GetOrderInvoiceDownloadSvc<T> {
+                        type Response = super::GetOrderInvoiceDownloadResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::GetOrderInvoiceDownloadRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::get_order_invoice_download(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetOrderInvoiceDownloadSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

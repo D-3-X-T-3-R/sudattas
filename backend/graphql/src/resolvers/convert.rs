@@ -50,6 +50,10 @@ pub fn order_response_to_gql(o: OrderResponse) -> Order {
         earliest_booking_at: o.earliest_booking_at,
         pickup_target_at: o.pickup_target_at,
         fulfillment_status: o.fulfillment_status,
+        invoice_id: o.invoice_id.map(|v| v.to_string()),
+        invoice_number: o.invoice_number,
+        invoice_generated_at: o.invoice_generated_at,
+        invoice_available: o.invoice_available.unwrap_or(false),
     }
 }
 

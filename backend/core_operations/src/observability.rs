@@ -92,9 +92,49 @@ pub fn record_outbox_backlog_gauge(count: f64) {
     ::metrics::gauge!("outbox_backlog", count);
 }
 
+/// Oldest pending outbox age in seconds.
+pub fn record_outbox_pending_max_age_seconds_gauge(age_sec: f64) {
+    ::metrics::gauge!("outbox_pending_max_age_seconds", age_sec);
+}
+
+/// Number of pending outbox rows with at least one failed publish attempt.
+pub fn record_outbox_retry_backlog_gauge(count: f64) {
+    ::metrics::gauge!("outbox_retry_backlog", count);
+}
+
+/// Number of webhook events that failed processing.
+pub fn record_webhook_failed_backlog_gauge(count: f64) {
+    ::metrics::gauge!("webhook_failed_backlog", count);
+}
+
+/// Oldest pending webhook age in seconds.
+pub fn record_webhook_pending_max_age_seconds_gauge(age_sec: f64) {
+    ::metrics::gauge!("webhook_pending_max_age_seconds", age_sec);
+}
+
+/// Number of refund attempts that are still pending/submitted beyond expected processing time.
+pub fn record_refund_attempts_stuck_gauge(count: f64) {
+    ::metrics::gauge!("refund_attempts_stuck", count);
+}
+
+/// Number of shipments in booking/cancel persistence retry states.
+pub fn record_shipments_retry_backlog_gauge(count: f64) {
+    ::metrics::gauge!("shipments_retry_backlog", count);
+}
+
 /// Count of active payment intents that remain pending past the intended expiry window.
 pub fn record_stuck_payment_intents_gauge(count: f64) {
     ::metrics::gauge!("stuck_payment_intents", count);
+}
+
+/// Count of stale idempotency keys that remained pending beyond retry timeout.
+pub fn record_stale_idempotency_pending_gauge(count: f64) {
+    ::metrics::gauge!("stale_idempotency_pending", count);
+}
+
+/// Invoice existed but corresponding outbox event was missing and repaired.
+pub fn record_invoice_outbox_repair_total() {
+    ::metrics::counter!("invoice_outbox_repair_total", 1);
 }
 
 /// Emit a structured operational event without secrets/tokens.
@@ -173,7 +213,15 @@ mod tests {
         record_cancel_pending_logistics_backlog_gauge(3.0);
         record_refund_failed_orders_gauge(1.0);
         record_outbox_backlog_gauge(4.0);
+        record_outbox_pending_max_age_seconds_gauge(120.0);
+        record_outbox_retry_backlog_gauge(2.0);
+        record_webhook_failed_backlog_gauge(1.0);
+        record_webhook_pending_max_age_seconds_gauge(300.0);
+        record_refund_attempts_stuck_gauge(3.0);
+        record_shipments_retry_backlog_gauge(2.0);
         record_stuck_payment_intents_gauge(1.0);
+        record_stale_idempotency_pending_gauge(1.0);
+        record_invoice_outbox_repair_total();
         log_operational_event(
             "order_placed",
             &[("order_id", "42".to_string()), ("user_id", "9".to_string())],

@@ -17,6 +17,7 @@ use crate::resolvers::{
         self,
         schema::{InventoryLog, SearchInventoryLogInput},
     },
+    invoices::{self, schema::InvoiceDownload},
     order_events::{self, schema::OrderEvent},
     orders::{
         self,
@@ -268,6 +269,20 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    #[instrument(err, ret)]
+    async fn get_order_invoice_download(
+        context: &Context,
+        order_id: String,
+    ) -> FieldResult<InvoiceDownload> {
+        if !context.is_admin() {
+            let _ = require_customer_actor(context)?;
+            ensure_customer_can_access_order(context, order_id.as_str()).await?;
+        }
+        invoices::handlers::get_order_invoice_download(order_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     async fn search_order_status(context: &Context) -> FieldResult<Vec<OrderStatus>> {
         let _ = require_jwt(context)?;
         orders::handlers::search_order_status()
@@ -418,8 +433,10 @@ impl QueryRoot {
     // Inventory logs
     #[instrument(err, ret)]
     async fn search_inventory_log(
+        context: &Context,
         input: SearchInventoryLogInput,
     ) -> FieldResult<Vec<InventoryLog>> {
+        require_admin(context)?;
         inventory_logs::handlers::search_inventory_log(input)
             .await
             .map_err(|e| e.into_field_error())

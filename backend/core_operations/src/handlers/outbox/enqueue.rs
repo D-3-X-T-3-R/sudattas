@@ -15,6 +15,7 @@ pub const PAYMENT_CAPTURED: &str = "PaymentCaptured";
 pub const SHIPPED: &str = "Shipped";
 pub const DELIVERED: &str = "Delivered";
 pub const REFUNDED: &str = "Refunded";
+pub const INVOICE_GENERATED: &str = "InvoiceGenerated";
 /// P2: Abandoned cart reminder (payload: cart_id, user_id?, session_id?, email?)
 pub const ABANDONED_CART: &str = "AbandonedCart";
 
