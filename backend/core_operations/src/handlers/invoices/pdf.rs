@@ -3,10 +3,9 @@ use chrono::{DateTime, FixedOffset};
 use genpdf::elements::{self, CellDecorator, LinearLayout, Paragraph, TableLayout};
 use genpdf::fonts::{FontData, FontFamily};
 use genpdf::style::{Color, Style};
-use genpdf::{Alignment, Element as _, Margins, PaperSize, Position};
+use genpdf::{Alignment, Context, Element as _, Margins, PaperSize, Position, RenderResult, Size};
 use tracing::warn;
 
-const COLOR_PRIMARY: Color = Color::Rgb(0x0F, 0x3D, 0x3E);
 const COLOR_ACCENT: Color = Color::Rgb(0xC6, 0xA7, 0x5E);
 const COLOR_TEXT: Color = Color::Rgb(0x1A, 0x1A, 0x1A);
 const COLOR_SECONDARY: Color = Color::Rgb(0x6B, 0x6B, 0x6B);
@@ -18,7 +17,7 @@ const INTER_REGULAR: &[u8] = include_bytes!("assets/fonts/Inter-Regular.ttf");
 
 const IST_OFFSET_SECONDS: i32 = 5 * 3600 + 30 * 60;
 const DEFAULT_SELLER_NAME: &str = "Sudatta's";
-const DEFAULT_SUPPORT_EMAIL: &str = "support@sudattas.com";
+const DEFAULT_SUPPORT_EMAIL: &str = "sudattasdesignerboutique@gmail.com";
 
 #[derive(Clone)]
 struct SellerInfo {
@@ -37,40 +36,66 @@ impl InvoiceStyles {
     fn title(self) -> Style {
         Style::new()
             .with_font_family(self.heading_font)
-            .with_font_size(24)
-            .with_color(COLOR_PRIMARY)
+            .with_font_size(22)
+            .with_color(COLOR_TEXT)
     }
 
-    fn header_tag(self) -> Style {
+    fn brand_primary(self) -> Style {
+        Style::new()
+            .with_font_family(self.heading_font)
+            .with_font_size(18)
+            .with_color(COLOR_TEXT)
+    }
+
+    fn brand_secondary(self) -> Style {
+        Style::new().with_font_size(11).with_color(COLOR_SECONDARY)
+    }
+
+    fn meta_label(self) -> Style {
         Style::new()
             .with_font_size(11)
-            .with_color(COLOR_ACCENT)
+            .with_color(COLOR_TEXT)
             .bold()
     }
 
-    fn header_meta(self) -> Style {
-        Style::new().with_font_size(10).with_color(COLOR_SECONDARY)
+    fn meta_value(self) -> Style {
+        Style::new().with_font_size(11).with_color(COLOR_TEXT)
     }
 
     fn section_header(self) -> Style {
         Style::new()
+            .with_font_family(self.heading_font)
+            .with_font_size(12)
+            .with_color(COLOR_ACCENT)
+            .bold()
+    }
+
+    fn section_heading_value(self) -> Style {
+        Style::new()
             .with_font_size(11)
-            .with_color(COLOR_PRIMARY)
+            .with_color(COLOR_TEXT)
             .bold()
     }
 
     fn label(self) -> Style {
-        Style::new().with_font_size(9).with_color(COLOR_SECONDARY)
+        Style::new()
+            .with_font_size(10)
+            .with_color(COLOR_TEXT)
+            .bold()
     }
 
     fn body(self) -> Style {
         Style::new().with_font_size(10).with_color(COLOR_TEXT)
     }
 
+    fn email(self) -> Style {
+        Style::new().with_font_size(8).with_color(COLOR_TEXT)
+    }
+
     fn table_header(self) -> Style {
         Style::new()
-            .with_font_size(9)
-            .with_color(COLOR_PRIMARY)
+            .with_font_size(10)
+            .with_color(COLOR_TEXT)
             .bold()
     }
 
@@ -80,8 +105,8 @@ impl InvoiceStyles {
 
     fn summary_total(self) -> Style {
         Style::new()
-            .with_font_size(12)
-            .with_color(COLOR_PRIMARY)
+            .with_font_size(14)
+            .with_color(COLOR_ACCENT)
             .bold()
     }
 
@@ -91,15 +116,35 @@ impl InvoiceStyles {
 }
 
 #[derive(Default)]
-struct MinimalRowDivider {
-    total_rows: usize,
+struct ThreeColumnSeparator;
+
+impl CellDecorator for ThreeColumnSeparator {
+    fn decorate_cell(
+        &mut self,
+        column: usize,
+        _row: usize,
+        _has_more: bool,
+        area: genpdf::render::Area<'_>,
+        style: Style,
+    ) {
+        let line_style = style.and(COLOR_DIVIDER);
+        let size = area.size();
+        if column == 0 || column == 1 {
+            area.draw_line(
+                vec![
+                    Position::new(size.width, 0),
+                    Position::new(size.width, size.height),
+                ],
+                line_style,
+            );
+        }
+    }
 }
 
-impl CellDecorator for MinimalRowDivider {
-    fn set_table_size(&mut self, _num_columns: usize, num_rows: usize) {
-        self.total_rows = num_rows;
-    }
+#[derive(Default)]
+struct HeaderRowDivider;
 
+impl CellDecorator for HeaderRowDivider {
     fn decorate_cell(
         &mut self,
         _column: usize,
@@ -108,30 +153,58 @@ impl CellDecorator for MinimalRowDivider {
         area: genpdf::render::Area<'_>,
         style: Style,
     ) {
-        let line_style = style.and(COLOR_DIVIDER);
         let size = area.size();
         if row == 0 {
-            area.draw_line(
-                vec![Position::new(0, 0), Position::new(size.width, 0)],
-                line_style,
-            );
-        }
-        area.draw_line(
-            vec![
-                Position::new(0, size.height),
-                Position::new(size.width, size.height),
-            ],
-            line_style,
-        );
-        if row + 1 == self.total_rows {
             area.draw_line(
                 vec![
                     Position::new(0, size.height),
                     Position::new(size.width, size.height),
                 ],
-                line_style,
+                style.and(COLOR_ACCENT),
+            );
+        } else {
+            area.draw_line(
+                vec![
+                    Position::new(0, size.height),
+                    Position::new(size.width, size.height),
+                ],
+                style.and(COLOR_DIVIDER),
             );
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct HorizontalDivider {
+    color: Color,
+    bottom_margin: f64,
+}
+
+impl HorizontalDivider {
+    fn new(color: Color, bottom_margin: f64) -> Self {
+        Self {
+            color,
+            bottom_margin,
+        }
+    }
+}
+
+impl genpdf::Element for HorizontalDivider {
+    fn render(
+        &mut self,
+        _context: &Context,
+        area: genpdf::render::Area<'_>,
+        _style: Style,
+    ) -> Result<RenderResult, genpdf::error::Error> {
+        let width = area.size().width;
+        area.draw_line(
+            vec![Position::new(0, 0), Position::new(width, 0)],
+            Style::new().with_color(self.color),
+        );
+        Ok(RenderResult {
+            size: Size::new(width, self.bottom_margin),
+            has_more: false,
+        })
     }
 }
 
@@ -150,9 +223,9 @@ fn load_inter_family() -> Result<FontFamily<FontData>, genpdf::error::Error> {
 
 fn load_playfair_family() -> Result<FontFamily<FontData>, genpdf::error::Error> {
     let regular = FontData::new(PLAYFAIR_REGULAR.to_vec(), None)?;
-    let bold = FontData::new(PLAYFAIR_REGULAR.to_vec(), None)?;
-    let italic = FontData::new(PLAYFAIR_REGULAR.to_vec(), None)?;
-    let bold_italic = FontData::new(PLAYFAIR_REGULAR.to_vec(), None)?;
+    let bold = FontData::new(INTER_REGULAR.to_vec(), None)?;
+    let italic = FontData::new(INTER_REGULAR.to_vec(), None)?;
+    let bold_italic = FontData::new(INTER_REGULAR.to_vec(), None)?;
     Ok(FontFamily {
         regular,
         bold,
@@ -242,7 +315,7 @@ fn format_inr_major(value: u64) -> String {
         }
         out.push(ch);
     }
-    format!("₹{out}")
+    format!("\u{20B9}{out}")
 }
 
 fn payment_mode_label(raw: &str) -> &'static str {
@@ -287,6 +360,73 @@ fn looks_like_phone(candidate: &str) -> bool {
     digits >= 10
 }
 
+fn split_email_local_chunks(local: &str, max_chars: usize) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    let mut current_chars = 0usize;
+    for ch in local.chars() {
+        current.push(ch);
+        current_chars += 1;
+        if matches!(ch, '.' | '+' | '_' | '-') || current_chars >= max_chars {
+            chunks.push(std::mem::take(&mut current));
+            current_chars = 0;
+        }
+    }
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+    chunks
+}
+
+fn email_chunks(email: &str) -> Vec<String> {
+    let trimmed = email.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let Some((local, domain)) = trimmed.split_once('@') else {
+        return vec![trimmed.to_string()];
+    };
+
+    let mut chunks = split_email_local_chunks(local, 16);
+    let mut domain_parts = domain.split('.').peekable();
+    if let Some(first) = domain_parts.next() {
+        if let Some(last_local_chunk) = chunks.last_mut() {
+            last_local_chunk.push('@');
+            last_local_chunk.push_str(first);
+            if domain_parts.peek().is_some() {
+                last_local_chunk.push('.');
+            }
+        } else {
+            let mut first_chunk = String::from("@");
+            first_chunk.push_str(first);
+            if domain_parts.peek().is_some() {
+                first_chunk.push('.');
+            }
+            chunks.push(first_chunk);
+        }
+    }
+    while let Some(part) = domain_parts.next() {
+        let mut chunk = part.to_string();
+        if domain_parts.peek().is_some() {
+            chunk.push('.');
+        }
+        chunks.push(chunk);
+    }
+    chunks
+}
+
+fn email_paragraph(email: &str) -> Paragraph {
+    let mut paragraph = Paragraph::default();
+    let chunks = email_chunks(email);
+    if chunks.is_empty() {
+        return paragraph;
+    }
+    for chunk in chunks {
+        paragraph.push(chunk);
+    }
+    paragraph
+}
+
 fn padded_text(text: impl Into<String>, style: Style, align: Alignment) -> impl genpdf::Element {
     Paragraph::new(text.into())
         .aligned(align)
@@ -298,71 +438,108 @@ fn render_header(
     layout: &mut LinearLayout,
     snapshot: &InvoiceDocumentSnapshot,
     styles: InvoiceStyles,
-    seller: &SellerInfo,
 ) -> Result<(), genpdf::error::Error> {
-    let mut header = TableLayout::new(vec![3, 2]);
+    let mut header = TableLayout::new(vec![2, 3]);
 
     let mut left = LinearLayout::vertical();
-    left.push(Paragraph::new(seller.name.clone()).styled(styles.title()));
+    left.push(Paragraph::new("Sudatta's").styled(styles.brand_primary()));
+    left.push(elements::Break::new(0.15));
+    left.push(Paragraph::new("Designer Boutique").styled(styles.brand_secondary()));
 
     let mut right = LinearLayout::vertical();
     right.push(
         Paragraph::new("TAX INVOICE")
             .aligned(Alignment::Right)
-            .styled(styles.header_tag()),
+            .styled(styles.title()),
     );
-    right.push(
-        Paragraph::new(format!("Invoice Number: {}", snapshot.invoice_number))
-            .aligned(Alignment::Right)
-            .styled(styles.header_meta()),
-    );
-    right.push(
-        Paragraph::new(format!(
-            "Invoice Date: {}",
-            format_invoice_datetime(&snapshot.generated_at_rfc3339)
-        ))
-        .aligned(Alignment::Right)
-        .styled(styles.header_meta()),
-    );
-    right.push(
-        Paragraph::new(format!("Order ID: {}", snapshot.order_id))
-            .aligned(Alignment::Right)
-            .styled(styles.header_meta()),
-    );
+    right.push(elements::Break::new(0.4));
 
-    header.row().element(left).element(right).push()?;
+    let mut meta = TableLayout::new(vec![2, 3]);
+    meta.row()
+        .element(padded_text(
+            "Invoice Number",
+            styles.meta_label(),
+            Alignment::Left,
+        ))
+        .element(padded_text(
+            snapshot.invoice_number.clone(),
+            styles.meta_value(),
+            Alignment::Right,
+        ))
+        .push()?;
+    meta.row()
+        .element(padded_text(
+            "Invoice Date",
+            styles.meta_label(),
+            Alignment::Left,
+        ))
+        .element(padded_text(
+            format_invoice_datetime(&snapshot.generated_at_rfc3339),
+            styles.meta_value(),
+            Alignment::Right,
+        ))
+        .push()?;
+    meta.row()
+        .element(padded_text(
+            "Order ID",
+            styles.meta_label(),
+            Alignment::Left,
+        ))
+        .element(padded_text(
+            snapshot.order_id.to_string(),
+            styles.meta_value(),
+            Alignment::Right,
+        ))
+        .push()?;
+    right.push(meta);
+
+    header
+        .row()
+        .element(left.padded(Margins::trbl(0, 8.0, 0, 0)))
+        .element(right)
+        .push()?;
+
     layout.push(header);
-    layout.push(elements::Break::new(1.3));
-    layout.push(elements::Break::new(1.0));
+    layout.push(elements::Break::new(0.8));
+    layout.push(HorizontalDivider::new(COLOR_ACCENT, 1.0));
+    layout.push(elements::Break::new(1.2));
     Ok(())
 }
 
-fn render_seller(layout: &mut LinearLayout, styles: InvoiceStyles, seller: &SellerInfo) {
-    layout.push(Paragraph::new("Sold By").styled(styles.section_header()));
-    layout.push(Paragraph::new(seller.name.clone()).styled(styles.body()));
-    for line in &seller.address_lines {
-        layout.push(Paragraph::new(line.clone()).styled(styles.body()));
-    }
-    layout.push(Paragraph::new(format!("Email: {}", seller.email)).styled(styles.body()));
-    layout.push(Paragraph::new(format!("Phone: {}", seller.phone)).styled(styles.body()));
-    layout.push(elements::Break::new(1.3));
-}
-
-fn render_customer(
+fn render_seller(
     layout: &mut LinearLayout,
     snapshot: &InvoiceDocumentSnapshot,
     styles: InvoiceStyles,
+    seller: &SellerInfo,
 ) -> Result<(), genpdf::error::Error> {
-    let mut customer_table = TableLayout::new(vec![1, 1]);
+    let mut customer_table = TableLayout::new(vec![28, 25, 47]);
+    customer_table.set_cell_decorator(ThreeColumnSeparator);
     let (ship_lines, ship_phone) = split_shipping(snapshot);
+
+    let mut sold_by = LinearLayout::vertical();
+    sold_by.push(Paragraph::new("Sold By").styled(styles.section_header()));
+    sold_by.push(elements::Break::new(0.2));
+    sold_by.push(Paragraph::new(seller.name.clone()).styled(styles.section_heading_value()));
+    for line in &seller.address_lines {
+        sold_by.push(Paragraph::new(line.clone()).styled(styles.body()));
+    }
+    sold_by.push(elements::Break::new(0.1));
+    sold_by.push(email_paragraph(&seller.email).styled(styles.email()));
+    sold_by.push(Paragraph::new(format!("Phone: {}", seller.phone)).styled(styles.body()));
 
     let mut bill_to = LinearLayout::vertical();
     bill_to.push(Paragraph::new("Bill To").styled(styles.section_header()));
-    bill_to.push(Paragraph::new(snapshot.customer_name.clone()).styled(styles.body()));
-    bill_to.push(Paragraph::new(snapshot.customer_email.clone()).styled(styles.body()));
+    bill_to.push(elements::Break::new(0.2));
+    bill_to.push(
+        Paragraph::new(snapshot.customer_name.clone()).styled(styles.section_heading_value()),
+    );
+    if !snapshot.customer_email.trim().is_empty() {
+        bill_to.push(email_paragraph(&snapshot.customer_email).styled(styles.email()));
+    }
 
     let mut ship_to = LinearLayout::vertical();
     ship_to.push(Paragraph::new("Ship To").styled(styles.section_header()));
+    ship_to.push(elements::Break::new(0.2));
     for line in ship_lines {
         ship_to.push(Paragraph::new(line).styled(styles.body()));
     }
@@ -372,11 +549,12 @@ fn render_customer(
 
     customer_table
         .row()
-        .element(bill_to.padded(Margins::trbl(0, 6.0, 0, 0)))
-        .element(ship_to.padded(Margins::trbl(0, 0, 0, 6.0)))
+        .element(sold_by.padded(Margins::trbl(0, 4.0, 0, 0)))
+        .element(bill_to.padded(Margins::trbl(0, 2.0, 0, 2.0)))
+        .element(ship_to.padded(Margins::trbl(0, 0, 0, 2.0)))
         .push()?;
     layout.push(customer_table);
-    layout.push(elements::Break::new(1.4));
+    layout.push(elements::Break::new(1.8));
     Ok(())
 }
 
@@ -385,8 +563,8 @@ fn render_items_table(
     snapshot: &InvoiceDocumentSnapshot,
     styles: InvoiceStyles,
 ) -> Result<(), genpdf::error::Error> {
-    let mut table = TableLayout::new(vec![6, 1, 2, 2]);
-    table.set_cell_decorator(MinimalRowDivider::default());
+    let mut table = TableLayout::new(vec![7, 1, 2, 2]);
+    table.set_cell_decorator(HeaderRowDivider);
 
     table
         .row()
@@ -431,7 +609,7 @@ fn render_items_table(
     }
 
     layout.push(table);
-    layout.push(elements::Break::new(1.2));
+    layout.push(elements::Break::new(1.6));
     Ok(())
 }
 
@@ -440,42 +618,42 @@ fn render_summary(
     snapshot: &InvoiceDocumentSnapshot,
     styles: InvoiceStyles,
 ) -> Result<(), genpdf::error::Error> {
-    let mut summary = TableLayout::new(vec![3, 2]);
-    summary.set_cell_decorator(MinimalRowDivider::default());
-
-    summary
+    let mut summary_rows = TableLayout::new(vec![2, 1]);
+    summary_rows
         .row()
-        .element(padded_text("Item Total", styles.body(), Alignment::Right))
+        .element(padded_text("Item Total", styles.body(), Alignment::Left))
         .element(padded_text(
             format_inr(snapshot.item_total_minor),
             styles.body(),
             Alignment::Right,
         ))
         .push()?;
-    summary
+    summary_rows
         .row()
-        .element(padded_text("Discount", styles.body(), Alignment::Right))
+        .element(padded_text("Discount", styles.body(), Alignment::Left))
         .element(padded_text(
             format_inr(-snapshot.discount_minor),
             styles.body(),
             Alignment::Right,
         ))
         .push()?;
-    summary
+    summary_rows
         .row()
-        .element(padded_text("Shipping", styles.body(), Alignment::Right))
+        .element(padded_text("Shipping", styles.body(), Alignment::Left))
         .element(padded_text(
             format_inr(snapshot.shipping_minor),
             styles.body(),
             Alignment::Right,
         ))
         .push()?;
-    summary
+
+    let mut grand_total = TableLayout::new(vec![3, 2]);
+    grand_total
         .row()
         .element(padded_text(
             "Grand Total",
             styles.summary_total(),
-            Alignment::Right,
+            Alignment::Left,
         ))
         .element(padded_text(
             format_inr(snapshot.grand_total_minor),
@@ -484,17 +662,30 @@ fn render_summary(
         ))
         .push()?;
 
-    layout.push(summary.padded(Margins::trbl(0, 0, 0, 70.0)));
-    layout.push(elements::Break::new(1.3));
+    let mut summary_block = LinearLayout::vertical();
+    summary_block.push(summary_rows);
+    summary_block.push(elements::Break::new(0.3));
+    summary_block.push(HorizontalDivider::new(COLOR_ACCENT, 0.6));
+    summary_block.push(elements::Break::new(0.4));
+    summary_block.push(grand_total);
 
-    let mut payment = TableLayout::new(vec![3, 2]);
+    let mut summary_wrapper = TableLayout::new(vec![2, 3]);
+    summary_wrapper
+        .row()
+        .element(Paragraph::new(""))
+        .element(summary_block)
+        .push()?;
+    layout.push(summary_wrapper);
+    layout.push(elements::Break::new(1.4));
+
+    let mut payment = TableLayout::new(vec![2, 3]);
     payment
         .row()
         .element(padded_text("Payment Mode", styles.label(), Alignment::Left))
         .element(padded_text(
             payment_mode_label(&snapshot.payment_mode),
             styles.body(),
-            Alignment::Left,
+            Alignment::Right,
         ))
         .push()?;
     payment
@@ -507,20 +698,28 @@ fn render_summary(
         .element(padded_text(
             payment_status_label(&snapshot.payment_mode, &snapshot.payment_status),
             styles.body(),
-            Alignment::Left,
+            Alignment::Right,
         ))
         .push()?;
-    layout.push(payment);
-    layout.push(elements::Break::new(1.4));
+    layout.push(payment.padded(Margins::trbl(0, 0, 0, 2.0)));
+    layout.push(elements::Break::new(1.6));
     Ok(())
 }
 
 fn render_footer(layout: &mut LinearLayout, styles: InvoiceStyles, seller: &SellerInfo) {
+    layout.push(HorizontalDivider::new(COLOR_DIVIDER, 0.8));
+    layout.push(elements::Break::new(0.6));
     layout.push(
         Paragraph::new("This is a computer-generated invoice and does not require a signature.")
+            .aligned(Alignment::Center)
             .styled(styles.footer()),
     );
-    layout.push(Paragraph::new(format!("Support: {}", seller.email)).styled(styles.footer()));
+    layout.push(elements::Break::new(0.3));
+    layout.push(
+        Paragraph::new(format!("Support: {}", seller.email))
+            .aligned(Alignment::Center)
+            .styled(styles.footer().with_color(COLOR_ACCENT)),
+    );
 }
 
 fn render_invoice_pdf_inner(
@@ -547,9 +746,8 @@ fn render_invoice_pdf_inner(
 
     let seller = seller_info();
     let mut layout = LinearLayout::vertical();
-    render_header(&mut layout, snapshot, styles, &seller)?;
-    render_seller(&mut layout, styles, &seller);
-    render_customer(&mut layout, snapshot, styles)?;
+    render_header(&mut layout, snapshot, styles)?;
+    render_seller(&mut layout, snapshot, styles, &seller)?;
     render_items_table(&mut layout, snapshot, styles)?;
     render_summary(&mut layout, snapshot, styles)?;
     render_footer(&mut layout, styles, &seller);
@@ -560,79 +758,20 @@ fn render_invoice_pdf_inner(
     Ok(pdf_bytes)
 }
 
-fn render_failure_pdf(snapshot: &InvoiceDocumentSnapshot) -> Result<Vec<u8>, genpdf::error::Error> {
-    let default_family = load_inter_family()?;
-    let mut doc = genpdf::Document::new(default_family);
-    doc.set_title(format!("Invoice {}", snapshot.invoice_number));
-    doc.set_font_size(10);
-    doc.set_paper_size(PaperSize::A4);
-    doc.set_minimal_conformance();
-
-    let mut decorator = genpdf::SimplePageDecorator::new();
-    decorator.set_margins(Margins::trbl(20.0, 18.0, 20.0, 18.0));
-    doc.set_page_decorator(decorator);
-
-    let mut layout = LinearLayout::vertical();
-    layout.push(
-        Paragraph::new("Tax Invoice").styled(
-            Style::new()
-                .with_font_size(18)
-                .with_color(COLOR_PRIMARY)
-                .bold(),
-        ),
-    );
-    layout.push(elements::Break::new(0.8));
-    layout.push(
-        Paragraph::new(format!("Invoice Number: {}", snapshot.invoice_number))
-            .styled(Style::new().with_color(COLOR_TEXT)),
-    );
-    layout.push(
-        Paragraph::new(format!("Order ID: {}", snapshot.order_id))
-            .styled(Style::new().with_color(COLOR_TEXT)),
-    );
-    layout.push(
-        Paragraph::new(format!(
-            "Grand Total: {}",
-            format_inr(snapshot.grand_total_minor)
-        ))
-        .styled(Style::new().with_color(COLOR_TEXT).bold()),
-    );
-    layout.push(elements::Break::new(0.8));
-    layout.push(
-        Paragraph::new("Invoice rendering had a temporary formatting issue.")
-            .styled(Style::new().with_color(COLOR_SECONDARY)),
-    );
-    doc.push(layout);
-
-    let mut pdf_bytes = Vec::new();
-    doc.render(&mut pdf_bytes)?;
-    Ok(pdf_bytes)
-}
-
-pub fn render_invoice_pdf(snapshot: &InvoiceDocumentSnapshot) -> Vec<u8> {
-    match render_invoice_pdf_inner(snapshot) {
-        Ok(bytes) => {
-            if bytes.len() > MAX_EXPECTED_PDF_BYTES {
-                warn!(
-                    invoice_number = %snapshot.invoice_number,
-                    order_id = snapshot.order_id,
-                    pdf_size_bytes = bytes.len(),
-                    size_limit_bytes = MAX_EXPECTED_PDF_BYTES,
-                    "premium invoice PDF size exceeds expected budget"
-                );
-            }
-            bytes
-        }
-        Err(err) => {
-            warn!(
-                invoice_number = %snapshot.invoice_number,
-                order_id = snapshot.order_id,
-                error = %err,
-                "premium invoice render failed; generating safe fallback invoice PDF"
-            );
-            render_failure_pdf(snapshot).unwrap_or_default()
-        }
+pub fn render_invoice_pdf(
+    snapshot: &InvoiceDocumentSnapshot,
+) -> Result<Vec<u8>, genpdf::error::Error> {
+    let bytes = render_invoice_pdf_inner(snapshot)?;
+    if bytes.len() > MAX_EXPECTED_PDF_BYTES {
+        warn!(
+            invoice_number = %snapshot.invoice_number,
+            order_id = snapshot.order_id,
+            pdf_size_bytes = bytes.len(),
+            size_limit_bytes = MAX_EXPECTED_PDF_BYTES,
+            "premium invoice PDF size exceeds expected budget"
+        );
     }
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -667,6 +806,10 @@ mod tests {
         }
     }
 
+    fn render_invoice_pdf_bytes_for_test(snapshot: &InvoiceDocumentSnapshot) -> Vec<u8> {
+        render_invoice_pdf_inner(snapshot).expect("invoice render should succeed")
+    }
+
     #[test]
     fn render_invoice_pdf_produces_pdf_bytes() {
         let snapshot = snapshot_with_lines(vec![InvoiceDocumentLineSnapshot {
@@ -678,7 +821,7 @@ mod tests {
             line_total_formatted: "INR 1200.00".to_string(),
         }]);
 
-        let bytes = render_invoice_pdf(&snapshot);
+        let bytes = render_invoice_pdf_bytes_for_test(&snapshot);
         assert!(!bytes.is_empty());
         let rendered = String::from_utf8_lossy(&bytes);
         assert!(rendered.starts_with("%PDF-"));
@@ -706,7 +849,7 @@ mod tests {
             },
         ]);
 
-        let bytes = render_invoice_pdf(&snapshot);
+        let bytes = render_invoice_pdf_bytes_for_test(&snapshot);
         assert!(bytes.starts_with(b"%PDF-"));
         assert!(bytes.len() > 8_000);
     }
@@ -740,7 +883,7 @@ mod tests {
             },
         ]);
 
-        let bytes = render_invoice_pdf(&snapshot);
+        let bytes = render_invoice_pdf_bytes_for_test(&snapshot);
         eprintln!("invoice pdf size={} bytes", bytes.len());
         assert!(
             bytes.len() < MAX_EXPECTED_PDF_BYTES,
@@ -772,8 +915,16 @@ mod tests {
         ]);
         snapshot.payment_mode = "cod".to_string();
         snapshot.payment_status = "pending".to_string();
+        snapshot.customer_email = "invoice_content+12345678@example.com".to_string();
+        snapshot.shipping_address_snapshot = "\
+test user
+1st Floor, Aster East, Block, 2a, Embassy Tech Village Rd
+Bangalore Urban, Karnataka 560103
+India
+9739097329"
+            .to_string();
 
-        let bytes = render_invoice_pdf(&snapshot);
+        let bytes = render_invoice_pdf_bytes_for_test(&snapshot);
         let text = extract_text_from_mem(&bytes).expect("extractable pdf text");
         let normalized = normalize_ws(&text);
 
@@ -786,8 +937,24 @@ mod tests {
             "missing phrase Invoice Number in extracted text: {normalized}"
         );
         assert!(
+            normalized.contains("Sudatta's"),
+            "missing phrase Sudatta's in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("Designer Boutique"),
+            "missing phrase Designer Boutique in extracted text: {normalized}"
+        );
+        assert!(
             normalized.contains("Sold By"),
             "missing phrase Sold By in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("Bill To"),
+            "missing phrase Bill To in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("Ship To"),
+            "missing phrase Ship To in extracted text: {normalized}"
         );
         assert!(
             normalized.contains("Cash on Delivery"),
@@ -796,6 +963,40 @@ mod tests {
         assert!(
             normalized.contains("To be collected on delivery"),
             "missing phrase To be collected on delivery in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("Phone: 9739097329"),
+            "missing Ship To phone line in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("invoice_content+")
+                && normalized.contains("12345678@example.com"),
+            "missing Bill To email in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("sudattasdesigner")
+                && normalized.contains("boutique@gmail.com"),
+            "missing seller email in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("sudattasdesignerboutique@gmail.com"),
+            "missing support email in extracted text: {normalized}"
+        );
+        assert!(
+            !normalized.contains("sudattasdesignerboutique@ gmail.com"),
+            "seller email should not split at @ in extracted text: {normalized}"
+        );
+        assert!(
+            !normalized.contains("@ example.com") && !normalized.contains("@ gmail.com"),
+            "email should not split immediately after @ in extracted text: {normalized}"
+        );
+        assert!(
+            normalized.contains("Grand Total") && normalized.contains("\u{20B9}1,600.00"),
+            "missing Grand Total amount in extracted text: {normalized}"
+        );
+        assert!(
+            !normalized.contains("support@sudattas.com"),
+            "legacy support email should not appear in extracted text: {normalized}"
         );
     }
 }

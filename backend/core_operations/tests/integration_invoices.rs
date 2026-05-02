@@ -5,6 +5,8 @@
 
 mod integration_common;
 
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::{
     AuthProvider, FulfillmentStatus, PaymentStatus, Status as OutboxStatus,
@@ -16,6 +18,7 @@ use core_operations::handlers::invoices::{ensure_invoice_for_order, InvoiceDocum
 use core_operations::handlers::outbox::INVOICE_GENERATED;
 use core_operations::handlers::payment_intents::finalize_order_paid;
 use core_operations::procedures::outbox_worker::process_pending_outbox_events;
+use pdf_extract::extract_text_from_mem;
 use rust_decimal::Decimal;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, PaginatorTrait, QueryFilter,
@@ -115,10 +118,18 @@ async fn seed_order(
     payment_status: PaymentStatus,
     email: &str,
 ) -> SeededOrder {
+    let short_tag = tag
+        .chars()
+        .rev()
+        .take(8)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect::<String>();
     let normalized_email = if email.trim().is_empty() {
         String::new()
     } else if let Some((local, domain)) = email.trim().split_once('@') {
-        format!("{local}+{tag}@{domain}")
+        format!("{local}+{short_tag}@{domain}")
     } else {
         email.trim().to_string()
     };
@@ -478,5 +489,111 @@ async fn missing_email_is_handled_safely_without_crashing_invoice_generation() {
     let snapshot: InvoiceDocumentSnapshot =
         serde_json::from_value(invoice.snapshot_json.clone()).expect("parse snapshot");
     assert!(snapshot.customer_email.is_empty());
+    txn.rollback().await.expect("rollback");
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn generated_invoice_blob_contains_expected_content_and_no_fallback_text() {
+    let db = db_conn().await;
+    let txn = db.begin().await.expect("begin");
+    let seeded = seed_order(
+        &txn,
+        &unique_tag("content_check"),
+        "confirmed",
+        "cod",
+        PaymentStatus::Pending,
+        "invoice_content@example.com",
+    )
+    .await;
+
+    let invoice = ensure_invoice_for_order(&txn, seeded.order_id, "itest")
+        .await
+        .expect("invoice generation")
+        .expect("invoice expected");
+    let pdf_bytes = BASE64_STANDARD
+        .decode(invoice.pdf_blob.as_bytes())
+        .expect("base64 pdf decode");
+    assert!(pdf_bytes.starts_with(b"%PDF-"), "expected PDF header");
+    assert!(
+        pdf_bytes.len() < 300 * 1024,
+        "invoice pdf size {} exceeds 300KB",
+        pdf_bytes.len()
+    );
+
+    let text = extract_text_from_mem(&pdf_bytes).expect("extract text from generated invoice");
+    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(normalized.contains("TAX INVOICE"));
+    assert!(normalized.contains("Sudatta's"));
+    assert!(normalized.contains("Designer Boutique"));
+    assert!(normalized.contains("Invoice Number"));
+    assert!(normalized.contains("Sold By"));
+    assert!(normalized.contains("Bill To"));
+    assert!(normalized.contains("Ship To"));
+    assert!(normalized.contains("sudattasdesignerboutique@gmail.com"));
+    assert!(normalized.contains("Cash on Delivery"));
+    assert!(normalized.contains("To be collected on delivery"));
+    assert!(!normalized.contains("Invoice rendering had a temporary formatting issue"));
+    assert!(
+        normalized.contains("Invoice Test User"),
+        "expected Bill To customer name"
+    );
+    assert!(
+        normalized.contains("example.com"),
+        "expected Bill To email domain"
+    );
+    assert!(
+        !normalized.contains("@ "),
+        "email text should not split directly after @: {normalized}"
+    );
+    assert!(
+        normalized.contains("Grand Total") && normalized.contains("\u{20B9}115.00"),
+        "expected grand total amount in extracted text: {normalized}"
+    );
+    txn.rollback().await.expect("rollback");
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn stale_fallback_invoice_blob_is_regenerated() {
+    let db = db_conn().await;
+    let txn = db.begin().await.expect("begin");
+    let seeded = seed_order(
+        &txn,
+        &unique_tag("stale_repair"),
+        "confirmed",
+        "cod",
+        PaymentStatus::Pending,
+        "invoice_stale@example.com",
+    )
+    .await;
+
+    let first = ensure_invoice_for_order(&txn, seeded.order_id, "itest")
+        .await
+        .expect("first invoice")
+        .expect("invoice expected");
+
+    let mut stale: invoices::ActiveModel = first.clone().into();
+    let fake_pdf = b"%PDF-1.4 Invoice rendering had a temporary formatting issue.";
+    stale.pdf_blob = ActiveValue::Set(BASE64_STANDARD.encode(fake_pdf));
+    let _ = stale.update(&txn).await.expect("update stale blob");
+
+    let repaired = ensure_invoice_for_order(&txn, seeded.order_id, "itest_repair")
+        .await
+        .expect("repair invoice")
+        .expect("invoice expected after repair");
+
+    let repaired_pdf = BASE64_STANDARD
+        .decode(repaired.pdf_blob.as_bytes())
+        .expect("decode repaired pdf");
+    let repaired_text = extract_text_from_mem(&repaired_pdf).expect("extract repaired pdf text");
+    assert!(
+        !repaired_text.contains("Invoice rendering had a temporary formatting issue"),
+        "stale fallback marker should be removed after regeneration"
+    );
+    assert!(
+        repaired_text.contains("Sudatta's") && repaired_text.contains("Designer Boutique"),
+        "regenerated invoice should contain text branding"
+    );
     txn.rollback().await.expect("rollback");
 }

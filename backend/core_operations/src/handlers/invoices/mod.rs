@@ -21,9 +21,11 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tonic::{Request, Response, Status};
-use tracing::info;
+use tracing::{error, info, warn};
 
 const INVOICE_CONTENT_TYPE: &str = "application/pdf";
+const LEGACY_FALLBACK_INVOICE_MARKER: &[u8] =
+    b"Invoice rendering had a temporary formatting issue.";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvoiceDocumentLineSnapshot {
@@ -113,6 +115,44 @@ fn is_duplicate_key(err: &DbErr) -> bool {
         }
         _ => false,
     }
+}
+
+fn is_legacy_fallback_pdf_blob(encoded_pdf: &str) -> bool {
+    let Ok(pdf_bytes) = BASE64_STANDARD.decode(encoded_pdf.as_bytes()) else {
+        return false;
+    };
+    pdf_bytes
+        .windows(LEGACY_FALLBACK_INVOICE_MARKER.len())
+        .any(|window| window == LEGACY_FALLBACK_INVOICE_MARKER)
+}
+
+async fn delete_stale_invoice_and_unlink_order(
+    txn: &DatabaseTransaction,
+    order: &mut orders::Model,
+    stale_invoice: &invoices::Model,
+) -> Result<(), Status> {
+    invoices::Entity::delete_by_id(stale_invoice.invoice_id)
+        .exec(txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+
+    order.invoice_id = None;
+    order.invoice_number = None;
+    order.invoice_generated_at = None;
+    order.invoice_storage_path = None;
+    let order_active: orders::ActiveModel = order.clone().into();
+    order_active
+        .update(txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+
+    warn!(
+        order_id = order.order_id,
+        stale_invoice_id = stale_invoice.invoice_id,
+        stale_invoice_number = %stale_invoice.invoice_number,
+        "removed stale legacy fallback invoice and unlinked order"
+    );
+    Ok(())
 }
 
 fn shipping_snapshot(address: &shipping_addresses::Model) -> String {
@@ -241,34 +281,57 @@ pub async fn ensure_invoice_for_order(
             .await
             .map_err(map_db_error_to_status)?;
         if let Some(ref invoice) = existing {
-            ensure_invoice_outbox_event(
-                txn,
+            if is_legacy_fallback_pdf_blob(&invoice.pdf_blob) {
+                delete_stale_invoice_and_unlink_order(txn, &mut order, invoice).await?;
+            } else {
+                ensure_invoice_outbox_event(
+                    txn,
+                    order_id,
+                    invoice.invoice_id,
+                    invoice.user_id,
+                    "invoice_exists_missing_outbox",
+                )
+                .await?;
+                return Ok(existing);
+            }
+        } else {
+            order.invoice_id = None;
+            order.invoice_number = None;
+            order.invoice_generated_at = None;
+            order.invoice_storage_path = None;
+            let order_active: orders::ActiveModel = order.clone().into();
+            order_active
+                .update(txn)
+                .await
+                .map_err(map_db_error_to_status)?;
+            warn!(
                 order_id,
-                invoice.invoice_id,
-                invoice.user_id,
-                "invoice_exists_missing_outbox",
-            )
-            .await?;
+                invoice_id = existing_invoice_id,
+                "order had dangling invoice_id link; unlinked stale reference"
+            );
         }
-        return Ok(existing);
     }
 
     if let Some(existing) = find_invoice_by_order_id(txn, order_id).await? {
-        let mut active: orders::ActiveModel = order.clone().into();
-        active.invoice_id = ActiveValue::Set(Some(existing.invoice_id));
-        active.invoice_number = ActiveValue::Set(Some(existing.invoice_number.clone()));
-        active.invoice_generated_at = ActiveValue::Set(Some(existing.generated_at));
-        active.invoice_storage_path = ActiveValue::Set(Some(existing.storage_path.clone()));
-        let _ = active.update(txn).await.map_err(map_db_error_to_status)?;
-        ensure_invoice_outbox_event(
-            txn,
-            order_id,
-            existing.invoice_id,
-            existing.user_id,
-            "invoice_relinked_missing_outbox",
-        )
-        .await?;
-        return Ok(Some(existing));
+        if is_legacy_fallback_pdf_blob(&existing.pdf_blob) {
+            delete_stale_invoice_and_unlink_order(txn, &mut order, &existing).await?;
+        } else {
+            let mut active: orders::ActiveModel = order.clone().into();
+            active.invoice_id = ActiveValue::Set(Some(existing.invoice_id));
+            active.invoice_number = ActiveValue::Set(Some(existing.invoice_number.clone()));
+            active.invoice_generated_at = ActiveValue::Set(Some(existing.generated_at));
+            active.invoice_storage_path = ActiveValue::Set(Some(existing.storage_path.clone()));
+            let _ = active.update(txn).await.map_err(map_db_error_to_status)?;
+            ensure_invoice_outbox_event(
+                txn,
+                order_id,
+                existing.invoice_id,
+                existing.user_id,
+                "invoice_relinked_missing_outbox",
+            )
+            .await?;
+            return Ok(Some(existing));
+        }
     }
 
     let status = order_status::Entity::find_by_id(order.status_id)
@@ -359,7 +422,15 @@ pub async fn ensure_invoice_for_order(
     };
     let snapshot_json =
         serde_json::to_value(&snapshot).map_err(|e| Status::internal(e.to_string()))?;
-    let pdf_bytes = pdf::render_invoice_pdf(&snapshot);
+    let pdf_bytes = pdf::render_invoice_pdf(&snapshot).map_err(|err| {
+        error!(
+            order_id,
+            invoice_number = %invoice_number,
+            error = %err,
+            "premium invoice rendering failed"
+        );
+        Status::internal("Invoice rendering failed")
+    })?;
     let encoded_pdf = BASE64_STANDARD.encode(&pdf_bytes);
     let storage_path = build_storage_path(&invoice_number);
 
@@ -433,6 +504,7 @@ pub async fn get_order_invoice_download(
     request: Request<GetOrderInvoiceDownloadRequest>,
 ) -> Result<Response<GetOrderInvoiceDownloadResponse>, Status> {
     let req = request.into_inner();
+    let _ = ensure_invoice_for_order(txn, req.order_id, "invoice_download_request").await?;
     let invoice = find_invoice_by_order_id(txn, req.order_id)
         .await?
         .ok_or_else(|| {
@@ -448,4 +520,22 @@ pub async fn get_order_invoice_download(
         file_name: format!("{}.pdf", invoice.invoice_number),
         content_type: INVOICE_CONTENT_TYPE.to_string(),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_legacy_fallback_blob_marker() {
+        let encoded =
+            BASE64_STANDARD.encode(b"%PDF-1.4 Invoice rendering had a temporary formatting issue.");
+        assert!(is_legacy_fallback_pdf_blob(&encoded));
+    }
+
+    #[test]
+    fn does_not_flag_non_fallback_blob() {
+        let encoded = BASE64_STANDARD.encode(b"%PDF-1.4 TAX INVOICE /Subtype /Image");
+        assert!(!is_legacy_fallback_pdf_blob(&encoded));
+    }
 }
