@@ -103,6 +103,14 @@ fn order_scoped_refund_idempotency_keys(state: &MockState, order_id: i64) -> Vec
         .collect()
 }
 
+fn channel_order_scoped_booking_call_count(state: &MockState, channel_order_id: &str) -> usize {
+    state
+        .last_channel_order_ids
+        .iter()
+        .filter(|id| id.as_str() == channel_order_id)
+        .count()
+}
+
 fn compute_signature(order_id: &str, payment_id: &str, secret: &str) -> String {
     let payload = format!("{order_id}|{payment_id}");
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac");
@@ -1447,22 +1455,38 @@ async fn integration_booking_intent_is_persisted_before_external_call_and_worker
     );
     txn.commit().await.expect("commit booking intent");
 
-    let create_calls_before = state.lock().expect("lock").create_order_calls;
+    let channel_order_id = orders::Entity::find_by_id(order_id)
+        .one(&db)
+        .await
+        .expect("load order")
+        .expect("order row")
+        .public_order_ref;
+    let create_calls_before = {
+        let guard = state.lock().expect("lock");
+        channel_order_scoped_booking_call_count(&guard, &channel_order_id)
+    };
     process_booking_intents_batch(&db, 25)
         .await
         .expect("run booking worker");
+    let create_calls_after_first_batch = {
+        let guard = state.lock().expect("lock");
+        channel_order_scoped_booking_call_count(&guard, &channel_order_id)
+    };
     assert_eq!(
-        state.lock().expect("lock").create_order_calls - create_calls_before,
+        create_calls_after_first_batch - create_calls_before,
         1,
-        "worker should perform one external booking call"
+        "worker should perform one external booking call for this order"
     );
 
-    let create_calls_after_first_batch = state.lock().expect("lock").create_order_calls;
     process_booking_intents_batch(&db, 25)
         .await
         .expect("run booking worker again");
+    let create_calls_after_second_batch = {
+        let guard = state.lock().expect("lock");
+        channel_order_scoped_booking_call_count(&guard, &channel_order_id)
+    };
     assert_eq!(
-        state.lock().expect("lock").create_order_calls - create_calls_after_first_batch,
+        create_calls_after_second_batch - create_calls_after_first_batch,
         0,
         "duplicate worker run must not create duplicate shiprocket orders"
     );

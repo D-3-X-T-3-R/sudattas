@@ -47,6 +47,16 @@ fn processing_status_outcome(status: Option<&Status>) -> &'static str {
     }
 }
 
+fn status_canonical_value(status: &Status) -> &'static str {
+    match status {
+        Status::Pending => "pending",
+        Status::Processed => "processed",
+        Status::Failed => "failed",
+        Status::NeedsReview => "needs_review",
+        Status::ClientVerified => "client_verified",
+    }
+}
+
 fn is_fresh_in_progress(
     status: Option<&Status>,
     received_at: Option<DateTime<Utc>>,
@@ -1063,7 +1073,9 @@ pub fn model_to_response(m: webhook_events::Model) -> WebhookEventResponse {
         webhook_id: m.webhook_id,
         status: m
             .status
-            .map(|s| format!("{:?}", s).to_lowercase())
+            .as_ref()
+            .map(status_canonical_value)
+            .map(str::to_string)
             .unwrap_or_default(),
         received_at: m.received_at.map(|t| t.to_string()).unwrap_or_default(),
     }
@@ -1157,5 +1169,22 @@ mod tests {
             "in_progress"
         );
         assert_eq!(processing_status_outcome(Some(&Status::Pending)), "pending");
+    }
+
+    #[test]
+    fn helper_model_to_response_uses_canonical_status_values() {
+        let model = webhook_events::Model {
+            event_id: 1,
+            provider: "razorpay".to_string(),
+            event_type: "noop.event".to_string(),
+            webhook_id: "wh_1".to_string(),
+            provider_event_id: None,
+            payload: serde_json::json!({}),
+            status: Some(Status::ClientVerified),
+            received_at: None,
+        };
+
+        let response = model_to_response(model);
+        assert_eq!(response.status, "client_verified");
     }
 }

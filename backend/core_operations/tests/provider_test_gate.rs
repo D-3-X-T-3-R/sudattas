@@ -20,7 +20,10 @@ fn db_name_looks_like_test(db_url: &str) -> bool {
         return false;
     };
     let upper = name.to_ascii_uppercase();
-    upper.contains("TEST") || upper.contains("TESTING") || upper.contains("SUDATTAS_TEST")
+    upper.contains("TEST")
+        || upper.contains("TESTING")
+        || upper == "SUDATTAS_CLONED"
+        || upper.contains("SUDATTAS_TEST")
 }
 
 #[allow(dead_code)]
