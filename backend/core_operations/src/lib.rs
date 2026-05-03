@@ -14,6 +14,7 @@ pub mod razorpay;
 pub mod services;
 
 static DOTENV_LOADED: OnceLock<()> = OnceLock::new();
+static GRPC_AUTH_RELAXED_WARNED: OnceLock<()> = OnceLock::new();
 
 pub fn load_env_once() {
     DOTENV_LOADED.get_or_init(|| {
@@ -108,16 +109,69 @@ pub struct MyGRPCServices {
     session_manager: Option<auth::session::SessionManager>,
 }
 
-/// gRPC interceptor that enforces bearer-token auth when `GRPC_AUTH_TOKEN` is set.
+fn is_production_env() -> bool {
+    ["APP_ENV", "RUST_ENV", "NODE_ENV"]
+        .into_iter()
+        .filter_map(|key| std::env::var(key).ok())
+        .map(|value| value.trim().to_ascii_lowercase())
+        .any(|value| value == "production")
+}
+
+fn parse_bool_env_or_default(key: &str, default: bool) -> bool {
+    match std::env::var(key) {
+        Ok(raw) => match raw.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => true,
+            "0" | "false" | "no" | "off" => false,
+            _ => {
+                tracing::warn!("{key} has invalid value; using default for gRPC auth strictness");
+                default
+            }
+        },
+        Err(_) => default,
+    }
+}
+
+fn is_grpc_auth_strict_mode() -> bool {
+    is_production_env() || parse_bool_env_or_default("STRICT_STARTUP_VALIDATION", false)
+}
+
+fn configured_grpc_auth_token() -> Option<String> {
+    std::env::var("GRPC_AUTH_TOKEN")
+        .ok()
+        .map(|raw| raw.trim().to_owned())
+        .filter(|token| !token.is_empty())
+}
+
+fn warn_grpc_auth_relaxed_mode() {
+    if GRPC_AUTH_RELAXED_WARNED.set(()).is_ok() {
+        tracing::warn!(
+            "GRPC_AUTH_TOKEN is not configured; allowing unauthenticated gRPC requests because strict startup validation is disabled"
+        );
+    }
+}
+
+/// gRPC interceptor that enforces bearer-token auth.
 ///
-/// - If `GRPC_AUTH_TOKEN` env var is absent or empty → pass-through (dev/local mode).
-/// - All calls must supply `authorization: Bearer <GRPC_AUTH_TOKEN>`.
-/// - Auth failures are logged for audit purposes.
+/// - Strict/prod mode (`STRICT_STARTUP_VALIDATION=true` or production env) is fail-closed.
+/// - Relaxed non-production mode allows pass-through only when `GRPC_AUTH_TOKEN` is not configured.
+/// - All authenticated calls must supply `authorization: Bearer <GRPC_AUTH_TOKEN>`.
 #[allow(clippy::result_large_err)]
 pub fn check_auth(req: Request<()>) -> Result<Request<()>, Status> {
-    let expected_token = match std::env::var("GRPC_AUTH_TOKEN") {
-        Ok(t) if !t.is_empty() => t,
-        _ => return Ok(req), // Token not configured — dev/local mode, allow all
+    let strict_mode = is_grpc_auth_strict_mode();
+    let expected_token = match configured_grpc_auth_token() {
+        Some(token) => token,
+        None if strict_mode => {
+            tracing::warn!(
+                "gRPC auth rejected: GRPC_AUTH_TOKEN is missing while strict validation is enabled"
+            );
+            return Err(Status::unauthenticated(
+                "gRPC authentication is not configured",
+            ));
+        }
+        None => {
+            warn_grpc_auth_relaxed_mode();
+            return Ok(req);
+        }
     };
 
     let provided = req
@@ -2501,6 +2555,152 @@ impl GrpcServices for MyGRPCServices {
             ok: true,
             error: None,
         }))
+    }
+}
+
+#[cfg(test)]
+mod grpc_auth_tests {
+    use super::*;
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+    use tonic::{metadata::MetadataValue, Code};
+
+    const AUTH_ENV_KEYS: &[&str] = &[
+        "APP_ENV",
+        "RUST_ENV",
+        "NODE_ENV",
+        "STRICT_STARTUP_VALIDATION",
+        "GRPC_AUTH_TOKEN",
+    ];
+
+    fn auth_env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct AuthEnvGuard {
+        _lock: MutexGuard<'static, ()>,
+        originals: Vec<(&'static str, Option<String>)>,
+    }
+
+    impl AuthEnvGuard {
+        fn new() -> Self {
+            let lock = auth_env_lock()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let originals = AUTH_ENV_KEYS
+                .iter()
+                .copied()
+                .map(|key| (key, std::env::var(key).ok()))
+                .collect();
+            Self {
+                _lock: lock,
+                originals,
+            }
+        }
+
+        fn set(&self, key: &str, value: &str) {
+            std::env::set_var(key, value);
+        }
+
+        fn remove(&self, key: &str) {
+            std::env::remove_var(key);
+        }
+    }
+
+    impl Drop for AuthEnvGuard {
+        fn drop(&mut self) {
+            for (key, previous) in &self.originals {
+                match previous {
+                    Some(value) => std::env::set_var(key, value),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+    }
+
+    fn request_with_bearer(token: &str) -> Request<()> {
+        let mut req = Request::new(());
+        req.metadata_mut().insert(
+            "authorization",
+            MetadataValue::try_from(format!("Bearer {token}")).expect("valid auth metadata"),
+        );
+        req
+    }
+
+    #[test]
+    fn strict_mode_rejects_missing_authorization_header() {
+        let env = AuthEnvGuard::new();
+        env.set("APP_ENV", "production");
+        env.remove("STRICT_STARTUP_VALIDATION");
+        env.set("GRPC_AUTH_TOKEN", "expected_token");
+
+        let err = check_auth(Request::new(())).expect_err("missing header must be rejected");
+        assert_eq!(err.code(), Code::Unauthenticated);
+        assert_eq!(err.message(), "Missing authorization header");
+    }
+
+    #[test]
+    fn strict_mode_rejects_wrong_authorization_token() {
+        let env = AuthEnvGuard::new();
+        env.set("APP_ENV", "production");
+        env.remove("STRICT_STARTUP_VALIDATION");
+        env.set("GRPC_AUTH_TOKEN", "expected_token");
+
+        let err = check_auth(request_with_bearer("wrong_token"))
+            .expect_err("wrong token must be rejected");
+        assert_eq!(err.code(), Code::Unauthenticated);
+        assert_eq!(err.message(), "Invalid authorization token");
+    }
+
+    #[test]
+    fn strict_mode_accepts_correct_authorization_token() {
+        let env = AuthEnvGuard::new();
+        env.set("APP_ENV", "production");
+        env.remove("STRICT_STARTUP_VALIDATION");
+        env.set("GRPC_AUTH_TOKEN", "expected_token");
+
+        let result = check_auth(request_with_bearer("expected_token"));
+        assert!(result.is_ok(), "expected token should be accepted");
+    }
+
+    #[test]
+    fn strict_mode_rejects_when_grpc_auth_token_is_not_configured() {
+        let env = AuthEnvGuard::new();
+        env.set("STRICT_STARTUP_VALIDATION", "true");
+        env.set("APP_ENV", "development");
+        env.remove("GRPC_AUTH_TOKEN");
+
+        let err = check_auth(Request::new(()))
+            .expect_err("strict mode must reject when GRPC_AUTH_TOKEN is not configured");
+        assert_eq!(err.code(), Code::Unauthenticated);
+        assert_eq!(err.message(), "gRPC authentication is not configured");
+    }
+
+    #[test]
+    fn production_mode_rejects_missing_token_even_when_strict_override_is_false() {
+        let env = AuthEnvGuard::new();
+        env.set("APP_ENV", "production");
+        env.set("STRICT_STARTUP_VALIDATION", "false");
+        env.remove("GRPC_AUTH_TOKEN");
+
+        let err = check_auth(Request::new(()))
+            .expect_err("production mode must reject when GRPC_AUTH_TOKEN is not configured");
+        assert_eq!(err.code(), Code::Unauthenticated);
+        assert_eq!(err.message(), "gRPC authentication is not configured");
+    }
+
+    #[test]
+    fn non_strict_mode_allows_missing_grpc_auth_token() {
+        let env = AuthEnvGuard::new();
+        env.set("APP_ENV", "development");
+        env.set("STRICT_STARTUP_VALIDATION", "false");
+        env.remove("GRPC_AUTH_TOKEN");
+
+        let result = check_auth(Request::new(()));
+        assert!(
+            result.is_ok(),
+            "non-strict mode should preserve relaxed behavior for missing token"
+        );
     }
 }
 
