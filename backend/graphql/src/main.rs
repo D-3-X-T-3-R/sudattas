@@ -855,6 +855,10 @@ async fn handle_auth_rejection(
         graphql::metrics::record_auth_rejection_total("csrf");
         return Ok(reply::with_status("FORBIDDEN", StatusCode::FORBIDDEN).into_response());
     }
+    if err.find::<warp::filters::cors::CorsForbidden>().is_some() {
+        graphql::metrics::record_auth_rejection_total("cors");
+        return Ok(reply::with_status("FORBIDDEN", StatusCode::FORBIDDEN).into_response());
+    }
     if err.find::<RateLimited>().is_some() {
         graphql::metrics::record_auth_rejection_total("rate_limited");
         return Ok(reply::with_header(

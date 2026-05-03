@@ -26,20 +26,34 @@ fn add_session_header(req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
 /// If ALLOWED_ORIGINS is configured, attach the first allowed origin so session-auth
 /// tests can validate behavior beyond CSRF gatekeeping.
 fn add_allowed_origin_header(req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    if let Ok(allowed_raw) = std::env::var("ALLOWED_ORIGINS") {
-        if let Some(origin) = allowed_raw
-            .split(',')
-            .map(|s| s.trim())
-            .find(|s| !s.is_empty())
-        {
-            return req.header("Origin", origin);
-        }
+    if let Some(origin) = configured_allowed_origin() {
+        return req.header("Origin", origin);
     }
     req
 }
 
 fn add_session_and_allowed_origin(req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
     add_allowed_origin_header(add_session_header(req))
+}
+
+/// Resolve the test's allowed origin deterministically.
+///
+/// Priority:
+/// 1) `GRAPHQL_E2E_ALLOWED_ORIGIN` (explicit test override).
+/// 2) First non-empty entry from `ALLOWED_ORIGINS`.
+fn configured_allowed_origin() -> Option<String> {
+    if let Ok(origin) = std::env::var("GRAPHQL_E2E_ALLOWED_ORIGIN") {
+        let trimmed = origin.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    std::env::var("ALLOWED_ORIGINS").ok().and_then(|raw| {
+        raw.split(',')
+            .map(|s| s.trim())
+            .find(|s| !s.is_empty())
+            .map(str::to_string)
+    })
 }
 
 // =============================================================================
@@ -426,11 +440,7 @@ async fn e2e_csrf_rejection_on_disallowed_origin() {
         Ok(v) => v,
         Err(_) => return, // no valid session context available in this environment
     };
-    let has_allowed_origins = std::env::var("ALLOWED_ORIGINS")
-        .ok()
-        .map(|v| !v.trim().is_empty())
-        .unwrap_or(false);
-    if !has_allowed_origins {
+    if configured_allowed_origin().is_none() {
         return;
     }
 
@@ -459,11 +469,7 @@ async fn e2e_session_mutation_paths_reject_disallowed_origin() {
         Ok(v) => v,
         Err(_) => return,
     };
-    let has_allowed_origins = std::env::var("ALLOWED_ORIGINS")
-        .ok()
-        .map(|v| !v.trim().is_empty())
-        .unwrap_or(false);
-    if !has_allowed_origins {
+    if configured_allowed_origin().is_none() {
         return;
     }
 
@@ -506,15 +512,7 @@ async fn e2e_session_mutation_paths_accept_allowed_origin() {
         Ok(v) => v,
         Err(_) => return,
     };
-    let allowed_raw = match std::env::var("ALLOWED_ORIGINS") {
-        Ok(v) => v,
-        Err(_) => return,
-    };
-    let allowed_origin = match allowed_raw
-        .split(',')
-        .map(|s| s.trim())
-        .find(|s| !s.is_empty())
-    {
+    let allowed_origin = match configured_allowed_origin() {
         Some(v) => v,
         None => return,
     };
