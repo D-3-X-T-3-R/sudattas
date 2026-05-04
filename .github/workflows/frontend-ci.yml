@@ -186,9 +186,38 @@ jobs:
     - name: Setup backend test database schema
       run: |
         sleep 10
+        mysql -h 127.0.0.1 -P 3306 -u root -ptest_password -e "CREATE DATABASE IF NOT EXISTS SUDATTAS;"
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         chmod +x ./backend/scripts/apply_sql_migrations.sh
         ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
+        MISSING_TABLES="$(mysql -N -s -h 127.0.0.1 -P 3306 -u root -ptest_password -e "
+          SELECT required.required_name
+          FROM (
+            SELECT 'refundattempts' AS required_name
+            UNION ALL SELECT 'returnrequests'
+            UNION ALL SELECT 'returnrequestitems'
+            UNION ALL SELECT 'orderinventoryrestores'
+            UNION ALL SELECT 'orderinventoryrestoreitems'
+            UNION ALL SELECT 'invoices'
+            UNION ALL SELECT 'schemamigrations'
+          ) AS required
+          LEFT JOIN (
+            SELECT DISTINCT LOWER(REPLACE(table_name, '_', '')) AS normalized_name
+            FROM information_schema.tables
+            WHERE table_schema = 'SUDATTAS'
+          ) AS existing
+          ON required.required_name = existing.normalized_name
+          WHERE existing.normalized_name IS NULL;
+        ")"
+        if [[ -n "$MISSING_TABLES" ]]; then
+          echo "Missing required tables before backend startup:"
+          echo "$MISSING_TABLES"
+          echo "Existing SUDATTAS tables:"
+          mysql -N -s -h 127.0.0.1 -P 3306 -u root -ptest_password -e \
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='SUDATTAS' ORDER BY table_name;"
+          exit 1
+        fi
+        echo "Backend schema sanity check passed for frontend smoke CI."
 
     - name: Build backend binaries
       working-directory: ./backend

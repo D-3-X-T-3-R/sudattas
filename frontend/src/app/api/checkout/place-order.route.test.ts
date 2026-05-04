@@ -14,10 +14,14 @@ vi.mock("@/lib/server-session-auth", () => ({
 
 import { POST } from "@/app/api/checkout/place-order/route";
 
-describe("checkout place-order idempotency", () => {
+function resetPlaceOrderMocks() {
+  mocks.requireAuthenticatedCustomerUserId.mockReset();
+  mocks.callGraphqlAsCustomer.mockReset();
+}
+
+describe("checkout place-order idempotency and validation", () => {
   beforeEach(() => {
-    mocks.requireAuthenticatedCustomerUserId.mockReset();
-    mocks.callGraphqlAsCustomer.mockReset();
+    resetPlaceOrderMocks();
   });
 
   it("forwards stable idempotency key for order placement", async () => {
@@ -106,6 +110,12 @@ describe("checkout place-order idempotency", () => {
     expect(body.errorCode).toBe("VALIDATION_ERROR");
     expect(body.message).toContain("shippingAddressId");
     expect(mocks.callGraphqlAsCustomer).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkout place-order payment-mode behavior", () => {
+  beforeEach(() => {
+    resetPlaceOrderMocks();
   });
 
   it("returns COD payload without fetching payment intent", async () => {
