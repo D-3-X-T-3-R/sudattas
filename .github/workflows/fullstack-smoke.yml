@@ -110,6 +110,7 @@ jobs:
         working-directory: ./frontend
         env:
           NEXT_PUBLIC_GRAPHQL_URL: http://127.0.0.1:8080/v2
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
         run: |
           npm ci
           npm run build
@@ -134,6 +135,8 @@ jobs:
           OAUTH_DOMAIN: https://accounts.google.com/
           OAUTH_AUDIENCE: https://www.googleapis.com/oauth2/v3/tokeninfo
           NEXT_PUBLIC_GRAPHQL_URL: http://127.0.0.1:8080/v2
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          STOREFRONT_ORIGIN: http://127.0.0.1:3000
         run: |
           set -euo pipefail
           chmod +x ./backend/scripts/wait_for_http_ready.sh
