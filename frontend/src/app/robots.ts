@@ -6,12 +6,17 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
-      allow: "/",
-      disallow: ["/imtheboss", "/api"],
+      allow: ["/", "/collections", "/product", "/category", "/shipping-policy", "/returns-exchanges", "/privacy-policy", "/terms-conditions", "/contact-support", "/about", "/cancellation-policy", "/payment-guide", "/size-fit-guide"],
+      disallow: [
+        "/bag",
+        "/wishlist",
+        "/profile",
+        "/checkout",
+        "/imtheboss",
+        "/api",
+        "/account",
+      ],
     },
     sitemap: `${base}/sitemap.xml`,
   };
 }
-
-
-
