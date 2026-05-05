@@ -100,15 +100,22 @@ function responseEnvelope(data: unknown, overrides?: { ok?: boolean; message?: s
   };
 }
 
+type CommerceMockOptions = {
+  placeOrderDelayMs?: number;
+  verifyPaymentState?: "paid" | "failed" | "pending" | "needs_review";
+  verifyOrderUiState?: "processing" | "failed" | "pending" | "needs_review";
+};
+
 // This helper intentionally keeps the critical mocked commerce flow in one place for the browser journey.
 // eslint-disable-next-line max-lines-per-function
-async function installCommerceMocks(page: Page) {
+async function installCommerceMocks(page: Page, options: CommerceMockOptions = {}) {
   let authenticated = false;
   let mergeCalls = 0;
   let customerCartLoads = 0;
   let verifyCalls = 0;
   let orderListLoads = 0;
   let orderDetailLoads = 0;
+  let placeOrderCalls = 0;
   let placeOrderSelections: string[] = [];
   const placeOrderSelectionHistory: string[][] = [];
   let lastShippingSelection: string[] = [];
@@ -309,6 +316,7 @@ async function installCommerceMocks(page: Page) {
   });
 
   await page.route("**/api/checkout/place-order", async (route) => {
+    placeOrderCalls += 1;
     const body = route.request().postDataJSON() as { selectedCartLineIds?: string[] };
     placeOrderSelections = body.selectedCartLineIds ?? [];
     placeOrderSelectionHistory.push([...placeOrderSelections]);
@@ -329,6 +337,10 @@ async function installCommerceMocks(page: Page) {
       statusId: "2",
       statusName: "confirmed",
     };
+
+    if ((options.placeOrderDelayMs ?? 0) > 0) {
+      await page.waitForTimeout(options.placeOrderDelayMs ?? 0);
+    }
 
     await json(route, responseEnvelope({
       order: {
@@ -357,9 +369,9 @@ async function installCommerceMocks(page: Page) {
     verifyCalls += 1;
     await json(route, responseEnvelope({
       verified: true,
-      paymentState: "paid",
+      paymentState: options.verifyPaymentState ?? "paid",
       orderStatusId: "2",
-      orderUiState: "processing",
+      orderUiState: options.verifyOrderUiState ?? "processing",
       verifyKey: "verify-key-1",
     }));
   });
@@ -475,6 +487,9 @@ async function installCommerceMocks(page: Page) {
     get verifyCalls() {
       return verifyCalls;
     },
+    get placeOrderCalls() {
+      return placeOrderCalls;
+    },
     get placeOrderSelections() {
       return placeOrderSelections;
     },
@@ -520,6 +535,22 @@ async function addGuestLine(page: Page, variantId: string, quantity: string) {
     },
     { variantId, quantity }
   );
+}
+
+async function prepareAuthenticatedBag(page: Page, mocks: Awaited<ReturnType<typeof installCommerceMocks>>) {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await addGuestLine(page, "v-amber", "1");
+  await addGuestLine(page, "v-emerald", "1");
+
+  await page.goto("/bag", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).toContainText("Amber Saree");
+  await expect(page.locator("body")).toContainText("Emerald Saree");
+
+  mocks.setAuthenticated(true);
+  await page.goto("/bag", { waitUntil: "domcontentloaded" });
+  await expect.poll(() => mocks.mergeCalls).toBe(1);
+  await expect(page.locator("body")).toContainText("Amber Saree");
+  await expect(page.locator("body")).toContainText("Emerald Saree");
 }
 
 test("critical commerce browser journey", async ({ page }) => {
@@ -613,4 +644,95 @@ test("critical commerce browser journey", async ({ page }) => {
   await page.getByRole("button", { name: /Refresh tracking/i }).click();
   await expect(page.locator("body")).toContainText("AWB AWB-123");
   await expect.poll(() => mocks.orderDetailLoads).toBeGreaterThan(0);
+});
+
+test("checkout CTA double-click sends one place-order request", async ({ page }) => {
+  const mocks = await installCommerceMocks(page, { placeOrderDelayMs: 450 });
+  await prepareAuthenticatedBag(page, mocks);
+
+  const checkoutButton = page.getByRole("button", { name: /^Checkout$/i }).first();
+  await expect(checkoutButton).toBeVisible();
+  await checkoutButton.dblclick();
+
+  await expect(page).toHaveURL(/\/checkout\/success\?/);
+  expect(mocks.placeOrderCalls).toBe(1);
+});
+
+test("mobile checkout bar double-tap sends one place-order request", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mocks = await installCommerceMocks(page, { placeOrderDelayMs: 450 });
+  await prepareAuthenticatedBag(page, mocks);
+
+  const mobileCheckoutButton = page.getByRole("button", { name: /Checkout \(/i }).first();
+  await expect(mobileCheckoutButton).toBeVisible();
+  await mobileCheckoutButton.dblclick();
+
+  await expect(page).toHaveURL(/\/checkout\/success\?/);
+  expect(mocks.placeOrderCalls).toBe(1);
+});
+
+test("pending payment state routes to pending copy without verified language", async ({ page }) => {
+  const mocks = await installCommerceMocks(page, {
+    verifyPaymentState: "pending",
+    verifyOrderUiState: "pending",
+  });
+  await prepareAuthenticatedBag(page, mocks);
+
+  await page.getByRole("button", { name: /^Checkout$/i }).first().click();
+
+  await expect(page).toHaveURL(/payment=pending/);
+  await expect(page.locator("body")).toContainText("We're confirming your payment. Please don't place another order yet.");
+  await expect(page.locator("body")).not.toContainText("payment is verified");
+  await expect(page.getByRole("link", { name: /Download Invoice/i })).toHaveCount(0);
+});
+
+test("needs_review payment state routes to review copy without verified language", async ({ page }) => {
+  const mocks = await installCommerceMocks(page, {
+    verifyPaymentState: "paid",
+    verifyOrderUiState: "needs_review",
+  });
+  await prepareAuthenticatedBag(page, mocks);
+
+  await page.getByRole("button", { name: /^Checkout$/i }).first().click();
+
+  await expect(page).toHaveURL(/payment=needs_review/);
+  await expect(page.locator("body")).toContainText(
+    "We received your payment update, but it needs manual verification. We'll contact you if action is needed."
+  );
+  await expect(page.locator("body")).not.toContainText("payment is verified");
+  await expect(page.getByRole("link", { name: /Download Invoice/i })).toHaveCount(0);
+});
+
+test("bag address modal keeps focus and exposes explicit form labels", async ({ page }) => {
+  const mocks = await installCommerceMocks(page);
+  await prepareAuthenticatedBag(page, mocks);
+
+  const addAddressButton = page.getByRole("button", { name: "Add new address" }).first();
+  await addAddressButton.focus();
+  await addAddressButton.click();
+
+  await expect(page.getByLabel("Full name")).toBeVisible();
+  await expect(page.getByLabel("Phone")).toBeVisible();
+  await expect(page.getByLabel("Address line")).toBeVisible();
+  await expect(page.getByLabel("City")).toBeVisible();
+  await expect(page.getByLabel("State")).toBeVisible();
+  await expect(page.getByLabel("Country")).toBeVisible();
+  await expect(page.getByLabel("Postal code")).toBeVisible();
+
+  await expect(page.locator("#bag-address-recipient-name")).toBeFocused();
+
+  for (let i = 0; i < 5; i += 1) {
+    await page.keyboard.press("Tab");
+    const focusInsideDialog = await page.evaluate(() => {
+      const dialog = document.querySelector("[role='dialog']");
+      return dialog ? dialog.contains(document.activeElement) : false;
+    });
+    expect(focusInsideDialog).toBeTruthy();
+  }
+
+  await page.getByRole("button", { name: "Save address" }).click();
+  await expect(page.locator("body")).toContainText("Please enter all required address details correctly.");
+
+  await page.keyboard.press("Escape");
+  await expect(addAddressButton).toBeFocused();
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
@@ -72,7 +72,7 @@ export default function BagPage() {
   const { status } = useSession();
   const { openLogin } = useStorefrontLogin();
   const { cartLines, decCart, incCart, removeCart, toggleWish, wishlist, addToCart } = useStorefront();
-  const { paymentMessage, runCheckout } = useRazorpayCheckout();
+  const { paymentMessage, paymentLoading, runCheckout } = useRazorpayCheckout();
   const reduceMotion = !!useReducedMotion();
 
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set());
@@ -85,6 +85,9 @@ export default function BagPage() {
   const [addAddressOpen, setAddAddressOpen] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
+  const addressErrorId = useId();
+  const addAddressTriggerRef = useRef<HTMLElement | null>(null);
+  const addAddressFirstInputRef = useRef<HTMLInputElement | null>(null);
   const [newAddress, setNewAddress] = useState<AddressFormState>({
     recipientName: "",
     phoneNumber: "",
@@ -227,7 +230,11 @@ export default function BagPage() {
   );
 
   const handleSaveAddress = async () => {
-    if (!addressValid || savingAddress) return;
+    if (!addressValid) {
+      setAddressError("Please enter all required address details correctly.");
+      return;
+    }
+    if (savingAddress) return;
     setAddressError(null);
     setSavingAddress(true);
     try {
@@ -247,7 +254,7 @@ export default function BagPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input: payload }),
       });
-      setAddAddressOpen(false);
+      closeAddAddressDialog();
       setNewAddress({
         recipientName: "",
         phoneNumber: "",
@@ -269,6 +276,18 @@ export default function BagPage() {
       setSavingAddress(false);
     }
   };
+
+  const openAddAddressDialog = useCallback((trigger?: HTMLElement | null) => {
+    addAddressTriggerRef.current = trigger ?? null;
+    setAddressError(null);
+    setAddAddressOpen(true);
+  }, []);
+
+  const closeAddAddressDialog = useCallback(() => {
+    setAddAddressOpen(false);
+    setAddressError(null);
+    window.setTimeout(() => addAddressTriggerRef.current?.focus(), 0);
+  }, []);
 
   const makeDefaultAddress = useCallback(async (address: ShippingAddressRow) => {
     await fetchApiEnvelope<ShippingAddressRow>("/api/account/addresses", {
@@ -292,6 +311,7 @@ export default function BagPage() {
   }, []);
 
   const handleCheckout = () => {
+    if (paymentLoading) return;
     if (status !== "authenticated") {
       openLogin("/bag");
       return;
@@ -304,7 +324,24 @@ export default function BagPage() {
       shippingAddressId: selectedAddressId,
       selectedCartLineIds: [...selectedLineIds],
       paymentMode,
-      onSuccess: ({ orderId }) => router.push(`/checkout/success?orderId=${encodeURIComponent(orderId)}`),
+      onSuccess: ({ orderId, checkoutState }) => {
+        const params = new URLSearchParams();
+        params.set("orderId", orderId);
+        params.set("payment", checkoutState === "cod" ? "cod" : "paid");
+        router.push(`/checkout/success?${params.toString()}`);
+      },
+      onPending: ({ orderId }) => {
+        const params = new URLSearchParams();
+        params.set("orderId", orderId);
+        params.set("payment", "pending");
+        router.push(`/checkout/success?${params.toString()}`);
+      },
+      onNeedsReview: ({ orderId }) => {
+        const params = new URLSearchParams();
+        params.set("orderId", orderId);
+        params.set("payment", "needs_review");
+        router.push(`/checkout/success?${params.toString()}`);
+      },
       onFailure: ({ orderId, reason }) => {
         const params = new URLSearchParams();
         if (orderId) params.set("orderId", orderId);
@@ -329,23 +366,25 @@ export default function BagPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8B816D]">Payment mode</p>
                 <button
                   type="button"
+                  disabled={paymentLoading}
                   onClick={() => setPaymentMode("prepaid")}
                   className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
                     paymentMode === "prepaid"
                       ? "border-[#0F3D2E] bg-[#0F3D2E]/10 text-[#0F3D2E]"
                       : "border-[#0F3D2E]/20 text-[#6B6560]"
-                  }`}
+                  } disabled:opacity-50`}
                 >
                   Prepaid
                 </button>
                 <button
                   type="button"
+                  disabled={paymentLoading}
                   onClick={() => setPaymentMode("cod")}
                   className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
                     paymentMode === "cod"
                       ? "border-[#0F3D2E] bg-[#0F3D2E]/10 text-[#0F3D2E]"
                       : "border-[#0F3D2E]/20 text-[#6B6560]"
-                  }`}
+                  } disabled:opacity-50`}
                 >
                   Cash on Delivery
                 </button>
@@ -362,7 +401,7 @@ export default function BagPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAddAddressOpen(true)}
+                      onClick={(event) => openAddAddressDialog(event.currentTarget)}
                       className="rounded-full border border-[#C9A646]/30 bg-[#FFF9EF] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#A37D34]"
                     >
                       Add new address
@@ -389,6 +428,7 @@ export default function BagPage() {
               shippingAmount={shippingAmount}
               shippingLoading={shippingLoading}
               shippingNote={shippingNote || paymentMessage}
+              checkoutLoading={paymentLoading}
               allSelected={allSelected}
               catalogSizes={catalogSizes}
               openSizeForId={openSizeForId}
@@ -422,6 +462,7 @@ export default function BagPage() {
           selectedSubtotal={selectedSubtotal}
           shippingAmount={shippingAmount}
           selectedCount={selectedCount}
+          checkoutLoading={paymentLoading}
           onCheckout={handleCheckout}
         />
       )}
@@ -455,9 +496,9 @@ export default function BagPage() {
             )}
             <button
               type="button"
-              onClick={() => {
+              onClick={(event) => {
                 setAddressPickerOpen(false);
-                setAddAddressOpen(true);
+                openAddAddressDialog(event.currentTarget);
               }}
               className="mt-2 rounded-full border border-[#C9A646]/30 bg-[#FFF9EF] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#A37D34]"
             >
@@ -467,36 +508,178 @@ export default function BagPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={addAddressOpen} onOpenChange={setAddAddressOpen}>
-        <DialogContent title="Add new address" className="max-w-xl">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input value={newAddress.recipientName} onChange={(e) => setNewAddress((p) => ({ ...p, recipientName: e.target.value }))} placeholder="Recipient name" className="h-10 rounded-lg border border-[#0F3D2E]/20 px-3 text-sm sm:col-span-2" />
-            <input value={newAddress.phoneNumber} onChange={(e) => setNewAddress((p) => ({ ...p, phoneNumber: e.target.value }))} placeholder="Phone number" className="h-10 rounded-lg border border-[#0F3D2E]/20 px-3 text-sm sm:col-span-2" />
-            <input value={newAddress.road} onChange={(e) => setNewAddress((p) => ({ ...p, road: e.target.value }))} placeholder="Road / street" className="h-10 rounded-lg border border-[#0F3D2E]/20 px-3 text-sm sm:col-span-2" />
-            <input value={newAddress.apartmentNoOrName} onChange={(e) => setNewAddress((p) => ({ ...p, apartmentNoOrName: e.target.value }))} placeholder="Apartment / house (optional)" className="h-10 rounded-lg border border-[#0F3D2E]/20 px-3 text-sm sm:col-span-2" />
-            <input value={newAddress.city} onChange={(e) => setNewAddress((p) => ({ ...p, city: e.target.value }))} placeholder="City" className="h-10 rounded-lg border border-[#0F3D2E]/20 px-3 text-sm" />
-            <input value={newAddress.stateRegion} onChange={(e) => setNewAddress((p) => ({ ...p, stateRegion: e.target.value }))} placeholder="State / region" className="h-10 rounded-lg border border-[#0F3D2E]/20 px-3 text-sm" />
-            <input value={newAddress.country} onChange={(e) => setNewAddress((p) => ({ ...p, country: e.target.value }))} placeholder="Country" className="h-10 rounded-lg border border-[#0F3D2E]/20 px-3 text-sm" />
-            <input value={newAddress.postalCode} onChange={(e) => setNewAddress((p) => ({ ...p, postalCode: e.target.value.replace(/\D/g, "").slice(0, 6) }))} placeholder="Pincode" className="h-10 rounded-lg border border-[#0F3D2E]/20 px-3 text-sm" />
-          </div>
-          {addressError ? <p className="mt-3 text-sm text-red-700">{addressError}</p> : null}
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={!addressValid || savingAddress}
-              onClick={() => void handleSaveAddress()}
-              className="rounded-full bg-[#0F3D2E] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+      <Dialog
+        open={addAddressOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setAddAddressOpen(true);
+            return;
+          }
+          closeAddAddressDialog();
+        }}
+      >
+        <DialogContent
+          title="Add new address"
+          className="max-w-xl"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            addAddressFirstInputRef.current?.focus();
+          }}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveAddress();
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label htmlFor="bag-address-recipient-name" className="mb-1 block text-xs font-medium text-[#615A50]">
+                  Full name
+                </label>
+                <input
+                  ref={addAddressFirstInputRef}
+                  id="bag-address-recipient-name"
+                  value={newAddress.recipientName}
+                  onChange={(e) => setNewAddress((p) => ({ ...p, recipientName: e.target.value }))}
+                  placeholder="Recipient name"
+                  autoComplete="name"
+                  aria-invalid={Boolean(addressError) && !newAddress.recipientName.trim()}
+                  aria-describedby={addressError ? addressErrorId : undefined}
+                  className="h-10 w-full rounded-lg border border-[#0F3D2E]/20 px-3 text-sm"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="bag-address-phone" className="mb-1 block text-xs font-medium text-[#615A50]">
+                  Phone
+                </label>
+                <input
+                  id="bag-address-phone"
+                  value={newAddress.phoneNumber}
+                  onChange={(e) => setNewAddress((p) => ({ ...p, phoneNumber: e.target.value }))}
+                  placeholder="Phone number"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  aria-invalid={Boolean(addressError) && !newAddress.phoneNumber.trim()}
+                  aria-describedby={addressError ? addressErrorId : undefined}
+                  className="h-10 w-full rounded-lg border border-[#0F3D2E]/20 px-3 text-sm"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="bag-address-line1" className="mb-1 block text-xs font-medium text-[#615A50]">
+                  Address line
+                </label>
+                <input
+                  id="bag-address-line1"
+                  value={newAddress.road}
+                  onChange={(e) => setNewAddress((p) => ({ ...p, road: e.target.value }))}
+                  placeholder="Road / street"
+                  autoComplete="address-line1"
+                  aria-invalid={Boolean(addressError) && !newAddress.road.trim()}
+                  aria-describedby={addressError ? addressErrorId : undefined}
+                  className="h-10 w-full rounded-lg border border-[#0F3D2E]/20 px-3 text-sm"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="bag-address-line2" className="mb-1 block text-xs font-medium text-[#615A50]">
+                  Apartment / house (optional)
+                </label>
+                <input
+                  id="bag-address-line2"
+                  value={newAddress.apartmentNoOrName}
+                  onChange={(e) => setNewAddress((p) => ({ ...p, apartmentNoOrName: e.target.value }))}
+                  placeholder="Apartment / house (optional)"
+                  autoComplete="address-line2"
+                  className="h-10 w-full rounded-lg border border-[#0F3D2E]/20 px-3 text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="bag-address-city" className="mb-1 block text-xs font-medium text-[#615A50]">
+                  City
+                </label>
+                <input
+                  id="bag-address-city"
+                  value={newAddress.city}
+                  onChange={(e) => setNewAddress((p) => ({ ...p, city: e.target.value }))}
+                  placeholder="City"
+                  autoComplete="address-level2"
+                  aria-invalid={Boolean(addressError) && !newAddress.city.trim()}
+                  aria-describedby={addressError ? addressErrorId : undefined}
+                  className="h-10 w-full rounded-lg border border-[#0F3D2E]/20 px-3 text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="bag-address-state" className="mb-1 block text-xs font-medium text-[#615A50]">
+                  State
+                </label>
+                <input
+                  id="bag-address-state"
+                  value={newAddress.stateRegion}
+                  onChange={(e) => setNewAddress((p) => ({ ...p, stateRegion: e.target.value }))}
+                  placeholder="State / region"
+                  autoComplete="address-level1"
+                  aria-invalid={Boolean(addressError) && !newAddress.stateRegion.trim()}
+                  aria-describedby={addressError ? addressErrorId : undefined}
+                  className="h-10 w-full rounded-lg border border-[#0F3D2E]/20 px-3 text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="bag-address-country" className="mb-1 block text-xs font-medium text-[#615A50]">
+                  Country
+                </label>
+                <input
+                  id="bag-address-country"
+                  value={newAddress.country}
+                  onChange={(e) => setNewAddress((p) => ({ ...p, country: e.target.value }))}
+                  placeholder="Country"
+                  autoComplete="country-name"
+                  aria-invalid={Boolean(addressError) && !newAddress.country.trim()}
+                  aria-describedby={addressError ? addressErrorId : undefined}
+                  className="h-10 w-full rounded-lg border border-[#0F3D2E]/20 px-3 text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="bag-address-postal-code" className="mb-1 block text-xs font-medium text-[#615A50]">
+                  Postal code
+                </label>
+                <input
+                  id="bag-address-postal-code"
+                  value={newAddress.postalCode}
+                  onChange={(e) => setNewAddress((p) => ({ ...p, postalCode: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
+                  placeholder="Pincode"
+                  autoComplete="postal-code"
+                  inputMode="numeric"
+                  aria-invalid={Boolean(addressError) && newAddress.postalCode.replace(/\D/g, "").slice(0, 6).length !== 6}
+                  aria-describedby={addressError ? addressErrorId : undefined}
+                  className="h-10 w-full rounded-lg border border-[#0F3D2E]/20 px-3 text-sm"
+                />
+              </div>
+            </div>
+            <p
+              id={addressErrorId}
+              className={addressError ? "mt-3 text-sm text-red-700" : "sr-only"}
+              role="alert"
+              aria-live="assertive"
             >
-              {savingAddress ? "Saving..." : "Save address"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setAddAddressOpen(false)}
-              className="rounded-full border border-[#0F3D2E]/20 px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#0F3D2E]"
-            >
-              Cancel
-            </button>
-          </div>
+              {addressError ?? ""}
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="submit"
+                disabled={savingAddress}
+                className="rounded-full bg-[#0F3D2E] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+              >
+                {savingAddress ? "Saving..." : "Save address"}
+              </button>
+              <button
+                type="button"
+                onClick={closeAddAddressDialog}
+                className="rounded-full border border-[#0F3D2E]/20 px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#0F3D2E]"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

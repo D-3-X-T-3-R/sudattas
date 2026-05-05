@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
 import { ApiEnvelopeError } from "@/lib/api-envelope";
@@ -20,25 +20,25 @@ declare global {
   }
 }
 
-type OrderReconcilePayload = {
-  statusName: string;
+type CheckoutOutcomePayload = {
+  orderId: string;
   paymentState: string;
-  fulfillmentState: string;
+  orderUiState: string;
+  checkoutState: "paid" | "failed" | "pending" | "needs_review" | "cod";
 };
 
-const FINAL_PAYMENT_STATES = new Set([
-  "paid",
-  "failed",
-  "refunded",
-  "needs_review",
-]);
+type CheckoutInput = {
+  shippingAddressId?: string;
+  selectedCartLineIds?: string[];
+  paymentMode?: "prepaid" | "cod";
+  onSuccess?: (payload: CheckoutOutcomePayload) => void;
+  onPending?: (payload: CheckoutOutcomePayload) => void;
+  onNeedsReview?: (payload: CheckoutOutcomePayload) => void;
+  onFailure?: (payload: { orderId: string; reason?: string }) => void;
+};
 
 function isValidRazorpayOrderId(value: string): boolean {
   return value.trim().startsWith("order_");
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function loadRazorpayScript(): Promise<void> {
@@ -53,11 +53,42 @@ function loadRazorpayScript(): Promise<void> {
   });
 }
 
+function normalizeVerifyPaymentState(rawStatus?: string | null): "paid" | "failed" | "pending" | "needs_review" {
+  const status = (rawStatus ?? "").trim().toLowerCase();
+  if (status.includes("needs_review")) return "needs_review";
+  if (status.includes("failed")) return "failed";
+  if (
+    status.includes("paid") ||
+    status.includes("captured") ||
+    status.includes("confirmed") ||
+    status.includes("processed")
+  ) {
+    return "paid";
+  }
+  return "pending";
+}
+
+function deriveCheckoutState(
+  paymentState?: string | null,
+  orderUiState?: string | null
+): "paid" | "failed" | "pending" | "needs_review" {
+  const normalizedOrderUiState = (orderUiState ?? "").trim().toLowerCase();
+  if (normalizedOrderUiState.includes("needs_review")) return "needs_review";
+  if (normalizedOrderUiState.includes("failed")) return "failed";
+  if (normalizedOrderUiState.includes("pending")) return "pending";
+  return normalizeVerifyPaymentState(paymentState);
+}
+
 // eslint-disable-next-line max-lines-per-function
 export function useRazorpayCheckout() {
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const { announce } = useLiveAnnouncer();
+  const checkoutInFlightRef = useRef(false);
+  const checkoutAttemptRef = useRef<{
+    placeOrderKey: string;
+    verifyKey?: string | null;
+  } | null>(null);
 
   const setPaymentMessageWithAnnounce = useCallback(
     (message: string | null, politeness: "polite" | "assertive" = "polite") => {
@@ -74,34 +105,19 @@ export function useRazorpayCheckout() {
     return toRouteFailureUi("account", error).message;
   }, []);
 
-  const pollOrderReconciliation = useCallback(async (orderId: string) => {
-    const maxAttempts = 6;
-    const delayMs = 4000;
-
-    for (let i = 0; i < maxAttempts; i += 1) {
-      await sleep(delayMs);
-      const detail = await fetchApiEnvelope<{
-        paymentState: string;
-        fulfillmentState: string;
-        statusName: string;
-      }>(`/api/account/orders/${encodeURIComponent(orderId)}`, {
-        cache: "no-store",
-      });
-      if (FINAL_PAYMENT_STATES.has(detail.paymentState)) {
-        return detail as OrderReconcilePayload;
-      }
-    }
-    return null;
+  const resetAttempt = useCallback(() => {
+    checkoutAttemptRef.current = null;
+    checkoutInFlightRef.current = false;
+    setPaymentLoading(false);
   }, []);
 
   // eslint-disable-next-line max-lines-per-function
-  const runCheckout = useCallback(async (input?: {
-    shippingAddressId?: string;
-    selectedCartLineIds?: string[];
-    paymentMode?: "prepaid" | "cod";
-    onSuccess?: (payload: { orderId: string; paymentState: string; orderUiState: string }) => void;
-    onFailure?: (payload: { orderId: string; reason?: string }) => void;
-  }) => {
+  const runCheckout = useCallback(async (input?: CheckoutInput) => {
+    if (checkoutInFlightRef.current) {
+      setPaymentMessageWithAnnounce("Checkout is already in progress. Please wait.", "polite");
+      return;
+    }
+
     const shippingAddressId = input?.shippingAddressId?.trim();
     const selectedCartLineIds = (input?.selectedCartLineIds ?? []).map((id) => id.trim()).filter(Boolean);
     if (!shippingAddressId) {
@@ -117,9 +133,19 @@ export function useRazorpayCheckout() {
       input?.paymentMode === "cod" ? "cod" : "prepaid";
 
     setPaymentMessageWithAnnounce(null);
+    checkoutInFlightRef.current = true;
     setPaymentLoading(true);
+    setPaymentMessageWithAnnounce("Processing...", "polite");
+
+    if (!checkoutAttemptRef.current) {
+      checkoutAttemptRef.current = {
+        placeOrderKey: `checkout-place-${crypto.randomUUID()}`,
+        verifyKey: null,
+      };
+    }
+    const activeAttempt = checkoutAttemptRef.current;
+
     try {
-      const placeOrderKey = `checkout-place-${crypto.randomUUID()}`;
       const start = await fetchApiEnvelope<{
         checkoutMode?: "prepaid" | "cod";
         order: {
@@ -141,23 +167,29 @@ export function useRazorpayCheckout() {
         body: JSON.stringify({
           shippingAddressId,
           selectedCartLineIds,
-          idempotencyKey: placeOrderKey,
+          idempotencyKey: activeAttempt.placeOrderKey,
           paymentMode,
         }),
       });
+      if (start?.idempotency?.verifyKey) {
+        activeAttempt.verifyKey = start.idempotency.verifyKey;
+      }
 
       const orderId = start?.order?.orderId;
       if (!orderId) {
         setPaymentMessageWithAnnounce("Order creation failed. Please retry.", "assertive");
+        resetAttempt();
         return;
       }
 
       if ((start?.checkoutMode ?? "").toLowerCase() === "cod") {
-        const successPayload = {
+        const successPayload: CheckoutOutcomePayload = {
           orderId,
-          paymentState: "cod_pending",
+          paymentState: "cod",
           orderUiState: "processing",
+          checkoutState: "cod",
         };
+        resetAttempt();
         if (input?.onSuccess) {
           input.onSuccess(successPayload);
           return;
@@ -171,11 +203,13 @@ export function useRazorpayCheckout() {
         setPaymentMessageWithAnnounce(
           "No Razorpay key/order returned. Please retry in a moment."
         );
+        resetAttempt();
         return;
       }
       const parsed = paymentIntentSchema.safeParse(raw);
       if (!parsed.success) {
         setPaymentMessageWithAnnounce("Invalid payment intent response.", "assertive");
+        resetAttempt();
         return;
       }
       const intent = parsed.data;
@@ -184,17 +218,38 @@ export function useRazorpayCheckout() {
           "Invalid Razorpay order ID. Please retry checkout.",
           "assertive"
         );
+        resetAttempt();
         return;
       }
+
       await loadRazorpayScript();
-      const paymentOrderId = intent.orderId;
-      const verifyKey = start?.idempotency?.verifyKey;
+      const verifyKey = activeAttempt.verifyKey;
+      let finalized = false;
+      const finalizeOnce = (fn: () => void) => {
+        if (finalized) return;
+        finalized = true;
+        fn();
+        resetAttempt();
+      };
+
       const options = {
         key: intent.razorpayKeyId,
         amount: intent.amountPaise,
         currency: intent.currency || "INR",
         order_id: intent.razorpayOrderId,
         name: "Sudatta's",
+        modal: {
+          ondismiss: () => {
+            finalizeOnce(() => {
+              const reason = "Payment window was closed before completion.";
+              if (input?.onFailure) {
+                input.onFailure({ orderId, reason });
+                return;
+              }
+              setPaymentMessageWithAnnounce("Payment was not completed. You can retry safely.", "assertive");
+            });
+          },
+        },
         handler: async function (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;
@@ -217,68 +272,110 @@ export function useRazorpayCheckout() {
                 idempotencyKey: verifyKey,
               }),
             });
+
             const verifyParsed = verifyRazorpayPayloadSchema.safeParse({
               verified: verifyResult.verified,
               paymentIntent: { status: verifyResult.paymentState },
             });
+
+            const checkoutState = deriveCheckoutState(
+              verifyResult.paymentState,
+              verifyResult.orderUiState
+            );
             if (verifyParsed.success && verifyResult.verified) {
-              const successPayload = {
+              const basePayload = {
                 orderId,
-                paymentState: verifyResult.paymentState,
+                paymentState: checkoutState,
                 orderUiState: verifyResult.orderUiState,
               };
-              if (verifyResult.paymentState === "failed") {
-                if (input?.onFailure) {
-                  input.onFailure({
-                    orderId,
-                    reason: "Payment verification marked this payment as failed.",
-                  });
+
+              if (checkoutState === "failed") {
+                finalizeOnce(() => {
+                  if (input?.onFailure) {
+                    input.onFailure({
+                      orderId,
+                      reason: "Payment was not completed. You can retry safely.",
+                    });
+                    return;
+                  }
+                  setPaymentMessageWithAnnounce("Payment was not completed. You can retry safely.", "assertive");
+                });
+                return;
+              }
+
+              if (checkoutState === "needs_review") {
+                finalizeOnce(() => {
+                  const payload: CheckoutOutcomePayload = {
+                    ...basePayload,
+                    checkoutState: "needs_review",
+                  };
+                  if (input?.onNeedsReview) {
+                    input.onNeedsReview(payload);
+                    return;
+                  }
+                  setPaymentMessageWithAnnounce(
+                    "We received your payment update, but it needs manual verification. We'll contact you if action is needed.",
+                    "polite"
+                  );
+                });
+                return;
+              }
+
+              if (checkoutState === "pending") {
+                finalizeOnce(() => {
+                  const payload: CheckoutOutcomePayload = {
+                    ...basePayload,
+                    checkoutState: "pending",
+                  };
+                  if (input?.onPending) {
+                    input.onPending(payload);
+                    return;
+                  }
+                  setPaymentMessageWithAnnounce(
+                    "We're confirming your payment. Please don't place another order yet.",
+                    "polite"
+                  );
+                });
+                return;
+              }
+
+              finalizeOnce(() => {
+                const payload: CheckoutOutcomePayload = {
+                  ...basePayload,
+                  checkoutState: "paid",
+                };
+                if (input?.onSuccess) {
+                  input.onSuccess(payload);
                   return;
                 }
-                setPaymentMessageWithAnnounce(
-                  "Payment failed. Please try again with a different payment method.",
-                  "assertive"
-                );
-                return;
-              }
-              if (input?.onSuccess) {
-                input.onSuccess(successPayload);
-                return;
-              }
-              if (FINAL_PAYMENT_STATES.has(verifyResult.paymentState)) {
-                setPaymentMessageWithAnnounce(
-                  `Payment ${verifyResult.paymentState}. Order state: ${verifyResult.orderUiState}.`
-                );
-              } else {
-                setPaymentMessageWithAnnounce(
-                  `Payment verification received. Current state: ${verifyResult.paymentState}; awaiting final backend/webhook reconciliation.`
-                );
-                try {
-                  const reconciled = await pollOrderReconciliation(orderId);
-                  if (reconciled) {
-                    setPaymentMessageWithAnnounce(
-                      `Payment ${reconciled.paymentState}. Order state: ${reconciled.statusName}.`
-                    );
-                  } else {
-                    setPaymentMessageWithAnnounce(
-                      "Verification received. Final payment state is still processing; please refresh your profile orders shortly."
-                    );
-                  }
-                } catch (pollError) {
-                  setPaymentMessageWithAnnounce(
-                    toRouteFailureUi("account", pollError).message,
-                    "assertive"
-                  );
-                }
-              }
-            } else {
-              setPaymentMessageWithAnnounce("Verify failed or invalid response.", "assertive");
+                setPaymentMessageWithAnnounce("Payment verified and order confirmed.");
+              });
+              return;
             }
+
+            finalizeOnce(() => {
+              if (input?.onFailure) {
+                input.onFailure({
+                  orderId,
+                  reason: "Payment was not completed. You can retry safely.",
+                });
+                return;
+              }
+              setPaymentMessageWithAnnounce("Payment was not completed. You can retry safely.", "assertive");
+            });
           } catch (e) {
-            setPaymentMessageWithAnnounce(accountErrorMessage(e), "assertive");
+            const message = accountErrorMessage(e);
+            finalizeOnce(() => {
+              if (input?.onFailure) {
+                input.onFailure({ orderId, reason: message });
+                return;
+              }
+              setPaymentMessageWithAnnounce(message, "assertive");
+            });
           }
         },
       };
+
       const rzp = new window.Razorpay!(options);
       rzp.on("payment.failed", (failure: unknown) => {
         const reason =
@@ -288,20 +385,23 @@ export function useRazorpayCheckout() {
           typeof (failure as { error?: { description?: unknown } }).error?.description ===
             "string"
             ? (failure as { error: { description: string } }).error.description
-            : "Payment failed or was closed.";
-        if (input?.onFailure) {
-          input.onFailure({ orderId: paymentOrderId, reason });
-          return;
-        }
-        setPaymentMessageWithAnnounce("Payment failed or was closed.", "assertive");
+            : "Payment was not completed. You can retry safely.";
+        finalizeOnce(() => {
+          if (input?.onFailure) {
+            input.onFailure({ orderId, reason });
+            return;
+          }
+          setPaymentMessageWithAnnounce("Payment was not completed. You can retry safely.", "assertive");
+        });
       });
+
+      setPaymentMessageWithAnnounce("Opening payment...", "polite");
       rzp.open();
     } catch (e) {
       setPaymentMessageWithAnnounce(accountErrorMessage(e), "assertive");
-    } finally {
-      setPaymentLoading(false);
+      resetAttempt();
     }
-  }, [accountErrorMessage, pollOrderReconciliation, setPaymentMessageWithAnnounce]);
+  }, [accountErrorMessage, resetAttempt, setPaymentMessageWithAnnounce]);
 
   const runTest = useCallback(async () => {
     setPaymentMessageWithAnnounce("Use checkout flow from /bag.");

@@ -10,6 +10,7 @@ type OrderSummaryPanelProps = {
   shippingAmount: number;
   shippingLoading: boolean;
   shippingNote?: string | null;
+  checkoutLoading?: boolean;
   onCheckout: () => void;
 };
 
@@ -20,6 +21,7 @@ export function OrderSummaryPanel({
   shippingAmount,
   shippingLoading,
   shippingNote,
+  checkoutLoading = false,
   onCheckout,
 }: OrderSummaryPanelProps) {
   const totalAmount = cartSubtotal + shippingAmount;
@@ -75,10 +77,13 @@ export function OrderSummaryPanel({
 
         <div className="mt-7">
           <button
+            type="button"
             onClick={onCheckout}
-            className="group inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#C9A646] px-5 text-[11px] font-semibold uppercase tracking-[0.24em] text-white shadow-[0_16px_28px_rgba(201,166,70,0.28)] transition duration-300 hover:-translate-y-1 hover:bg-[#B89435]"
+            disabled={checkoutLoading || cartCount === 0}
+            aria-busy={checkoutLoading}
+            className="group inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#C9A646] px-5 text-[11px] font-semibold uppercase tracking-[0.24em] text-white shadow-[0_16px_28px_rgba(201,166,70,0.28)] transition duration-300 hover:-translate-y-1 hover:bg-[#B89435] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-[#C9A646]"
           >
-            Checkout
+            {checkoutLoading ? "Processing..." : "Checkout"}
             <ArrowRightIcon className="h-4 w-4 transition duration-300 group-hover:translate-x-1" />
           </button>
         </div>

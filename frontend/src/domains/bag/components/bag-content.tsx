@@ -15,6 +15,7 @@ type BagContentProps = {
   shippingAmount: number;
   shippingLoading: boolean;
   shippingNote?: string | null;
+  checkoutLoading?: boolean;
   allSelected: boolean;
   catalogSizes: CatalogSize[];
   openSizeForId: string | null;
@@ -40,6 +41,7 @@ export function BagContent({
   shippingAmount,
   shippingLoading,
   shippingNote,
+  checkoutLoading = false,
   allSelected,
   catalogSizes,
   openSizeForId,
@@ -106,6 +108,7 @@ export function BagContent({
             shippingAmount={shippingAmount}
             shippingLoading={shippingLoading}
             shippingNote={shippingNote}
+            checkoutLoading={checkoutLoading}
             onCheckout={onCheckout}
           />
         </div>
