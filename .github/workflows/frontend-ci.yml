@@ -186,9 +186,38 @@ jobs:
     - name: Setup backend test database schema
       run: |
         sleep 10
+        mysql -h 127.0.0.1 -P 3306 -u root -ptest_password -e "CREATE DATABASE IF NOT EXISTS SUDATTAS;"
         mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
         chmod +x ./backend/scripts/apply_sql_migrations.sh
         ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
+        MISSING_TABLES="$(mysql -N -s -h 127.0.0.1 -P 3306 -u root -ptest_password -e "
+          SELECT required.required_name
+          FROM (
+            SELECT 'refundattempts' AS required_name
+            UNION ALL SELECT 'returnrequests'
+            UNION ALL SELECT 'returnrequestitems'
+            UNION ALL SELECT 'orderinventoryrestores'
+            UNION ALL SELECT 'orderinventoryrestoreitems'
+            UNION ALL SELECT 'invoices'
+            UNION ALL SELECT 'schemamigrations'
+          ) AS required
+          LEFT JOIN (
+            SELECT DISTINCT LOWER(REPLACE(table_name, '_', '')) AS normalized_name
+            FROM information_schema.tables
+            WHERE table_schema = 'SUDATTAS'
+          ) AS existing
+          ON required.required_name = existing.normalized_name
+          WHERE existing.normalized_name IS NULL;
+        ")"
+        if [[ -n "$MISSING_TABLES" ]]; then
+          echo "Missing required tables before backend startup:"
+          echo "$MISSING_TABLES"
+          echo "Existing SUDATTAS tables:"
+          mysql -N -s -h 127.0.0.1 -P 3306 -u root -ptest_password -e \
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='SUDATTAS' ORDER BY table_name;"
+          exit 1
+        fi
+        echo "Backend schema sanity check passed for frontend smoke CI."
 
     - name: Build backend binaries
       working-directory: ./backend
@@ -200,15 +229,20 @@ jobs:
 
     - name: Start backend and run Playwright journey scenarios
       env:
+        APP_ENV: test
+        STRICT_STARTUP_VALIDATION: "false"
         DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/SUDATTAS
         REDIS_URL: redis://127.0.0.1:6379
         GRPC_SERVER: 0.0.0.0:50051
         GRPC_URL: http://127.0.0.1:50051
+        GRPC_AUTH_TOKEN: ci-test-grpc-token
         GRAPHQL_URL: http://127.0.0.1:8080/v2
         NEXT_PUBLIC_GRAPHQL_URL: http://127.0.0.1:8080/v2
+        ALLOWED_ORIGINS: http://127.0.0.1:3000,http://localhost:3000
+        REQUIRE_WEBHOOK_SECRETS: "false"
         OAUTH_DOMAIN: https://accounts.google.com/
         OAUTH_AUDIENCE: https://www.googleapis.com/oauth2/v3/tokeninfo
-        INTERNAL_API_SECRET: ci-e2e-internal-secret
+        INTERNAL_API_SECRET: ci-test-internal-secret
         AUTH_SECRET: ci-frontend-auth-secret
         ADMIN_ALLOWED_EMAILS: admin@example.com
         NEXTAUTH_URL: http://127.0.0.1:3000
@@ -218,15 +252,60 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p /tmp/backend-logs
-        ./backend/target/debug/core_operations > /tmp/core_operations.log 2>&1 &
+        CORE_LOG=/tmp/backend-logs/core_operations.log
+        GRAPHQL_LOG=/tmp/backend-logs/graphql.log
+        FRONTEND_LOG=/tmp/backend-logs/frontend.log
+
+        ./backend/target/debug/core_operations > "$CORE_LOG" 2>&1 &
         CORE_PID=$!
-        ./backend/target/debug/graphql > /tmp/graphql.log 2>&1 &
+        ./backend/target/debug/graphql > "$GRAPHQL_LOG" 2>&1 &
         GRAPHQL_PID=$!
         (
           cd frontend
-          PORT=3000 npm run start > /tmp/frontend.log 2>&1
+          PORT=3000 npm run start > "$FRONTEND_LOG" 2>&1
         ) &
         FRONTEND_PID=$!
+
+        dump_service_logs() {
+          echo "========== core_operations log (last 200 lines) =========="
+          tail -n 200 "$CORE_LOG" || true
+          echo "========== graphql log (last 200 lines) =========="
+          tail -n 200 "$GRAPHQL_LOG" || true
+          echo "========== frontend log (last 200 lines) =========="
+          tail -n 200 "$FRONTEND_LOG" || true
+        }
+
+        ensure_process_alive() {
+          local pid="$1"
+          local name="$2"
+          local log_file="$3"
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "${name} exited before readiness completed"
+            tail -n 200 "$log_file" || true
+            dump_service_logs
+            exit 1
+          fi
+        }
+
+        wait_for_ready_with_process_guard() {
+          local url="$1"
+          local max_attempts="${2:-90}"
+          local sleep_seconds="${3:-3}"
+          echo "Waiting for readiness endpoint: ${url}"
+          for i in $(seq 1 "$max_attempts"); do
+            if curl -sf "$url" > /dev/null 2>&1; then
+              echo "Ready: ${url}"
+              return 0
+            fi
+            ensure_process_alive "$CORE_PID" "core_operations" "$CORE_LOG"
+            ensure_process_alive "$GRAPHQL_PID" "graphql" "$GRAPHQL_LOG"
+            ensure_process_alive "$FRONTEND_PID" "frontend" "$FRONTEND_LOG"
+            sleep "$sleep_seconds"
+          done
+          echo "Readiness check failed after ${max_attempts} attempts: ${url}"
+          dump_service_logs
+          return 1
+        }
 
         cleanup() {
           kill "$CORE_PID" "$GRAPHQL_PID" "$FRONTEND_PID" 2>/dev/null || true
@@ -237,22 +316,22 @@ jobs:
         sleep 3
         if ! kill -0 "$CORE_PID" 2>/dev/null; then
           echo "core_operations failed to start"
-          tail -n 200 /tmp/core_operations.log || true
+          dump_service_logs
           exit 1
         fi
         if ! kill -0 "$GRAPHQL_PID" 2>/dev/null; then
           echo "graphql failed to start"
-          tail -n 200 /tmp/graphql.log || true
+          dump_service_logs
           exit 1
         fi
         if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
           echo "frontend failed to start"
-          tail -n 200 /tmp/frontend.log || true
+          dump_service_logs
           exit 1
         fi
 
-        ./backend/scripts/wait_for_http_ready.sh http://127.0.0.1:8080/ready 90 3
-        ./backend/scripts/wait_for_http_ready.sh http://127.0.0.1:3000 90 3
+        wait_for_ready_with_process_guard http://127.0.0.1:8080/ready 90 3
+        wait_for_ready_with_process_guard http://127.0.0.1:3000 90 3
         echo "Running Playwright shard ${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL}"
         (
           cd frontend

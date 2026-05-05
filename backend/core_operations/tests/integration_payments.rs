@@ -12,21 +12,24 @@ mod integration_common;
 mod provider_test_gate;
 
 use chrono::Utc;
-use core_db_entities::entity::sea_orm_active_enums::Status as PaymentIntentStatus;
+use core_db_entities::entity::sea_orm_active_enums::{
+    FulfillmentStatus, PaymentStatus, Status as PaymentIntentStatus,
+};
 use core_db_entities::entity::{
-    inventory, order_status, orders, payment_intents, product_categories, product_variants,
-    products, shipping_addresses, user_roles,
+    inventory, order_details, order_status, orders, payment_intents, product_categories,
+    product_variants, products, shipping_addresses, user_roles,
 };
 use core_operations::procedures::orders::place_order;
 use core_operations::procedures::stale_order_expiry::expire_stale_pending_orders;
 use hmac::{Hmac, Mac};
 use integration_common::test_db_url;
 use proto::proto::core::{
-    CreateCartItemRequest, CreateUserRequest, PlaceOrderRequest, VerifyRazorpayPaymentRequest,
+    CreateCartItemRequest, CreateUserRequest, IngestWebhookRequest, PlaceOrderRequest,
+    VerifyRazorpayPaymentRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter, QueryOrder,
-    TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, TransactionTrait,
 };
 use sha2::Sha256;
 use tonic::Request;
@@ -67,6 +70,7 @@ async fn place_order_setup(
     txn: &sea_orm::DatabaseTransaction,
     now_tag: i64,
     cart_total_paise: i64,
+    payment_mode: Option<&str>,
 ) -> (i64, i64) {
     let pending = order_status::Entity::find()
         .filter(order_status::Column::StatusName.eq("pending"))
@@ -200,7 +204,7 @@ async fn place_order_setup(
             user_id,
             coupon_code: None,
             selected_cart_ids: vec![cart_id],
-            payment_mode: None,
+            payment_mode: payment_mode.map(|mode| mode.to_string()),
         }),
     )
     .await
@@ -227,7 +231,7 @@ async fn integration_place_order_creates_payment_intent() {
     let now_tag = Utc::now().timestamp_millis();
     // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR so tests do not depend on live shipping quote.
     let cart_total = 150_000_i64;
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, cart_total).await;
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, cart_total, None).await;
 
     let intents = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
@@ -267,7 +271,7 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000).await;
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
 
     let intents = payment_intents::Entity::find()
@@ -343,7 +347,7 @@ async fn integration_verify_razorpay_payment_invalid_signature_no_update() {
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000).await;
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
 
     let intents = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
@@ -384,7 +388,7 @@ async fn integration_verify_razorpay_payment_invalid_signature_no_update() {
     txn.rollback().await.ok();
 }
 
-/// P4 - stale unpaid pending orders are expired, payment intents fail, and inventory is restored.
+/// P4A - stale unpaid prepaid orders expire even after cancel window closes.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL, migrated schema, and shipping quote configuration"]
 async fn integration_stale_unpaid_order_expiry_restores_inventory() {
@@ -400,8 +404,102 @@ async fn integration_stale_unpaid_order_expiry_restores_inventory() {
     let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000).await;
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
 
+    let intent = payment_intents::Entity::find()
+        .filter(payment_intents::Column::OrderId.eq(order_id))
+        .one(&txn)
+        .await
+        .expect("query payment intent")
+        .expect("payment intent exists");
+    let mut intent_active: payment_intents::ActiveModel = intent.clone().into();
+    intent_active.expires_at = ActiveValue::Set(Utc::now() - chrono::Duration::hours(1));
+    intent_active
+        .update(&txn)
+        .await
+        .expect("expire payment intent");
+
+    let mut order_active: orders::ActiveModel = orders::Entity::find_by_id(order_id)
+        .one(&txn)
+        .await
+        .expect("query order")
+        .expect("order exists")
+        .into();
+    order_active.cancel_window_ends_at =
+        ActiveValue::Set(Some(Utc::now() - chrono::Duration::hours(2)));
+    order_active
+        .update(&txn)
+        .await
+        .expect("close customer cancel window");
+    txn.commit().await.expect("commit setup");
+
+    let expired = expire_stale_pending_orders(&db, 10)
+        .await
+        .expect("expire stale orders should succeed");
+    assert_eq!(expired, 1);
+    let repeat = expire_stale_pending_orders(&db, 10)
+        .await
+        .expect("repeat stale expiry should succeed");
+    assert_eq!(
+        repeat, 0,
+        "second system-expiry run should be idempotent no-op"
+    );
+
+    let verify_txn = db.begin().await.expect("begin verify transaction");
+    let updated_intent = payment_intents::Entity::find_by_id(intent.intent_id)
+        .one(&verify_txn)
+        .await
+        .expect("query updated intent")
+        .expect("updated intent exists");
+    assert_eq!(updated_intent.status, PaymentIntentStatus::Failed);
+
+    let cancelled_id = ensure_order_status(&verify_txn, "cancelled").await;
+    let order = orders::Entity::find_by_id(order_id)
+        .one(&verify_txn)
+        .await
+        .expect("query expired order")
+        .expect("order exists");
+    assert_eq!(order.status_id, cancelled_id);
+    assert_eq!(order.payment_status, Some(PaymentStatus::Failed));
+    assert_eq!(order.fulfillment_status, FulfillmentStatus::NotCreated);
+
+    let cancelled_lines = order_details::Entity::find()
+        .filter(order_details::Column::OrderId.eq(order_id))
+        .filter(order_details::Column::ItemStatus.eq("cancelled"))
+        .count(&verify_txn)
+        .await
+        .expect("count cancelled lines");
+    assert_eq!(cancelled_lines, 1, "line items should be system-cancelled");
+
+    let inventory_row = inventory::Entity::find()
+        .filter(inventory::Column::VariantId.is_not_null())
+        .order_by_desc(inventory::Column::InventoryId)
+        .one(&verify_txn)
+        .await
+        .expect("query inventory")
+        .expect("inventory exists");
+    assert_eq!(inventory_row.quantity_available, Some(10));
+
+    verify_txn.rollback().await.ok();
+}
+
+/// P4B - stale unpaid prepaid orders expire before cancel window too (system path ignores customer window).
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and shipping quote configuration"]
+async fn integration_stale_unpaid_order_expiry_before_cancel_window_still_succeeds() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_stale_unpaid_order_expiry_before_cancel_window_still_succeeds",
+    ) {
+        return;
+    }
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
     let intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
         .one(&txn)
@@ -421,30 +519,251 @@ async fn integration_stale_unpaid_order_expiry_restores_inventory() {
         .expect("expire stale orders should succeed");
     assert_eq!(expired, 1);
 
-    let verify_txn = db.begin().await.expect("begin verify transaction");
-    let updated_intent = payment_intents::Entity::find_by_id(intent.intent_id)
-        .one(&verify_txn)
-        .await
-        .expect("query updated intent")
-        .expect("updated intent exists");
-    assert_eq!(updated_intent.status, PaymentIntentStatus::Failed);
-
+    let verify_txn = db.begin().await.expect("verify txn");
     let cancelled_id = ensure_order_status(&verify_txn, "cancelled").await;
     let order = orders::Entity::find_by_id(order_id)
         .one(&verify_txn)
         .await
-        .expect("query expired order")
+        .expect("query order")
         .expect("order exists");
     assert_eq!(order.status_id, cancelled_id);
+    assert_eq!(order.payment_status, Some(PaymentStatus::Failed));
+    verify_txn.rollback().await.ok();
+}
 
-    let inventory_row = inventory::Entity::find()
-        .filter(inventory::Column::VariantId.is_not_null())
-        .order_by_desc(inventory::Column::InventoryId)
+/// P4C - COD orders are excluded from stale unpaid prepaid expiry path.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and shipping quote configuration"]
+async fn integration_stale_unpaid_order_expiry_skips_cod_orders() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_stale_unpaid_order_expiry_skips_cod_orders",
+    ) {
+        return;
+    }
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let (user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, Some("cod")).await;
+
+    let synthetic_intent = payment_intents::ActiveModel {
+        intent_id: ActiveValue::NotSet,
+        razorpay_order_id: ActiveValue::Set(format!("order_cod_stale_{now_tag}")),
+        order_id: ActiveValue::Set(Some(order_id)),
+        active_order_id: ActiveValue::NotSet,
+        user_id: ActiveValue::Set(Some(user_id)),
+        amount_paise: ActiveValue::Set(150_000),
+        currency: ActiveValue::Set(Some("INR".to_string())),
+        status: ActiveValue::Set(PaymentIntentStatus::Pending),
+        razorpay_payment_id: ActiveValue::Set(None),
+        metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(Some(Utc::now())),
+        expires_at: ActiveValue::Set(Utc::now() - chrono::Duration::hours(1)),
+    };
+    let _ = synthetic_intent
+        .insert(&txn)
+        .await
+        .expect("insert synthetic cod intent");
+    txn.commit().await.expect("commit setup");
+
+    let expired = expire_stale_pending_orders(&db, 10)
+        .await
+        .expect("expire stale orders should succeed");
+    assert_eq!(expired, 0, "COD orders must not be system-expired");
+
+    let verify_txn = db.begin().await.expect("verify txn");
+    let confirmed_id = ensure_order_status(&verify_txn, "confirmed").await;
+    let order = orders::Entity::find_by_id(order_id)
         .one(&verify_txn)
         .await
-        .expect("query inventory")
-        .expect("inventory exists");
-    assert_eq!(inventory_row.quantity_available, Some(10));
-
+        .expect("query order")
+        .expect("order exists");
+    assert_eq!(order.status_id, confirmed_id);
+    assert_eq!(
+        order.payment_method.as_deref(),
+        Some("cod"),
+        "COD marker should remain unchanged"
+    );
     verify_txn.rollback().await.ok();
+}
+
+/// P4D - captured/paid orders are not expired by stale unpaid worker even if a stale pending intent exists.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and shipping quote configuration"]
+async fn integration_stale_unpaid_order_expiry_skips_captured_orders() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_stale_unpaid_order_expiry_skips_captured_orders",
+    ) {
+        return;
+    }
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
+    let confirmed_id = ensure_order_status(&txn, "confirmed").await;
+    let mut order_active: orders::ActiveModel = orders::Entity::find_by_id(order_id)
+        .one(&txn)
+        .await
+        .expect("query order")
+        .expect("order exists")
+        .into();
+    order_active.status_id = ActiveValue::Set(confirmed_id);
+    order_active.payment_status = ActiveValue::Set(Some(PaymentStatus::Captured));
+    order_active.update(&txn).await.expect("set order captured");
+
+    let intent = payment_intents::Entity::find()
+        .filter(payment_intents::Column::OrderId.eq(order_id))
+        .one(&txn)
+        .await
+        .expect("query intent")
+        .expect("intent exists");
+    let mut intent_active: payment_intents::ActiveModel = intent.clone().into();
+    intent_active.expires_at = ActiveValue::Set(Utc::now() - chrono::Duration::hours(1));
+    intent_active.update(&txn).await.expect("expire intent");
+    txn.commit().await.expect("commit setup");
+
+    let expired = expire_stale_pending_orders(&db, 10)
+        .await
+        .expect("expire stale orders should succeed");
+    assert_eq!(expired, 0, "captured orders must not be system-expired");
+
+    let verify_txn = db.begin().await.expect("verify txn");
+    let order = orders::Entity::find_by_id(order_id)
+        .one(&verify_txn)
+        .await
+        .expect("query order")
+        .expect("order exists");
+    assert_eq!(order.status_id, confirmed_id);
+    assert_eq!(order.payment_status, Some(PaymentStatus::Captured));
+    verify_txn.rollback().await.ok();
+}
+
+/// P4E - late captured webhook after system expiry is flagged for manual review, not auto-paid.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL, migrated schema, and shipping quote configuration"]
+async fn integration_late_captured_webhook_after_system_expiry_marks_needs_review() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_late_captured_webhook_after_system_expiry_marks_needs_review",
+    ) {
+        return;
+    }
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
+    let intent = payment_intents::Entity::find()
+        .filter(payment_intents::Column::OrderId.eq(order_id))
+        .one(&txn)
+        .await
+        .expect("query payment intent")
+        .expect("payment intent exists");
+    let mut intent_active: payment_intents::ActiveModel = intent.clone().into();
+    intent_active.expires_at = ActiveValue::Set(Utc::now() - chrono::Duration::hours(1));
+    intent_active
+        .update(&txn)
+        .await
+        .expect("expire payment intent");
+    txn.commit().await.expect("commit setup");
+
+    let expired = expire_stale_pending_orders(&db, 10)
+        .await
+        .expect("expire stale orders should succeed");
+    assert_eq!(expired, 1);
+
+    let webhook_txn = db.begin().await.expect("begin webhook txn");
+    let payload = serde_json::json!({
+        "event": "payment.captured",
+        "payload": {
+            "payment": {
+                "entity": {
+                    "id": format!("pay_late_{}", now_tag),
+                    "order_id": intent.razorpay_order_id,
+                    "amount": 150_000,
+                    "currency": "INR"
+                }
+            }
+        }
+    });
+    let webhook_id = format!("razorpay:late_capture:{now_tag}");
+    let ingest = core_operations::handlers::webhooks::ingest_webhook(
+        &webhook_txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await;
+    assert!(
+        ingest.is_ok(),
+        "late capture webhook should be accepted and flagged for review"
+    );
+    let first_event = ingest
+        .expect("already asserted ingest ok")
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .expect("first webhook response item");
+
+    let replay = core_operations::handlers::webhooks::ingest_webhook(
+        &webhook_txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id,
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("duplicate replay should be idempotent")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("replay webhook response item");
+    assert_eq!(replay.event_id, first_event.event_id);
+    assert_eq!(replay.status, "processed");
+
+    let refreshed_intent = payment_intents::Entity::find_by_id(intent.intent_id)
+        .one(&webhook_txn)
+        .await
+        .expect("query refreshed intent")
+        .expect("intent exists");
+    assert_eq!(
+        refreshed_intent.status,
+        PaymentIntentStatus::NeedsReview,
+        "late capture after system expiry must require manual review"
+    );
+
+    let cancelled_id = ensure_order_status(&webhook_txn, "cancelled").await;
+    let refreshed_order = orders::Entity::find_by_id(order_id)
+        .one(&webhook_txn)
+        .await
+        .expect("query refreshed order")
+        .expect("order exists");
+    assert_eq!(
+        refreshed_order.status_id, cancelled_id,
+        "late capture must not auto-promote cancelled order to confirmed"
+    );
+
+    webhook_txn.rollback().await.ok();
 }

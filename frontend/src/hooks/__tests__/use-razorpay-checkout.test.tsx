@@ -105,4 +105,33 @@ describe("useRazorpayCheckout async reconciliation", () => {
     expect(result.current.paymentMessage).toContain("Select at least one bag item");
     expect(mocks.fetchApiEnvelope).not.toHaveBeenCalled();
   });
+
+  it("refuses to open Razorpay when order id is not a real order_* value", async () => {
+    const razorpay = vi.fn(() => ({
+      open: () => {},
+      on: () => {},
+    }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).Razorpay = razorpay;
+
+    mocks.fetchApiEnvelope.mockResolvedValueOnce({
+      order: { orderId: "o2" },
+      paymentIntent: {
+        razorpayOrderId: "rzp_pending_o2",
+        razorpayKeyId: "key_1",
+        orderId: "o2",
+        amountPaise: "10000",
+        currency: "INR",
+      },
+      idempotency: { placeOrderKey: "place_2", verifyKey: "verify_2" },
+    });
+
+    const { result } = renderHook(() => useRazorpayCheckout());
+    await act(async () => {
+      await result.current.runCheckout({ shippingAddressId: "10", selectedCartLineIds: ["c1"] });
+    });
+
+    expect(razorpay).not.toHaveBeenCalled();
+    expect(result.current.paymentMessage).toContain("Invalid Razorpay order ID");
+  });
 });

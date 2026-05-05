@@ -2,6 +2,7 @@
 //! These tests never run by default and always attempt cleanup cancellation.
 
 mod integration_common;
+mod provider_test_gate;
 
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::{AuthProvider, Status as PaymentIntentStatus};
@@ -15,12 +16,13 @@ use core_operations::handlers::shipments::logistics_workflow::{
     cancel_order_via_logistics, ensure_shiprocket_booking_for_paid_order,
     process_booking_intents_batch, process_cancel_pending_logistics_order,
 };
+use core_operations::handlers::webhooks::ingest_webhook;
 use core_operations::procedures::orders::place_order;
 use core_operations::procedures::refund_attempts_worker::process_refund_attempts;
 use hmac::{Hmac, Mac};
-use integration_common::test_db_url_optional;
 use proto::proto::core::{
-    CreateCartItemRequest, DeleteOrderRequest, PlaceOrderRequest, VerifyRazorpayPaymentRequest,
+    CreateCartItemRequest, DeleteOrderRequest, IngestWebhookRequest, PlaceOrderRequest,
+    VerifyRazorpayPaymentRequest,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DatabaseConnection,
@@ -111,28 +113,9 @@ fn load_live_env_from_repo() {
 
 fn live_context() -> Result<LiveContext, String> {
     load_live_env_from_repo();
-    let flag_value = std::env::var("RUN_LIVE_LOGISTICS_TESTS").ok();
-    if flag_value.as_deref() != Some("1") {
-        let current = flag_value.unwrap_or_else(|| "<unset>".to_string());
-        return Err(format!(
-            "RUN_LIVE_LOGISTICS_TESTS must be exactly '1' (current: {current})"
-        ));
-    }
-    for key in [
-        "SHIPROCKET_EMAIL",
-        "SHIPROCKET_PASSWORD",
-        "SHIPROCKET_PICKUP_LOCATION",
-        "RAZORPAY_KEY_ID",
-        "RAZORPAY_KEY_SECRET",
-    ] {
-        let value = std::env::var(key).ok().filter(|v| !v.trim().is_empty());
-        if value.is_none() {
-            return Err(format!("missing required env: {key}"));
-        }
-    }
-    let db_url = test_db_url_optional().ok_or_else(|| {
-        "TEST_DATABASE_URL (or DATABASE_URL fallback) is not configured".to_string()
-    })?;
+    let safety =
+        provider_test_gate::validate_live_shiprocket_test_safety("integration_logistics_live")?;
+    let db_url = safety.test_database_url;
     Ok(LiveContext { db_url })
 }
 
@@ -1098,6 +1081,85 @@ async fn order_refund_settlement_status(
     Ok(status)
 }
 
+async fn webhook_row_by_provider_event_id(
+    db: &DatabaseConnection,
+    provider_event_id: &str,
+) -> Result<Option<(i64, String, String)>, String> {
+    let txn = db.begin().await.map_err(|e| e.to_string())?;
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT event_id, webhook_id, status
+               FROM WebhookEvents
+               WHERE provider_event_id = ?
+               ORDER BY event_id DESC
+               LIMIT 1"#,
+            [provider_event_id.into()],
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
+    txn.rollback().await.ok();
+    Ok(row.and_then(|record| {
+        let event_id = record.try_get::<i64>("", "event_id").ok()?;
+        let webhook_id = record.try_get::<String>("", "webhook_id").ok()?;
+        let status = record.try_get::<String>("", "status").ok()?;
+        Some((event_id, webhook_id, status))
+    }))
+}
+
+async fn webhook_count_by_provider_event_id(
+    db: &DatabaseConnection,
+    provider_event_id: &str,
+) -> Result<u64, String> {
+    let txn = db.begin().await.map_err(|e| e.to_string())?;
+    let count = txn
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            r#"SELECT COUNT(*) AS count
+               FROM WebhookEvents
+               WHERE provider_event_id = ?"#,
+            [provider_event_id.into()],
+        ))
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "missing webhook count row".to_string())?
+        .try_get::<i64>("", "count")
+        .map_err(|e| e.to_string())? as u64;
+    txn.rollback().await.ok();
+    Ok(count)
+}
+
+async fn ingest_shiprocket_webhook_once(
+    db: &DatabaseConnection,
+    webhook_id: &str,
+    provider_event_id: &str,
+    payload: serde_json::Value,
+    signature_verified: bool,
+) -> Result<(i64, String), String> {
+    let txn = db.begin().await.map_err(|e| e.to_string())?;
+    let response = ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "shiprocket".to_string(),
+            event_type: "shiprocket.update".to_string(),
+            webhook_id: webhook_id.to_string(),
+            payload_json: payload.to_string(),
+            signature_verified,
+            provider_event_id: Some(provider_event_id.to_string()),
+        }),
+    )
+    .await
+    .map_err(|e| e.to_string())?
+    .into_inner();
+    txn.commit().await.map_err(|e| e.to_string())?;
+    let event = response
+        .items
+        .into_iter()
+        .next()
+        .ok_or_else(|| "missing webhook response row".to_string())?;
+    Ok((event.event_id, event.status))
+}
+
 async fn ensure_live_shipment_booked(db: &DatabaseConnection, order_id: i64) -> Result<(), String> {
     {
         let eligibility_txn = db.begin().await.map_err(|e| e.to_string())?;
@@ -1547,6 +1609,241 @@ async fn live_pre_pickup_cancel_refunds_once_and_is_idempotent() {
             refund_status.as_deref().unwrap_or(""),
             refund_settlement_status.as_deref().unwrap_or("")
         );
+        Ok::<(), String>(())
+    })
+    .await;
+
+    if let Err(error) = finalize_live_test_with_cleanup(&db, &tracker, body_result).await {
+        panic!("{error}");
+    }
+}
+
+#[tokio::test]
+#[ignore = "opt-in live logistics verification; replays duplicate Shiprocket webhook for a test-created order and performs scoped provider cleanup"]
+async fn live_shiprocket_duplicate_webhook_for_tracked_order_is_idempotent() {
+    let ctx = match live_context() {
+        Ok(ctx) => ctx,
+        Err(reason) => {
+            print_live_skip_message(&reason);
+            return;
+        }
+    };
+    let db = Database::connect(&ctx.db_url).await.expect("connect");
+    let tag = unique_tag();
+    let tracker = LiveCleanupTracker::default();
+    let tracker_for_body = tracker.clone();
+    let db_url_for_body = ctx.db_url.clone();
+
+    let body_result = tokio::spawn(async move {
+        let body_db = Database::connect(db_url_for_body.as_str())
+            .await
+            .map_err(|error| format!("connect for live test body failed: {error}"))?;
+        let (order_id, user_id, shiprocket_live_ready) =
+            place_and_pay_live_order(&body_db, tag).await?;
+        tracker_for_body.record_local_order(order_id, user_id)?;
+        if !shiprocket_live_ready {
+            print_live_skip_message(
+                "Shiprocket live AWB assignment is unavailable (wallet balance precondition)",
+            );
+            return Ok(());
+        }
+
+        let created = capture_created_shiprocket_order(&body_db, order_id)
+            .await?
+            .ok_or_else(|| {
+                format!(
+                    "shiprocket booking was marked ready but identifiers were missing for internal_order_id={order_id}"
+                )
+            })?;
+        tracker_for_body.record_shiprocket_order(created.clone())?;
+        eprintln!(
+            "[live-cleanup-track] duplicate-webhook test internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}",
+            created.internal_order_id,
+            created.shiprocket_order_id,
+            created.external_order_id,
+            created.awb_code.as_deref().unwrap_or("")
+        );
+
+        let awb = created
+            .awb_code
+            .as_deref()
+            .ok_or_else(|| format!("missing awb for internal_order_id={order_id}"))?
+            .to_string();
+        let provider_event_id = format!("live_shiprocket_dup_evt_{tag}");
+        let webhook_id = format!("shiprocket:live-dup:{tag}");
+        let payload = serde_json::json!({
+            "awb": awb,
+            "shipment_id": created.shiprocket_order_id,
+            "shipment_status_id": 6,
+            "shipment_status": "IN TRANSIT"
+        });
+
+        let shipment_rows_before = shipment_count(&body_db, order_id).await?;
+        let (first_event_id, first_status) = ingest_shiprocket_webhook_once(
+            &body_db,
+            webhook_id.as_str(),
+            provider_event_id.as_str(),
+            payload.clone(),
+            true,
+        )
+        .await?;
+        assert_eq!(first_status, "processed");
+
+        let (second_event_id, second_status) = ingest_shiprocket_webhook_once(
+            &body_db,
+            webhook_id.as_str(),
+            provider_event_id.as_str(),
+            payload,
+            true,
+        )
+        .await?;
+        assert_eq!(second_status, "processed");
+        assert_eq!(
+            second_event_id, first_event_id,
+            "duplicate Shiprocket webhook must no-op on same canonical row"
+        );
+
+        assert_eq!(
+            webhook_count_by_provider_event_id(&body_db, provider_event_id.as_str()).await?,
+            1,
+            "provider_event_id dedupe must keep a single canonical webhook row"
+        );
+        let canonical = webhook_row_by_provider_event_id(&body_db, provider_event_id.as_str())
+            .await?
+            .ok_or_else(|| "missing canonical webhook row".to_string())?;
+        assert_eq!(canonical.0, first_event_id);
+        assert_eq!(canonical.2, "processed");
+
+        let shipment_rows_after = shipment_count(&body_db, order_id).await?;
+        assert_eq!(
+            shipment_rows_after, shipment_rows_before,
+            "duplicate delivery must not create extra shipment rows"
+        );
+
+        assert_shiprocket_cancel_target_ownership(&body_db, order_id, Some(&created)).await?;
+        Ok::<(), String>(())
+    })
+    .await;
+
+    if let Err(error) = finalize_live_test_with_cleanup(&db, &tracker, body_result).await {
+        panic!("{error}");
+    }
+}
+
+#[tokio::test]
+#[ignore = "opt-in live logistics verification; verifies failed Shiprocket webhook replay reprocesses safely for test-created order only"]
+async fn live_shiprocket_failed_webhook_replay_reprocesses_tracked_order() {
+    let ctx = match live_context() {
+        Ok(ctx) => ctx,
+        Err(reason) => {
+            print_live_skip_message(&reason);
+            return;
+        }
+    };
+    let db = Database::connect(&ctx.db_url).await.expect("connect");
+    let tag = unique_tag();
+    let tracker = LiveCleanupTracker::default();
+    let tracker_for_body = tracker.clone();
+    let db_url_for_body = ctx.db_url.clone();
+
+    let body_result = tokio::spawn(async move {
+        let body_db = Database::connect(db_url_for_body.as_str())
+            .await
+            .map_err(|error| format!("connect for live test body failed: {error}"))?;
+        let (order_id, user_id, shiprocket_live_ready) =
+            place_and_pay_live_order(&body_db, tag).await?;
+        tracker_for_body.record_local_order(order_id, user_id)?;
+        if !shiprocket_live_ready {
+            print_live_skip_message(
+                "Shiprocket live AWB assignment is unavailable (wallet balance precondition)",
+            );
+            return Ok(());
+        }
+
+        let created = capture_created_shiprocket_order(&body_db, order_id)
+            .await?
+            .ok_or_else(|| {
+                format!(
+                    "shiprocket booking was marked ready but identifiers were missing for internal_order_id={order_id}"
+                )
+            })?;
+        tracker_for_body.record_shiprocket_order(created.clone())?;
+        eprintln!(
+            "[live-cleanup-track] failed-replay test internal_order_id={} shiprocket_order_id={} external_order_id={} awb={}",
+            created.internal_order_id,
+            created.shiprocket_order_id,
+            created.external_order_id,
+            created.awb_code.as_deref().unwrap_or("")
+        );
+
+        let awb = created
+            .awb_code
+            .as_deref()
+            .ok_or_else(|| format!("missing awb for internal_order_id={order_id}"))?
+            .to_string();
+        let provider_event_id = format!("live_shiprocket_fail_evt_{tag}");
+        let webhook_id = format!("shiprocket:live-failed-replay:{tag}");
+        let payload = serde_json::json!({
+            "awb": awb,
+            "shipment_id": created.shiprocket_order_id,
+            "shipment_status_id": 6,
+            "shipment_status": "IN TRANSIT"
+        });
+
+        let before = shipment_meta(&body_db, order_id).await?;
+        let logistics_before: Option<String> = before.try_get("", "logistics_status").ok();
+
+        let (first_event_id, first_status) = ingest_shiprocket_webhook_once(
+            &body_db,
+            webhook_id.as_str(),
+            provider_event_id.as_str(),
+            payload.clone(),
+            false,
+        )
+        .await?;
+        assert_eq!(first_status, "failed");
+
+        let after_failed = shipment_meta(&body_db, order_id).await?;
+        let logistics_after_failed: Option<String> = after_failed.try_get("", "logistics_status").ok();
+        assert_eq!(
+            logistics_after_failed, logistics_before,
+            "failed webhook pass must not apply shipment transition side effects"
+        );
+
+        let (second_event_id, second_status) = ingest_shiprocket_webhook_once(
+            &body_db,
+            webhook_id.as_str(),
+            provider_event_id.as_str(),
+            payload.clone(),
+            true,
+        )
+        .await?;
+        assert_eq!(second_status, "processed");
+        assert_eq!(second_event_id, first_event_id);
+
+        let (third_event_id, third_status) = ingest_shiprocket_webhook_once(
+            &body_db,
+            webhook_id.as_str(),
+            provider_event_id.as_str(),
+            payload,
+            true,
+        )
+        .await?;
+        assert_eq!(third_status, "processed");
+        assert_eq!(third_event_id, first_event_id);
+
+        assert_eq!(
+            webhook_count_by_provider_event_id(&body_db, provider_event_id.as_str()).await?,
+            1,
+            "failed->processed replay path must still retain a single canonical webhook row"
+        );
+        let canonical = webhook_row_by_provider_event_id(&body_db, provider_event_id.as_str())
+            .await?
+            .ok_or_else(|| "missing canonical webhook row".to_string())?;
+        assert_eq!(canonical.0, first_event_id);
+        assert_eq!(canonical.2, "processed");
+
+        assert_shiprocket_cancel_target_ownership(&body_db, order_id, Some(&created)).await?;
         Ok::<(), String>(())
     })
     .await;

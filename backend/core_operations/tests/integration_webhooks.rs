@@ -552,12 +552,12 @@ async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
     txn.rollback().await.ok();
 }
 
-/// Phase 6: Replay protection – same provider_event_id twice; second returns AlreadyExists.
+/// Phase 6: Replay dedupe by provider_event_id – duplicate processed event is idempotent no-op.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and schema with provider_event_id (run generate.ps1 after schema)"]
-async fn integration_webhook_replay_provider_event_id_rejected() {
+async fn integration_webhook_duplicate_provider_event_id_processed_noop() {
     if !provider_test_gate::should_run_provider_dependent_test(
-        "integration_webhook_replay_provider_event_id_rejected",
+        "integration_webhook_duplicate_provider_event_id_processed_noop",
     ) {
         return;
     }
@@ -579,7 +579,7 @@ async fn integration_webhook_replay_provider_event_id_rejected() {
         std::time::SystemTime::now().elapsed().unwrap().as_millis()
     );
     let payload = serde_json::json!({
-        "event": "payment.captured",
+        "event": "payment.authorized",
         "payload": { "payment": { "entity": { "id": "pay_replay_1" } } }
     });
 
@@ -587,7 +587,7 @@ async fn integration_webhook_replay_provider_event_id_rejected() {
         &txn,
         Request::new(IngestWebhookRequest {
             provider: "razorpay".to_string(),
-            event_type: "payment.captured".to_string(),
+            event_type: "payment.authorized".to_string(),
             webhook_id: webhook_id.clone(),
             payload_json: payload.to_string(),
             signature_verified: true,
@@ -605,7 +605,7 @@ async fn integration_webhook_replay_provider_event_id_rejected() {
         &txn,
         Request::new(IngestWebhookRequest {
             provider: "razorpay".to_string(),
-            event_type: "payment.captured".to_string(),
+            event_type: "payment.authorized".to_string(),
             webhook_id: format!(
                 "razorpay:pay_replay_2_{}",
                 std::time::SystemTime::now().elapsed().unwrap().as_millis()
@@ -617,15 +617,25 @@ async fn integration_webhook_replay_provider_event_id_rejected() {
     )
     .await;
     assert!(
-        r2.is_err(),
-        "second ingest with same provider_event_id should fail (replay)"
+        r2.is_ok(),
+        "duplicate provider_event_id should return no-op success"
     );
-    let err = r2.unwrap_err();
-    assert_eq!(
-        err.code(),
-        tonic::Code::AlreadyExists,
-        "replay should return AlreadyExists"
-    );
+    let first_event = r1
+        .expect("first ok")
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .expect("first response item");
+    let second_event = r2
+        .expect("second ok")
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .expect("second response item");
+    assert_eq!(second_event.event_id, first_event.event_id);
+    assert_eq!(second_event.status, "processed");
 
     let count = webhook_events::Entity::find()
         .filter(webhook_events::Column::ProviderEventId.eq(provider_event_id.as_str()))
@@ -636,6 +646,503 @@ async fn integration_webhook_replay_provider_event_id_rejected() {
         count.len(),
         1,
         "only one row should have this provider_event_id"
+    );
+
+    txn.rollback().await.ok();
+}
+
+/// Failed webhook replay with the same webhook_id should reprocess successfully once prerequisites exist.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_webhook_failed_same_webhook_id_can_replay_to_success() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_failed_same_webhook_id_can_replay_to_success",
+    ) {
+        return;
+    }
+
+    use core_db_entities::entity::payment_intents;
+    use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let razorpay_order_id = format!(
+        "order_replay_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let payment_id = format!(
+        "pay_replay_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let webhook_id = format!(
+        "razorpay:failed-replay:{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let payload = serde_json::json!({
+        "event": "payment.captured",
+        "payload": {
+            "payment": {
+                "entity": {
+                    "id": payment_id,
+                    "order_id": razorpay_order_id,
+                    "amount": 9_900,
+                    "currency": "INR"
+                }
+            }
+        }
+    });
+
+    let first = core_operations::handlers::webhooks::ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("first ingest should store failed event, not error")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("first webhook response item");
+    assert_eq!(first.status, "failed");
+
+    let intent = payment_intents::ActiveModel {
+        intent_id: ActiveValue::NotSet,
+        razorpay_order_id: ActiveValue::Set(razorpay_order_id.clone()),
+        order_id: ActiveValue::Set(None),
+        active_order_id: ActiveValue::NotSet,
+        user_id: ActiveValue::Set(None),
+        amount_paise: ActiveValue::Set(9_900),
+        currency: ActiveValue::Set(Some("INR".to_string())),
+        status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
+        razorpay_payment_id: ActiveValue::Set(None),
+        metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(None),
+        expires_at: ActiveValue::Set(chrono::Utc::now()),
+    };
+    let inserted = intent.insert(&txn).await.expect("insert replay intent");
+
+    let second = core_operations::handlers::webhooks::ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("replay ingest should succeed")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("second webhook response item");
+    assert_eq!(second.status, "processed");
+    assert_eq!(second.event_id, first.event_id);
+
+    let updated_intent = payment_intents::Entity::find_by_id(inserted.intent_id)
+        .one(&txn)
+        .await
+        .expect("query updated intent")
+        .expect("intent exists");
+    assert_eq!(
+        updated_intent.status,
+        core_db_entities::entity::sea_orm_active_enums::Status::Processed
+    );
+    assert_eq!(
+        updated_intent.razorpay_payment_id.as_deref(),
+        Some(payment_id.as_str())
+    );
+
+    txn.rollback().await.ok();
+}
+
+/// Fresh pending/client_verified webhooks should not be reclaimed concurrently.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_webhook_fresh_in_progress_not_reclaimed() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_fresh_in_progress_not_reclaimed",
+    ) {
+        return;
+    }
+
+    use core_db_entities::entity::sea_orm_active_enums::Status as WebhookStatus;
+    use core_db_entities::entity::webhook_events;
+    use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let webhook_id = format!(
+        "razorpay:fresh:{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let seeded = webhook_events::ActiveModel {
+        event_id: ActiveValue::NotSet,
+        provider: ActiveValue::Set("razorpay".to_string()),
+        event_type: ActiveValue::Set("noop.event".to_string()),
+        webhook_id: ActiveValue::Set(webhook_id.clone()),
+        provider_event_id: ActiveValue::Set(None),
+        payload: ActiveValue::Set(serde_json::json!({"event":"noop.event"})),
+        status: ActiveValue::Set(Some(WebhookStatus::ClientVerified)),
+        received_at: ActiveValue::Set(Some(chrono::Utc::now())),
+    }
+    .insert(&txn)
+    .await
+    .expect("seed fresh row");
+
+    let replay = core_operations::handlers::webhooks::ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "noop.event".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: serde_json::json!({"event":"noop.event"}).to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("fresh duplicate should no-op")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("response item");
+    assert_eq!(replay.event_id, seeded.event_id);
+    assert_eq!(replay.status, "client_verified");
+
+    let refreshed = webhook_events::Entity::find_by_id(seeded.event_id)
+        .one(&txn)
+        .await
+        .expect("query refreshed row")
+        .expect("row exists");
+    assert_eq!(refreshed.status, Some(WebhookStatus::ClientVerified));
+
+    txn.rollback().await.ok();
+}
+
+/// Stale pending/client_verified webhooks should be reclaimed and processed.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_webhook_stale_in_progress_reclaimed() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_stale_in_progress_reclaimed",
+    ) {
+        return;
+    }
+
+    use core_db_entities::entity::sea_orm_active_enums::Status as WebhookStatus;
+    use core_db_entities::entity::webhook_events;
+    use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let webhook_id = format!(
+        "razorpay:stale:{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let seeded = webhook_events::ActiveModel {
+        event_id: ActiveValue::NotSet,
+        provider: ActiveValue::Set("razorpay".to_string()),
+        event_type: ActiveValue::Set("noop.event".to_string()),
+        webhook_id: ActiveValue::Set(webhook_id.clone()),
+        provider_event_id: ActiveValue::Set(None),
+        payload: ActiveValue::Set(serde_json::json!({"event":"noop.event"})),
+        status: ActiveValue::Set(Some(WebhookStatus::ClientVerified)),
+        received_at: ActiveValue::Set(Some(chrono::Utc::now() - chrono::Duration::minutes(30))),
+    }
+    .insert(&txn)
+    .await
+    .expect("seed stale row");
+
+    let replay = core_operations::handlers::webhooks::ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "noop.event".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: serde_json::json!({"event":"noop.event"}).to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("stale replay should succeed")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("response item");
+    assert_eq!(replay.event_id, seeded.event_id);
+    assert_eq!(replay.status, "processed");
+
+    let refreshed = webhook_events::Entity::find_by_id(seeded.event_id)
+        .one(&txn)
+        .await
+        .expect("query refreshed row")
+        .expect("row exists");
+    assert_eq!(refreshed.status, Some(WebhookStatus::Processed));
+
+    txn.rollback().await.ok();
+}
+
+/// Duplicate provider_event_id can safely retry when the first processing attempt failed.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and schema with provider_event_id (run generate.ps1 after schema)"]
+async fn integration_webhook_duplicate_provider_event_id_failed_can_retry() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_duplicate_provider_event_id_failed_can_retry",
+    ) {
+        return;
+    }
+
+    use core_db_entities::entity::payment_intents;
+    use core_db_entities::entity::webhook_events;
+    use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let razorpay_order_id = format!(
+        "order_peid_failed_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let payment_id = format!(
+        "pay_peid_failed_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let provider_event_id = format!(
+        "evt_peid_failed_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let payload = serde_json::json!({
+        "event": "payment.captured",
+        "payload": {
+            "payment": {
+                "entity": {
+                    "id": payment_id,
+                    "order_id": razorpay_order_id,
+                    "amount": 18_250,
+                    "currency": "INR"
+                }
+            }
+        }
+    });
+
+    let first = core_operations::handlers::webhooks::ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: format!("razorpay:peid-failed:first:{provider_event_id}"),
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: Some(provider_event_id.clone()),
+        }),
+    )
+    .await
+    .expect("first ingest should store failed webhook")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("first response item");
+    assert_eq!(first.status, "failed");
+
+    let intent = payment_intents::ActiveModel {
+        intent_id: ActiveValue::NotSet,
+        razorpay_order_id: ActiveValue::Set(razorpay_order_id.clone()),
+        order_id: ActiveValue::Set(None),
+        active_order_id: ActiveValue::NotSet,
+        user_id: ActiveValue::Set(None),
+        amount_paise: ActiveValue::Set(18_250),
+        currency: ActiveValue::Set(Some("INR".to_string())),
+        status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
+        razorpay_payment_id: ActiveValue::Set(None),
+        metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(None),
+        expires_at: ActiveValue::Set(chrono::Utc::now()),
+    };
+    let inserted = intent.insert(&txn).await.expect("insert replay intent");
+
+    let second = core_operations::handlers::webhooks::ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: format!("razorpay:peid-failed:second:{provider_event_id}"),
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: Some(provider_event_id.clone()),
+        }),
+    )
+    .await
+    .expect("failed provider_event replay should succeed")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("second response item");
+    assert_eq!(second.status, "processed");
+    assert_eq!(second.event_id, first.event_id);
+
+    let rows = webhook_events::Entity::find()
+        .filter(webhook_events::Column::ProviderEventId.eq(provider_event_id.as_str()))
+        .all(&txn)
+        .await
+        .expect("query webhook rows");
+    assert_eq!(rows.len(), 1);
+
+    let updated_intent = payment_intents::Entity::find_by_id(inserted.intent_id)
+        .one(&txn)
+        .await
+        .expect("query updated intent")
+        .expect("intent exists");
+    assert_eq!(
+        updated_intent.status,
+        core_db_entities::entity::sea_orm_active_enums::Status::Processed
+    );
+    assert_eq!(
+        updated_intent.razorpay_payment_id.as_deref(),
+        Some(payment_id.as_str())
+    );
+
+    txn.rollback().await.ok();
+}
+
+/// Internal replay-by-id path supports admin-safe reprocessing of failed events.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_webhook_internal_replay_by_id_reprocesses_failed() {
+    if !provider_test_gate::should_run_provider_dependent_test(
+        "integration_webhook_internal_replay_by_id_reprocesses_failed",
+    ) {
+        return;
+    }
+
+    use core_db_entities::entity::payment_intents;
+    use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let razorpay_order_id = format!(
+        "order_internal_replay_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let payment_id = format!(
+        "pay_internal_replay_{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let webhook_id = format!(
+        "razorpay:internal-replay:{}",
+        std::time::SystemTime::now().elapsed().unwrap().as_millis()
+    );
+    let payload = serde_json::json!({
+        "event": "payment.captured",
+        "payload": {
+            "payment": {
+                "entity": {
+                    "id": payment_id,
+                    "order_id": razorpay_order_id,
+                    "amount": 21_000,
+                    "currency": "INR"
+                }
+            }
+        }
+    });
+
+    let first = core_operations::handlers::webhooks::ingest_webhook(
+        &txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: webhook_id.clone(),
+            payload_json: payload.to_string(),
+            signature_verified: true,
+            provider_event_id: None,
+        }),
+    )
+    .await
+    .expect("first ingest should record failed")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("first response item");
+    assert_eq!(first.status, "failed");
+
+    let intent = payment_intents::ActiveModel {
+        intent_id: ActiveValue::NotSet,
+        razorpay_order_id: ActiveValue::Set(razorpay_order_id.clone()),
+        order_id: ActiveValue::Set(None),
+        active_order_id: ActiveValue::NotSet,
+        user_id: ActiveValue::Set(None),
+        amount_paise: ActiveValue::Set(21_000),
+        currency: ActiveValue::Set(Some("INR".to_string())),
+        status: ActiveValue::Set(core_db_entities::entity::sea_orm_active_enums::Status::Pending),
+        razorpay_payment_id: ActiveValue::Set(None),
+        metadata: ActiveValue::Set(None),
+        gateway_fee_paise: ActiveValue::Set(None),
+        gateway_tax_paise: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(None),
+        expires_at: ActiveValue::Set(chrono::Utc::now()),
+    };
+    let inserted = intent.insert(&txn).await.expect("insert replay intent");
+
+    let replay = core_operations::handlers::webhooks::ingest_webhook::replay_webhook_by_id(
+        &txn,
+        &webhook_id,
+    )
+    .await
+    .expect("internal replay by id should succeed")
+    .into_inner()
+    .items
+    .into_iter()
+    .next()
+    .expect("replay response item");
+    assert_eq!(replay.status, "processed");
+    assert_eq!(replay.event_id, first.event_id);
+
+    let updated_intent = payment_intents::Entity::find_by_id(inserted.intent_id)
+        .one(&txn)
+        .await
+        .expect("query updated intent")
+        .expect("intent exists");
+    assert_eq!(
+        updated_intent.status,
+        core_db_entities::entity::sea_orm_active_enums::Status::Processed
+    );
+    assert_eq!(
+        updated_intent.razorpay_payment_id.as_deref(),
+        Some(payment_id.as_str())
     );
 
     txn.rollback().await.ok();

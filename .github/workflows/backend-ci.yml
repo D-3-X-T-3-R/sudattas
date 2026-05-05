@@ -14,6 +14,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  RUST_TOOLCHAIN: nightly-2026-03-30
 
 jobs:
   # ============================================================================
@@ -42,8 +43,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain@master
       with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
         components: rustfmt, clippy
 
     - name: Cache cargo registry
@@ -105,8 +107,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain@master
       with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
         components: rustfmt
 
     - name: Cache dependencies
@@ -140,8 +143,13 @@ jobs:
         ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations --verify-idempotent
 
     - name: Regenerate entities and verify
+      env:
+        RUSTFLAGS: ""
+        RUSTDOCFLAGS: ""
+        CARGO_ENCODED_RUSTFLAGS: ""
       run: |
-        cargo install sea-orm-cli --locked
+        unset RUSTFLAGS RUSTDOCFLAGS CARGO_ENCODED_RUSTFLAGS
+        cargo install sea-orm-cli --version 1.1.20 --locked
         sea-orm-cli generate entity \
           -u "mysql://root:test_password@127.0.0.1:3306/SUDATTAS" \
           -o backend/core_db_entities/src/entity \
@@ -149,7 +157,7 @@ jobs:
           --date-time-crate chrono \
           --max-connections 1
         if ! git diff --exit-code backend/core_db_entities/src/entity; then
-          echo "::error::Entity files are out of sync with schema. Run: cargo install sea-orm-cli --locked && sea-orm-cli generate entity -u 'mysql://root:test_password@127.0.0.1:3306/SUDATTAS' -o backend/core_db_entities/src/entity --with-serde both --date-time-crate chrono --max-connections 1"
+          echo "::error::Entity files are out of sync with schema. Run: cargo install sea-orm-cli --version 1.1.20 --locked && sea-orm-cli generate entity -u 'mysql://root:test_password@127.0.0.1:3306/SUDATTAS' -o backend/core_db_entities/src/entity --with-serde both --date-time-crate chrono --max-connections 1"
           exit 1
         fi
 
@@ -163,8 +171,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain@master
       with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
         components: rustfmt
 
     - name: Cache dependencies
@@ -214,8 +223,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain@master
       with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
         components: rustfmt
 
     - name: Cache dependencies
@@ -296,8 +306,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain@master
       with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
         components: rustfmt
 
     - name: Cache dependencies
@@ -407,7 +418,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
 
     - name: Install cargo-audit
       run: cargo install cargo-audit
@@ -471,7 +484,9 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
 
     - name: Install cargo-outdated
       run: cargo install cargo-outdated

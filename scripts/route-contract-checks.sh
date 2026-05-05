@@ -57,7 +57,9 @@ assert_products_shape() {
 const fs = require("fs");
 const json = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 if (!Array.isArray(json.products)) throw new Error("products must be an array");
-if (json.error !== null) throw new Error("products.error must be null");
+if (json.error !== null) {
+  throw new Error(`products.error must be null; full response: ${JSON.stringify(json)}`);
+}
 if (json.products.length > 0) {
   const p = json.products[0];
   if (typeof p.id !== "string") throw new Error("product.id must be string");

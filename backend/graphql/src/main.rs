@@ -136,6 +136,40 @@ fn status_from_gql_code(code: GqlCode) -> StatusCode {
     }
 }
 
+const CORS_ALLOWED_HEADERS: &[&str] = &[
+    "content-type",
+    "authorization",
+    "x-session-id",
+    "x-request-id",
+    "idempotency-key",
+    "x-client-action",
+    "x-guest-session-id",
+    "x-internal-auth",
+    "x-customer-user-id",
+];
+
+const CORS_ALLOWED_METHODS: &[&str] = &["GET", "POST", "OPTIONS"];
+
+fn build_cors(allowed_origins: Option<&[String]>) -> warp::filters::cors::Builder {
+    let base = warp::cors()
+        .allow_headers(CORS_ALLOWED_HEADERS.to_vec())
+        .allow_methods(CORS_ALLOWED_METHODS.to_vec());
+
+    match allowed_origins {
+        Some(origins) if !origins.is_empty() => origins
+            .iter()
+            .fold(base.allow_credentials(true), |cors, origin| {
+                cors.allow_origin(origin.as_str())
+            }),
+        _ => {
+            warn!(
+                "ALLOWED_ORIGINS is not configured; using permissive CORS only because strict startup validation is disabled"
+            );
+            base.allow_any_origin().allow_credentials(false)
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
@@ -254,21 +288,7 @@ async fn main() {
         "Rate limiter configured"
     );
 
-    let cors = warp::cors()
-        .allow_any_origin()
-        .allow_credentials(true)
-        .allow_headers(vec![
-            "content-type",
-            "authorization",
-            "x-session-id",
-            "x-request-id",
-            "idempotency-key",
-            "x-client-action",
-            "x-guest-session-id",
-            "x-internal-auth",
-            "x-customer-user-id",
-        ])
-        .allow_methods(vec!["GET", "POST", "OPTIONS"]);
+    let cors = build_cors(startup.allowed_origins.as_deref());
 
     // Liveness: GET / — process is up (orchestrators use this for restart decisions).
     let load_balancer_health_check = warp::get().and(warp::path::end()).map(|| {
@@ -835,6 +855,10 @@ async fn handle_auth_rejection(
         graphql::metrics::record_auth_rejection_total("csrf");
         return Ok(reply::with_status("FORBIDDEN", StatusCode::FORBIDDEN).into_response());
     }
+    if err.find::<warp::filters::cors::CorsForbidden>().is_some() {
+        graphql::metrics::record_auth_rejection_total("cors");
+        return Ok(reply::with_status("FORBIDDEN", StatusCode::FORBIDDEN).into_response());
+    }
     if err.find::<RateLimited>().is_some() {
         graphql::metrics::record_auth_rejection_total("rate_limited");
         return Ok(reply::with_header(
@@ -859,4 +883,74 @@ async fn handle_auth_rejection(
         reply::with_status("INTERNAL_SERVER_ERROR", StatusCode::INTERNAL_SERVER_ERROR)
             .into_response(),
     )
+}
+
+#[cfg(test)]
+mod cors_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn cors_allows_configured_origin_with_credentials() {
+        let origins = vec!["https://app.example.com".to_string()];
+        let route = warp::any()
+            .map(warp::reply)
+            .with(build_cors(Some(&origins)));
+        let response = warp::test::request()
+            .method("OPTIONS")
+            .header("origin", "https://app.example.com")
+            .header("access-control-request-method", "POST")
+            .reply(&route)
+            .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()["access-control-allow-origin"],
+            "https://app.example.com"
+        );
+        assert_eq!(
+            response.headers()["access-control-allow-credentials"],
+            "true"
+        );
+    }
+
+    #[tokio::test]
+    async fn cors_rejects_unconfigured_origin() {
+        let origins = vec!["https://app.example.com".to_string()];
+        let route = warp::any()
+            .map(warp::reply)
+            .with(build_cors(Some(&origins)));
+        let response = warp::test::request()
+            .method("OPTIONS")
+            .header("origin", "https://evil.example")
+            .header("access-control-request-method", "POST")
+            .reply(&route)
+            .await;
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(response
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn permissive_non_strict_fallback_does_not_enable_credentials() {
+        let route = warp::any().map(warp::reply).with(build_cors(None));
+        let response = warp::test::request()
+            .method("OPTIONS")
+            .header("origin", "https://random.example")
+            .header("access-control-request-method", "POST")
+            .reply(&route)
+            .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()["access-control-allow-origin"],
+            "https://random.example"
+        );
+        assert!(response
+            .headers()
+            .get("access-control-allow-credentials")
+            .is_none());
+    }
 }

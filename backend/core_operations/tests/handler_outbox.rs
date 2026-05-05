@@ -291,6 +291,115 @@ async fn process_pending_outbox_events_one_success_returns_one() {
     );
 }
 
+/// Stale client_verified rows are reclaimed and processed so crash windows do not stall forever.
+#[tokio::test]
+async fn process_pending_outbox_events_reclaims_stale_client_verified() {
+    use core_db_entities::entity::outbox_events;
+    use core_db_entities::entity::sea_orm_active_enums::Status as OutboxStatus;
+    use core_operations::procedures::outbox_worker::process_pending_outbox_events;
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
+
+    let _guard = OutboxDeliverFailGuard::clear();
+    let now = chrono::Utc::now();
+    let row = outbox_events::Model {
+        event_id: 2,
+        event_type: "OrderPlaced".to_string(),
+        aggregate_type: "order".to_string(),
+        aggregate_id: "1002".to_string(),
+        payload: serde_json::json!({ "order_id": 1002 }),
+        status: OutboxStatus::ClientVerified,
+        created_at: now - chrono::Duration::minutes(60),
+        published_at: Some(now - chrono::Duration::minutes(25)),
+    };
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![row]])
+        .append_exec_results(vec![
+            // reclaim stale client_verified -> client_verified (new published_at)
+            MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            },
+            // mark client_verified -> processed
+            MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            },
+        ])
+        .into_connection();
+
+    let count = process_pending_outbox_events(&db, 5)
+        .await
+        .expect("process stale client_verified");
+    assert_eq!(count, 1);
+
+    let logs = db.into_transaction_log();
+    let sql: Vec<String> = logs
+        .iter()
+        .flat_map(|txn| {
+            txn.statements()
+                .iter()
+                .map(|stmt| stmt.sql.to_ascii_lowercase())
+        })
+        .collect();
+    let reclaim_stmt = sql
+        .iter()
+        .find(|s| {
+            s.contains("update outboxevents")
+                && s.contains("set status = 'client_verified'")
+                && s.contains("date_sub(utc_timestamp(), interval ? minute)")
+        })
+        .expect("stale reclaim update statement");
+    assert!(
+        reclaim_stmt.contains("status = 'client_verified'"),
+        "reclaim path must explicitly allow stale client_verified"
+    );
+}
+
+/// Fresh client_verified rows must not be stolen; they are only reclaimable after timeout.
+#[tokio::test]
+async fn process_pending_outbox_events_does_not_reclaim_fresh_client_verified() {
+    use core_db_entities::entity::outbox_events;
+    use core_db_entities::entity::sea_orm_active_enums::Status as OutboxStatus;
+    use core_operations::procedures::outbox_worker::process_pending_outbox_events;
+    use sea_orm::{DatabaseBackend, MockDatabase};
+
+    let _guard = OutboxDeliverFailGuard::clear();
+    let now = chrono::Utc::now();
+    let row = outbox_events::Model {
+        event_id: 3,
+        event_type: "OrderPlaced".to_string(),
+        aggregate_type: "order".to_string(),
+        aggregate_id: "1003".to_string(),
+        payload: serde_json::json!({ "order_id": 1003 }),
+        status: OutboxStatus::ClientVerified,
+        created_at: now - chrono::Duration::minutes(60),
+        published_at: Some(now),
+    };
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![row]])
+        .into_connection();
+
+    let count = process_pending_outbox_events(&db, 5)
+        .await
+        .expect("process fresh client_verified");
+    assert_eq!(count, 0, "fresh claimed rows must not be reclaimed early");
+
+    let logs = db.into_transaction_log();
+    let update_count = logs
+        .iter()
+        .flat_map(|txn| txn.statements().iter())
+        .filter(|stmt| {
+            stmt.sql
+                .to_ascii_lowercase()
+                .contains("update outboxevents")
+        })
+        .count();
+    assert_eq!(
+        update_count, 0,
+        "fresh client_verified row must not be updated/reclaimed"
+    );
+}
+
 /// Delivery failure path: claim once, requeue to Pending, never mark Processed, return 0 processed.
 #[tokio::test]
 async fn process_pending_outbox_events_delivery_fail_claims_once_requeues_and_returns_zero_processed(
@@ -354,7 +463,7 @@ async fn process_pending_outbox_events_delivery_fail_claims_once_requeues_and_re
         .filter(|s| {
             s.contains("update outboxevents")
                 && s.contains("set status = 'client_verified'")
-                && s.contains("and status = 'pending'")
+                && s.contains("status = 'pending'")
         })
         .count();
     let requeue_updates = sql

@@ -22,6 +22,43 @@ type PaymentIntentRow = {
   status: string;
 };
 
+const ACTIVE_PAYMENT_INTENT_STATUSES = new Set([
+  "pending",
+  "client_verified",
+  "needs_review",
+]);
+
+function isValidRazorpayOrderId(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().startsWith("order_");
+}
+
+function parseIntentId(value: string | undefined): number {
+  if (!value) return 0;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function pickCheckoutPaymentIntent(
+  orderId: string,
+  intents: PaymentIntentRow[] | undefined
+): PaymentIntentRow | null {
+  if (!intents?.length) return null;
+  const sorted = intents
+    .filter((row) => row?.orderId === orderId)
+    .slice()
+    .sort((a, b) => parseIntentId(b.intentId) - parseIntentId(a.intentId));
+  if (!sorted.length) return null;
+
+  const active = sorted.find(
+    (row) =>
+      ACTIVE_PAYMENT_INTENT_STATUSES.has((row.status ?? "").toLowerCase()) &&
+      isValidRazorpayOrderId(row.razorpayOrderId)
+  );
+  if (active) return active;
+
+  return sorted.find((row) => isValidRazorpayOrderId(row.razorpayOrderId)) ?? null;
+}
+
 const PLACE_ORDER_MUTATION = `mutation PlaceOrder($order: NewOrder!) {
   placeOrder(order: $order) {
     orderId
@@ -137,16 +174,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const paymentIntent = paymentResult.data?.getPaymentIntent?.[0];
-  if (!paymentIntent?.razorpayOrderId || !paymentIntent?.razorpayKeyId) {
+  const paymentIntent = pickCheckoutPaymentIntent(
+    order.orderId,
+    paymentResult.data?.getPaymentIntent
+  );
+  if (!paymentIntent?.razorpayKeyId || !isValidRazorpayOrderId(paymentIntent.razorpayOrderId)) {
     return apiError(
-      "Payment intent is missing Razorpay details",
+      "Payment intent is missing a valid Razorpay order ID",
       502,
       "PAYMENT_PROVIDER_ERROR"
     );
   }
   const normalizedIntent = {
     ...paymentIntent,
+    razorpayOrderId: paymentIntent.razorpayOrderId.trim(),
     razorpayKeyId: paymentIntent.razorpayKeyId,
     currency: paymentIntent.currency ?? "INR",
   };

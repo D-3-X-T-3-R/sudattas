@@ -33,6 +33,10 @@ const FINAL_PAYMENT_STATES = new Set([
   "needs_review",
 ]);
 
+function isValidRazorpayOrderId(value: string): boolean {
+  return value.trim().startsWith("order_");
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -175,6 +179,13 @@ export function useRazorpayCheckout() {
         return;
       }
       const intent = parsed.data;
+      if (!isValidRazorpayOrderId(intent.razorpayOrderId)) {
+        setPaymentMessageWithAnnounce(
+          "Invalid Razorpay order ID. Please retry checkout.",
+          "assertive"
+        );
+        return;
+      }
       await loadRazorpayScript();
       const paymentOrderId = intent.orderId;
       const verifyKey = start?.idempotency?.verifyKey;

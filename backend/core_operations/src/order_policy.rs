@@ -24,6 +24,38 @@ pub fn return_window_days() -> i64 {
     parse_positive_i64_env("RETURN_WINDOW_DAYS", 7)
 }
 
+pub fn worker_reclaim_timeout_minutes() -> i64 {
+    parse_positive_i64_env("WORKER_RECLAIM_TIMEOUT_MINUTES", 12)
+}
+
+pub fn shipment_booking_reclaim_timeout_minutes() -> i64 {
+    parse_positive_i64_env(
+        "SHIPMENT_BOOKING_RECLAIM_TIMEOUT_MINUTES",
+        worker_reclaim_timeout_minutes(),
+    )
+}
+
+pub fn outbox_reclaim_timeout_minutes() -> i64 {
+    parse_positive_i64_env(
+        "OUTBOX_RECLAIM_TIMEOUT_MINUTES",
+        worker_reclaim_timeout_minutes(),
+    )
+}
+
+pub fn refund_reclaim_timeout_minutes() -> i64 {
+    parse_positive_i64_env(
+        "REFUND_RECLAIM_TIMEOUT_MINUTES",
+        worker_reclaim_timeout_minutes(),
+    )
+}
+
+pub fn webhook_reclaim_timeout_minutes() -> i64 {
+    parse_positive_i64_env(
+        "WEBHOOK_RECLAIM_TIMEOUT_MINUTES",
+        worker_reclaim_timeout_minutes(),
+    )
+}
+
 pub fn cancel_window_deadline(order_created_at: DateTime<Utc>) -> DateTime<Utc> {
     order_created_at + Duration::hours(cancel_window_hours())
 }
