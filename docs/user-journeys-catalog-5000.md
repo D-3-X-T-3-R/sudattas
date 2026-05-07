@@ -6,6 +6,7 @@ Status: Extended planning catalog (does not replace the 220-row CI blueprint)
 ## Scope
 - Includes 5,000 unique journey scenarios focused on login, account, wishlist, order tracking, refunds, and expanded admin operations.
 - Generated with matrix-based permutations plus strict uniqueness validation.
+- Real provider-call scenarios (Razorpay/Shiprocket live credentials, live webhooks, provider side effects) are maintained in `docs/user-journeys-provider-live.md` and are excluded from default CI runs.
 
 | ID | Domain | Journey | User Path | Expected Result |
 |---|---|---|---|---|

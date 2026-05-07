@@ -27,6 +27,17 @@ Open [http://localhost:3000](http://localhost:3000). The **admin panel** is at [
 - `npm run build` - production build
 - `npm run start` - run production build
 - `npm run lint` - ESLint
+- `npm run test` - unit/integration tests
+- `npm run test:e2e:critical` - critical mocked commerce Playwright journey (provider-safe)
+- `npm run test:e2e:journeys` - journey matrix Playwright suite (provider-safe by default)
+
+### E2E safety defaults
+
+- Default CI E2E is mock/offline-safe for external providers.
+- Real provider flows (Razorpay/Shiprocket live calls or live webhook side effects) are excluded by default.
+- Provider-live runs are opt-in only and require:
+  - `RUN_LIVE_PROVIDER_JOURNEYS=1`
+  - `PROVIDER_LIVE_TEST_CONFIRM=I_UNDERSTAND_THIS_HITS_REAL_PROVIDERS`
 
 ## Environment
 
@@ -36,7 +47,7 @@ See `.env.example`. Key variables:
 - `NEXT_PUBLIC_SITE_URL` - public site URL used for metadata, sitemap and robots
 - `GRAPHQL_URL` - server-only GraphQL endpoint override for Next.js API/auth routes
 - `STOREFRONT_ORIGIN` - server-side origin header for session-authenticated GraphQL calls
-- `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - required for Google NextAuth sign-in
+- `AUTH_SECRET` (or `NEXTAUTH_SECRET`), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - required for Google NextAuth sign-in
 - `ADMIN_ALLOWED_EMAILS` - comma-separated admin allowlist for `/imtheboss`
 
 ## Learn more

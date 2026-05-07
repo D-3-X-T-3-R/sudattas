@@ -234,7 +234,7 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
-  secret: serverEnv.AUTH_SECRET,
+  secret: serverEnv.AUTH_SECRET ?? serverEnv.NEXTAUTH_SECRET,
   callbacks: {
     async signIn({ user, account }) {
       const isAdminFlow =

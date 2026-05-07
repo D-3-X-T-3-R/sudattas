@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:e2e:critical": "node -e \"const {spawnSync}=require('node:child_process'); const env={...process.env, PW_DESKTOP:'1'}; const result=spawnSync('npx playwright test tests/e2e/critical-commerce.spec.ts',{stdio:'inherit',env,shell:true}); process.exit(result.status ?? 1);\"",
+    "test:e2e:critical": "node -e \"const {spawnSync}=require('node:child_process'); const port=process.env.PORT||'3000'; const base=process.env.PLAYWRIGHT_BASE_URL||('http://127.0.0.1:'+port); const secret=process.env.NEXTAUTH_SECRET||process.env.AUTH_SECRET||'ci-test-nextauth-secret-at-least-32-chars'; const env={...process.env, PW_DESKTOP:'1', PLAYWRIGHT_BASE_URL:base, NEXTAUTH_URL:process.env.NEXTAUTH_URL||base, NEXTAUTH_SECRET:secret, AUTH_SECRET:secret}; const result=spawnSync('npx playwright test tests/e2e/critical-commerce.spec.ts',{stdio:'inherit',env,shell:true}); process.exit(result.status ?? 1);\"",
     "test:e2e:journeys": "playwright test tests/e2e/journey-paths.spec.ts"
   },
   "dependencies": {

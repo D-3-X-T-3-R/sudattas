@@ -134,6 +134,9 @@ jobs:
           RATE_LIMIT_PER_MINUTE: "300"
           OAUTH_DOMAIN: https://accounts.google.com/
           OAUTH_AUDIENCE: https://www.googleapis.com/oauth2/v3/tokeninfo
+          AUTH_SECRET: ci-test-nextauth-secret-at-least-32-chars
+          NEXTAUTH_SECRET: ci-test-nextauth-secret-at-least-32-chars
+          NEXTAUTH_URL: http://127.0.0.1:3000
           NEXT_PUBLIC_GRAPHQL_URL: http://127.0.0.1:8080/v2
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
           STOREFRONT_ORIGIN: http://127.0.0.1:3000

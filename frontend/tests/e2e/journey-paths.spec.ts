@@ -25,6 +25,18 @@ const DEFERRED_IDS = new Set(["UJ-204", "UJ-205", "UJ-206", "UJ-207"]);
 const ROUTE_STATUS_OK = new Set([200, 301, 302, 303, 307, 308, 401, 403, 404]);
 const API_STATUS_OK = new Set([200, 201, 204, 400, 401, 403, 404, 405, 409, 422, 429]);
 const REQUIRE_BEHAVIOR_ASSERTIONS = process.env.PW_REQUIRE_BEHAVIOR_ASSERTIONS !== "0";
+// Default CI is provider-safe. Real provider journeys are opt-in only.
+const LIVE_PROVIDER_CONFIRMATION =
+  "I_UNDERSTAND_THIS_HITS_REAL_PROVIDERS";
+const RUN_LIVE_PROVIDER_JOURNEYS = process.env.RUN_LIVE_PROVIDER_JOURNEYS === "1";
+const PROVIDER_LIVE_TEST_CONFIRM = process.env.PROVIDER_LIVE_TEST_CONFIRM?.trim();
+const INCLUDE_PROVIDER_LIVE_JOURNEYS =
+  RUN_LIVE_PROVIDER_JOURNEYS && PROVIDER_LIVE_TEST_CONFIRM === LIVE_PROVIDER_CONFIRMATION;
+if (RUN_LIVE_PROVIDER_JOURNEYS && !INCLUDE_PROVIDER_LIVE_JOURNEYS) {
+  throw new Error(
+    "RUN_LIVE_PROVIDER_JOURNEYS=1 requires PROVIDER_LIVE_TEST_CONFIRM=I_UNDERSTAND_THIS_HITS_REAL_PROVIDERS"
+  );
+}
 
 function parseSectionFilter(): Set<number> | null {
   const raw = process.env.JOURNEY_SECTIONS?.trim();
@@ -120,6 +132,12 @@ function parseRows(): JourneyRow[] {
   }
 
   return [...unique.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function isProviderLiveRow(row: JourneyRow): boolean {
+  const text = `${row.journey} ${row.sitePath} ${row.endpoint}`.toLowerCase();
+  if (text.includes("@provider-live")) return true;
+  return false;
 }
 
 function journeySeed(id: string): JourneySeed {
@@ -747,9 +765,12 @@ async function runScenario(row: JourneyRow, page: Page, request: APIRequestConte
 
 const rows = parseRows();
 const sectionFilter = parseSectionFilter();
+const providerSafeRows = INCLUDE_PROVIDER_LIVE_JOURNEYS
+  ? rows
+  : rows.filter((row) => !isProviderLiveRow(row));
 const activeRows = sectionFilter
-  ? rows.filter((r) => r.section !== undefined && sectionFilter.has(r.section))
-  : rows;
+  ? providerSafeRows.filter((r) => r.section !== undefined && sectionFilter.has(r.section))
+  : providerSafeRows;
 
 const coreRows = rows.filter((r) => r.id.startsWith("UJ-"));
 const extendedRows = rows.filter((r) => r.id.startsWith("UJX-"));
@@ -760,6 +781,10 @@ test("journey catalogs exist and matrix rows parse", async () => {
   expect(coreRows.length).toBeGreaterThanOrEqual(220);
   expect(extendedRows.length).toBeGreaterThanOrEqual(5000);
   expect(activeRows.length).toBeGreaterThan(0);
+  if (!INCLUDE_PROVIDER_LIVE_JOURNEYS) {
+    const leaked = activeRows.find((row) => isProviderLiveRow(row));
+    expect(leaked, "provider-live journeys must be excluded by default CI").toBeUndefined();
+  }
 });
 
 for (const row of activeRows) {
