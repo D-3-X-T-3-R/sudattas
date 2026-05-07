@@ -9,6 +9,8 @@ on:
       - 'docs/user-journeys-catalog-5000.md'
       - 'docs/user-journeys-provider-live.md'
       - 'scripts/check-user-journeys-blueprint.mjs'
+      - 'scripts/check-provider-safe-journey-catalogs.mjs'
+      - 'scripts/check-journey-catalog-mapping.mjs'
       - '.github/workflows/frontend-ci.yml'
   pull_request:
     branches: [ main, master, develop ]
@@ -18,6 +20,8 @@ on:
       - 'docs/user-journeys-catalog-5000.md'
       - 'docs/user-journeys-provider-live.md'
       - 'scripts/check-user-journeys-blueprint.mjs'
+      - 'scripts/check-provider-safe-journey-catalogs.mjs'
+      - 'scripts/check-journey-catalog-mapping.mjs'
       - '.github/workflows/frontend-ci.yml'
 
 jobs:
@@ -71,6 +75,9 @@ jobs:
 
     - name: Journey provider-safe discipline
       run: node ./scripts/check-provider-safe-journey-catalogs.mjs
+
+    - name: Journey bucket mapping discipline
+      run: node ./scripts/check-journey-catalog-mapping.mjs
 
   critical-browser-e2e:
     name: Critical Browser E2E
