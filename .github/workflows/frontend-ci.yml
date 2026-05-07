@@ -69,6 +69,9 @@ jobs:
     - name: Journey blueprint discipline
       run: node ./scripts/check-user-journeys-blueprint.mjs
 
+    - name: Journey provider-safe discipline
+      run: node ./scripts/check-provider-safe-journey-catalogs.mjs
+
   critical-browser-e2e:
     name: Critical Browser E2E
     runs-on: ubuntu-latest

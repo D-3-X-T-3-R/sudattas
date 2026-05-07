@@ -21,6 +21,10 @@ const DEFAULT_BLUEPRINTS = [
   path.resolve(__dirname, "../../../docs/user-journeys-blueprint.md"),
   path.resolve(__dirname, "../../../docs/user-journeys-catalog-5000.md"),
 ];
+const PROVIDER_LIVE_CATALOG = path.resolve(
+  __dirname,
+  "../../../docs/user-journeys-provider-live.md"
+);
 const DEFERRED_IDS = new Set(["UJ-204", "UJ-205", "UJ-206", "UJ-207"]);
 const ROUTE_STATUS_OK = new Set([200, 301, 302, 303, 307, 308, 401, 403, 404]);
 const API_STATUS_OK = new Set([200, 201, 204, 400, 401, 403, 404, 405, 409, 422, 429]);
@@ -38,6 +42,48 @@ if (RUN_LIVE_PROVIDER_JOURNEYS && !INCLUDE_PROVIDER_LIVE_JOURNEYS) {
   );
 }
 
+const PROVIDER_LIVE_MARKERS = [
+  "@provider-live",
+  "@razorpay-live",
+  "@shiprocket-live",
+  "real razorpay",
+  "real shiprocket",
+  "razorpay live",
+  "shiprocket live",
+  "live webhook",
+  "provider callback",
+  "razorpay capture webhook",
+  "razorpay refund webhook",
+  "shiprocket booking",
+  "shiprocket cancellation",
+  "awb callback",
+] as const;
+
+const CATALOG_FORBIDDEN_PATTERNS = [
+  /@provider-live/i,
+  /@razorpay-live/i,
+  /@shiprocket-live/i,
+  /\breal razorpay\b/i,
+  /\breal shiprocket\b/i,
+  /\blive webhook\b/i,
+  /\bprovider callback\b/i,
+  /\bshiprocket cancellation\b/i,
+  /\bshiprocket booking\b/i,
+  /\bawb callback\b/i,
+  /\brazorpay capture webhook\b/i,
+  /\brazorpay refund webhook\b/i,
+];
+
+const CATALOG_ALLOWED_PROVIDER_CONTEXT =
+  /\b(mock-safe|excluded from default ci|provider-live\.md)\b/i;
+
+type ForbiddenCatalogMatch = {
+  file: string;
+  line: number;
+  text: string;
+  pattern: string;
+};
+
 function parseSectionFilter(): Set<number> | null {
   const raw = process.env.JOURNEY_SECTIONS?.trim();
   if (!raw) return null;
@@ -50,12 +96,19 @@ function parseSectionFilter(): Set<number> | null {
 }
 
 function resolveJourneyFiles(): string[] {
+  const excludeProviderLiveCatalog = (files: string[]) =>
+    INCLUDE_PROVIDER_LIVE_JOURNEYS
+      ? files
+      : files.filter((filePath) => path.normalize(filePath) !== path.normalize(PROVIDER_LIVE_CATALOG));
+
   const fromEnv = process.env.JOURNEY_BLUEPRINT_FILES?.trim();
-  if (!fromEnv) return DEFAULT_BLUEPRINTS.filter((p) => fs.existsSync(p));
-  return fromEnv
+  if (!fromEnv) {
+    return excludeProviderLiveCatalog(DEFAULT_BLUEPRINTS.filter((p) => fs.existsSync(p)));
+  }
+  return excludeProviderLiveCatalog(fromEnv
     .split(",")
     .map((f) => path.resolve(__dirname, "../../../", f.trim()))
-    .filter((p) => fs.existsSync(p));
+    .filter((p) => fs.existsSync(p)));
 }
 
 function splitMarkdownRow(line: string): string[] | null {
@@ -136,8 +189,29 @@ function parseRows(): JourneyRow[] {
 
 function isProviderLiveRow(row: JourneyRow): boolean {
   const text = `${row.journey} ${row.sitePath} ${row.endpoint}`.toLowerCase();
-  if (text.includes("@provider-live")) return true;
-  return false;
+  return PROVIDER_LIVE_MARKERS.some((marker) => text.includes(marker));
+}
+
+function collectForbiddenCatalogMatches(filePath: string): ForbiddenCatalogMatch[] {
+  if (!fs.existsSync(filePath)) return [];
+  const text = fs.readFileSync(filePath, "utf8");
+  const lines = text.split(/\r?\n/);
+  const findings: ForbiddenCatalogMatch[] = [];
+
+  lines.forEach((line, index) => {
+    for (const pattern of CATALOG_FORBIDDEN_PATTERNS) {
+      if (!pattern.test(line)) continue;
+      if (CATALOG_ALLOWED_PROVIDER_CONTEXT.test(line)) continue;
+      findings.push({
+        file: path.basename(filePath),
+        line: index + 1,
+        text: line.trim(),
+        pattern: pattern.toString(),
+      });
+    }
+  });
+
+  return findings;
 }
 
 function journeySeed(id: string): JourneySeed {
@@ -785,6 +859,16 @@ test("journey catalogs exist and matrix rows parse", async () => {
     const leaked = activeRows.find((row) => isProviderLiveRow(row));
     expect(leaked, "provider-live journeys must be excluded by default CI").toBeUndefined();
   }
+});
+
+test("default catalogs block live-provider journey leakage", async () => {
+  const findings = DEFAULT_BLUEPRINTS.flatMap((filePath) =>
+    collectForbiddenCatalogMatches(filePath)
+  );
+  const summary = findings
+    .map((f) => `${f.file}:${f.line} (${f.pattern}) -> ${f.text}`)
+    .join("\n");
+  expect(findings, summary || "No forbidden live-provider terms found.").toEqual([]);
 });
 
 for (const row of activeRows) {
