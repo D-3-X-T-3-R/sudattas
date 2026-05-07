@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Kicker } from "@/components/ui/typography";
 
 interface FooterProps {
-  goTo: (id: string, instant?: boolean) => void;
+  goTo?: (id: string, instant?: boolean) => void;
 }
 
 export function Footer({ goTo }: FooterProps) {
@@ -35,22 +35,40 @@ export function Footer({ goTo }: FooterProps) {
           <Kicker className="text-[var(--color-ink)]">Shop</Kicker>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-muted)]">
             <li>
-              <button
-                type="button"
-                onClick={() => goTo("collections", false)}
-                className="transition-colors hover:text-[var(--color-accent-gold)]"
-              >
-                Collections
-              </button>
+              {goTo ? (
+                <button
+                  type="button"
+                  onClick={() => goTo("collections", false)}
+                  className="transition-colors hover:text-[var(--color-accent-gold)]"
+                >
+                  Collections
+                </button>
+              ) : (
+                <Link
+                  href="/collections"
+                  className="transition-colors hover:text-[var(--color-accent-gold)]"
+                >
+                  Collections
+                </Link>
+              )}
             </li>
             <li>
-              <button
-                type="button"
-                onClick={() => goTo("shop", false)}
-                className="transition-colors hover:text-[var(--color-accent-gold)]"
-              >
-                New arrivals
-              </button>
+              {goTo ? (
+                <button
+                  type="button"
+                  onClick={() => goTo("shop", false)}
+                  className="transition-colors hover:text-[var(--color-accent-gold)]"
+                >
+                  New arrivals
+                </button>
+              ) : (
+                <Link
+                  href="/#shop"
+                  className="transition-colors hover:text-[var(--color-accent-gold)]"
+                >
+                  New arrivals
+                </Link>
+              )}
             </li>
             <li>
               <Link
@@ -60,10 +78,18 @@ export function Footer({ goTo }: FooterProps) {
                 Styling support
               </Link>
             </li>
+            <li>
+              <Link
+                href="/about"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                About Sudatta&apos;s
+              </Link>
+            </li>
           </ul>
         </div>
         <div>
-          <Kicker className="text-[var(--color-ink)]">Services</Kicker>
+          <Kicker className="text-[var(--color-ink)]">Policies</Kicker>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-muted)]">
             <li>
               <Link
@@ -95,6 +121,30 @@ export function Footer({ goTo }: FooterProps) {
                 className="transition-colors hover:text-[var(--color-accent-gold)]"
               >
                 Privacy Policy
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/cancellation-policy"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                Cancellation Policy
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/payment-guide"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                COD &amp; Prepaid Guide
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/size-fit-guide"
+                className="transition-colors hover:text-[var(--color-accent-gold)]"
+              >
+                Size &amp; Fit Guide
               </Link>
             </li>
           </ul>

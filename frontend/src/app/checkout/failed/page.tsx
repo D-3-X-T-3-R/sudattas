@@ -19,7 +19,7 @@ export default async function CheckoutFailedPage({
           We could not complete your payment
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-[#615A50]">
-          Your order was not confirmed. Your selected bag items remain available for retry, and no shipment is created until payment verification succeeds.
+          Payment was not completed. You can retry safely.
         </p>
         {reason ? (
           <p className="mt-4 rounded-xl bg-[#FFFDF8] px-3 py-2 text-xs text-[#8B816D]">

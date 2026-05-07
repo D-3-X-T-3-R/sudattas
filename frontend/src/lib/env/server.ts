@@ -9,6 +9,7 @@ const serverEnvSchema = z.object({
   CORE_OPS_METRICS_URL: z.string().url().optional(),
   STOREFRONT_ORIGIN: z.string().url().optional(),
   AUTH_SECRET: z.string().min(1).optional(),
+  NEXTAUTH_SECRET: z.string().min(1).optional(),
   NEXTAUTH_URL: z.string().url().optional(),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
@@ -22,6 +23,7 @@ const parsed = serverEnvSchema.safeParse({
   CORE_OPS_METRICS_URL: process.env.CORE_OPS_METRICS_URL,
   STOREFRONT_ORIGIN: process.env.STOREFRONT_ORIGIN,
   AUTH_SECRET: process.env.AUTH_SECRET,
+  NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
   NEXTAUTH_URL: process.env.NEXTAUTH_URL,
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
@@ -64,4 +66,3 @@ export function serverStorefrontOrigin(): string | null {
   }
   return storefrontSiteOrigin();
 }
-

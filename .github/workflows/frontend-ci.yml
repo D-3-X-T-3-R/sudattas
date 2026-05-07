@@ -7,7 +7,10 @@ on:
       - 'frontend/**'
       - 'docs/user-journeys-blueprint.md'
       - 'docs/user-journeys-catalog-5000.md'
+      - 'docs/user-journeys-provider-live.md'
       - 'scripts/check-user-journeys-blueprint.mjs'
+      - 'scripts/check-provider-safe-journey-catalogs.mjs'
+      - 'scripts/check-journey-catalog-mapping.mjs'
       - '.github/workflows/frontend-ci.yml'
   pull_request:
     branches: [ main, master, develop ]
@@ -15,7 +18,10 @@ on:
       - 'frontend/**'
       - 'docs/user-journeys-blueprint.md'
       - 'docs/user-journeys-catalog-5000.md'
+      - 'docs/user-journeys-provider-live.md'
       - 'scripts/check-user-journeys-blueprint.mjs'
+      - 'scripts/check-provider-safe-journey-catalogs.mjs'
+      - 'scripts/check-journey-catalog-mapping.mjs'
       - '.github/workflows/frontend-ci.yml'
 
 jobs:
@@ -67,6 +73,12 @@ jobs:
     - name: Journey blueprint discipline
       run: node ./scripts/check-user-journeys-blueprint.mjs
 
+    - name: Journey provider-safe discipline
+      run: node ./scripts/check-provider-safe-journey-catalogs.mjs
+
+    - name: Journey bucket mapping discipline
+      run: node ./scripts/check-journey-catalog-mapping.mjs
+
   critical-browser-e2e:
     name: Critical Browser E2E
     runs-on: ubuntu-latest
@@ -110,6 +122,10 @@ jobs:
       working-directory: ./frontend
       env:
         PW_DISABLE_ARTIFACTS: "1"
+        NEXTAUTH_SECRET: ci-test-nextauth-secret-at-least-32-chars
+        AUTH_SECRET: ci-test-nextauth-secret-at-least-32-chars
+        NEXTAUTH_URL: http://127.0.0.1:3000
+        RUN_LIVE_PROVIDER_JOURNEYS: "0"
       run: npm run test:e2e:critical
 
   journey-e2e:
@@ -243,12 +259,14 @@ jobs:
         OAUTH_DOMAIN: https://accounts.google.com/
         OAUTH_AUDIENCE: https://www.googleapis.com/oauth2/v3/tokeninfo
         INTERNAL_API_SECRET: ci-test-internal-secret
-        AUTH_SECRET: ci-frontend-auth-secret
+        AUTH_SECRET: ci-test-nextauth-secret-at-least-32-chars
+        NEXTAUTH_SECRET: ci-test-nextauth-secret-at-least-32-chars
         ADMIN_ALLOWED_EMAILS: admin@example.com
         NEXTAUTH_URL: http://127.0.0.1:3000
         PLAYWRIGHT_SHARD_INDEX: ${{ matrix.shard_index }}
         PLAYWRIGHT_SHARD_TOTAL: ${{ matrix.shard_total }}
         PW_DISABLE_ARTIFACTS: "1"
+        RUN_LIVE_PROVIDER_JOURNEYS: "0"
       run: |
         set -euo pipefail
         mkdir -p /tmp/backend-logs
@@ -335,5 +353,5 @@ jobs:
         echo "Running Playwright shard ${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL}"
         (
           cd frontend
-          PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npx playwright test tests/e2e/journey-paths.spec.ts --shard=${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL} --reporter=line
+          PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 PLAYWRIGHT_REUSE_EXISTING_SERVER=1 npx playwright test tests/e2e/journey-paths.spec.ts --shard=${PLAYWRIGHT_SHARD_INDEX}/${PLAYWRIGHT_SHARD_TOTAL} --reporter=line
         )

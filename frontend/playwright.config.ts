@@ -5,6 +5,11 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
 const desktopMode = process.env.PW_DESKTOP === "1";
 const ci = Boolean(process.env.CI);
 const disableArtifacts = process.env.PW_DISABLE_ARTIFACTS === "1";
+const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1" || !ci;
+const e2eAuthSecret =
+  process.env.NEXTAUTH_SECRET ??
+  process.env.AUTH_SECRET ??
+  "ci-test-nextauth-secret-at-least-32-chars";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -36,9 +41,15 @@ export default defineConfig({
   ],
   webServer: {
     command: `npm run start -- --hostname 127.0.0.1 --port ${port}`,
+    url: `http://127.0.0.1:${port}`,
     cwd: process.cwd(),
-    port,
-    reuseExistingServer: !ci,
+    reuseExistingServer,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      NEXTAUTH_SECRET: e2eAuthSecret,
+      AUTH_SECRET: e2eAuthSecret,
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? `http://127.0.0.1:${port}`,
+    },
   },
 });

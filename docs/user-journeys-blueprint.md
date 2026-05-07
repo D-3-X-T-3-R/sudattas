@@ -137,10 +137,10 @@ Each journey item is path-oriented and should be interpreted as:
 - Payment verification success.
 - Payment verification signature mismatch.
 - Duplicate verification idempotency.
-- Webhook arrives before client verify.
-- Webhook replay duplicate.
-- Amount mismatch webhook path.
-- Currency mismatch webhook path.
+- Async payment status event arrives before client verify (mock-safe reconciliation).
+- Duplicate async payment status event replay (mock-safe idempotency check).
+- Async payment amount mismatch state path (mock-safe reconciliation check).
+- Async payment currency mismatch state path (mock-safe reconciliation check).
 - Needs-review status path UX.
 - Payment success but order state not updated (recovery path).
 - Payment failure and retry.
@@ -398,10 +398,10 @@ Each journey item is path-oriented and should be interpreted as:
 | UJ-085 | 7 | Payment verification success. | `/checkout/payment` -> verify callback path | GraphQL `verifyRazorpayPayment` mutation |
 | UJ-086 | 7 | Payment verification signature mismatch. | `/checkout/payment` -> verify callback path | GraphQL `verifyRazorpayPayment` mutation |
 | UJ-087 | 7 | Duplicate verification idempotency. | `/checkout/payment` -> verify callback path | GraphQL `verifyRazorpayPayment` mutation |
-| UJ-088 | 7 | Webhook arrives before client verify. | N/A user route (server-side webhook -> backend payment handlers) | Payment webhook endpoint(s), backend payment handlers |
-| UJ-089 | 7 | Webhook replay duplicate. | N/A user route (server-side webhook -> backend payment handlers) | GraphQL `verifyRazorpayPayment` mutation |
-| UJ-090 | 7 | Amount mismatch webhook path. | N/A user route (server-side webhook -> backend payment handlers) | Payment webhook endpoint(s), backend payment handlers |
-| UJ-091 | 7 | Currency mismatch webhook path. | N/A user route (server-side webhook -> backend payment handlers) | Payment webhook endpoint(s), backend payment handlers |
+| UJ-088 | 7 | Simulated async payment status arrives before client verify (mock-safe ordering). | `/checkout/payment` -> status refresh/reconciliation UI | GraphQL `verifyRazorpayPayment` mutation + order status query |
+| UJ-089 | 7 | Simulated duplicate async payment status replay (mock-safe idempotency). | `/checkout/payment` -> status refresh/reconciliation UI | GraphQL `verifyRazorpayPayment` mutation + order status query |
+| UJ-090 | 7 | Simulated payment amount mismatch state path (mock-safe). | `/checkout/payment` -> pending/needs-review messaging path | GraphQL `verifyRazorpayPayment` mutation + order status query |
+| UJ-091 | 7 | Simulated payment currency mismatch state path (mock-safe). | `/checkout/payment` -> pending/needs-review messaging path | GraphQL `verifyRazorpayPayment` mutation + order status query |
 | UJ-092 | 7 | Needs-review status path UX. | `/checkout/confirmation` or order status UI in `/account/orders/[id]` | GraphQL payment mutations + order status queries |
 | UJ-093 | 7 | Payment success but order state not updated (recovery path). | `/checkout/confirmation` + `/account/orders/[id]` recovery path | GraphQL payment mutations + order status queries |
 | UJ-094 | 7 | Payment failure and retry. | `/checkout/payment` (retry flow) | GraphQL payment mutations + order status queries |

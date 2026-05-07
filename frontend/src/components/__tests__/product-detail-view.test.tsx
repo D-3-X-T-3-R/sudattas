@@ -51,10 +51,28 @@ describe("ProductDetailView", () => {
     );
 
     expect(screen.getByRole("button", { name: "M" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: /size & fit guide/i })).toHaveAttribute("href", "/size-fit-guide");
 
     await user.click(screen.getByRole("button", { name: "Increase quantity" }));
     await user.click(screen.getByRole("button", { name: "ADD TO BAG" }));
 
     expect(onAddToCart).toHaveBeenCalledWith(product, 2, "S");
+  });
+
+  it("shows fit guidance copy when standard size variants are unavailable", () => {
+    render(
+      <ProductDetailView
+        product={{
+          ...product,
+          variantStock: [{ sizeId: "free", sizeName: "Free Size", quantity: 4 }],
+        }}
+        wished={false}
+        onToggleWish={vi.fn()}
+        onAddToCart={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/does not use standard size variants/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view size & fit guide/i })).toHaveAttribute("href", "/size-fit-guide");
   });
 });

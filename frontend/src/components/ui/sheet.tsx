@@ -27,18 +27,62 @@ const Sheet = ({
   const titleId = React.useId();
   const closeBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const previousFocusRef = React.useRef<HTMLElement | null>(null);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const getFocusableElements = () => {
+      if (!panelRef.current) return [] as HTMLElement[];
+      const selector = [
+        "a[href]",
+        "button:not([disabled])",
+        "input:not([disabled])",
+        "select:not([disabled])",
+        "textarea:not([disabled])",
+        "[tabindex]:not([tabindex='-1'])",
+      ].join(",");
+      return Array.from(panelRef.current.querySelectorAll<HTMLElement>(selector)).filter(
+        (element) => !element.hasAttribute("aria-hidden")
+      );
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (!active || !panelRef.current?.contains(active)) {
+        event.preventDefault();
+        first.focus();
+        return;
+      }
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
     document.addEventListener("keydown", onKeyDown);
-    window.setTimeout(() => closeBtnRef.current?.focus(), 0);
+    window.setTimeout(() => {
+      const [firstFocusable] = getFocusableElements();
+      (firstFocusable ?? closeBtnRef.current)?.focus();
+    }, 0);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       previousFocusRef.current?.focus();
@@ -58,6 +102,7 @@ const Sheet = ({
             aria-hidden
           />
           <motion.div
+            ref={panelRef}
             initial={{ x: fromX }}
             animate={{ x: 0 }}
             exit={{ x: fromX }}

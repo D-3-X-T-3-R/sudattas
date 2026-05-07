@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { INR } from "@/lib/constants";
 import type { Product } from "@/lib/schemas";
@@ -81,10 +82,29 @@ function SizeSelector({
   selectedSize: string | null;
   setSelectedSize: (value: string) => void;
 }) {
-  if (!hasSizeSelector(product)) return null;
+  if (!hasSizeSelector(product)) {
+    return (
+      <div className="mt-6 rounded-sm border border-[var(--color-line)] bg-[var(--color-line)]/10 p-3 text-sm text-[var(--color-muted)]">
+        <p>
+          This style does not use standard size variants. Fit can vary by fabric, cut, and drape.
+        </p>
+        <Link
+          href="/size-fit-guide"
+          className="mt-2 inline-flex text-sm font-semibold text-[var(--color-ink)] underline"
+        >
+          View Size &amp; Fit Guide
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="mt-6">
-      <div className="text-sm font-semibold text-[var(--color-ink)]">Size <button type="button" className="font-normal text-[var(--color-muted)] underline">Chart</button></div>
+      <div className="text-sm font-semibold text-[var(--color-ink)]">
+        Size{" "}
+        <Link href="/size-fit-guide" className="font-normal text-[var(--color-muted)] underline">
+          Size &amp; Fit Guide
+        </Link>
+      </div>
       <div className="mt-2 flex flex-wrap gap-2">
         {sizeNames.map((sizeName) => {
           const qty = getStockForSize(variantStock, sizeName);

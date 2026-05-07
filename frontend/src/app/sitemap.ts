@@ -4,6 +4,37 @@ import { graphqlBaseUrl } from "@/lib/env/server";
 
 type BackendSitemapUrl = { loc: string; lastmod: string | null };
 
+const PRIVATE_PREFIXES = [
+  "/bag",
+  "/wishlist",
+  "/profile",
+  "/checkout",
+  "/imtheboss",
+  "/api",
+  "/account",
+];
+
+const STATIC_PUBLIC_ROUTES = [
+  "/",
+  "/collections",
+  "/shipping-policy",
+  "/returns-exchanges",
+  "/privacy-policy",
+  "/terms-conditions",
+  "/contact-support",
+  "/about",
+  "/cancellation-policy",
+  "/payment-guide",
+  "/size-fit-guide",
+];
+
+function isIndexablePath(pathname: string): boolean {
+  if (!pathname.startsWith("/")) return false;
+  return !PRIVATE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
 async function fetchBackendSitemapUrls(): Promise<BackendSitemapUrl[]> {
   try {
     const res = await fetch(`${graphqlBaseUrl()}/sitemap.xml`, { cache: "no-store" });
@@ -23,59 +54,50 @@ async function fetchBackendSitemapUrls(): Promise<BackendSitemapUrl[]> {
   }
 }
 
-function normalizeBackendLocToFrontend(loc: string, base: string): string {
+function normalizeBackendLocToPath(loc: string): string | null {
   try {
     const parsed = new URL(loc);
     // Backend SEO currently emits `/products/{slug}` while frontend route is `/product/{idOrSlug}`.
     if (parsed.pathname.startsWith("/products/")) {
-      const tail = parsed.pathname.replace(/^\/products\//, "");
-      return `${base}/product/${tail}`;
+      const tail = parsed.pathname.replace(/^\/products\//, "").trim();
+      return tail ? `/product/${tail}` : null;
     }
-    return `${base}${parsed.pathname}`;
+    return parsed.pathname;
   } catch {
-    return loc;
+    return null;
   }
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
   const now = new Date();
-  const backendUrls = await fetchBackendSitemapUrls();
-  const productUrls: MetadataRoute.Sitemap = backendUrls.map((u) => ({
-    url: normalizeBackendLocToFrontend(u.loc, base),
-    lastModified: u.lastmod ? new Date(u.lastmod) : now,
-    changeFrequency: "daily",
-    priority: 0.9,
+
+  const staticUrls: MetadataRoute.Sitemap = STATIC_PUBLIC_ROUTES.map((route) => ({
+    url: `${base}${route === "/" ? "" : route}`,
+    lastModified: now,
+    changeFrequency: route === "/" ? "daily" : "weekly",
+    priority: route === "/" ? 1 : 0.7,
   }));
 
-  return [
-    {
-      url: `${base}/`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 1,
-    },
-    {
-      url: `${base}/wishlist`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.8,
-    },
-    {
-      url: `${base}/bag`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.8,
-    },
-    {
-      url: `${base}/profile`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.6,
-    },
-    ...productUrls,
-  ];
+  const backendUrls = await fetchBackendSitemapUrls();
+  const productUrls: MetadataRoute.Sitemap = backendUrls
+    .map((entry) => ({
+      path: normalizeBackendLocToPath(entry.loc),
+      lastmod: entry.lastmod,
+    }))
+    .filter((entry): entry is { path: string; lastmod: string | null } => Boolean(entry.path))
+    .filter((entry) => isIndexablePath(entry.path))
+    .map((entry) => ({
+      url: `${base}${entry.path}`,
+      lastModified: entry.lastmod ? new Date(entry.lastmod) : now,
+      changeFrequency: "daily" as const,
+      priority: 0.9,
+    }));
+
+  const deduped = new Map<string, MetadataRoute.Sitemap[number]>();
+  for (const row of [...staticUrls, ...productUrls]) {
+    deduped.set(row.url, row);
+  }
+
+  return [...deduped.values()];
 }
-
-
-

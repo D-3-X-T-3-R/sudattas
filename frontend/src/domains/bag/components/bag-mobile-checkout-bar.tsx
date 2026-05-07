@@ -4,6 +4,7 @@ type BagMobileCheckoutBarProps = {
   selectedSubtotal: number;
   shippingAmount: number;
   selectedCount: number;
+  checkoutLoading?: boolean;
   onCheckout: () => void;
 };
 
@@ -11,6 +12,7 @@ export function BagMobileCheckoutBar({
   selectedSubtotal,
   shippingAmount,
   selectedCount,
+  checkoutLoading = false,
   onCheckout,
 }: BagMobileCheckoutBarProps) {
   const total = selectedSubtotal + shippingAmount;
@@ -22,11 +24,13 @@ export function BagMobileCheckoutBar({
           <p className="font-sans text-base font-bold text-[var(--color-ink)]">{INR.format(total)}</p>
         </div>
         <button
+          type="button"
           onClick={onCheckout}
-          disabled={selectedCount === 0}
+          disabled={selectedCount === 0 || checkoutLoading}
+          aria-busy={checkoutLoading}
           className="flex-1 rounded-full bg-[var(--color-accent-gold)] py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
         >
-          Checkout ({selectedCount})
+          {checkoutLoading ? "Processing..." : `Checkout (${selectedCount})`}
         </button>
       </div>
     </div>
