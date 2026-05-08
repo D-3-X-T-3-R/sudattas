@@ -24,6 +24,7 @@ import { ExploreSection } from "@/components/explore-section";
 import { MenuDrawer } from "@/components/menu-drawer";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
 import { Section } from "@/components/ui/section";
+import { TrustStrip } from "@/components/trust-strip";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
 
@@ -50,7 +51,7 @@ const StorySection = dynamic(() => import("@/components/story-section").then((m)
 const Footer = dynamic(() => import("@/components/footer").then((m) => m.Footer), {
   loading: () => (
     <footer className="border-t border-[var(--color-line)] py-10">
-      <div className="mx-auto max-w-[2000px] px-4">
+      <div className="mx-auto max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
         <div className="h-16 animate-pulse rounded bg-[var(--color-line)]/40" />
       </div>
     </footer>
@@ -121,7 +122,7 @@ export function Storefront() {
           status === "authenticated" ? (
             <Link
               href="/profile"
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-line)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-accent-gold)] hover:text-[var(--color-accent-gold)]"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-gold)] hover:text-[var(--color-green)]"
               aria-label="Open profile"
             >
               <User size={14} />
@@ -131,7 +132,7 @@ export function Storefront() {
             <button
               type="button"
               onClick={() => openLogin()}
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-line)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-accent-gold)] hover:text-[var(--color-accent-gold)]"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-gold)] hover:text-[var(--color-green)]"
               aria-label="Sign in"
             >
               <User size={14} />
@@ -142,10 +143,13 @@ export function Storefront() {
       />
 
       <HeroSection />
+      <Section compact className="pt-5">
+        <TrustStrip />
+      </Section>
 
       {productsError && !productsBannerDismissed && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <div className="mx-auto flex max-w-[2000px] items-start justify-between gap-3">
+          <div className="mx-auto flex max-w-[var(--container-max)] items-start justify-between gap-3 px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
             <p className="min-w-0">
               <strong>Catalog temporarily unavailable.</strong> We could not load products right now. {productsError}
             </p>

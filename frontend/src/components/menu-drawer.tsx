@@ -41,7 +41,7 @@ export function MenuDrawer({
   ];
 
   return (
-    <Sheet open={open} onClose={onClose} title="MENU" side="left">
+    <Sheet open={open} onClose={onClose} title="Menu" side="left">
       <div className="space-y-8">
         <div className="space-y-3">
           {nav.map((x) => (
@@ -54,7 +54,7 @@ export function MenuDrawer({
               }}
               className="flex w-full items-center justify-between border-b border-[var(--color-line)] pb-3 text-left"
             >
-              <span className="text-sm font-semibold text-[var(--color-ink)]">
+              <span className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
                 {x.label}
               </span>
               <ChevronRight className="h-4 w-4 text-[var(--color-muted)]" />
@@ -63,7 +63,7 @@ export function MenuDrawer({
         </div>
 
         <div>
-          <div className="text-[11px] font-semibold tracking-[0.24em] text-[var(--color-muted)]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-muted)]">
             COLLECTIONS
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -76,7 +76,7 @@ export function MenuDrawer({
                   navigateToSection("shop");
                   onClose();
                 }}
-                className="rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-sm hover:bg-white/80"
+                className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] hover:border-[var(--color-gold)] hover:text-[var(--color-green)]"
               >
                 {c.key}
               </button>
@@ -88,15 +88,15 @@ export function MenuDrawer({
                 navigateToSection("shop");
                 onClose();
               }}
-              className="rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-sm hover:bg-white/80"
+              className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] hover:border-[var(--color-gold)] hover:text-[var(--color-green)]"
             >
               All
             </button>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[var(--color-line)] bg-white p-4">
-          <div className="text-[11px] font-semibold tracking-[0.24em] text-[var(--color-muted)]">
+        <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-muted)]">
             CURATED
           </div>
           <div className="mt-2 text-sm text-[var(--color-muted)]">

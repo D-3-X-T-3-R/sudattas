@@ -20,7 +20,7 @@ function formatStatusMutationError(err: unknown): string {
     const short = msg.match(/Illegal order state transition[^,}\]]*/);
     if (short) return short[0].trim();
   }
-  return msg.length > 280 ? `${msg.slice(0, 280)}…` : msg;
+  return msg.length > 280 ? `${msg.slice(0, 280)}...` : msg;
 }
 
 type OrderDetailStatusEditorProps = {
@@ -53,90 +53,61 @@ export function OrderDetailStatusEditor({
         shiprocketBook: shouldBookShiprocket,
       });
     },
-    onMutate: (newStatusId) => {
-      console.info("[orders-flow][admin-ui] status mutation started", {
-        orderId: order.orderId,
-        fromStatusId: order.statusId,
-        toStatusId: newStatusId,
-      });
-    },
     onSuccess: () => {
-      console.info("[orders-flow][admin-ui] status mutation success", {
-        orderId: order.orderId,
-        newStatusId: statusDraft,
-      });
       queryClient.invalidateQueries({ queryKey: ["admin", "order", orderIdParam] });
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
-    },
-    onError: (err) => {
-      console.error("[orders-flow][admin-ui] status mutation failed", {
-        orderId: order.orderId,
-        attemptedStatusId: statusDraft,
-        error: err instanceof Error ? err.message : String(err),
-      });
     },
   });
 
   return (
-    <div className="sm:col-span-2">
-      <dt className="text-[var(--color-muted)]">Status</dt>
-      <dd className="mt-2 space-y-2">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="order-detail-status" className="text-xs text-[var(--color-muted)]">
-              Change status
-            </label>
-            <select
-              id="order-detail-status"
-              className={cn(
-                "h-9 min-w-[12rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-              )}
-              value={statusDraft}
-              onChange={(e) => setStatusDraft(e.target.value)}
-              disabled={statusMutation.isPending}
-            >
-              {selectableStatuses.length === 0 ? (
-                <option value={order.statusId}>
-                  {getStatusLabel(order.statusId, statuses)} (id {order.statusId})
+    <div>
+      <p className="text-xs uppercase tracking-[0.14em] text-[var(--color-muted)]">Change status</p>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <select
+          className={cn(
+            "h-10 min-w-[12rem] rounded-md border border-[var(--color-line)] bg-white px-3 text-sm",
+            "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+          )}
+          value={statusDraft}
+          onChange={(e) => setStatusDraft(e.target.value)}
+          disabled={statusMutation.isPending}
+        >
+          {selectableStatuses.length === 0 ? (
+            <option value={order.statusId}>{getStatusLabel(order.statusId, statuses)} (id {order.statusId})</option>
+          ) : (
+            <>
+              {selectableStatuses.map((s) => (
+                <option key={s.statusId} value={s.statusId}>
+                  {formatOrderStatusName(s.statusName)}
                 </option>
-              ) : (
-                <>
-                  {selectableStatuses.map((s) => (
-                    <option key={s.statusId} value={s.statusId}>
-                      {formatOrderStatusName(s.statusName)}
-                    </option>
-                  ))}
-                  {!selectableStatuses.some((s) => s.statusId === order.statusId) ? (
-                    <option value={order.statusId}>Current (id {order.statusId})</option>
-                  ) : null}
-                </>
-              )}
-            </select>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            disabled={statusMutation.isPending || !statusDraft || statusDraft === order.statusId}
-            onClick={() => statusMutation.mutate(statusDraft)}
-          >
-            {statusMutation.isPending ? "Saving…" : "Save status"}
-          </Button>
-        </div>
-        <p className="text-xs text-[var(--color-muted)]">
-          Current:{" "}
-          <span className="font-medium text-[var(--color-ink)]">
-            {getStatusLabel(order.statusId, statuses)}
-          </span>
-          . Typical flow: pending → confirmed → processing order → shipped → delivered. Only valid next
-          steps are listed.
+              ))}
+              {!selectableStatuses.some((s) => s.statusId === order.statusId) ? (
+                <option value={order.statusId}>Current (id {order.statusId})</option>
+              ) : null}
+            </>
+          )}
+        </select>
+
+        <Button
+          type="button"
+          size="sm"
+          disabled={statusMutation.isPending || !statusDraft || statusDraft === order.statusId}
+          onClick={() => statusMutation.mutate(statusDraft)}
+        >
+          {statusMutation.isPending ? "Saving..." : "Save status"}
+        </Button>
+      </div>
+
+      <p className="mt-2 text-xs text-[var(--color-muted)]">
+        Current status: <span className="font-medium text-[var(--color-ink)]">{getStatusLabel(order.statusId, statuses)}</span>.
+        Typical flow: pending -&gt; confirmed -&gt; processing -&gt; shipped -&gt; delivered.
+      </p>
+
+      {statusMutation.isError ? (
+        <p className="mt-2 text-xs text-rose-700" role="alert">
+          {formatStatusMutationError(statusMutation.error)}
         </p>
-        {statusMutation.isError && (
-          <p className="text-xs text-rose-700" role="alert">
-            {formatStatusMutationError(statusMutation.error)}
-          </p>
-        )}
-      </dd>
+      ) : null}
     </div>
   );
 }

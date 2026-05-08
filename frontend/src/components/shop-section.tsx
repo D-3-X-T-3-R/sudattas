@@ -3,8 +3,8 @@
 import { ProductCard } from "@/components/product-card";
 import type { Product } from "@/lib/schemas";
 import { Section } from "@/components/ui/section";
-import { SectionHeading, Kicker } from "@/components/ui/typography";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { SectionHeader } from "@/components/ui/page-shell";
 
 export interface ShopSectionProps {
   products: Product[];
@@ -22,40 +22,39 @@ export function ShopSection({
   onViewAll,
 }: ShopSectionProps) {
   const preview = products.slice(0, 4);
+  if (preview.length === 0) return null;
+
   return (
     <Section id="shop">
       <ScrollReveal>
-        <div className="flex items-end justify-between border-b border-[var(--color-line)] pb-8">
-          <div>
-            <Kicker className="invisible text-[var(--color-muted)]">Shop</Kicker>
-            <SectionHeading size="lg" className="mt-3 uppercase tracking-[0.18em] text-[var(--color-accent-gold)]">
-              New arrivals
-            </SectionHeading>
-          </div>
-          <button
-            type="button"
-            onClick={onViewAll}
-            className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent-brown)]"
-          >
-            View all
-          </button>
-        </div>
+        <SectionHeader
+          label="New Arrivals"
+          title="Thoughtfully Designed, Beautifully Crafted"
+          description="Freshly added pieces curated for this season's celebrations and everyday dressing."
+          action={
+            <button
+              type="button"
+              onClick={onViewAll}
+              className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)] hover:text-[var(--color-gold)]"
+            >
+              View All
+            </button>
+          }
+        />
       </ScrollReveal>
 
-      {preview.length > 0 && (
-        <div className="mt-14 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          {preview.map((p, i) => (
-            <ScrollReveal key={p.id} delay={i * 0.05}>
-              <ProductCard
-                product={p}
-                wished={!!wishlist[p.id]}
-                onToggleWish={onToggleWish}
-                onQuickView={onQuickView}
-              />
-            </ScrollReveal>
-          ))}
-        </div>
-      )}
+      <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+        {preview.map((p, i) => (
+          <ScrollReveal key={p.id} delay={i * 0.05}>
+            <ProductCard
+              product={p}
+              wished={!!wishlist[p.id]}
+              onToggleWish={onToggleWish}
+              onQuickView={onQuickView}
+            />
+          </ScrollReveal>
+        ))}
+      </div>
     </Section>
   );
 }

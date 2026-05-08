@@ -1,8 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { SectionHeading } from "@/components/ui/typography";
 import { fetchOrdersList, fetchOrderStatuses, type OrderListRow } from "@/lib/admin-queries";
 import { toRouteFailureUi } from "@/lib/route-state";
 import { ListOrdered } from "lucide-react";
@@ -10,6 +9,7 @@ import { OrdersFiltersCard } from "@/domains/admin/orders/components/orders-filt
 import { OrdersTableCard } from "@/domains/admin/orders/components/orders-table-card";
 import { getDateRange } from "@/domains/admin/orders/utils";
 import type { DatePreset } from "@/domains/admin/orders/types";
+import { AdminPageShell } from "@/components/admin/admin-page-shell";
 
 const MAX_ORDER_PAGE_SIZE = 100;
 
@@ -52,27 +52,21 @@ export default function AdminOrdersPage() {
     queryKey: ["admin", "orders", filters],
     queryFn: () => fetchOrdersList(filters),
   });
+
   const ordersErrorUi = isError ? toRouteFailureUi("admin", error) : null;
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-8">
-        <p className="text-sm text-[var(--color-muted)]">Orders</p>
-        <SectionHeading size="default" className="mt-1">
-          Order management
-        </SectionHeading>
-        <p className="mt-1 text-sm leading-relaxed text-[var(--color-muted)]">
-          Filter by date and status, or view orders for a specific customer.
-        </p>
-      </div>
-
-      <div className="mb-6 flex flex-wrap gap-3">
-        <span className="inline-flex items-center gap-2 rounded-full bg-blue-500/12 px-4 py-2 text-sm font-medium text-blue-700">
-          <ListOrdered className="h-4 w-4" />
-          {orders.length} order{orders.length !== 1 ? "s" : ""}
+    <AdminPageShell
+      label="Orders"
+      title="Order management"
+      description="Filter by date, status, and customer to manage fulfillment efficiently."
+      action={
+        <span className="inline-flex items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
+          <ListOrdered className="h-3.5 w-3.5" />
+          {orders.length} orders
         </span>
-      </div>
-
+      }
+    >
       <OrdersFiltersCard
         datePreset={datePreset}
         setDatePreset={setDatePreset}
@@ -97,6 +91,6 @@ export default function AdminOrdersPage() {
         pageSize={pageSize}
         setPage={setPageRaw}
       />
-    </div>
+    </AdminPageShell>
   );
 }

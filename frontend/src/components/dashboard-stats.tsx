@@ -23,49 +23,12 @@ const ORDER_STATS_CONFIG: Array<{
   label: string;
   format: (c: OrderCountsByStatus) => string;
   icon: LucideIcon;
-  cardClass: string;
-  overlayClass: string;
 }> = [
-  {
-    key: "total",
-    label: "Total orders",
-    format: (c) => String(c.total),
-    icon: ShoppingCart,
-    cardClass: "bg-blue-500",
-    overlayClass: "from-white/20 to-transparent",
-  },
-  {
-    key: "pending",
-    label: "Pending",
-    format: (c) => String(c.pending),
-    icon: Clock,
-    cardClass: "bg-rose-500",
-    overlayClass: "from-white/20 to-transparent",
-  },
-  {
-    key: "delivered",
-    label: "Delivered",
-    format: (c) => String(c.delivered),
-    icon: CheckCircle2,
-    cardClass: "bg-violet-500",
-    overlayClass: "from-white/20 to-transparent",
-  },
-  {
-    key: "cancelled",
-    label: "Cancelled",
-    format: (c) => String(c.cancelled),
-    icon: XCircle,
-    cardClass: "bg-slate-600",
-    overlayClass: "from-white/20 to-transparent",
-  },
-  {
-    key: "inTransit",
-    label: "In transit",
-    format: (c) => String(c.inTransit),
-    icon: Truck,
-    cardClass: "bg-emerald-600",
-    overlayClass: "from-white/20 to-transparent",
-  },
+  { key: "total", label: "Total orders", format: (c) => String(c.total), icon: ShoppingCart },
+  { key: "pending", label: "Pending", format: (c) => String(c.pending), icon: Clock },
+  { key: "delivered", label: "Delivered", format: (c) => String(c.delivered), icon: CheckCircle2 },
+  { key: "cancelled", label: "Cancelled", format: (c) => String(c.cancelled), icon: XCircle },
+  { key: "inTransit", label: "In transit", format: (c) => String(c.inTransit), icon: Truck },
 ];
 
 const EXTRA_STATS_CONFIG: Array<{
@@ -73,34 +36,25 @@ const EXTRA_STATS_CONFIG: Array<{
   label: string;
   format: (e: DashboardExtras) => string;
   icon: LucideIcon;
-  cardClass: string;
-  overlayClass: string;
 }> = [
-  {
-    key: "revenueMtdFormatted",
-    label: "Revenue (MTD)",
-    format: (e) => e.revenueMtdFormatted,
-    icon: IndianRupee,
-    cardClass: "bg-amber-500",
-    overlayClass: "from-white/20 to-transparent",
-  },
-  {
-    key: "revenueTotalFormatted",
-    label: "Revenue (Total)",
-    format: (e) => e.revenueTotalFormatted,
-    icon: IndianRupee,
-    cardClass: "bg-orange-500",
-    overlayClass: "from-white/20 to-transparent",
-  },
-  {
-    key: "customersCount",
-    label: "Customers",
-    format: (e) => String(e.customersCount),
-    icon: Users,
-    cardClass: "bg-teal-600",
-    overlayClass: "from-white/20 to-transparent",
-  },
+  { key: "revenueMtdFormatted", label: "Revenue (MTD)", format: (e) => e.revenueMtdFormatted, icon: IndianRupee },
+  { key: "revenueTotalFormatted", label: "Revenue (Total)", format: (e) => e.revenueTotalFormatted, icon: IndianRupee },
+  { key: "customersCount", label: "Customers", format: (e) => String(e.customersCount), icon: Users },
 ];
+
+function StatCard({ label, value, Icon }: { label: string; value: string; Icon: LucideIcon }) {
+  return (
+    <article className="rounded-lg border border-[var(--color-line)] bg-[var(--admin-surface-muted)] p-4 shadow-[var(--admin-card-shadow)]">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">{label}</p>
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--color-line)] bg-white text-[var(--color-green)]">
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+      <p className="mt-3 text-2xl font-semibold tracking-tight text-[var(--color-ink)]">{value}</p>
+    </article>
+  );
+}
 
 export function DashboardStats() {
   const orderCounts = useQuery({
@@ -122,18 +76,9 @@ export function DashboardStats() {
 
   if (isLoading) {
     return (
-      <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {[...ORDER_STATS_CONFIG, ...EXTRA_STATS_CONFIG].map(({ label, cardClass }) => (
-          <div
-            key={label}
-            className={`relative flex min-h-[100px] items-center gap-4 overflow-hidden rounded-xl ${cardClass} px-5 py-4 text-white`}
-          >
-            <div className="h-10 w-10 rounded-lg bg-white/20" />
-            <div>
-              <p className="text-sm font-medium opacity-90">…</p>
-              <p className="mt-0.5 text-2xl font-semibold tracking-tight">…</p>
-            </div>
-          </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[...ORDER_STATS_CONFIG, ...EXTRA_STATS_CONFIG].map(({ label }) => (
+          <div key={label} className="min-h-[96px] animate-pulse rounded-lg border border-[var(--color-line)] bg-[var(--admin-surface-muted)]" />
         ))}
       </div>
     );
@@ -141,7 +86,7 @@ export function DashboardStats() {
 
   if (isError || !counts || !extraData) {
     return (
-      <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         <p className="font-medium">Could not load dashboard stats.</p>
         <p className="mt-1 text-xs">{error?.message ?? "Unknown error"}</p>
       </div>
@@ -149,42 +94,12 @@ export function DashboardStats() {
   }
 
   return (
-    <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-      {ORDER_STATS_CONFIG.map(({ key, label, format, icon: Icon, cardClass, overlayClass }) => (
-        <div
-          key={key}
-          className={`relative flex min-h-[100px] items-center gap-4 overflow-hidden rounded-xl ${cardClass} px-5 py-4 text-white`}
-        >
-          <div
-            className={`absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l ${overlayClass}`}
-            aria-hidden
-          />
-          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
-            <Icon className="h-6 w-6" strokeWidth={2} />
-          </div>
-          <div className="relative min-w-0">
-            <p className="text-sm font-medium opacity-90">{label}</p>
-            <p className="mt-0.5 text-2xl font-semibold tracking-tight">{format(counts)}</p>
-          </div>
-        </div>
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {ORDER_STATS_CONFIG.map(({ key, label, format, icon: Icon }) => (
+        <StatCard key={key} label={label} value={format(counts)} Icon={Icon} />
       ))}
-      {EXTRA_STATS_CONFIG.map(({ key, label, format, icon: Icon, cardClass, overlayClass }) => (
-        <div
-          key={key}
-          className={`relative flex min-h-[100px] items-center gap-4 overflow-hidden rounded-xl ${cardClass} px-5 py-4 text-white`}
-        >
-          <div
-            className={`absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l ${overlayClass}`}
-            aria-hidden
-          />
-          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
-            <Icon className="h-6 w-6" strokeWidth={2} />
-          </div>
-          <div className="relative min-w-0">
-            <p className="text-sm font-medium opacity-90">{label}</p>
-            <p className="mt-0.5 text-2xl font-semibold tracking-tight">{format(extraData)}</p>
-          </div>
-        </div>
+      {EXTRA_STATS_CONFIG.map(({ key, label, format, icon: Icon }) => (
+        <StatCard key={key} label={label} value={format(extraData)} Icon={Icon} />
       ))}
     </div>
   );

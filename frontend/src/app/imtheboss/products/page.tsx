@@ -52,7 +52,7 @@ import {
 import { ProductVariantsSection } from "@/domains/admin/products/components/product-variants-section";
 import { ProductMoodsSection } from "@/domains/admin/products/components/product-moods-section";
 import { ProductImagesSection } from "@/domains/admin/products/components/product-images-section";
-import { SectionHeading } from "@/components/ui/typography";
+import { AdminPageShell } from "@/components/admin/admin-page-shell";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
@@ -1161,35 +1161,28 @@ export default function AdminProductsPage() {
   });
 
   return (
-    <div className="mx-auto max-w-6xl w-full">
-      <div className="mb-8">
-        <p className="text-sm text-[var(--color-muted)]">Products</p>
-        <SectionHeading size="default" className="mt-1">
-          Product catalog
-        </SectionHeading>
-        <p className="mt-1 text-sm leading-relaxed text-[var(--color-muted)]">
-          View, search, and add products. Filter by category, status, and price.
-        </p>
-      </div>
-
-      <div className="mb-6 flex flex-wrap gap-3">
-        {activeTab === "view" && (
-          <span className="inline-flex items-center gap-2 rounded-full bg-violet-500/12 px-4 py-2 text-sm font-medium text-violet-700">
-            <Package className="h-4 w-4" />
-            {products.length} product{products.length !== 1 ? "s" : ""}
+    <AdminPageShell
+      label="Products"
+      title="Product catalog"
+      description="View, search, and add products. Filter by category, status, and price."
+      action={
+        activeTab === "view" ? (
+          <span className="inline-flex items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
+            <Package className="h-3.5 w-3.5" />
+            {products.length} products
           </span>
-        )}
-      </div>
-
-      <div className="mt-6 inline-flex rounded-full border border-[var(--color-line)] bg-white shadow-sm p-1 text-xs">
+        ) : null
+      }
+    >
+      <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 text-xs shadow-[var(--shadow-subtle)]">
         <button
           type="button"
           onClick={() => setActiveTab("view")}
           className={cn(
-            "rounded-full px-4 py-1.5 font-medium transition-colors",
+            "rounded-sm px-4 py-1.5 font-semibold uppercase tracking-[0.12em] transition-colors",
             activeTab === "view"
-              ? "bg-[var(--color-ink)] text-white"
-              : "text-[var(--color-muted)] hover:bg-[var(--color-line)]/40"
+              ? "bg-[var(--color-green)] text-white"
+              : "text-[var(--color-muted)] hover:bg-[var(--color-surface-soft)]"
           )}
         >
           View products
@@ -1205,10 +1198,10 @@ export default function AdminProductsPage() {
         setInitialVariantIdsWhenEdit([]);
           }}
           className={cn(
-            "rounded-full px-4 py-1.5 font-medium transition-colors",
+            "rounded-sm px-4 py-1.5 font-semibold uppercase tracking-[0.12em] transition-colors",
             activeTab === "add"
-              ? "bg-[var(--color-ink)] text-white"
-              : "text-[var(--color-muted)] hover:bg-[var(--color-line)]/40"
+              ? "bg-[var(--color-green)] text-white"
+              : "text-[var(--color-muted)] hover:bg-[var(--color-surface-soft)]"
           )}
         >
           Add product
@@ -1287,7 +1280,7 @@ export default function AdminProductsPage() {
       )}
 
       {activeTab === "add" && (
-        <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-emerald-500 bg-white shadow-[var(--admin-card-shadow)]">
+        <Card className="mt-6 rounded-lg border-[var(--color-line)] bg-[var(--admin-surface-muted)] shadow-[var(--admin-card-shadow)]">
           <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
             {editingProductId ? (
               <Pencil className="h-4 w-4 text-emerald-500" />
@@ -1318,7 +1311,7 @@ export default function AdminProductsPage() {
                 <button
                   type="button"
                   onClick={() => refetchCategories()}
-                  className="mt-2 inline-flex items-center rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-50"
+                  className="mt-2 inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-50"
                 >
                   Try again
                 </button>
@@ -1715,10 +1708,8 @@ export default function AdminProductsPage() {
         productImagesLoadKey={productImagesLoadKey}
         getImageUrlWithCacheBuster={getImageUrlWithCacheBuster}
       />
-    </div>
+    </AdminPageShell>
   );
 }
-
-
 
 

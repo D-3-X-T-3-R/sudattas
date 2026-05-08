@@ -9,6 +9,7 @@ import { fetchApiEnvelope } from "@/lib/api-envelope";
 import { addressInputSchema } from "@/lib/validation-schemas";
 import { toRouteFailureUi, type RouteFailureUi } from "@/lib/route-state";
 import { useLiveAnnouncer } from "@/components/ui/live-announcer";
+import { PageShell } from "@/components/ui/page-shell";
 import { ProfileAuthenticatedContent } from "@/domains/profile/components/profile-authenticated-content";
 import type {
   AccountOrderDetailPayload,
@@ -111,21 +112,18 @@ function useAccountDataLoader({
 
 function UnauthenticatedProfile({ openLogin }: { openLogin: (returnTo?: string) => void }) {
   return (
-    <section className="rounded-[28px] border border-white/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(249,246,240,0.92))] p-8 shadow-[0_28px_80px_rgba(8,32,26,0.12)] backdrop-blur-xl sm:rounded-[32px] sm:p-10">
-      <span
-        className="inline-block rounded-full border px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em]"
-        style={{ borderColor: "#C4A574", color: "#B8956A" }}
-      >
+    <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-8 shadow-[var(--shadow-soft)] sm:p-10">
+      <span className="inline-block rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
         Account
       </span>
-      <h1 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-semibold text-[#0A2A20] sm:text-4xl">Your Profile</h1>
+      <h1 className="mt-4 font-display text-3xl font-semibold text-[var(--color-ink)] sm:text-4xl">Your Profile</h1>
       <p className="mt-3 max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
         Sign in to see your account, saved addresses, and order history in the premium Sudatta&apos;s dashboard.
       </p>
       <button
         type="button"
         onClick={() => openLogin("/profile")}
-        className="mt-6 rounded-full bg-[var(--color-accent-gold)] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white"
+        className="mt-6 inline-flex h-11 items-center justify-center rounded-md border border-[var(--color-green)] bg-[var(--color-green)] px-6 text-[11px] font-semibold uppercase tracking-[0.16em] text-white"
       >
         Sign in
       </button>
@@ -555,9 +553,9 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen w-full min-w-0 bg-[#F4EFE6] text-[var(--foreground)]">
+    <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
       <SiteHeader />
-      <main className="mx-auto max-w-7xl px-4 pt-3 pb-8 sm:px-6 sm:pt-4 lg:px-8">
+      <PageShell wide containerClassName="pt-4 pb-10 md:pt-6">
         {loadingSession ? (
           <p className="text-sm text-[var(--color-muted)]">Loading profile...</p>
         ) : !authenticated ? (
@@ -591,7 +589,7 @@ export default function ProfilePage() {
             requestReturn={requestReturn}
           />
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }

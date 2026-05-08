@@ -9,6 +9,7 @@ export interface SectionProps {
   fullWidth?: boolean;
   /** Reduced vertical padding (e.g. for admin panels) */
   compact?: boolean;
+  soft?: boolean;
   id?: string;
 }
 
@@ -20,14 +21,16 @@ export function Section({
   className,
   fullWidth,
   compact,
+  soft,
   id,
 }: SectionProps) {
   return (
     <section
       id={id}
       className={cn(
-        compact ? "pt-8 md:pt-10" : "pt-16 md:pt-20",
-        !fullWidth && "mx-auto max-w-[2000px] px-4",
+        compact ? "pt-8 md:pt-10" : "pt-12 md:pt-16",
+        !fullWidth && "mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]",
+        soft && "rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 md:p-6",
         className
       )}
     >
@@ -35,3 +38,5 @@ export function Section({
     </section>
   );
 }
+
+export const StorefrontSection = Section;

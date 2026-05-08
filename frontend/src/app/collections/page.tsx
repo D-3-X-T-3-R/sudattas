@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { Footer } from "@/components/footer";
+import { PageShell, SectionHeader, EmptyState } from "@/components/ui/page-shell";
 import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
 import { fetchCategoriesWithSession } from "@/lib/storefront-queries";
 import {
@@ -56,40 +57,43 @@ export default async function CollectionsIndexPage() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-[1200px] px-4 py-10 sm:px-6 lg:px-8">
+      <PageShell containerClassName="py-8 md:py-10">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
         />
-        <div className="border-b border-[var(--color-line)] pb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-            Storefront
-          </p>
-          <h1 className="mt-2 font-display text-3xl tracking-tight text-[var(--color-ink)] sm:text-4xl">
-            Collections
-          </h1>
-        </div>
+        <SectionHeader
+          label="Storefront"
+          title="Collections"
+          description="Discover curated categories designed for occasions, gifting, and everyday elegance."
+        />
 
         {categories.length === 0 ? (
-          <section className="rounded-sm border border-[var(--color-line)] bg-[var(--background)] px-6 py-10 text-center text-[var(--color-muted)]">
-            Collections are not available right now.
-          </section>
+          <div className="mt-8">
+            <EmptyState
+              title="Collections unavailable"
+              description="Collections are not available right now."
+            />
+          </div>
         ) : (
-          <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <section className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 md:gap-5">
             {categories.map((category) => (
               <Link
                 key={category.categoryId}
                 href={`/collections/${encodeURIComponent(slugifyCategoryName(category.name))}`}
-                className="rounded-sm border border-[var(--color-line)] bg-white px-5 py-4 transition hover:border-[var(--color-accent-gold)] hover:shadow-[0_8px_24px_rgba(26,24,20,0.08)]"
+                className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-4 shadow-[var(--shadow-subtle)] transition hover:border-[var(--color-gold)]"
               >
-                <p className="font-display text-xl tracking-tight text-[var(--color-ink)]">
+                <p className="font-display text-lg tracking-tight text-[var(--color-ink)] sm:text-xl">
                   {category.name}
+                </p>
+                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-green)]">
+                  Explore
                 </p>
               </Link>
             ))}
           </section>
         )}
-      </main>
+      </PageShell>
       <Footer />
     </div>
   );

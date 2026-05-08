@@ -98,7 +98,7 @@ const Sheet = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/40"
+            className="fixed inset-0 z-40 bg-black/30"
             aria-hidden
           />
           <motion.div
@@ -108,7 +108,7 @@ const Sheet = ({
             exit={{ x: fromX }}
             transition={{ type: "spring", stiffness: 320, damping: 30 }}
             className={cn(
-              "fixed top-0 z-50 flex h-full w-full max-w-md flex-col bg-[var(--color-ivory)] shadow-2xl",
+              "fixed top-0 z-50 flex h-full w-full max-w-md flex-col bg-[var(--color-surface)] shadow-[var(--shadow-soft)]",
               side === "left" ? "left-0 border-r" : "right-0 border-l",
               "border-[var(--color-line)]",
               className
@@ -121,7 +121,7 @@ const Sheet = ({
             <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
               <span
                 id={titleId}
-                className="text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]"
+                className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]"
               >
                 {title}
               </span>

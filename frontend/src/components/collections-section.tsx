@@ -8,13 +8,13 @@ import { COLLECTIONS } from "@/lib/constants";
 import { COLLECTION_IMAGES } from "@/lib/seed-data";
 import { goTo } from "@/hooks/use-scroll-to";
 import { Section } from "@/components/ui/section";
-import { SectionHeading } from "@/components/ui/typography";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { SectionHeader } from "@/components/ui/page-shell";
+import { cn } from "@/lib/utils";
 
 export interface CollectionsSectionProps {
   setCollection: (c: string) => void;
   moods?: { moodId: string; moodName: string; thumbnailUrl?: string }[];
-  /** Applies searchProduct mood filter and scrolls to shop */
   onPickMood?: (m: { moodId: string; moodName: string }) => void;
   reduceMotion?: boolean;
 }
@@ -27,22 +27,57 @@ export type DisplayCollection = {
   thumbnailUrl?: string;
 };
 
+type MoodCardVariant = "sm" | "md" | "feature";
+
+const moodCard = {
+  sm: {
+    media: "aspect-[4/5]",
+    panel: "min-h-[132px] p-4 md:min-h-[142px] lg:min-h-[154px] flex flex-1 flex-col",
+    title: "text-[1.2rem] md:text-[1.3rem]",
+  },
+  md: {
+    media: "aspect-[4/5]",
+    panel: "min-h-[132px] p-4 md:min-h-[142px] lg:min-h-[154px] flex flex-1 flex-col",
+    title: "text-[1.25rem] md:text-[1.45rem]",
+  },
+  feature: {
+    media: "aspect-[4/5] md:aspect-[5/6] lg:aspect-[4/5]",
+    panel: "min-h-[132px] p-4 md:min-h-[142px] lg:min-h-[154px] md:p-5 flex flex-1 flex-col",
+    title: "text-[1.32rem] md:text-[1.55rem]",
+  },
+} as const;
+
+const moodLayoutDesktop = [
+  "lg:col-span-3",
+  "lg:col-span-3",
+  "md:col-span-2 lg:col-span-3",
+  "lg:col-span-3",
+] as const;
+
+function moodVariantForIndex(index: number): MoodCardVariant {
+  if (index === 2) return "feature";
+  if (index === 1) return "md";
+  return "sm";
+}
+
 export function CollectionCard({
   c,
   idx,
   setCollection,
   onPickMood,
   reduceMotion,
-  large = false,
+  variant = "md",
 }: {
   c: DisplayCollection;
   idx: number;
   setCollection: (x: string) => void;
   onPickMood?: (m: { moodId: string; moodName: string }) => void;
   reduceMotion: boolean;
-  large?: boolean;
+  variant?: MoodCardVariant;
 }) {
   const imgSrc = c.thumbnailUrl || COLLECTION_IMAGES[idx % COLLECTION_IMAGES.length];
+  const tone = moodCard[variant];
+
   return (
     <button
       type="button"
@@ -55,36 +90,38 @@ export function CollectionCard({
         setCollection(c.isMood ? "All" : c.key);
         goTo("shop", reduceMotion);
       }}
-      className={`group relative w-full overflow-hidden rounded-sm bg-white text-left shadow-[0_1px_3px_rgba(26,24,20,0.06)] transition-shadow duration-300 hover:shadow-[0_8px_32px_rgba(26,24,20,0.1)] ${large ? "md:row-span-2" : ""}`}
+      className={cn(
+        "group h-full w-full overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] text-left shadow-[var(--shadow-subtle)]",
+        variant === "feature" && "border-[var(--color-line-strong)] shadow-[var(--shadow-soft)]"
+      )}
     >
-      <div
-        className={`relative w-full ${
-          large ? "aspect-[3/4] md:aspect-[3/4] md:min-h-[480px]" : "aspect-[3/4]"
-        }`}
-      >
+      <div className={cn("relative w-full overflow-hidden", tone.media)}>
         <Image
           src={imgSrc}
           alt={c.key}
           fill
           className="object-cover transition duration-500 ease-out group-hover:scale-[1.03]"
-          sizes={large ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 768px) 100vw, 50vw"}
-          loading={large ? "eager" : "lazy"}
+          sizes="(max-width: 768px) 50vw, 25vw"
+          loading="lazy"
         />
       </div>
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 p-6 text-left sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/60">
+      <div className={cn("border-t border-[var(--color-line)]", tone.panel)}>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
           {c.isMood ? "Mood" : "Collection"}
         </p>
-        <span
-          className={`mt-1 block uppercase tracking-[0.18em] font-semibold text-[var(--color-accent-gold)] [text-shadow:0_1px_4px_rgba(0,0,0,0.55)] ${large ? "text-2xl sm:text-3xl md:text-4xl" : "text-2xl sm:text-3xl"}`}
+        <p
+          className={cn(
+            "mt-1 h-[2.8rem] overflow-hidden font-display leading-[1.15] text-[var(--color-ink)] md:h-[3.1rem] lg:h-[3.45rem]",
+            tone.title
+          )}
+          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
         >
           {c.blurb}
-        </span>
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full border-2 border-[var(--color-accent-gold)] bg-transparent px-5 py-2.5 text-xs font-semibold text-white transition-colors group-hover:bg-[var(--color-accent-gold)] group-hover:text-white sm:mt-5">
+        </p>
+        <span className="mt-auto pt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)]">
           Explore
-          <ChevronRight className="h-4 w-4" />
-        </div>
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
       </div>
     </button>
   );
@@ -106,88 +143,85 @@ export function CollectionsSection({
     thumbnailUrl: m.thumbnailUrl,
   }));
 
+  const defaultCollections: DisplayCollection[] = COLLECTIONS.map((item) => ({
+    key: item.key,
+    blurb: item.blurb,
+  }));
+
   const displayCollections: DisplayCollection[] =
     moods.length > 0
-      ? (showAll ? allMoodItems : allMoodItems.slice(0, 4))
-      : [...COLLECTIONS];
+      ? showAll
+        ? allMoodItems
+        : allMoodItems.slice(0, 4)
+      : defaultCollections.slice(0, 4);
+
+  if (displayCollections.length === 0) return null;
+  const leadCards = displayCollections.slice(0, 4);
+  const overflowCards = displayCollections.slice(4);
 
   return (
     <Section id="collections">
       <ScrollReveal>
-        <div className="flex flex-col gap-4 border-b border-[var(--color-line)] pb-8 sm:flex-row sm:items-end sm:justify-between">
-          <SectionHeading size="lg" className="uppercase tracking-[0.18em] text-[var(--color-accent-gold)]">
-            {"This week's moods"}
-          </SectionHeading>
-          <button
-            type="button"
-            onClick={() => moods.length > 0 ? setShowAll((v) => !v) : goTo("shop", reduceMotion)}
-            className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent-brown)] sm:inline-flex"
-          >
-            {moods.length > 0 && showAll ? "Show less" : "View all"}
-          </button>
-        </div>
+        <SectionHeader
+          label="Curated For You"
+          title="Signature Moods & Collections"
+          description="Browse boutique edits crafted for celebrations, gifting, and everyday elegance."
+          action={
+            moods.length > 4 ? (
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)] hover:text-[var(--color-gold)]"
+              >
+                {showAll ? "Show Less" : "View All"}
+              </button>
+            ) : null
+          }
+        />
       </ScrollReveal>
 
-      {moods.length > 0 ? (
-        <div className="mt-12 grid grid-cols-2 gap-4 md:grid-cols-4">
-          <AnimatePresence initial={false}>
-            {displayCollections.map((item, idx) => (
-              <motion.div
-                key={item.key}
-                initial={{ opacity: 0, y: 20, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 16, scale: 0.97 }}
-                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1], delay: idx < 4 ? 0 : (idx - 4) * 0.06 }}
-              >
-                <CollectionCard
-                  c={item}
-                  idx={idx}
-                  setCollection={setCollection}
-                  onPickMood={onPickMood}
-                  reduceMotion={reduceMotion}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-12 lg:items-stretch">
+        <AnimatePresence initial={false}>
+          {leadCards.map((item, idx) => (
+            <motion.div
+              key={item.key}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className={cn(
+                "col-span-1 h-full",
+                leadCards.length >= 4 ? moodLayoutDesktop[idx] : "lg:col-span-4"
+              )}
+            >
+              <CollectionCard
+                c={item}
+                idx={idx}
+                setCollection={setCollection}
+                onPickMood={onPickMood}
+                reduceMotion={reduceMotion}
+                variant={moodVariantForIndex(idx)}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {overflowCards.length > 0 ? (
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
+          {overflowCards.map((item, idx) => (
+            <CollectionCard
+              key={item.key}
+              c={item}
+              idx={idx + leadCards.length}
+              setCollection={setCollection}
+              onPickMood={onPickMood}
+              reduceMotion={reduceMotion}
+              variant="md"
+            />
+          ))}
         </div>
-      ) : (
-        <div className="mt-12 grid gap-6 md:grid-cols-2 md:grid-rows-2">
-          {displayCollections[0] && (
-            <div className="md:row-span-2">
-              <CollectionCard
-                c={displayCollections[0]}
-                idx={0}
-                setCollection={setCollection}
-                onPickMood={onPickMood}
-                reduceMotion={reduceMotion}
-                large
-              />
-            </div>
-          )}
-          {displayCollections[1] && (
-            <div>
-              <CollectionCard
-                c={displayCollections[1]}
-                idx={1}
-                setCollection={setCollection}
-                onPickMood={onPickMood}
-                reduceMotion={reduceMotion}
-              />
-            </div>
-          )}
-          {displayCollections[2] && (
-            <div>
-              <CollectionCard
-                c={displayCollections[2]}
-                idx={2}
-                setCollection={setCollection}
-                onPickMood={onPickMood}
-                reduceMotion={reduceMotion}
-              />
-            </div>
-          )}
-        </div>
-      )}
+      ) : null}
     </Section>
   );
 }

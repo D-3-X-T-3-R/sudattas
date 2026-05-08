@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import type { CatalogSize } from "@/components/wishlist-grid";
 import { WishlistGrid } from "@/components/wishlist-grid";
+import { PageShell, SectionHeader } from "@/components/ui/page-shell";
 import { useStorefront } from "@/context/storefront-context";
 import { ensureGuestSession, getGuestSessionId } from "@/lib/session";
 import type { Product } from "@/lib/schemas";
@@ -106,33 +107,27 @@ export default function WishlistPage() {
   return (
     <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
       <SiteHeader />
+      <PageShell containerClassName="pt-8 pb-20 md:pt-10 md:pb-14">
+        <SectionHeader
+          label="Wishlist"
+          title="Saved Favourites"
+          description={`Review your shortlisted styles before adding them to your bag. (${titleCount})`}
+        />
 
-      <div className="mx-auto w-full max-w-[2000px] px-4 pt-8 pb-32 md:pb-12">
-        <div className="mb-6 md:mb-8">
-          <h1
-            id="wishlist-page-title"
-            className="font-display text-lg font-medium uppercase tracking-[0.18em] text-[var(--color-accent-gold)]"
-          >
-            My Wishlist
-          </h1>
-          <p className="mt-1 text-sm text-[var(--color-muted)]">({titleCount})</p>
-        </div>
-
-        <div>
+        <div className="mt-8">
           {loading ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 md:gap-5">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={i}
-                  className="animate-pulse overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-warm-white)] shadow-[0_8px_28px_-6px_rgba(26,24,20,0.08)]"
+                  className="animate-pulse overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]"
                 >
-                  <div className="aspect-[3/4] bg-[var(--color-line)]/70" />
-                  <div className="space-y-2 p-4 sm:p-5">
-                    <div className="h-5 w-3/4 rounded bg-[var(--color-line)]/90" />
-                    <div className="h-3 w-1/2 rounded bg-[var(--color-line)]/70" />
-                    <div className="mt-3 h-14 rounded-lg bg-[var(--color-line)]/50" />
+                  <div className="aspect-[3/4] bg-[var(--color-line)]/60" />
+                  <div className="space-y-2 p-4">
+                    <div className="h-5 w-3/4 rounded bg-[var(--color-line)]/80" />
+                    <div className="h-4 w-1/2 rounded bg-[var(--color-line)]/60" />
+                    <div className="h-10 rounded bg-[var(--color-line)]/40" />
                   </div>
-                  <div className="h-12 border-t border-[var(--color-line)] bg-[var(--color-line)]/25" />
                 </div>
               ))}
             </div>
@@ -145,7 +140,7 @@ export default function WishlistPage() {
             />
           )}
         </div>
-      </div>
+      </PageShell>
     </div>
   );
 }

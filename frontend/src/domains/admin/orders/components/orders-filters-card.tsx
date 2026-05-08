@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Filter } from "lucide-react";
 import { DATE_PRESETS, type DatePreset } from "@/domains/admin/orders/types";
 import { formatOrderStatusName } from "@/domains/admin/orders/utils";
+import { AdminFilterCard } from "@/components/admin/admin-cards";
 
 type OrdersFiltersCardProps = {
   datePreset: DatePreset;
@@ -34,12 +34,8 @@ export function OrdersFiltersCard({
   onRefresh,
 }: OrdersFiltersCardProps) {
   return (
-    <Card className="rounded-xl border-[var(--color-line)] border-l-4 border-l-blue-500 bg-white shadow-[var(--admin-card-shadow)]">
-      <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
-        <Filter className="h-4 w-4 text-blue-500" />
-        Filters
-      </CardTitle>
-      <CardContent className="mt-3 flex flex-wrap items-center gap-3">
+    <AdminFilterCard title="Filters" icon={<Filter className="h-4 w-4 text-[var(--color-green)]" />}>
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-2">
           {DATE_PRESETS.map(({ key, label }) => (
             <Button
@@ -56,15 +52,17 @@ export function OrdersFiltersCard({
             </Button>
           ))}
         </div>
-        {userIdFromUrl && (
-          <div className="flex items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-sm">
+
+        {userIdFromUrl ? (
+          <div className="flex items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-sm">
             <span className="text-[var(--color-muted)]">Customer:</span>
             <span className="font-mono text-[var(--color-ink)]">{userIdFromUrl}</span>
-            <Link href="/imtheboss/orders" className="text-[var(--color-accent-brown)] hover:underline">
+            <Link href="/imtheboss/orders" className="text-[var(--color-green)] hover:underline">
               Clear
             </Link>
           </div>
-        )}
+        ) : null}
+
         <div className="flex items-center gap-2">
           <label htmlFor="orders-status" className="text-sm text-[var(--color-muted)]">
             Status
@@ -72,7 +70,7 @@ export function OrdersFiltersCard({
           <select
             id="orders-status"
             className={cn(
-              "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+              "h-10 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-3 text-sm",
               "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
             )}
             value={statusId}
@@ -89,6 +87,7 @@ export function OrdersFiltersCard({
             ))}
           </select>
         </div>
+
         <div className="flex items-center gap-2">
           <label htmlFor="orders-page-size" className="text-sm text-[var(--color-muted)]">
             Per page
@@ -96,7 +95,7 @@ export function OrdersFiltersCard({
           <select
             id="orders-page-size"
             className={cn(
-              "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+              "h-10 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-3 text-sm",
               "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
             )}
             value={String(pageSize)}
@@ -110,10 +109,11 @@ export function OrdersFiltersCard({
             <option value="100">100</option>
           </select>
         </div>
+
         <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
           Refresh
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </AdminFilterCard>
   );
 }

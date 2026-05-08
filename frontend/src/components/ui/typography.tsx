@@ -4,12 +4,12 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const heroHeadingVariants = cva(
-  "font-display font-medium tracking-tight leading-[1.05] text-[var(--color-ink)]",
+  "font-display font-semibold tracking-[-0.02em] leading-[1.15] text-[var(--color-ink)]",
   {
     variants: {
       size: {
-        default: "text-4xl md:text-6xl",
-        sm: "text-3xl md:text-5xl",
+        default: "text-[2rem] sm:text-[2.4rem] md:text-[3rem]",
+        sm: "text-[1.8rem] sm:text-[2.2rem] md:text-[2.8rem]",
       },
       inverse: {
         true: "text-white",
@@ -42,12 +42,12 @@ export function HeroHeading({
 }
 
 const sectionHeadingVariants = cva(
-  "font-display font-medium tracking-tight text-[var(--color-ink)]",
+  "font-display font-medium tracking-[-0.01em] text-[var(--color-ink)]",
   {
     variants: {
       size: {
-        default: "text-2xl md:text-3xl",
-        lg: "text-3xl md:text-4xl",
+        default: "text-[1.75rem] md:text-[2.1rem]",
+        lg: "text-[2rem] md:text-[2.45rem]",
       },
     },
     defaultVariants: {
@@ -73,7 +73,7 @@ export function SectionHeading({
   );
 }
 
-const kickerVariants = cva("text-xs uppercase tracking-[0.18em] font-semibold", {
+const kickerVariants = cva("text-[11px] uppercase tracking-[0.2em] font-semibold", {
   variants: {
     tone: {
       default: "text-[var(--color-muted)]",

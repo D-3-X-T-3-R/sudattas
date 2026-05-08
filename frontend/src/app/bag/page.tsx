@@ -14,6 +14,7 @@ import { addressInputSchema } from "@/lib/validation-schemas";
 import { BagEmptyState } from "@/domains/bag/components/bag-empty-state";
 import { BagContent } from "@/domains/bag/components/bag-content";
 import { BagMobileCheckoutBar } from "@/domains/bag/components/bag-mobile-checkout-bar";
+import { OrderSummaryPanel } from "@/domains/bag/components/order-summary-panel";
 import { useRazorpayCheckout } from "@/hooks/use-razorpay-checkout";
 
 type CatalogSize = { sizeId: string; sizeName: string };
@@ -352,110 +353,145 @@ export default function BagPage() {
   };
 
   return (
-    <div className="min-h-screen w-full min-w-0 bg-[linear-gradient(135deg,#EFE9DE_0%,#F7F3EB_45%,#EEE6D8_100%)] text-[var(--foreground)]">
+    <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
       <SiteHeader />
-      <div className="mx-auto w-full max-w-7xl rounded-[36px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(255,255,255,0.72))] p-4 shadow-[0_30px_90px_rgba(15,61,46,0.10)] backdrop-blur-xl sm:p-6 lg:h-[calc(100vh-100px)] lg:overflow-hidden lg:p-8">
+      <main className="mx-auto w-full max-w-[1380px] px-[var(--gutter-mobile)] pb-20 pt-8 md:px-[var(--gutter-tablet)] md:pb-14 md:pt-10">
         {cartLines.length === 0 ? (
           <BagEmptyState />
         ) : (
           <>
-            <div className="mb-5 rounded-2xl border border-[#0F3D2E]/10 bg-white/70 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8B816D]">Delivery address</p>
-              <p className="mt-2 text-sm text-[#162019]">{status === "authenticated" ? formatAddress(selectedAddress) : "Sign in to choose address"}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8B816D]">Payment mode</p>
-                <button
-                  type="button"
-                  disabled={paymentLoading}
-                  onClick={() => setPaymentMode("prepaid")}
-                  className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                    paymentMode === "prepaid"
-                      ? "border-[#0F3D2E] bg-[#0F3D2E]/10 text-[#0F3D2E]"
-                      : "border-[#0F3D2E]/20 text-[#6B6560]"
-                  } disabled:opacity-50`}
-                >
-                  Prepaid
-                </button>
-                <button
-                  type="button"
-                  disabled={paymentLoading}
-                  onClick={() => setPaymentMode("cod")}
-                  className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                    paymentMode === "cod"
-                      ? "border-[#0F3D2E] bg-[#0F3D2E]/10 text-[#0F3D2E]"
-                      : "border-[#0F3D2E]/20 text-[#6B6560]"
-                  } disabled:opacity-50`}
-                >
-                  Cash on Delivery
-                </button>
+            <header className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-5 shadow-[var(--shadow-subtle)] md:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
+                    Shopping Bag
+                  </p>
+                  <h1 className="mt-1 font-display text-[2rem] leading-[1.2] text-[var(--color-ink)] md:text-[2.3rem]">
+                    Review Your Selection
+                  </h1>
+                  <p className="mt-1 text-sm text-[var(--color-muted)]">
+                    Review your selected pieces before checkout.
+                  </p>
+                </div>
+                <span className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)]">
+                  {selectedCount} item{selectedCount === 1 ? "" : "s"}
+                </span>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {status === "authenticated" ? (
-                  <>
+            </header>
+
+            <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+              <div className="space-y-4">
+                <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)] md:p-5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
+                    Delivery & Payment
+                  </p>
+                  <p className="mt-2 text-sm text-[var(--color-ink)]">
+                    {status === "authenticated" ? formatAddress(selectedAddress) : "Sign in to choose address"}
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">
+                      Payment mode
+                    </p>
                     <button
                       type="button"
-                      onClick={() => setAddressPickerOpen(true)}
-                      className="rounded-full border border-[#0F3D2E]/20 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#0F3D2E]"
+                      disabled={paymentLoading}
+                      onClick={() => setPaymentMode("prepaid")}
+                      className={`rounded-md border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                        paymentMode === "prepaid"
+                          ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
+                          : "border-[var(--color-line)] text-[var(--color-muted)]"
+                      } disabled:opacity-50`}
                     >
-                      Change address
+                      Prepaid
                     </button>
                     <button
                       type="button"
-                      onClick={(event) => openAddAddressDialog(event.currentTarget)}
-                      className="rounded-full border border-[#C9A646]/30 bg-[#FFF9EF] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#A37D34]"
+                      disabled={paymentLoading}
+                      onClick={() => setPaymentMode("cod")}
+                      className={`rounded-md border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                        paymentMode === "cod"
+                          ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
+                          : "border-[var(--color-line)] text-[var(--color-muted)]"
+                      } disabled:opacity-50`}
                     >
-                      Add new address
+                      Cash on Delivery
                     </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => openLogin("/bag")}
-                    className="rounded-full border border-[#C9A646]/30 bg-[#FFF9EF] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#A37D34]"
-                  >
-                    Sign in
-                  </button>
-                )}
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {status === "authenticated" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setAddressPickerOpen(true)}
+                          className="rounded-md border border-[var(--color-line)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]"
+                        >
+                          Change Address
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => openAddAddressDialog(event.currentTarget)}
+                          className="rounded-md border border-[var(--color-gold)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)]"
+                        >
+                          Add New Address
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openLogin("/bag")}
+                        className="rounded-md border border-[var(--color-gold)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)]"
+                      >
+                        Sign In
+                      </button>
+                    )}
+                  </div>
+                </section>
+
+                <BagContent
+                  cartLines={cartLines}
+                  selectedLineIds={selectedLineIds}
+                  allSelected={allSelected}
+                  catalogSizes={catalogSizes}
+                  openSizeForId={openSizeForId}
+                  reduceMotion={reduceMotion}
+                  wishlist={wishlist}
+                  onToggleAll={() =>
+                    setSelectedLineIds(allSelected ? new Set() : new Set(cartLines.map((line) => line.id)))
+                  }
+                  onToggleOne={(id) =>
+                    setSelectedLineIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                  onSetOpenSizeForId={setOpenSizeForId}
+                  onDecCart={decCart}
+                  onIncCart={incCart}
+                  onRemoveCart={removeCart}
+                  onToggleWish={toggleWish}
+                  onAddToCart={addToCart}
+                />
+              </div>
+
+              <div>
+                <OrderSummaryPanel
+                  cartLines={selectedLines}
+                  cartSubtotal={selectedSubtotal}
+                  cartCount={selectedCount}
+                  shippingAmount={shippingAmount}
+                  shippingLoading={shippingLoading}
+                  shippingNote={shippingNote || paymentMessage}
+                  checkoutLoading={paymentLoading}
+                  onCheckout={handleCheckout}
+                />
               </div>
             </div>
-
-            <BagContent
-              cartLines={cartLines}
-              selectedLineIds={selectedLineIds}
-              selectedLines={selectedLines}
-              selectedSubtotal={selectedSubtotal}
-              selectedCount={selectedCount}
-              shippingAmount={shippingAmount}
-              shippingLoading={shippingLoading}
-              shippingNote={shippingNote || paymentMessage}
-              checkoutLoading={paymentLoading}
-              allSelected={allSelected}
-              catalogSizes={catalogSizes}
-              openSizeForId={openSizeForId}
-              reduceMotion={reduceMotion}
-              wishlist={wishlist}
-              onToggleAll={() =>
-                setSelectedLineIds(allSelected ? new Set() : new Set(cartLines.map((line) => line.id)))
-              }
-              onToggleOne={(id) =>
-                setSelectedLineIds((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                })
-              }
-              onSetOpenSizeForId={setOpenSizeForId}
-              onDecCart={decCart}
-              onIncCart={incCart}
-              onRemoveCart={removeCart}
-              onToggleWish={toggleWish}
-              onAddToCart={addToCart}
-              onCheckout={handleCheckout}
-            />
           </>
         )}
-      </div>
+      </main>
 
       {cartLines.length > 0 && (
         <BagMobileCheckoutBar
@@ -500,7 +536,7 @@ export default function BagPage() {
                 setAddressPickerOpen(false);
                 openAddAddressDialog(event.currentTarget);
               }}
-              className="mt-2 rounded-full border border-[#C9A646]/30 bg-[#FFF9EF] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#A37D34]"
+              className="mt-2 rounded-md border border-[var(--color-gold)] bg-[var(--color-surface-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-green)]"
             >
               Add new address
             </button>
@@ -667,14 +703,14 @@ export default function BagPage() {
               <button
                 type="submit"
                 disabled={savingAddress}
-                className="rounded-full bg-[#0F3D2E] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                className="rounded-md border border-[var(--color-green)] bg-[var(--color-green)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-50"
               >
                 {savingAddress ? "Saving..." : "Save address"}
               </button>
               <button
                 type="button"
                 onClick={closeAddAddressDialog}
-                className="rounded-full border border-[#0F3D2E]/20 px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#0F3D2E]"
+                className="rounded-md border border-[var(--color-line)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]"
               >
                 Cancel
               </button>

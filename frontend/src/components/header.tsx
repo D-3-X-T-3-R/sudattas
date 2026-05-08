@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, Menu, Heart, ShoppingBag } from "lucide-react";
@@ -25,10 +26,6 @@ export interface HeaderProps {
   wishCount: number;
   setMenuOpen: (open: boolean) => void;
   goTo: (id: string, instant?: boolean) => void;
-  /**
-   * When true (e.g. bag / wishlist / product), nav uses the same `<button>` + underline as the
-   * landing page but navigates with `router.push('/#id')`. `goTo` is unused in that mode.
-   */
   navUseHashLinks?: boolean;
   authEnabled?: boolean;
   authButtons?: React.ReactNode;
@@ -50,135 +47,146 @@ export function Header({
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
+    const onScroll = () => setScrolled(window.scrollY > 14);
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const navigate = (id: string) => {
+    if (navUseHashLinks) {
+      setPendingHomeSection(id, { fromOtherPage: true });
+      router.push("/");
+      return;
+    }
+    goTo(id, false);
+  };
+
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 w-full min-w-0 transition-all duration-500",
-        scrolled
-          ? "border-b border-[var(--color-line)]/60 bg-[var(--color-ivory)]/80 backdrop-blur-md shadow-[0_1px_24px_rgba(26,24,20,0.06)]"
-          : "border-b border-transparent bg-[var(--color-ivory)]/40 backdrop-blur-sm"
+        "sticky top-0 z-40 w-full border-b border-[var(--color-line)] bg-[var(--color-surface)]/96 backdrop-blur",
+        scrolled && "shadow-[0_5px_18px_rgba(45,42,38,0.07)]"
       )}
     >
-      <div className="mx-auto grid w-full max-w-[2000px] grid-cols-[1fr_0_auto] items-center gap-4 px-4 py-4 md:grid-cols-[1fr_0_auto]">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open menu"
-            className="md:hidden"
-          >
-            <Menu size={28} strokeWidth={2.5} />
-          </Button>
-          <nav className="hidden md:flex md:items-center md:gap-6">
-            {NAV_LINKS.map(({ id, label }) => {
-              const navItemClass =
-                "group relative inline-flex cursor-pointer appearance-none border-0 bg-transparent p-0 text-left font-sans text-base font-medium uppercase tracking-[0.18em] text-[var(--color-ink)] no-underline transition-colors duration-300 ease-out hover:text-[var(--color-accent-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-gold)]/25 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-ivory)]";
-              const underline = (
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute -bottom-0.5 left-0 h-px w-0 bg-[var(--color-accent-gold)] transition-all duration-300 ease-out group-hover:w-full"
-                />
-              );
-              if (navUseHashLinks) {
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => {
-                      setPendingHomeSection(id, { fromOtherPage: true });
-                      router.push("/");
-                    }}
-                    className={navItemClass}
-                  >
-                    {label}
-                    {underline}
-                  </button>
-                );
-              }
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => goTo(id, false)}
-                  className={navItemClass}
-                >
-                  {label}
-                  {underline}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Center column left empty (logo removed) to keep nav and actions aligned */}
-        <div />
-
-        <div className="flex items-center justify-end gap-1">
-          {authEnabled && authButtons && (
-            <div className="hidden items-center sm:flex">{authButtons}</div>
-          )}
-          {searchOpen ? (
-            <div className="absolute right-4 top-full mt-2 w-[280px] md:relative md:right-0 md:mt-0 md:block md:w-[240px]">
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search"
-                className="pl-10 py-2.5"
-                autoFocus
-                onBlur={() => setSearchOpen(false)}
-              />
-              <Search size={28} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" strokeWidth={2.5} />
-            </div>
-          ) : (
+      <div className="mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-mobile)] py-3 md:px-[var(--gutter-tablet)] md:py-4">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setSearchOpen(true)}
-              aria-label="Search"
-              className="md:flex"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Open menu"
+              className="md:hidden"
             >
-              <Search size={28} strokeWidth={2.5} />
+              <Menu size={20} />
             </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Wishlist"
-            className={cn("relative", wishCount > 0 && "text-[var(--color-accent-gold)]")}
-            asChild
-          >
-            <Link href="/wishlist">
-              <Heart size={28} strokeWidth={2.5} />
-              {wishCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-xs font-semibold text-white">
-                  {wishCount}
-                </span>
-              )}
-            </Link>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Bag"
-            className={cn("relative", cartCount > 0 && "text-[var(--color-accent-gold)]")}
-            asChild
-          >
-            <Link href="/bag">
-              <ShoppingBag size={28} strokeWidth={2.5} />
-              {cartCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-xs font-semibold text-white">
-                  {cartCount}
-                </span>
-              )}
-            </Link>
-          </Button>
+            <div className="hidden items-center gap-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)] md:flex">
+              <Link href="/about" className="hover:text-[var(--color-green)]">
+                About Us
+              </Link>
+              <Link href="/contact-support" className="hover:text-[var(--color-green)]">
+                Stores
+              </Link>
+            </div>
+          </div>
+
+          <Link href="/" className="flex items-center justify-center">
+            <Image
+              src="/logo.png"
+              alt="Sudatta's"
+              width={180}
+              height={56}
+              className="h-11 w-auto sm:h-12 md:h-14"
+              priority
+            />
+          </Link>
+
+          <div className="flex items-center justify-end gap-1.5">
+            {authEnabled && authButtons ? (
+              <div className="hidden items-center lg:flex">{authButtons}</div>
+            ) : null}
+            {!searchOpen ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSearchOpen(true)}
+                aria-label="Search"
+              >
+                <Search size={18} />
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Wishlist"
+              className={cn("relative", wishCount > 0 && "text-[var(--color-gold)]")}
+              asChild
+            >
+              <Link href="/wishlist">
+                <Heart size={18} />
+                {wishCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] px-1 text-[10px] font-semibold text-white">
+                    {wishCount}
+                  </span>
+                )}
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Bag"
+              className={cn("relative", cartCount > 0 && "text-[var(--color-gold)]")}
+              asChild
+            >
+              <Link href="/bag">
+                <ShoppingBag size={18} />
+                {cartCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] px-1 text-[10px] font-semibold text-white">
+                    {cartCount}
+                  </span>
+                )}
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        {searchOpen ? (
+          <div className="mt-3 flex items-center gap-2 border-t border-[var(--color-line)] pt-3">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search collections, fabrics, styles"
+              className="h-10"
+              autoFocus
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSearchOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="hidden border-t border-[var(--color-line)] md:block">
+        <div className="mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-tablet)] py-2.5">
+          <nav className="flex flex-wrap items-center justify-center gap-x-7 gap-y-2">
+            {NAV_LINKS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => navigate(id)}
+                className="group relative text-[11px] font-semibold uppercase tracking-[0.17em] text-[var(--color-ink)] hover:text-[var(--color-green)]"
+              >
+                {label}
+                <span className="absolute -bottom-1 left-0 h-px w-0 bg-[var(--color-gold)] transition-all group-hover:w-full" />
+              </button>
+            ))}
+          </nav>
         </div>
       </div>
     </header>

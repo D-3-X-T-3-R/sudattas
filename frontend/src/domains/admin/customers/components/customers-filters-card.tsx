@@ -1,10 +1,10 @@
 "use client";
 
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Download, Filter } from "lucide-react";
+import { AdminFilterCard } from "@/components/admin/admin-cards";
 
 type CustomersFiltersCardProps = {
   searchQuery: string;
@@ -32,12 +32,8 @@ export function CustomersFiltersCard({
   exportDisabled,
 }: CustomersFiltersCardProps) {
   return (
-    <Card className="rounded-xl border-[var(--color-line)] border-l-4 border-l-teal-500 bg-white shadow-[var(--admin-card-shadow)]">
-      <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
-        <Filter className="h-4 w-4 text-teal-500" />
-        Filters
-      </CardTitle>
-      <CardContent className="mt-3 flex flex-wrap items-end gap-3">
+    <AdminFilterCard title="Filters" icon={<Filter className="h-4 w-4 text-[var(--color-green)]" />}>
+      <div className="flex flex-wrap items-end gap-3">
         <div>
           <label htmlFor="customers-search" className="mb-1 block text-xs text-[var(--color-muted)]">
             Search
@@ -51,9 +47,10 @@ export function CustomersFiltersCard({
               setPage(1);
               setSearchQuery(e.target.value);
             }}
-            className="h-9 w-56 rounded-md"
+            className="h-10 w-64"
           />
         </div>
+
         <div>
           <label htmlFor="customers-auth" className="mb-1 block text-xs text-[var(--color-muted)]">
             Auth
@@ -61,7 +58,7 @@ export function CustomersFiltersCard({
           <select
             id="customers-auth"
             className={cn(
-              "h-9 min-w-[8rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+              "h-10 min-w-[8rem] rounded-md border border-[var(--color-line)] bg-white px-3 text-sm",
               "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
             )}
             value={filterAuth}
@@ -75,6 +72,7 @@ export function CustomersFiltersCard({
             <option value="google">Google</option>
           </select>
         </div>
+
         <div>
           <label htmlFor="customers-page-size" className="mb-1 block text-xs text-[var(--color-muted)]">
             Per page
@@ -82,7 +80,7 @@ export function CustomersFiltersCard({
           <select
             id="customers-page-size"
             className={cn(
-              "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+              "h-10 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-3 text-sm",
               "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
             )}
             value={String(pageSize)}
@@ -96,9 +94,11 @@ export function CustomersFiltersCard({
             <option value="100">100</option>
           </select>
         </div>
+
         <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
           Refresh
         </Button>
+
         <Button
           type="button"
           variant="outline"
@@ -109,7 +109,7 @@ export function CustomersFiltersCard({
           <Download className="mr-1.5 h-4 w-4" />
           Export CSV
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </AdminFilterCard>
   );
 }

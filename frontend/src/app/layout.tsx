@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Playfair_Display } from "next/font/google";
+import { Plus_Jakarta_Sans, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { StorefrontProvider } from "@/context/storefront-context";
@@ -13,10 +13,11 @@ const playfair = Playfair_Display({
   weight: ["400", "500", "600", "700"],
 });
 
-/** Body / UI: Inter */
-const sans = Inter({
+/** Body / UI: Plus Jakarta Sans */
+const sans = Plus_Jakarta_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -35,7 +36,7 @@ export default function RootLayout({
     "@type": "Organization",
     name: "Sudatta's",
     url: base,
-    logo: `${base}/logo.svg`,
+    logo: `${base}/logo.png`,
     sameAs: [base],
   };
 
@@ -61,5 +62,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-

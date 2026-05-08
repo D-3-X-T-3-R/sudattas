@@ -17,14 +17,14 @@ export function ProductPageClient({ product, sizes }: ProductPageClientProps) {
   const { wishlist, toggleWish, addToCart } = useStorefront();
 
   return (
-    <div className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--color-ink)]">
       <SiteHeader />
 
-      <div className="mx-auto min-w-0 max-w-[2000px] px-4 py-4">
+      <div className="mx-auto min-w-0 max-w-[var(--container-max)] px-[var(--gutter-mobile)] py-6 md:px-[var(--gutter-tablet)] md:py-8">
         <Button
           variant="ghost"
           size="sm"
-          className="mb-4 -ml-2 text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+          className="mb-4 -ml-1 text-[var(--color-muted)] hover:text-[var(--color-green)]"
           asChild
         >
           <Link href="/" className="flex items-center gap-2">

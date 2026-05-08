@@ -22,8 +22,8 @@ export function MobileBottomBar({
   reduceMotion = false,
 }: MobileBottomBarProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-[var(--color-line)] bg-[var(--color-ivory)]/88 backdrop-blur md:hidden">
-      <div className="mx-auto max-w-[2000px] px-4 py-2">
+    <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-[var(--color-line)] bg-[var(--color-surface)]/95 backdrop-blur md:hidden">
+      <div className="mx-auto max-w-[var(--container-max)] px-[var(--gutter-mobile)] py-2">
         <div className="flex items-center justify-between">
           <button
             type="button"
@@ -40,15 +40,15 @@ export function MobileBottomBar({
               size="icon"
               aria-label="Wishlist"
               className={cn(
-                "relative border-[var(--color-line)] bg-white",
-                wishCount > 0 && "border-[var(--color-accent-gold)] text-[var(--color-accent-gold)]"
+                "relative h-9 w-9 rounded-md border-[var(--color-line)] bg-[var(--color-surface)]",
+                wishCount > 0 && "border-[var(--color-gold)] text-[var(--color-gold)]"
               )}
               asChild
             >
               <Link href="/wishlist">
                 <Heart className="h-5 w-5" />
                 {wishCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
+                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] font-sans text-[10px] font-semibold text-white">
                     {wishCount}
                   </span>
                 )}
@@ -60,13 +60,13 @@ export function MobileBottomBar({
               onClick={onCartOpen}
               aria-label="Bag"
               className={cn(
-                "relative border-[var(--color-line)] bg-white",
-                cartCount > 0 && "text-[var(--color-accent-gold)] border-[var(--color-accent-gold)]"
+                "relative h-9 w-9 rounded-md border-[var(--color-line)] bg-[var(--color-surface)]",
+                cartCount > 0 && "text-[var(--color-gold)] border-[var(--color-gold)]"
               )}
             >
               <ShoppingBag className="h-5 w-5" />
               {cartCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-[10px] font-semibold text-white">
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] font-sans text-[10px] font-semibold text-white">
                   {cartCount}
                 </span>
               )}

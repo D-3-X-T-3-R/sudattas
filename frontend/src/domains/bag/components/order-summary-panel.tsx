@@ -1,7 +1,7 @@
 import { INR } from "@/lib/constants";
 import { formatInrFromPaise } from "@/lib/money";
 import type { CartLine } from "@/lib/schemas";
-import { ArrowRightIcon, BagIcon } from "@/domains/bag/components/bag-shared";
+import { SummaryCard } from "@/components/ui/page-shell";
 
 type OrderSummaryPanelProps = {
   cartLines: CartLine[];
@@ -25,69 +25,58 @@ export function OrderSummaryPanel({
   onCheckout,
 }: OrderSummaryPanelProps) {
   const totalAmount = cartSubtotal + shippingAmount;
+
   return (
-    <div className="overflow-hidden rounded-[30px] bg-[radial-gradient(circle_at_top,rgba(201,166,70,0.22),transparent_42%),linear-gradient(165deg,#0E3D2F_0%,#114636_48%,#082E24_100%)] text-[#F6F3EA] shadow-[0_2px_8px_rgba(15,61,46,0.06)]">
-      <div className="p-6 sm:p-7">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 text-[#E7CF82] shadow-[0_12px_24px_rgba(0,0,0,0.18)]">
-            <BagIcon className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E7CF82]">
-              Price Details
+    <SummaryCard
+      title="Order Summary"
+      subtitle={`${cartCount} ${cartCount === 1 ? "item" : "items"} selected`}
+      className="lg:sticky lg:top-24"
+    >
+      <div className="space-y-2">
+        {cartLines.map(({ id, product, qty, sizeName }) => (
+          <div key={id} className="flex items-start justify-between gap-3 text-sm">
+            <p className="text-[var(--color-muted)]">
+              {product.name}
+              {sizeName && sizeName.toLowerCase() !== "free size" ? ` / ${sizeName}` : ""} x {qty}
             </p>
-            <p className="mt-1 text-sm text-[#F6F3EA]/78">
-              {cartCount} {cartCount === 1 ? "item" : "items"} in your bag
+            <p className="font-medium text-[var(--color-ink)]">
+              {formatInrFromPaise(qty * (product.pricePaise ?? Math.round(product.price * 100)))}
             </p>
           </div>
-        </div>
+        ))}
+      </div>
 
-        <div className="mt-7 rounded-[24px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          {cartLines.map(({ id, product, qty, sizeName }) => (
-            <div key={id} className="mb-3 flex items-center justify-between gap-4">
-              <span className="text-sm text-[#F6F3EA]/82">
-                {product.name}
-                {sizeName && sizeName.toLowerCase() !== "free size" ? ` / ${sizeName}` : ""} x {qty}
-              </span>
-              <span className="text-sm font-medium text-white">
-                {formatInrFromPaise(qty * (product.pricePaise ?? Math.round(product.price * 100)))}
-              </span>
-            </div>
-          ))}
-          <div className="my-4 border-t border-white/10" />
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-sm text-[#F6F3EA]/82">Subtotal</span>
-            <span className="text-sm font-medium text-white">{INR.format(cartSubtotal)}</span>
-          </div>
-          <div className="mt-3 flex items-center justify-between gap-4">
-            <span className="text-sm text-[#F6F3EA]/65">Shipping</span>
-            <span className="text-sm font-medium text-[#F6F3EA]/70">
-              {shippingLoading ? "Calculating..." : INR.format(shippingAmount)}
-            </span>
-          </div>
-          {shippingNote ? (
-            <p className="mt-2 text-xs text-[#F6F3EA]/70">{shippingNote}</p>
-          ) : null}
-          <div className="my-5 border-t border-white/10" />
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-semibold text-[#F6F3EA]">Total Amount</span>
-            <span className="text-3xl font-semibold text-white">{INR.format(totalAmount)}</span>
-          </div>
+      <div className="mt-4 space-y-2 border-t border-[var(--color-line)] pt-4 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-[var(--color-muted)]">Subtotal</span>
+          <span className="font-medium text-[var(--color-ink)]">{INR.format(cartSubtotal)}</span>
         </div>
-
-        <div className="mt-7">
-          <button
-            type="button"
-            onClick={onCheckout}
-            disabled={checkoutLoading || cartCount === 0}
-            aria-busy={checkoutLoading}
-            className="group inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#C9A646] px-5 text-[11px] font-semibold uppercase tracking-[0.24em] text-white shadow-[0_16px_28px_rgba(201,166,70,0.28)] transition duration-300 hover:-translate-y-1 hover:bg-[#B89435] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-[#C9A646]"
-          >
-            {checkoutLoading ? "Processing..." : "Checkout"}
-            <ArrowRightIcon className="h-4 w-4 transition duration-300 group-hover:translate-x-1" />
-          </button>
+        <div className="flex items-center justify-between">
+          <span className="text-[var(--color-muted)]">Shipping</span>
+          <span className="font-medium text-[var(--color-ink)]">
+            {shippingLoading ? "Calculating..." : INR.format(shippingAmount)}
+          </span>
+        </div>
+        {shippingNote ? <p className="text-xs text-[var(--color-muted)]">{shippingNote}</p> : null}
+        <div className="flex items-center justify-between border-t border-[var(--color-line)] pt-3">
+          <span className="text-sm font-semibold text-[var(--color-ink)]">Total</span>
+          <span className="text-2xl font-semibold text-[var(--color-green)]">{INR.format(totalAmount)}</span>
         </div>
       </div>
-    </div>
+
+      <button
+        type="button"
+        onClick={onCheckout}
+        disabled={checkoutLoading || cartCount === 0}
+        aria-busy={checkoutLoading}
+        className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md border border-[var(--color-green)] bg-[var(--color-green)] px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-[var(--color-green-2)] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {checkoutLoading ? "Processing..." : "Proceed To Checkout"}
+      </button>
+
+      <p className="mt-2 text-center text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--color-muted)]">
+        Secure payments and verified order updates
+      </p>
+    </SummaryCard>
   );
 }
