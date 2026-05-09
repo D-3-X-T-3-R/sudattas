@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { SiteHeader } from "@/components/site-header";
 import { Footer } from "@/components/footer";
 import type { StorefrontCollectionPageData } from "@/lib/storefront-collection-page";
 import { PageShell, SectionHeader, EmptyState } from "@/components/ui/page-shell";
@@ -73,7 +72,6 @@ export function StorefrontCollectionPageContent({
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <SiteHeader />
       <PageShell wide containerClassName="py-8 md:py-10">
         <SectionHeader
           label="Collection"

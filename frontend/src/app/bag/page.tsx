@@ -4,7 +4,6 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
-import { SiteHeader } from "@/components/site-header";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useStorefront } from "@/context/storefront-context";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
@@ -354,7 +353,6 @@ export default function BagPage() {
 
   return (
     <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
-      <SiteHeader />
       <main className="mx-auto w-full max-w-[1380px] px-[var(--gutter-mobile)] pb-20 pt-8 md:px-[var(--gutter-tablet)] md:pb-14 md:pt-10">
         {cartLines.length === 0 ? (
           <BagEmptyState />

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { SiteHeader } from "@/components/site-header";
 import type { CatalogSize } from "@/components/wishlist-grid";
 import { WishlistGrid } from "@/components/wishlist-grid";
 import { PageShell, SectionHeader } from "@/components/ui/page-shell";
@@ -106,7 +105,6 @@ export default function WishlistPage() {
 
   return (
     <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
-      <SiteHeader />
       <PageShell containerClassName="pt-8 pb-20 md:pt-10 md:pb-14">
         <SectionHeader
           label="Wishlist"

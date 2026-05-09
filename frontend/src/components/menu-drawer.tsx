@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { COLLECTIONS } from "@/lib/constants";
-import { goTo, setPendingHomeSection } from "@/hooks/use-scroll-to";
+import { goTo, setPendingHomeCollection, setPendingHomeSection } from "@/hooks/use-scroll-to";
 
 export interface MenuDrawerProps {
   open: boolean;
@@ -72,6 +72,7 @@ export function MenuDrawer({
                 key={c.key}
                 type="button"
                 onClick={() => {
+                  setPendingHomeCollection(c.key);
                   setCollection(c.key);
                   navigateToSection("shop");
                   onClose();
@@ -84,6 +85,7 @@ export function MenuDrawer({
             <button
               type="button"
               onClick={() => {
+                setPendingHomeCollection("All");
                 setCollection("All");
                 navigateToSection("shop");
                 onClose();

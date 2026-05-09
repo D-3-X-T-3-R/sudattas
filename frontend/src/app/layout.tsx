@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { StorefrontProvider } from "@/context/storefront-context";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
+import { SiteHeader } from "@/components/site-header";
 import { siteUrl } from "@/lib/site-url";
 
 /** Headings: Playfair Display */
@@ -54,7 +55,10 @@ export default function RootLayout({
         <div className="storefront-root min-h-screen w-full min-w-0">
           <Providers>
             <AppErrorBoundary>
-              <StorefrontProvider>{children}</StorefrontProvider>
+              <StorefrontProvider>
+                <SiteHeader />
+                {children}
+              </StorefrontProvider>
             </AppErrorBoundary>
           </Providers>
         </div>

@@ -15,7 +15,6 @@ const NAV_LINKS = [
   { id: "category-collections", label: "Collections" },
   { id: "shop", label: "New Arrivals" },
   { id: "explore", label: "Explore" },
-  { id: "story", label: "Story" },
 ] as const;
 
 export interface HeaderProps {
@@ -28,6 +27,27 @@ export interface HeaderProps {
   navUseHashLinks?: boolean;
   authEnabled?: boolean;
   authButtons?: React.ReactNode;
+}
+
+function WishlistLink({ wishCount, desktop = false }: { wishCount: number; desktop?: boolean }) {
+  return (
+    <Link
+      href="/wishlist"
+      className={cn(
+        "relative inline-flex h-9 w-9 items-center justify-center rounded-md text-[var(--color-ink)] transition-colors hover:text-[var(--color-green)]",
+        desktop && "border border-transparent hover:border-[var(--color-line)]",
+        wishCount > 0 && "text-[var(--color-gold)]"
+      )}
+      aria-label="Wishlist"
+    >
+      <Heart size={desktop ? 15 : 18} />
+      {wishCount > 0 && (
+        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] px-1 text-[10px] font-semibold text-white">
+          {wishCount}
+        </span>
+      )}
+    </Link>
+  );
 }
 
 export function Header({
@@ -68,62 +88,31 @@ export function Header({
         scrolled && "shadow-[0_5px_18px_rgba(45,42,38,0.07)]"
       )}
     >
-      <div className="mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-mobile)] py-2.5 md:px-[var(--gutter-tablet)] md:py-3">
-        <div className="flex items-center justify-between gap-3 md:gap-4">
-          <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-4">
+      <div className="relative mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-mobile)] py-2.5 md:px-[var(--gutter-tablet)] lg:py-3">
+        <div className="flex items-center justify-between gap-3 lg:hidden">
+          <div className="flex min-w-0 flex-1 items-center">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setMenuOpen(true)}
               aria-label="Open menu"
-              className="h-9 w-9 rounded-md md:hidden"
+              className="h-9 w-9 rounded-md"
             >
               <Menu size={20} />
             </Button>
-            <div className="hidden items-center gap-5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--color-muted)] md:flex">
-              <Link href="/about" className="hover:text-[var(--color-green)]">
-                About Us
-              </Link>
-              <Link href="/contact-support" className="hover:text-[var(--color-green)]">
-                Stores
-              </Link>
-            </div>
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-0.5 md:gap-1">
-            {authEnabled && authButtons ? (
-              <div className="hidden items-center pr-1 lg:flex">{authButtons}</div>
-            ) : null}
-            {!searchOpen ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSearchOpen(true)}
-                aria-label="Search"
-                className="h-9 w-9 rounded-md"
-              >
-                <Search size={18} />
-              </Button>
-            ) : null}
+          <div className="flex shrink-0 items-center justify-end gap-0.5">
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Wishlist"
-              className={cn(
-                "relative h-9 w-9 rounded-md",
-                wishCount > 0 && "text-[var(--color-gold)]"
-              )}
-              asChild
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search"
+              className="h-9 w-9 rounded-md"
             >
-              <Link href="/wishlist">
-                <Heart size={18} />
-                {wishCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] px-1 text-[10px] font-semibold text-white">
-                    {wishCount}
-                  </span>
-                )}
-              </Link>
+              <Search size={18} />
             </Button>
+            <WishlistLink wishCount={wishCount} />
             <Button
               variant="ghost"
               size="icon"
@@ -146,43 +135,86 @@ export function Header({
           </div>
         </div>
 
-        {searchOpen ? (
-          <div className="mt-2.5 flex items-center gap-2 border-t border-[var(--color-line)] pt-2.5">
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search collections, fabrics, styles"
-              className="h-9"
-              autoFocus
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setSearchOpen(false)}
-            >
-              Close
-            </Button>
-          </div>
-        ) : null}
-      </div>
+        <div className="hidden grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-8 lg:grid xl:gap-10">
+          <nav
+            className="flex items-center gap-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]"
+            aria-label="Utility"
+          >
+            <Link href="/about" className="transition-colors hover:text-[var(--color-green)]">
+              About Us
+            </Link>
+            <Link href="/contact-support" className="transition-colors hover:text-[var(--color-green)]">
+              Stores
+            </Link>
+          </nav>
 
-      <div className="hidden border-t border-[var(--color-line)]/95 md:block">
-        <div className="mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-tablet)] py-2">
-          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 lg:gap-x-6">
+          <nav
+            className="flex min-w-0 items-center justify-center gap-5 xl:gap-6"
+            aria-label="Primary"
+          >
             {NAV_LINKS.map(({ id, label }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => navigate(id)}
-                className="group relative px-0.5 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--color-ink)] hover:text-[var(--color-green)]"
+                className="group relative whitespace-nowrap px-0.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-green)]"
               >
                 {label}
                 <span className="absolute -bottom-1 left-0 h-px w-0 bg-[var(--color-gold)] transition-all group-hover:w-full" />
               </button>
             ))}
           </nav>
+
+          <div className="flex shrink-0 items-center justify-end gap-2 text-[11px] font-semibold uppercase tracking-[0.14em]">
+            {authEnabled && authButtons ? <div className="flex items-center">{authButtons}</div> : null}
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-[var(--color-ink)] transition-colors hover:border-[var(--color-line)] hover:text-[var(--color-green)]"
+              aria-label="Search"
+            >
+              <Search size={15} />
+            </button>
+            <WishlistLink wishCount={wishCount} desktop />
+            <Link
+              href="/bag"
+              className={cn(
+                "relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-[var(--color-ink)] transition-colors hover:border-[var(--color-line)] hover:text-[var(--color-green)]",
+                cartCount > 0 && "text-[var(--color-gold)]"
+              )}
+              aria-label="Bag"
+            >
+              <ShoppingBag size={15} />
+              {cartCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] px-1 text-[10px] font-semibold text-white">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
+          </div>
         </div>
+
+        {searchOpen ? (
+          <div className="absolute left-[var(--gutter-mobile)] right-[var(--gutter-mobile)] top-full z-50 mt-2 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-soft)] md:left-[var(--gutter-tablet)] md:right-[var(--gutter-tablet)] lg:left-auto lg:w-[420px]">
+            <div className="flex items-center gap-2">
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search collections, fabrics, styles"
+                className="h-9"
+                autoFocus
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSearchOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </header>
   );

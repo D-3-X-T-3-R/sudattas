@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { signOut, useSession } from "next-auth/react";
-import { SiteHeader } from "@/components/site-header";
 import { RouteFailureBanner } from "@/components/route-failure-banner";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
@@ -554,7 +553,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
-      <SiteHeader />
       <PageShell wide containerClassName="pt-4 pb-10 md:pt-6">
         {loadingSession ? (
           <p className="text-sm text-[var(--color-muted)]">Loading profile...</p>

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 
 export function HeroSection() {
@@ -15,27 +14,18 @@ export function HeroSection() {
     >
       <div className="mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
         <div className="overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]">
-          <div className="relative">
-            <div className="block md:hidden">
-              <Image
-                src="/hero/hero-sudattas-6.png"
-                alt="Sudatta's handcrafted sarees hero - mobile"
-                width={3200}
-                height={2133}
-                className="h-auto w-full"
-                priority
-              />
-            </div>
-            <div className="hidden md:block">
-              <Image
-                src="/hero/hero-sudattas-full-2.png"
-                alt="Sudatta's handcrafted sarees hero - desktop"
-                width={3200}
-                height={2133}
-                className="h-auto w-full"
-                priority
-              />
-            </div>
+          <div className="relative aspect-[3200/2133]">
+            <video
+              className="h-full w-full object-cover"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              poster="/hero/hero-sudattas-full-2.png"
+            >
+              <source src="/videos/hero_brand.mp4" type="video/mp4" />
+            </video>
           </div>
         </div>
       </div>

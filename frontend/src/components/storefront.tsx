@@ -1,27 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
-import { User } from "lucide-react";
-import { useSession } from "next-auth/react";
 import { useStorefront } from "@/context/storefront-context";
-import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { useStorefrontCatalog } from "@/domains/storefront/hooks/use-storefront-catalog";
 import { useStorefrontNavigationEffects } from "@/domains/storefront/hooks/use-storefront-navigation-effects";
 import { useActiveSection } from "@/hooks/use-active-section";
-import { useLockBodyScroll } from "@/hooks/use-lock-body-scroll";
 import { ensureGuestSession } from "@/lib/session";
-import { goTo } from "@/hooks/use-scroll-to";
-import { Header } from "@/components/header";
+import { consumePendingHomeCollection, goTo, PENDING_HOME_COLLECTION_EVENT } from "@/hooks/use-scroll-to";
 import { HeroSection } from "@/components/hero-section";
+import { BlockPrintStorySection } from "@/components/block-print-story-section";
 import { CollectionsSection } from "@/components/collections-section";
 import { CategoriesSection } from "@/components/categories-section";
 import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
-import { MenuDrawer } from "@/components/menu-drawer";
 import { MobileBottomBar } from "@/components/mobile-bottom-bar";
 import { Section } from "@/components/ui/section";
 import { TrustStrip } from "@/components/trust-strip";
@@ -61,16 +55,11 @@ const Footer = dynamic(() => import("@/components/footer").then((m) => m.Footer)
 export function Storefront() {
   const pathname = usePathname();
   const router = useRouter();
-  const { status, data: session } = useSession();
-  const { openLogin } = useStorefrontLogin();
   const reduceMotion = !!useReducedMotion();
   const { showToast } = useToast();
   const { wishlist, toggleWish, cartCount, wishCount } = useStorefront();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const {
-    query,
-    setQuery,
     collection,
     setCollection,
     occasion,
@@ -92,56 +81,38 @@ export function Storefront() {
   } = useStorefrontCatalog({ showToast });
 
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
-  useLockBodyScroll(menuOpen);
   useStorefrontNavigationEffects({ pathname, reduceMotion, loadingProducts });
 
   useEffect(() => {
     void ensureGuestSession();
   }, []);
 
+  useEffect(() => {
+    const applyPendingCollection = () => {
+      const pendingCollection = consumePendingHomeCollection();
+      if (pendingCollection) setCollection(pendingCollection);
+    };
+
+    applyPendingCollection();
+
+    const onPendingCollection = (event: Event) => {
+      if (event instanceof CustomEvent && typeof event.detail === "string") {
+        consumePendingHomeCollection();
+        setCollection(event.detail);
+        return;
+      }
+      applyPendingCollection();
+    };
+
+    window.addEventListener(PENDING_HOME_COLLECTION_EVENT, onPendingCollection);
+    return () => window.removeEventListener(PENDING_HOME_COLLECTION_EVENT, onPendingCollection);
+  }, [setCollection]);
+
   const goToProduct = (id: string) => router.push(`/product/${id}`);
   const goToWithMotion = (id: string, instant?: boolean) => goTo(id, instant ?? reduceMotion);
 
-  const firstName = useMemo(() => {
-    const rawName = session?.user?.name?.trim() ?? "";
-    const looksLikePhone = /^\+?\d{10,15}$/.test(rawName);
-    return !rawName || looksLikePhone ? "Profile" : rawName.split(/\s+/)[0];
-  }, [session?.user?.name]);
-
   return (
     <div id="top" className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <Header
-        query={query}
-        setQuery={setQuery}
-        cartCount={cartCount}
-        wishCount={wishCount}
-        setMenuOpen={setMenuOpen}
-        goTo={goToWithMotion}
-        authEnabled
-        authButtons={
-          status === "authenticated" ? (
-            <Link
-              href="/profile"
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-gold)] hover:text-[var(--color-green)]"
-              aria-label="Open profile"
-            >
-              <User size={14} />
-              {firstName}
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={() => openLogin()}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-gold)] hover:text-[var(--color-green)]"
-              aria-label="Sign in"
-            >
-              <User size={14} />
-              Sign In
-            </button>
-          )
-        }
-      />
-
       <HeroSection />
       <Section compact className="pt-5">
         <TrustStrip />
@@ -229,15 +200,9 @@ export function Storefront() {
       )}
 
       <EditorialBlock />
+      <BlockPrintStorySection />
       <StorySection />
       <Footer goTo={goToWithMotion} />
-
-      <MenuDrawer
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        setCollection={setCollection}
-        reduceMotion={reduceMotion}
-      />
 
       <MobileBottomBar
         activeSection={activeSection}

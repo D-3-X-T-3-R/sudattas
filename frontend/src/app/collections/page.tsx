@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SiteHeader } from "@/components/site-header";
 import { Footer } from "@/components/footer";
 import { PageShell, SectionHeader, EmptyState } from "@/components/ui/page-shell";
 import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
@@ -56,7 +55,6 @@ export default async function CollectionsIndexPage() {
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <SiteHeader />
       <PageShell containerClassName="py-8 md:py-10">
         <script
           type="application/ld+json"
