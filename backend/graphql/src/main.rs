@@ -388,7 +388,14 @@ async fn main() {
                                     auth = Some(AuthSource::Session(user_id));
                                 }
                                 Err(e) => {
-                                    warn!(auth_method = "session", reason = %e, "Session validation failed");
+                                    warn!(
+                                        request_id = ?request_id,
+                                        auth_method = "session",
+                                        reason = %e,
+                                        client_action = ?x_client_action,
+                                        has_session = true,
+                                        "Session validation failed"
+                                    );
                                 }
                             }
                         } else {
@@ -465,9 +472,12 @@ async fn main() {
                 // --- No valid credentials ---
                 if auth.is_none() {
                     warn!(
+                        request_id = ?request_id,
                         has_jwt = token.is_some(),
                         has_session = session_id.is_some(),
                         has_internal = x_internal_auth.is_some(),
+                        has_guest_session_header = x_guest_session_id.is_some(),
+                        client_action = ?x_client_action,
                         "Request rejected: no valid authentication credentials"
                     );
                     return Err(warp::reject::custom(Unauthorized {}));
@@ -535,11 +545,7 @@ async fn main() {
                 let schema = schema.clone();
                 async move { graphql_handler::handle_graphql_request(ctx, body, schema).await }
             }
-        })
-        .with(cors.clone())
-        .with(warp::trace::trace(
-            |_| tracing::info_span!("request", request_id = %Uuid::new_v4()),
-        ));
+        });
     let graphql_copy = rate_limit_filter
         .clone()
         .and(graphql_route)
@@ -575,7 +581,7 @@ async fn main() {
             }
         });
 
-    let options_routes = warp::options().map(warp::reply).with(cors.clone());
+    let options_routes = warp::options().map(warp::reply);
 
     let shiprocket_webhook_route_inner = warp::post()
         .and(warp::path("blastoff"))
@@ -827,19 +833,24 @@ async fn main() {
     let routes = load_balancer_health_check
         .or(readiness_check)
         .or(metrics_route)
-        .or(guest_session_get.with(cors.clone()))
-        .or(guest_session_route.with(cors.clone()))
-        .or(otp_request_route.with(cors.clone()))
-        .or(otp_verify_route.with(cors.clone()))
+        .or(guest_session_get)
+        .or(guest_session_route)
+        .or(otp_request_route)
+        .or(otp_verify_route)
         .or(robots_route)
         .or(sitemap_route)
-        .or(invoice_download_route.with(cors.clone()))
+        .or(invoice_download_route)
         .or(graphql_copy)
         .or(webhook_route)
         .or(options_routes)
-        .recover(handle_auth_rejection);
+        .recover(handle_auth_rejection)
+        .with(cors.clone());
 
-    warp::serve(routes).run(listen_addr).await
+    let traced_routes = routes.with(warp::trace::trace(
+        |_| tracing::info_span!("request", request_id = %Uuid::new_v4()),
+    ));
+
+    warp::serve(traced_routes).run(listen_addr).await
 }
 
 async fn handle_auth_rejection(
@@ -952,5 +963,40 @@ mod cors_tests {
             .headers()
             .get("access-control-allow-credentials")
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn auth_rejection_maps_unauthorized_to_401() {
+        let response = handle_auth_rejection(warp::reject::custom(Unauthorized {}))
+            .await
+            .expect("infallible");
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn auth_rejection_after_recover_keeps_cors_headers() {
+        let origins = vec!["http://localhost:3000".to_string()];
+        let route = warp::any()
+            .and_then(|| async {
+                Err::<warp::reply::Response, _>(warp::reject::custom(Unauthorized {}))
+            })
+            .recover(handle_auth_rejection)
+            .with(build_cors(Some(&origins)));
+
+        let response = warp::test::request()
+            .method("POST")
+            .header("origin", "http://localhost:3000")
+            .reply(&route)
+            .await;
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response.headers()["access-control-allow-origin"],
+            "http://localhost:3000"
+        );
+        assert_eq!(
+            response.headers()["access-control-allow-credentials"],
+            "true"
+        );
     }
 }
