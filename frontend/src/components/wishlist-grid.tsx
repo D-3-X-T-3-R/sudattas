@@ -273,7 +273,7 @@ export function WishlistGrid({
         onConfirm={confirmSizeAndAdd}
       />
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 md:gap-5">
+      <div className="grid grid-cols-2 gap-4 md:gap-5 lg:grid-cols-4">
         {products.map((p) => (
           <WishlistCard key={p.id} p={p} onRemove={onRemove} onMoveToBag={handleMoveClick} />
         ))}

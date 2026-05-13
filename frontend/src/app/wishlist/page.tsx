@@ -114,7 +114,7 @@ export default function WishlistPage() {
 
         <div className="mt-8">
           {loading ? (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 md:gap-5">
+            <div className="grid grid-cols-2 gap-4 md:gap-5 lg:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={i}

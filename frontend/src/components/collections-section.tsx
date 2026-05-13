@@ -180,7 +180,7 @@ export function CollectionsSection({
         />
       </ScrollReveal>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-12 lg:items-stretch">
+      <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-12 lg:items-stretch">
         <AnimatePresence initial={false}>
           {leadCards.map((item, idx) => (
             <motion.div
@@ -208,7 +208,7 @@ export function CollectionsSection({
       </div>
 
       {overflowCards.length > 0 ? (
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4">
           {overflowCards.map((item, idx) => (
             <CollectionCard
               key={item.key}

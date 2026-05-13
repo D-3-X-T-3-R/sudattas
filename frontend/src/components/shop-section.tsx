@@ -43,7 +43,7 @@ export function ShopSection({
         />
       </ScrollReveal>
 
-      <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+      <div className="mt-8 grid grid-cols-2 gap-4 md:gap-5 lg:grid-cols-4">
         {preview.map((p, i) => (
           <ScrollReveal key={p.id} delay={i * 0.05}>
             <ProductCard
