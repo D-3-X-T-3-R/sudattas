@@ -10,11 +10,12 @@ import { cn } from "@/lib/utils";
 import { setPendingHomeSection } from "@/hooks/use-scroll-to";
 
 const NAV_LINKS = [
-  { id: "top", label: "Home" },
-  { id: "collections", label: "Moods" },
-  { id: "category-collections", label: "Collections" },
-  { id: "shop", label: "New Arrivals" },
-  { id: "explore", label: "Explore" },
+  { type: "section", id: "top", label: "Home" },
+  { type: "section", id: "collections", label: "Moods" },
+  { type: "section", id: "category-collections", label: "Collections" },
+  { type: "section", id: "shop", label: "New Arrivals" },
+  { type: "section", id: "explore", label: "Explore" },
+  { type: "route", href: "/about", label: "About Us" },
 ] as const;
 
 export interface HeaderProps {
@@ -135,34 +136,33 @@ export function Header({
           </div>
         </div>
 
-        <div className="hidden grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-8 lg:grid xl:gap-10">
+        <div className="hidden items-center justify-between gap-6 lg:flex">
           <nav
-            className="flex items-center gap-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]"
-            aria-label="Utility"
-          >
-            <Link href="/about" className="transition-colors hover:text-[var(--color-green)]">
-              About Us
-            </Link>
-            <Link href="/contact-support" className="transition-colors hover:text-[var(--color-green)]">
-              Stores
-            </Link>
-          </nav>
-
-          <nav
-            className="flex min-w-0 items-center justify-center gap-5 xl:gap-6"
+            className="flex min-w-0 items-center gap-4 xl:gap-5"
             aria-label="Primary"
           >
-            {NAV_LINKS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => navigate(id)}
-                className="group relative whitespace-nowrap px-0.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-green)]"
-              >
-                {label}
-                <span className="absolute -bottom-1 left-0 h-px w-0 bg-[var(--color-gold)] transition-all group-hover:w-full" />
-              </button>
-            ))}
+            {NAV_LINKS.map((link) =>
+              link.type === "route" ? (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="group relative whitespace-nowrap px-0.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-green)]"
+                >
+                  {link.label}
+                  <span className="absolute -bottom-1 left-0 h-px w-0 bg-[var(--color-gold)] transition-all group-hover:w-full" />
+                </Link>
+              ) : (
+                <button
+                  key={link.id}
+                  type="button"
+                  onClick={() => navigate(link.id)}
+                  className="group relative whitespace-nowrap px-0.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-green)]"
+                >
+                  {link.label}
+                  <span className="absolute -bottom-1 left-0 h-px w-0 bg-[var(--color-gold)] transition-all group-hover:w-full" />
+                </button>
+              )
+            )}
           </nav>
 
           <div className="flex shrink-0 items-center justify-end gap-2 text-[11px] font-semibold uppercase tracking-[0.14em]">

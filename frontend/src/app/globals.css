@@ -119,6 +119,58 @@ textarea {
   transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.storefront-range-input {
+  appearance: none;
+  pointer-events: none;
+}
+
+.storefront-range-input:focus {
+  outline: none;
+}
+
+.storefront-range-input::-webkit-slider-runnable-track {
+  height: 0.25rem;
+  appearance: none;
+  background: transparent;
+}
+
+.storefront-range-input::-webkit-slider-thumb {
+  appearance: none;
+  pointer-events: auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-top: -0.42rem;
+  border: 2px solid var(--color-surface);
+  border-radius: 999px;
+  background: var(--color-green);
+  box-shadow: 0 0 0 1px var(--color-line-strong), 0 3px 8px rgba(15, 61, 46, 0.2);
+  cursor: pointer;
+}
+
+.storefront-range-input::-moz-range-track {
+  height: 0.25rem;
+  background: transparent;
+}
+
+.storefront-range-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 2px solid var(--color-surface);
+  border-radius: 999px;
+  background: var(--color-green);
+  box-shadow: 0 0 0 1px var(--color-line-strong), 0 3px 8px rgba(15, 61, 46, 0.2);
+  cursor: pointer;
+}
+
+.storefront-range-input:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--color-focus), 0 3px 8px rgba(15, 61, 46, 0.2);
+}
+
+.storefront-range-input:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px var(--color-focus), 0 3px 8px rgba(15, 61, 46, 0.2);
+}
+
 :focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;

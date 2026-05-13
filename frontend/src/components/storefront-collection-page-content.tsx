@@ -3,27 +3,717 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { Footer } from "@/components/footer";
-import type { StorefrontCollectionPageData } from "@/lib/storefront-collection-page";
+import type {
+  CollectionCardProduct,
+  StorefrontCollectionPageData,
+} from "@/lib/storefront-collection-page";
 import { PageShell, SectionHeader, EmptyState } from "@/components/ui/page-shell";
+import {
+  formatInrFromPaise,
+  optionalRupeesInputToPaise,
+  paiseToRupeesInput,
+} from "@/lib/money";
+import { cn } from "@/lib/utils";
+import {
+  CheckboxGroup,
+  PriceRangeSlider,
+  SelectFilter,
+} from "@/components/storefront-filter-controls";
 
 const PLACEHOLDER_IMAGE =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='500' viewBox='0 0 400 500'%3E%3Crect fill='%23f0ede8' width='400' height='500'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle'%3ENo image%3C/text%3E%3C/svg%3E";
 
+const SORT_OPTIONS = [
+  { value: "featured", label: "Featured" },
+  { value: "price-asc", label: "Price: Low to High" },
+  { value: "price-desc", label: "Price: High to Low" },
+  { value: "name-asc", label: "Name: A-Z" },
+] as const;
+
+type SortOption = (typeof SORT_OPTIONS)[number]["value"];
+type FilterOption = { value: string; label: string; count: number };
+type AvailabilityValue = "in-stock" | "out-of-stock";
+type BlouseValue = "included" | "not-included";
+type ActiveChip = { key: string; label: string; onRemove: () => void };
+
+type FilterSelection = {
+  selectedCategories: string[];
+  selectedFabrics: string[];
+  selectedOccasions: string[];
+  selectedCrafts: string[];
+  selectedSizes: string[];
+  selectedBlouse: BlouseValue[];
+  selectedAvailability: AvailabilityValue[];
+  minPricePaise: number | null;
+  maxPricePaise: number | null;
+};
+
+type FilterVisibility = {
+  category: boolean;
+  price: boolean;
+  fabric: boolean;
+  occasion: boolean;
+  craft: boolean;
+  size: boolean;
+  blouse: boolean;
+  availability: boolean;
+};
+
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "3XL"] as const;
+
+function normalizeSizeName(name: string): string {
+  const normalized = name.trim().toUpperCase().replace(/\s+/g, "");
+  return normalized === "XXXL" ? "3XL" : normalized;
+}
+
 function isExternalProductImage(src: string | undefined): boolean {
   if (!src || src.startsWith("/") || src.startsWith("data:")) return false;
   try {
-    const host = new URL(src).hostname;
-    return host !== "images.unsplash.com";
+    return new URL(src).hostname !== "images.unsplash.com";
   } catch {
     return false;
   }
 }
 
-function parsePriceToNumber(label: string): number {
-  const digits = label.replace(/[^0-9.]/g, "");
-  const value = Number.parseFloat(digits);
-  return Number.isFinite(value) ? value : 0;
+function buildOptions(
+  products: CollectionCardProduct[],
+  getValue: (product: CollectionCardProduct) => string | null | undefined
+): FilterOption[] {
+  const counts = new Map<string, number>();
+  for (const product of products) {
+    const value = (getValue(product) ?? "").trim();
+    if (!value) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ value, label: value, count }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function buildBlouseOptions(products: CollectionCardProduct[]): FilterOption[] {
+  let included = 0;
+  let notIncluded = 0;
+  for (const product of products) {
+    if (product.hasBlousePiece == null) continue;
+    if (product.hasBlousePiece) included += 1;
+    else notIncluded += 1;
+  }
+  return [
+    ...(included > 0
+      ? [{ value: "included", label: "Blouse piece included", count: included }]
+      : []),
+    ...(notIncluded > 0
+      ? [{ value: "not-included", label: "No blouse piece", count: notIncluded }]
+      : []),
+  ];
+}
+
+function productKnownStock(product: CollectionCardProduct): number | null {
+  if (product.variantStock.length > 0) {
+    return product.variantStock.reduce((sum, row) => sum + Math.max(0, row.quantity), 0);
+  }
+  const stock = product.stockQuantity?.trim();
+  if (!stock) return null;
+  const parsed = Number.parseInt(stock, 10);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+}
+
+function buildAvailabilityOptions(products: CollectionCardProduct[]): FilterOption[] {
+  let inStock = 0;
+  let outOfStock = 0;
+  for (const product of products) {
+    const stock = productKnownStock(product);
+    if (stock == null) continue;
+    if (stock > 0) inStock += 1;
+    else outOfStock += 1;
+  }
+  return [
+    ...(inStock > 0 ? [{ value: "in-stock", label: "In stock", count: inStock }] : []),
+    ...(outOfStock > 0
+      ? [{ value: "out-of-stock", label: "Out of stock", count: outOfStock }]
+      : []),
+  ];
+}
+
+function buildSizeOptions(products: CollectionCardProduct[]): FilterOption[] {
+  const counts = new Map<string, number>();
+  for (const product of products) {
+    const productSizes = new Set(
+      product.variantStock
+        .map((row) => normalizeSizeName(row.sizeName))
+        .filter((name) => name && name !== "FREESIZE")
+    );
+    for (const size of productSizes) {
+      counts.set(size, (counts.get(size) ?? 0) + 1);
+    }
+  }
+  return SIZE_ORDER.filter((size) => counts.has(size)).map((size) => ({
+    value: size,
+    label: size,
+    count: counts.get(size) ?? 0,
+  }));
+}
+
+function hasUsefulOptions(options: FilterOption[], totalProducts: number): boolean {
+  if (options.length > 1) return true;
+  return options.length === 1 && options[0].count < totalProducts;
+}
+
+function toggleValue<T extends string>(values: T[], value: T): T[] {
+  return values.includes(value)
+    ? values.filter((entry) => entry !== value)
+    : [...values, value];
+}
+
+function filterMatches(product: CollectionCardProduct, selection: FilterSelection): boolean {
+  if (
+    selection.selectedCategories.length > 0 &&
+    !selection.selectedCategories.includes(product.categoryName)
+  ) {
+    return false;
+  }
+  if (selection.selectedFabrics.length > 0 && !selection.selectedFabrics.includes(product.fabric)) {
+    return false;
+  }
+  if (
+    selection.selectedOccasions.length > 0 &&
+    !selection.selectedOccasions.includes(product.occasion)
+  ) {
+    return false;
+  }
+  if (selection.selectedCrafts.length > 0 && !selection.selectedCrafts.includes(product.weave)) {
+    return false;
+  }
+  if (selection.selectedSizes.length > 0) {
+    const productSizes = product.variantStock
+      .map((row) => normalizeSizeName(row.sizeName))
+      .filter((name) => name && name !== "FREESIZE");
+    if (!productSizes.some((size) => selection.selectedSizes.includes(size))) return false;
+  }
+  if (selection.selectedBlouse.length > 0) {
+    const blouseValue =
+      product.hasBlousePiece == null ? null : product.hasBlousePiece ? "included" : "not-included";
+    if (!blouseValue || !selection.selectedBlouse.includes(blouseValue)) return false;
+  }
+  if (selection.selectedAvailability.length > 0) {
+    const stock = productKnownStock(product);
+    const value = stock == null ? null : stock > 0 ? "in-stock" : "out-of-stock";
+    if (!value || !selection.selectedAvailability.includes(value)) return false;
+  }
+  if (selection.minPricePaise != null && product.pricePaise < selection.minPricePaise) return false;
+  if (selection.maxPricePaise != null && product.pricePaise > selection.maxPricePaise) return false;
+  return true;
+}
+
+function sortProducts(products: CollectionCardProduct[], sortBy: SortOption): CollectionCardProduct[] {
+  if (sortBy === "price-asc") {
+    return [...products].sort((a, b) => a.pricePaise - b.pricePaise || a.name.localeCompare(b.name));
+  }
+  if (sortBy === "price-desc") {
+    return [...products].sort((a, b) => b.pricePaise - a.pricePaise || a.name.localeCompare(b.name));
+  }
+  if (sortBy === "name-asc") {
+    return [...products].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return products;
+}
+
+function useCollectionFilters(data: StorefrontCollectionPageData) {
+  const [sortBy, setSortBy] = useState<SortOption>("featured");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedFabrics, setSelectedFabrics] = useState<string[]>([]);
+  const [selectedOccasions, setSelectedOccasions] = useState<string[]>([]);
+  const [selectedCrafts, setSelectedCrafts] = useState<string[]>([]);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedBlouse, setSelectedBlouse] = useState<BlouseValue[]>([]);
+  const [selectedAvailability, setSelectedAvailability] = useState<AvailabilityValue[]>([]);
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+
+  const categoryOptions = useMemo(
+    () => buildOptions(data.products, (product) => product.categoryName),
+    [data.products]
+  );
+  const fabricOptions = useMemo(
+    () => buildOptions(data.products, (product) => product.fabric),
+    [data.products]
+  );
+  const occasionOptions = useMemo(
+    () => buildOptions(data.products, (product) => product.occasion),
+    [data.products]
+  );
+  const craftOptions = useMemo(
+    () => buildOptions(data.products, (product) => product.weave),
+    [data.products]
+  );
+  const blouseOptions = useMemo(() => buildBlouseOptions(data.products), [data.products]);
+  const availabilityOptions = useMemo(
+    () => buildAvailabilityOptions(data.products),
+    [data.products]
+  );
+  const sizeOptions = useMemo(() => buildSizeOptions(data.products), [data.products]);
+  const priceBounds = useMemo(() => {
+    const prices = data.products.map((product) => product.pricePaise).filter((price) => price >= 0);
+    return {
+      min: prices.length > 0 ? Math.min(...prices) : 0,
+      max: prices.length > 0 ? Math.max(...prices) : 0,
+    };
+  }, [data.products]);
+
+  const minPricePaise = optionalRupeesInputToPaise(minPrice);
+  const maxPricePaise = optionalRupeesInputToPaise(maxPrice);
+  const selectedMinPricePaise = minPricePaise ?? priceBounds.min;
+  const selectedMaxPricePaise = maxPricePaise ?? priceBounds.max;
+  const hasActivePriceFilter =
+    (minPricePaise != null && minPricePaise > priceBounds.min) ||
+    (maxPricePaise != null && maxPricePaise < priceBounds.max);
+  const setPriceRangePaise = (nextMinPaise: number, nextMaxPaise: number) => {
+    const boundedMin = Math.max(priceBounds.min, Math.min(nextMinPaise, priceBounds.max));
+    const boundedMax = Math.max(priceBounds.min, Math.min(nextMaxPaise, priceBounds.max));
+    const clampedMin = Math.min(boundedMin, boundedMax);
+    const clampedMax = Math.max(boundedMin, boundedMax);
+    setMinPrice(clampedMin <= priceBounds.min ? "" : paiseToRupeesInput(clampedMin));
+    setMaxPrice(clampedMax >= priceBounds.max ? "" : paiseToRupeesInput(clampedMax));
+  };
+  const selection: FilterSelection = useMemo(
+    () => ({
+      selectedCategories,
+      selectedFabrics,
+      selectedOccasions,
+      selectedCrafts,
+      selectedSizes,
+      selectedBlouse,
+      selectedAvailability,
+      minPricePaise,
+      maxPricePaise,
+    }),
+    [
+      maxPricePaise,
+      minPricePaise,
+      selectedAvailability,
+      selectedBlouse,
+      selectedCategories,
+      selectedCrafts,
+      selectedFabrics,
+      selectedOccasions,
+      selectedSizes,
+    ]
+  );
+
+  const filteredProducts = useMemo(
+    () => sortProducts(data.products.filter((product) => filterMatches(product, selection)), sortBy),
+    [data.products, selection, sortBy]
+  );
+  const visibility: FilterVisibility = {
+    category: hasUsefulOptions(categoryOptions, data.products.length),
+    price: data.products.length > 0,
+    fabric: hasUsefulOptions(fabricOptions, data.products.length),
+    occasion: hasUsefulOptions(occasionOptions, data.products.length),
+    craft: hasUsefulOptions(craftOptions, data.products.length),
+    size: hasUsefulOptions(sizeOptions, data.products.length),
+    blouse:
+      data.categoryName.toLowerCase().includes("saree") &&
+      hasUsefulOptions(blouseOptions, data.products.length),
+    availability: hasUsefulOptions(availabilityOptions, data.products.length),
+  };
+  const hasActiveFilters =
+    selectedCategories.length > 0 ||
+    selectedFabrics.length > 0 ||
+    selectedOccasions.length > 0 ||
+    selectedCrafts.length > 0 ||
+    selectedSizes.length > 0 ||
+    selectedBlouse.length > 0 ||
+    selectedAvailability.length > 0 ||
+    hasActivePriceFilter;
+
+  const resetFilters = () => {
+    setSelectedCategories([]);
+    setSelectedFabrics([]);
+    setSelectedOccasions([]);
+    setSelectedCrafts([]);
+    setSelectedSizes([]);
+    setSelectedBlouse([]);
+    setSelectedAvailability([]);
+    setMinPrice("");
+    setMaxPrice("");
+  };
+
+  return {
+    sortBy,
+    setSortBy,
+    selectedCategories,
+    setSelectedCategories,
+    selectedFabrics,
+    setSelectedFabrics,
+    selectedOccasions,
+    setSelectedOccasions,
+    selectedCrafts,
+    setSelectedCrafts,
+    selectedSizes,
+    setSelectedSizes,
+    selectedBlouse,
+    setSelectedBlouse,
+    selectedAvailability,
+    setSelectedAvailability,
+    minPrice,
+    setMinPrice,
+    maxPrice,
+    setMaxPrice,
+    minPricePaise,
+    maxPricePaise,
+    selectedMinPricePaise,
+    selectedMaxPricePaise,
+    hasActivePriceFilter,
+    setPriceRangePaise,
+    categoryOptions,
+    fabricOptions,
+    occasionOptions,
+    craftOptions,
+    sizeOptions,
+    blouseOptions,
+    availabilityOptions,
+    priceBounds,
+    filteredProducts,
+    visibility,
+    hasActiveFilters,
+    resetFilters,
+  };
+}
+
+function useActiveFilterChips(controls: ReturnType<typeof useCollectionFilters>): ActiveChip[] {
+  return useMemo(
+    () => [
+      ...controls.selectedCategories.map((value) => ({
+        key: `category-${value}`,
+        label: value,
+        onRemove: () =>
+          controls.setSelectedCategories((current) => current.filter((entry) => entry !== value)),
+      })),
+      ...controls.selectedFabrics.map((value) => ({
+        key: `fabric-${value}`,
+        label: value,
+        onRemove: () =>
+          controls.setSelectedFabrics((current) => current.filter((entry) => entry !== value)),
+      })),
+      ...controls.selectedOccasions.map((value) => ({
+        key: `occasion-${value}`,
+        label: value,
+        onRemove: () =>
+          controls.setSelectedOccasions((current) => current.filter((entry) => entry !== value)),
+      })),
+      ...controls.selectedCrafts.map((value) => ({
+        key: `craft-${value}`,
+        label: value,
+        onRemove: () =>
+          controls.setSelectedCrafts((current) => current.filter((entry) => entry !== value)),
+      })),
+      ...controls.selectedSizes.map((value) => ({
+        key: `size-${value}`,
+        label: value,
+        onRemove: () =>
+          controls.setSelectedSizes((current) => current.filter((entry) => entry !== value)),
+      })),
+      ...controls.selectedBlouse.map((value) => ({
+        key: `blouse-${value}`,
+        label: controls.blouseOptions.find((option) => option.value === value)?.label ?? value,
+        onRemove: () =>
+          controls.setSelectedBlouse((current) => current.filter((entry) => entry !== value)),
+      })),
+      ...controls.selectedAvailability.map((value) => ({
+        key: `availability-${value}`,
+        label: controls.availabilityOptions.find((option) => option.value === value)?.label ?? value,
+        onRemove: () =>
+          controls.setSelectedAvailability((current) =>
+            current.filter((entry) => entry !== value)
+          ),
+      })),
+      ...(controls.hasActivePriceFilter
+        ? [
+            {
+              key: "price",
+              label: `Price: ${
+                formatInrFromPaise(controls.selectedMinPricePaise)
+              } - ${
+                formatInrFromPaise(controls.selectedMaxPricePaise)
+              }`,
+              onRemove: () => {
+                controls.setMinPrice("");
+                controls.setMaxPrice("");
+              },
+            },
+          ]
+        : []),
+    ],
+    [controls]
+  );
+}
+
+function PriceRange({
+  controls,
+  idPrefix,
+}: {
+  controls: ReturnType<typeof useCollectionFilters>;
+  idPrefix: string;
+}) {
+  return (
+    <PriceRangeSlider
+      id={`${idPrefix}-price`}
+      minPaise={controls.priceBounds.min}
+      maxPaise={controls.priceBounds.max}
+      selectedMinPaise={controls.selectedMinPricePaise}
+      selectedMaxPaise={controls.selectedMaxPricePaise}
+      onChange={controls.setPriceRangePaise}
+    />
+  );
+}
+
+function SortSelect({
+  value,
+  onChange,
+  className,
+}: {
+  value: SortOption;
+  onChange: (value: SortOption) => void;
+  className?: string;
+}) {
+  return (
+    <label className={cn("block", className)}>
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
+        Sort
+      </span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as SortOption)}
+        className="h-10 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-green)] focus:ring-2 focus:ring-[var(--color-focus)]"
+      >
+        {SORT_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function CollectionFiltersPanel({
+  controls,
+  idPrefix,
+}: {
+  controls: ReturnType<typeof useCollectionFilters>;
+  idPrefix: string;
+}) {
+  const hasVisibleFilters = Object.values(controls.visibility).some(Boolean);
+
+  return (
+    <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted)]">
+          Filter By
+        </p>
+        {controls.hasActiveFilters ? (
+          <button
+            type="button"
+            onClick={controls.resetFilters}
+            className="inline-flex min-h-9 items-center gap-1 rounded-md border border-[var(--color-line)] px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:border-[var(--color-gold)]"
+          >
+            <X size={13} />
+            Reset
+          </button>
+        ) : null}
+      </div>
+      {hasVisibleFilters ? (
+        <FilterGroups controls={controls} idPrefix={idPrefix} />
+      ) : (
+        <p className="mt-3 text-sm text-[var(--color-muted)]">
+          No additional filters are available for this collection yet.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function FilterGroups({
+  controls,
+  idPrefix,
+}: {
+  controls: ReturnType<typeof useCollectionFilters>;
+  idPrefix: string;
+}) {
+  return (
+    <div className="mt-4 space-y-4">
+      {controls.visibility.category ? (
+        <SelectFilter
+          title="Category"
+          id={`${idPrefix}-category-filter`}
+          options={controls.categoryOptions}
+          value={controls.selectedCategories[0] ?? ""}
+          onChange={(value) => controls.setSelectedCategories(value ? [value] : [])}
+        />
+      ) : null}
+      {controls.visibility.price ? (
+        <PriceRange controls={controls} idPrefix={idPrefix} />
+      ) : null}
+      {controls.visibility.fabric ? (
+        <SelectFilter
+          title="Fabric"
+          id={`${idPrefix}-fabric-filter`}
+          options={controls.fabricOptions}
+          value={controls.selectedFabrics[0] ?? ""}
+          onChange={(value) => controls.setSelectedFabrics(value ? [value] : [])}
+        />
+      ) : null}
+      {controls.visibility.occasion ? (
+        <SelectFilter
+          title="Occasion"
+          id={`${idPrefix}-occasion-filter`}
+          options={controls.occasionOptions}
+          value={controls.selectedOccasions[0] ?? ""}
+          onChange={(value) => controls.setSelectedOccasions(value ? [value] : [])}
+        />
+      ) : null}
+      {controls.visibility.craft ? (
+        <SelectFilter
+          title="Craft"
+          id={`${idPrefix}-craft-filter`}
+          options={controls.craftOptions}
+          value={controls.selectedCrafts[0] ?? ""}
+          onChange={(value) => controls.setSelectedCrafts(value ? [value] : [])}
+        />
+      ) : null}
+      {controls.visibility.size ? (
+        <CheckboxGroup
+          title="Size"
+          options={controls.sizeOptions}
+          selected={controls.selectedSizes}
+          onToggle={(value) => controls.setSelectedSizes((current) => toggleValue(current, value))}
+        />
+      ) : null}
+      {controls.visibility.blouse ? (
+        <CheckboxGroup
+          title="Blouse Option"
+          options={controls.blouseOptions}
+          selected={controls.selectedBlouse}
+          onToggle={(value) =>
+            controls.setSelectedBlouse((current) => toggleValue(current, value as BlouseValue))
+          }
+        />
+      ) : null}
+      {controls.visibility.availability ? (
+        <CheckboxGroup
+          title="Availability"
+          options={controls.availabilityOptions}
+          selected={controls.selectedAvailability}
+          onToggle={(value) =>
+            controls.setSelectedAvailability((current) =>
+              toggleValue(current, value as AvailabilityValue)
+            )
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ActiveFilterChips({
+  chips,
+  onClear,
+}: {
+  chips: ActiveChip[];
+  onClear: () => void;
+}) {
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="mt-5 flex flex-wrap items-center gap-2">
+      {chips.map((chip) => (
+        <button
+          key={chip.key}
+          type="button"
+          onClick={chip.onRemove}
+          className="inline-flex min-h-8 max-w-full items-center gap-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 text-xs font-medium text-[var(--color-ink)] hover:border-[var(--color-gold)]"
+        >
+          <span className="min-w-0 break-words">{chip.label}</span>
+          <X size={13} className="shrink-0 text-[var(--color-muted)]" />
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={onClear}
+        className="inline-flex min-h-8 items-center rounded-md px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:text-[var(--color-gold)]"
+      >
+        Clear all
+      </button>
+    </div>
+  );
+}
+
+function ProductGrid({ products }: { products: CollectionCardProduct[] }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-5">
+      {products.map((product) => (
+        <article
+          key={product.id}
+          className="group rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]"
+        >
+          <Link
+            href={`/product/${encodeURIComponent(product.id)}`}
+            className="block overflow-hidden rounded-t-lg border-b border-[var(--color-line)]"
+          >
+            <div className="relative aspect-[3/4] w-full">
+              <Image
+                src={product.imageUrl || PLACEHOLDER_IMAGE}
+                alt={product.name}
+                fill
+                className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                sizes="(max-width: 768px) 50vw, 25vw"
+                unoptimized={isExternalProductImage(product.imageUrl)}
+              />
+            </div>
+          </Link>
+          <div className="p-3 sm:p-4">
+            <h2 className="line-clamp-2 break-words font-display text-lg leading-tight text-[var(--color-ink)] sm:text-[1.35rem]">
+              {product.name}
+            </h2>
+            <p className="mt-2 font-sans text-lg font-semibold text-[var(--color-ink)]">
+              {product.priceLabel}
+            </p>
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-gold)]">
+              New
+            </p>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ProductResults({
+  products,
+  onReset,
+}: {
+  products: CollectionCardProduct[];
+  onReset: () => void;
+}) {
+  if (products.length > 0) return <ProductGrid products={products} />;
+
+  return (
+    <EmptyState
+      title="No products match these filters"
+      description="Clear the filters or adjust your range to see more pieces."
+      action={
+        <button
+          type="button"
+          onClick={onReset}
+          className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--color-green)] bg-[var(--color-green)] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-white hover:border-[var(--color-green-2)] hover:bg-[var(--color-green-2)]"
+        >
+          Reset filters
+        </button>
+      }
+    />
+  );
 }
 
 export function StorefrontCollectionPageContent({
@@ -31,44 +721,8 @@ export function StorefrontCollectionPageContent({
 }: {
   data: StorefrontCollectionPageData;
 }) {
-  const [sortBy, setSortBy] = useState("Featured");
-
-  const sortedProducts = useMemo(() => {
-    const list = [...data.products];
-    if (sortBy === "Price: Low") {
-      list.sort((a, b) => parsePriceToNumber(a.priceLabel) - parsePriceToNumber(b.priceLabel));
-      return list;
-    }
-    if (sortBy === "Price: High") {
-      list.sort((a, b) => parsePriceToNumber(b.priceLabel) - parsePriceToNumber(a.priceLabel));
-      return list;
-    }
-    if (sortBy === "Name") {
-      list.sort((a, b) => a.name.localeCompare(b.name));
-      return list;
-    }
-    return list;
-  }, [data.products, sortBy]);
-
-  const filterPanel = (
-    <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)]">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted)]">Filter By</p>
-      <div className="mt-4 space-y-4">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">Category</p>
-          <p className="mt-1 text-sm text-[var(--color-ink)]">{data.categoryName}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">Price</p>
-          <p className="mt-1 text-sm text-[var(--color-ink)]">Curated premium range</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">Availability</p>
-          <p className="mt-1 text-sm text-[var(--color-ink)]">{data.products.length} styles available</p>
-        </div>
-      </div>
-    </div>
-  );
+  const controls = useCollectionFilters(data);
+  const activeChips = useActiveFilterChips(controls);
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -78,28 +732,20 @@ export function StorefrontCollectionPageContent({
           title={data.categoryName}
           description="Thoughtfully designed pieces with premium fabrics and timeless silhouettes."
           action={
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
-                {sortedProducts.length} items
+            <div className="flex flex-wrap items-end gap-3">
+              <span className="pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
+                {controls.filteredProducts.length} items
               </span>
-              <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
-                Sort
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="ml-2 h-10 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-ink)]"
-                >
-                  <option>Featured</option>
-                  <option>Price: Low</option>
-                  <option>Price: High</option>
-                  <option>Name</option>
-                </select>
-              </label>
+              <SortSelect
+                value={controls.sortBy}
+                onChange={controls.setSortBy}
+                className="min-w-[12rem]"
+              />
             </div>
           }
         />
 
-        {sortedProducts.length === 0 ? (
+        {data.products.length === 0 ? (
           <div className="mt-8">
             <EmptyState
               title="No products available"
@@ -110,40 +756,32 @@ export function StorefrontCollectionPageContent({
           <>
             <div className="mt-6 md:hidden">
               <details className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)]">
-                <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)]">Filters</summary>
-                <div className="mt-4">{filterPanel}</div>
+                <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)]">
+                  Filters
+                </summary>
+                <div className="mt-4">
+                  <CollectionFiltersPanel
+                    controls={controls}
+                    idPrefix="collection-mobile"
+                  />
+                </div>
               </details>
             </div>
 
+            <ActiveFilterChips chips={activeChips} onClear={controls.resetFilters} />
+
             <section className="mt-8 grid items-start gap-6 md:grid-cols-[260px_minmax(0,1fr)]">
-              <aside className="hidden md:block">{filterPanel}</aside>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 md:gap-5">
-                {sortedProducts.map((product) => (
-                  <article key={product.id} className="group rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]">
-                    <Link
-                      href={`/product/${encodeURIComponent(product.id)}`}
-                      className="block overflow-hidden rounded-t-lg border-b border-[var(--color-line)]"
-                    >
-                      <div className="relative aspect-[3/4] w-full">
-                        <Image
-                          src={product.imageUrl || PLACEHOLDER_IMAGE}
-                          alt={product.name}
-                          fill
-                          className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                          sizes="(max-width: 768px) 50vw, 25vw"
-                          unoptimized={isExternalProductImage(product.imageUrl)}
-                        />
-                      </div>
-                    </Link>
-                    <div className="p-3 sm:p-4">
-                      <h2 className="line-clamp-2 font-display text-lg leading-tight text-[var(--color-ink)] sm:text-[1.35rem]">
-                        {product.name}
-                      </h2>
-                      <p className="mt-2 font-sans text-lg font-semibold text-[var(--color-ink)]">{product.priceLabel}</p>
-                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-gold)]">New</p>
-                    </div>
-                  </article>
-                ))}
+              <aside className="hidden md:block">
+                <CollectionFiltersPanel
+                  controls={controls}
+                  idPrefix="collection-desktop"
+                />
+              </aside>
+              <div>
+                <ProductResults
+                  products={controls.filteredProducts}
+                  onReset={controls.resetFilters}
+                />
               </div>
             </section>
           </>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
@@ -12,6 +13,14 @@ export interface MenuDrawerProps {
   setCollection: (c: string) => void;
   reduceMotion?: boolean;
 }
+
+type DrawerNavItem =
+  | {
+      type: "section";
+      label: string;
+      goToId: "top" | "collections" | "category-collections" | "shop" | "explore";
+    }
+  | { type: "route"; label: string; href: "/about" };
 
 export function MenuDrawer({
   open,
@@ -32,34 +41,49 @@ export function MenuDrawer({
     }
   };
 
-  const nav = [
-    { label: "New arrivals", goToId: "shop" as const },
-    { label: "Moods", goToId: "collections" as const },
-    { label: "Collections", goToId: "category-collections" as const },
-    { label: "Occasion", goToId: "shop" as const },
-    { label: "Best sellers", goToId: "shop" as const },
+  const nav: DrawerNavItem[] = [
+    { type: "section", label: "Home", goToId: "top" },
+    { type: "section", label: "Moods", goToId: "collections" },
+    { type: "section", label: "Collections", goToId: "category-collections" },
+    { type: "section", label: "New arrivals", goToId: "shop" },
+    { type: "section", label: "Explore", goToId: "explore" },
+    { type: "route", label: "About Us", href: "/about" },
   ];
 
   return (
     <Sheet open={open} onClose={onClose} title="Menu" side="left">
       <div className="space-y-8">
         <div className="space-y-3">
-          {nav.map((x) => (
-            <button
-              key={x.label}
-              type="button"
-              onClick={() => {
-                navigateToSection(x.goToId);
-                onClose();
-              }}
-              className="flex w-full items-center justify-between border-b border-[var(--color-line)] pb-3 text-left"
-            >
-              <span className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
-                {x.label}
-              </span>
-              <ChevronRight className="h-4 w-4 text-[var(--color-muted)]" />
-            </button>
-          ))}
+          {nav.map((x) =>
+            x.type === "route" ? (
+              <Link
+                key={x.label}
+                href={x.href}
+                onClick={onClose}
+                className="flex min-h-11 w-full items-center justify-between border-b border-[var(--color-line)] py-3 text-left"
+              >
+                <span className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
+                  {x.label}
+                </span>
+                <ChevronRight className="h-4 w-4 text-[var(--color-muted)]" />
+              </Link>
+            ) : (
+              <button
+                key={x.label}
+                type="button"
+                onClick={() => {
+                  navigateToSection(x.goToId);
+                  onClose();
+                }}
+                className="flex min-h-11 w-full items-center justify-between border-b border-[var(--color-line)] py-3 text-left"
+              >
+                <span className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
+                  {x.label}
+                </span>
+                <ChevronRight className="h-4 w-4 text-[var(--color-muted)]" />
+              </button>
+            )
+          )}
         </div>
 
         <div>

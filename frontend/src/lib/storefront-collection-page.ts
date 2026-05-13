@@ -2,6 +2,7 @@ import "server-only";
 
 import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
 import { parsePaise, paiseToRupeesNumber } from "@/lib/money";
+import type { ProductVariantStockRow } from "@/lib/graphql-types";
 import {
   fetchCategoriesWithSession,
   fetchProductsListWithSession,
@@ -15,8 +16,16 @@ export interface CollectionCardProduct {
   id: string;
   name: string;
   priceLabel: string;
+  pricePaise: number;
   imageUrl: string;
+  categoryId: string;
   categoryName: string;
+  fabric: string;
+  weave: string;
+  occasion: string;
+  hasBlousePiece: boolean | null;
+  stockQuantity: string | null;
+  variantStock: ProductVariantStockRow[];
 }
 
 export interface StorefrontCollectionPageData {
@@ -32,6 +41,12 @@ function slugifyCategoryName(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function isPublicCatalogName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return false;
+  return !/^(itest|test|e2e|mock|seed)[_-]/.test(normalized);
 }
 
 function firstImageUrl(
@@ -93,8 +108,16 @@ async function loadCollectionByCategoryId(categoryId: string): Promise<Storefron
       id: row.productId,
       name: row.name,
       priceLabel: mapPriceLabel(row.amountPaise, row.formatted),
+      pricePaise: parsePaise(row.amountPaise),
       imageUrl: firstImageUrl(row.images),
+      categoryId: row.categoryId ?? category.categoryId,
       categoryName: category.name,
+      fabric: row.fabric?.trim() ?? "",
+      weave: row.weave?.trim() ?? "",
+      occasion: row.occasion?.trim() ?? "",
+      hasBlousePiece: row.hasBlousePiece ?? null,
+      stockQuantity: row.stockQuantity ?? null,
+      variantStock: row.variantStock ?? [],
     })),
   };
 }
@@ -127,4 +150,4 @@ export async function loadCollectionByCategoryIdRoute(
   return loadCollectionByCategoryId(categoryId);
 }
 
-export { slugifyCategoryName };
+export { isPublicCatalogName, slugifyCategoryName };

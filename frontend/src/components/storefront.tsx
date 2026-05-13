@@ -59,26 +59,19 @@ export function Storefront() {
   const { showToast } = useToast();
   const { wishlist, toggleWish, cartCount, wishCount } = useStorefront();
 
+  const catalog = useStorefrontCatalog({ showToast });
   const {
-    collection,
     setCollection,
-    occasion,
-    setOccasion,
-    sort,
-    setSort,
     products,
     productsError,
     productsBannerDismissed,
     setProductsBannerDismissed,
     categories,
     moods,
-    shopMoodId,
     loadingProducts,
-    filtered,
     collectionOptions,
-    occasionOptions,
     applyShopMoodFilter,
-  } = useStorefrontCatalog({ showToast });
+  } = catalog;
 
   const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
   useStorefrontNavigationEffects({ pathname, reduceMotion, loadingProducts });
@@ -172,26 +165,13 @@ export function Storefront() {
             onToggleWish={toggleWish}
             onQuickView={(product) => goToProduct(product.id)}
             onViewAll={() => {
-              setSort("Latest");
+              catalog.setSort("Featured");
               goTo("explore", reduceMotion);
             }}
           />
 
           <ExploreSection
-            filtered={filtered}
-            collection={collection}
-            occasion={occasion}
-            sort={sort}
-            setCollection={setCollection}
-            setOccasion={setOccasion}
-            setSort={setSort}
-            occasions={occasionOptions}
-            collections={collectionOptions}
-            moods={moods}
-            shopMoodId={shopMoodId}
-            onMoodChange={(id) => {
-              void applyShopMoodFilter(id);
-            }}
+            catalog={catalog}
             wishlist={wishlist}
             onToggleWish={toggleWish}
             onQuickView={(product) => goToProduct(product.id)}
