@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Plus_Jakarta_Sans, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
@@ -6,6 +7,7 @@ import { StorefrontProvider } from "@/context/storefront-context";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { SiteHeader } from "@/components/site-header";
 import { siteUrl } from "@/lib/site-url";
+import { STOREFRONT_GATE_HEADER } from "@/lib/storefront-readiness";
 
 /** Headings: Playfair Display */
 const playfair = Playfair_Display({
@@ -26,11 +28,13 @@ export const metadata: Metadata = {
   description: "Minimal luxury storefront for Sudatta's sarees.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const requestHeaders = await headers();
+  const storefrontGated = requestHeaders.get(STOREFRONT_GATE_HEADER) === "1";
   const base = siteUrl();
   const organizationJsonLd = {
     "@context": "https://schema.org",
@@ -53,14 +57,18 @@ export default function RootLayout({
         className={`${playfair.variable} ${sans.variable} font-sans antialiased bg-[var(--background)] text-[var(--foreground)]`}
       >
         <div className="storefront-root min-h-screen w-full min-w-0">
-          <Providers>
-            <AppErrorBoundary>
-              <StorefrontProvider>
-                <SiteHeader />
-                {children}
-              </StorefrontProvider>
-            </AppErrorBoundary>
-          </Providers>
+          {storefrontGated ? (
+            children
+          ) : (
+            <Providers>
+              <AppErrorBoundary>
+                <StorefrontProvider>
+                  <SiteHeader />
+                  {children}
+                </StorefrontProvider>
+              </AppErrorBoundary>
+            </Providers>
+          )}
         </div>
       </body>
     </html>
