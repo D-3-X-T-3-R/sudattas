@@ -11,7 +11,6 @@ import type {
 } from "@/lib/storefront-collection-page";
 import { PageShell, SectionHeader, EmptyState } from "@/components/ui/page-shell";
 import {
-  formatInrFromPaise,
   optionalRupeesInputToPaise,
   paiseToRupeesInput,
 } from "@/lib/money";
@@ -36,7 +35,6 @@ type SortOption = (typeof SORT_OPTIONS)[number]["value"];
 type FilterOption = { value: string; label: string; count: number };
 type AvailabilityValue = "in-stock" | "out-of-stock";
 type BlouseValue = "included" | "not-included";
-type ActiveChip = { key: string; label: string; onRemove: () => void };
 
 type FilterSelection = {
   selectedCategories: string[];
@@ -382,74 +380,6 @@ function useCollectionFilters(data: StorefrontCollectionPageData) {
   };
 }
 
-function useActiveFilterChips(controls: ReturnType<typeof useCollectionFilters>): ActiveChip[] {
-  return useMemo(
-    () => [
-      ...controls.selectedCategories.map((value) => ({
-        key: `category-${value}`,
-        label: value,
-        onRemove: () =>
-          controls.setSelectedCategories((current) => current.filter((entry) => entry !== value)),
-      })),
-      ...controls.selectedFabrics.map((value) => ({
-        key: `fabric-${value}`,
-        label: value,
-        onRemove: () =>
-          controls.setSelectedFabrics((current) => current.filter((entry) => entry !== value)),
-      })),
-      ...controls.selectedOccasions.map((value) => ({
-        key: `occasion-${value}`,
-        label: value,
-        onRemove: () =>
-          controls.setSelectedOccasions((current) => current.filter((entry) => entry !== value)),
-      })),
-      ...controls.selectedCrafts.map((value) => ({
-        key: `craft-${value}`,
-        label: value,
-        onRemove: () =>
-          controls.setSelectedCrafts((current) => current.filter((entry) => entry !== value)),
-      })),
-      ...controls.selectedSizes.map((value) => ({
-        key: `size-${value}`,
-        label: value,
-        onRemove: () =>
-          controls.setSelectedSizes((current) => current.filter((entry) => entry !== value)),
-      })),
-      ...controls.selectedBlouse.map((value) => ({
-        key: `blouse-${value}`,
-        label: controls.blouseOptions.find((option) => option.value === value)?.label ?? value,
-        onRemove: () =>
-          controls.setSelectedBlouse((current) => current.filter((entry) => entry !== value)),
-      })),
-      ...controls.selectedAvailability.map((value) => ({
-        key: `availability-${value}`,
-        label: controls.availabilityOptions.find((option) => option.value === value)?.label ?? value,
-        onRemove: () =>
-          controls.setSelectedAvailability((current) =>
-            current.filter((entry) => entry !== value)
-          ),
-      })),
-      ...(controls.hasActivePriceFilter
-        ? [
-            {
-              key: "price",
-              label: `Price: ${
-                formatInrFromPaise(controls.selectedMinPricePaise)
-              } - ${
-                formatInrFromPaise(controls.selectedMaxPricePaise)
-              }`,
-              onRemove: () => {
-                controls.setMinPrice("");
-                controls.setMaxPrice("");
-              },
-            },
-          ]
-        : []),
-    ],
-    [controls]
-  );
-}
-
 function PriceRange({
   controls,
   idPrefix,
@@ -509,20 +439,24 @@ function CollectionFiltersPanel({
 
   return (
     <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)]">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex min-h-9 items-center justify-between gap-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted)]">
           Filter By
         </p>
-        {controls.hasActiveFilters ? (
-          <button
-            type="button"
-            onClick={controls.resetFilters}
-            className="inline-flex min-h-9 items-center gap-1 rounded-md border border-[var(--color-line)] px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:border-[var(--color-gold)]"
-          >
-            <X size={13} />
-            Reset
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={controls.hasActiveFilters ? controls.resetFilters : undefined}
+          disabled={!controls.hasActiveFilters}
+          aria-hidden={!controls.hasActiveFilters}
+          tabIndex={controls.hasActiveFilters ? undefined : -1}
+          className={cn(
+            "inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md border border-[var(--color-line)] px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:border-[var(--color-gold)]",
+            !controls.hasActiveFilters && "invisible pointer-events-none"
+          )}
+        >
+          <X size={13} />
+          Reset
+        </button>
       </div>
       {hasVisibleFilters ? (
         <FilterGroups controls={controls} idPrefix={idPrefix} />
@@ -617,39 +551,6 @@ function FilterGroups({
   );
 }
 
-function ActiveFilterChips({
-  chips,
-  onClear,
-}: {
-  chips: ActiveChip[];
-  onClear: () => void;
-}) {
-  if (chips.length === 0) return null;
-
-  return (
-    <div className="mt-5 flex flex-wrap items-center gap-2">
-      {chips.map((chip) => (
-        <button
-          key={chip.key}
-          type="button"
-          onClick={chip.onRemove}
-          className="inline-flex min-h-8 max-w-full items-center gap-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 text-xs font-medium text-[var(--color-ink)] hover:border-[var(--color-gold)]"
-        >
-          <span className="min-w-0 break-words">{chip.label}</span>
-          <X size={13} className="shrink-0 text-[var(--color-muted)]" />
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={onClear}
-        className="inline-flex min-h-8 items-center rounded-md px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:text-[var(--color-gold)]"
-      >
-        Clear all
-      </button>
-    </div>
-  );
-}
-
 function ProductGrid({ products }: { products: CollectionCardProduct[] }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-5">
@@ -722,7 +623,6 @@ export function StorefrontCollectionPageContent({
   data: StorefrontCollectionPageData;
 }) {
   const controls = useCollectionFilters(data);
-  const activeChips = useActiveFilterChips(controls);
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -767,8 +667,6 @@ export function StorefrontCollectionPageContent({
                 </div>
               </details>
             </div>
-
-            <ActiveFilterChips chips={activeChips} onClear={controls.resetFilters} />
 
             <section className="mt-8 grid items-start gap-6 md:grid-cols-[260px_minmax(0,1fr)]">
               <aside className="hidden md:block">

@@ -172,20 +172,24 @@ function FiltersPanel({
 
   return (
     <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)]">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex min-h-9 items-center justify-between gap-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted)]">
           Filter By
         </p>
-        {catalog.hasActiveFilters ? (
-          <button
-            type="button"
-            onClick={catalog.resetFilters}
-            className="inline-flex min-h-9 items-center gap-1 rounded-md border border-[var(--color-line)] px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:border-[var(--color-gold)]"
-          >
-            <X size={13} />
-            Reset
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={catalog.hasActiveFilters ? catalog.resetFilters : undefined}
+          disabled={!catalog.hasActiveFilters}
+          aria-hidden={!catalog.hasActiveFilters}
+          tabIndex={catalog.hasActiveFilters ? undefined : -1}
+          className={cn(
+            "inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md border border-[var(--color-line)] px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:border-[var(--color-gold)]",
+            !catalog.hasActiveFilters && "invisible pointer-events-none"
+          )}
+        >
+          <X size={13} />
+          Reset
+        </button>
       </div>
       {hasVisibleFilters ? (
         <FilterGroups catalog={catalog} idPrefix={idPrefix} />
@@ -194,33 +198,6 @@ function FiltersPanel({
           No additional filters are available for these products yet.
         </p>
       )}
-    </div>
-  );
-}
-
-function ActiveFilterChips({ catalog }: { catalog: StorefrontCatalogController }) {
-  if (catalog.activeFilterChips.length === 0) return null;
-
-  return (
-    <div className="mt-5 flex flex-wrap items-center gap-2">
-      {catalog.activeFilterChips.map((chip) => (
-        <button
-          key={chip.key}
-          type="button"
-          onClick={chip.onRemove}
-          className="inline-flex min-h-8 max-w-full items-center gap-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 text-xs font-medium text-[var(--color-ink)] hover:border-[var(--color-gold)]"
-        >
-          <span className="min-w-0 break-words">{chip.label}</span>
-          <X size={13} className="shrink-0 text-[var(--color-muted)]" />
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={catalog.resetFilters}
-        className="inline-flex min-h-8 items-center rounded-md px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:text-[var(--color-gold)]"
-      >
-        Clear all
-      </button>
     </div>
   );
 }
@@ -310,8 +287,6 @@ export function ExploreSection({
           </div>
         </details>
       </div>
-
-      <ActiveFilterChips catalog={catalog} />
 
       <div className="mt-8 grid items-start gap-6 md:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="hidden md:block">
