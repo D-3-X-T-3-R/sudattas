@@ -28,7 +28,7 @@ export function Section({
     <section
       id={id}
       className={cn(
-        compact ? "pt-8 md:pt-10" : "pt-12 md:pt-16",
+        compact ? "pt-6 md:pt-10" : "pt-10 md:pt-16",
         !fullWidth && "mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]",
         soft && "rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 md:p-6",
         className

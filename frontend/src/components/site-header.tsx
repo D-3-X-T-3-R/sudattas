@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
@@ -8,6 +8,7 @@ import { User } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { Header } from "@/components/header";
 import { MenuDrawer } from "@/components/menu-drawer";
+import { MobileBottomBar } from "@/components/mobile-bottom-bar";
 import { useStorefront } from "@/context/storefront-context";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { useLockBodyScroll } from "@/hooks/use-lock-body-scroll";
@@ -21,8 +22,20 @@ export function SiteHeader() {
   const { openLogin } = useStorefrontLogin();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const reduceMotion = !!useReducedMotion();
   useLockBodyScroll(menuOpen);
+
+  useEffect(() => {
+    const className = "storefront-mobile-utilities";
+    if (pathname.startsWith("/imtheboss")) {
+      document.documentElement.classList.remove(className);
+      return;
+    }
+
+    document.documentElement.classList.add(className);
+    return () => document.documentElement.classList.remove(className);
+  }, [pathname]);
 
   const firstName = useMemo(() => {
     const rawName = session?.user?.name?.trim() ?? "";
@@ -41,6 +54,8 @@ export function SiteHeader() {
         wishCount={wishCount}
         setMenuOpen={setMenuOpen}
         goTo={(id, instant) => goTo(id, instant ?? reduceMotion)}
+        searchOpen={searchOpen}
+        setSearchOpen={setSearchOpen}
         navUseHashLinks={pathname !== "/"}
         authEnabled
         authButtons={
@@ -71,6 +86,13 @@ export function SiteHeader() {
         onClose={() => setMenuOpen(false)}
         setCollection={() => {}}
         reduceMotion={reduceMotion}
+      />
+      <MobileBottomBar
+        wishCount={wishCount}
+        cartCount={cartCount}
+        authenticated={status === "authenticated"}
+        onProfileOpen={() => openLogin(pathname || "/")}
+        onSearchOpen={() => setSearchOpen(true)}
       />
     </>
   );

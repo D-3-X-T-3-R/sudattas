@@ -118,7 +118,7 @@ const Sheet = ({
             aria-labelledby={titleId}
             tabIndex={-1}
           >
-            <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
+            <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4 pt-[calc(1rem+env(safe-area-inset-top))]">
               <span
                 id={titleId}
                 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]"

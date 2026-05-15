@@ -1,79 +1,90 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, ShoppingBag } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { goTo } from "@/hooks/use-scroll-to";
+import { Heart, Search, ShoppingBag, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface MobileBottomBarProps {
-  activeSection: string;
   wishCount: number;
   cartCount: number;
-  onCartOpen: () => void;
-  reduceMotion?: boolean;
+  authenticated: boolean;
+  onProfileOpen: () => void;
+  onSearchOpen: () => void;
 }
 
 export function MobileBottomBar({
-  activeSection,
   wishCount,
   cartCount,
-  onCartOpen,
-  reduceMotion = false,
+  authenticated,
+  onProfileOpen,
+  onSearchOpen,
 }: MobileBottomBarProps) {
+  const itemClass =
+    "relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-green)]";
+  const iconWrapClass =
+    "relative inline-flex h-6 w-6 items-center justify-center";
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-[var(--color-line)] bg-[var(--color-surface)]/95 backdrop-blur md:hidden">
-      <div className="mx-auto max-w-[var(--container-max)] px-[var(--gutter-mobile)] py-2">
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() =>
-              goTo(activeSection === "top" ? "shop" : "top", reduceMotion)
-            }
-            className="text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]"
-          >
-            {activeSection === "top" ? "SHOP" : "TOP"}
+    <nav
+      className="mobile-bottom-bar fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--color-line)] bg-[var(--color-surface)]/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_28px_rgba(45,42,38,0.08)] backdrop-blur lg:hidden"
+      aria-label="Mobile utilities"
+    >
+      <div className="mx-auto grid w-full max-w-[var(--container-max)] grid-cols-4 gap-1 px-[var(--gutter-mobile)] py-1.5">
+        {authenticated ? (
+          <Link href="/profile" className={itemClass} aria-label="Profile">
+            <span className={iconWrapClass}>
+              <User className="h-5 w-5" />
+            </span>
+            <span className="truncate">Profile</span>
+          </Link>
+        ) : (
+          <button type="button" onClick={onProfileOpen} className={itemClass} aria-label="Sign in">
+            <span className={iconWrapClass}>
+              <User className="h-5 w-5" />
+            </span>
+            <span className="truncate">Profile</span>
           </button>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Wishlist"
-              className={cn(
-                "relative h-9 w-9 rounded-md border-[var(--color-line)] bg-[var(--color-surface)]",
-                wishCount > 0 && "border-[var(--color-gold)] text-[var(--color-gold)]"
-              )}
-              asChild
-            >
-              <Link href="/wishlist">
-                <Heart className="h-5 w-5" />
-                {wishCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] font-sans text-[10px] font-semibold text-white">
-                    {wishCount}
-                  </span>
-                )}
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={onCartOpen}
-              aria-label="Bag"
-              className={cn(
-                "relative h-9 w-9 rounded-md border-[var(--color-line)] bg-[var(--color-surface)]",
-                cartCount > 0 && "text-[var(--color-gold)] border-[var(--color-gold)]"
-              )}
-            >
-              <ShoppingBag className="h-5 w-5" />
-              {cartCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] font-sans text-[10px] font-semibold text-white">
-                  {cartCount}
-                </span>
-              )}
-            </Button>
-          </div>
-        </div>
+        )}
+
+        <button type="button" onClick={onSearchOpen} className={itemClass} aria-label="Search">
+          <span className={iconWrapClass}>
+            <Search className="h-5 w-5" />
+          </span>
+          <span className="truncate">Search</span>
+        </button>
+
+        <Link
+          href="/wishlist"
+          className={cn(itemClass, wishCount > 0 && "text-[var(--color-gold)]")}
+          aria-label="Wishlist"
+        >
+          <span className={iconWrapClass}>
+            <Heart className="h-5 w-5" />
+            {wishCount > 0 && (
+              <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] px-1 font-sans text-[10px] font-semibold text-white">
+                {wishCount}
+              </span>
+            )}
+          </span>
+          <span className="truncate">Wishlist</span>
+        </Link>
+
+        <Link
+          href="/bag"
+          className={cn(itemClass, cartCount > 0 && "text-[var(--color-gold)]")}
+          aria-label="Bag"
+        >
+          <span className={iconWrapClass}>
+            <ShoppingBag className="h-5 w-5" />
+            {cartCount > 0 && (
+              <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] px-1 font-sans text-[10px] font-semibold text-white">
+                {cartCount}
+              </span>
+            )}
+          </span>
+          <span className="truncate">Bag</span>
+        </Link>
       </div>
-    </div>
+    </nav>
   );
 }

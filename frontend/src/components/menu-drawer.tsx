@@ -45,22 +45,37 @@ export function MenuDrawer({
     { type: "section", label: "Home", goToId: "top" },
     { type: "section", label: "Moods", goToId: "collections" },
     { type: "section", label: "Collections", goToId: "category-collections" },
-    { type: "section", label: "New arrivals", goToId: "shop" },
+    { type: "section", label: "New Arrivals", goToId: "shop" },
     { type: "section", label: "Explore", goToId: "explore" },
     { type: "route", label: "About Us", href: "/about" },
   ];
 
   return (
-    <Sheet open={open} onClose={onClose} title="Menu" side="left">
-      <div className="space-y-8">
-        <div className="space-y-3">
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Menu"
+      side="left"
+      className="max-w-[22rem] bg-[var(--color-surface)]"
+    >
+      <div className="space-y-7">
+        <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-soft)] p-4">
+          <p className="font-display text-[1.65rem] leading-none text-[var(--color-green)]">
+            Sudatta&apos;s
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted)]">
+            Curated occasionwear, festive edits, and everyday pieces.
+          </p>
+        </div>
+
+        <div className="space-y-2">
           {nav.map((x) =>
             x.type === "route" ? (
               <Link
                 key={x.label}
                 href={x.href}
                 onClick={onClose}
-                className="flex min-h-11 w-full items-center justify-between border-b border-[var(--color-line)] py-3 text-left"
+                className="flex min-h-12 w-full items-center justify-between rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-3 text-left hover:border-[var(--color-gold)] hover:bg-[var(--color-surface-soft)]"
               >
                 <span className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
                   {x.label}
@@ -75,7 +90,7 @@ export function MenuDrawer({
                   navigateToSection(x.goToId);
                   onClose();
                 }}
-                className="flex min-h-11 w-full items-center justify-between border-b border-[var(--color-line)] py-3 text-left"
+                className="flex min-h-12 w-full items-center justify-between rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-3 text-left hover:border-[var(--color-gold)] hover:bg-[var(--color-surface-soft)]"
               >
                 <span className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
                   {x.label}

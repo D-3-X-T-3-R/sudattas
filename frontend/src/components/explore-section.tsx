@@ -164,14 +164,21 @@ function FilterGroups({
 function FiltersPanel({
   catalog,
   idPrefix,
+  flat = false,
 }: {
   catalog: StorefrontCatalogController;
   idPrefix: string;
+  flat?: boolean;
 }) {
   const hasVisibleFilters = Object.values(catalog.filterVisibility).some(Boolean);
 
   return (
-    <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)]">
+    <div
+      className={cn(
+        "rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)]",
+        flat && "rounded-none border-0 bg-transparent p-0 shadow-none"
+      )}
+    >
       <div className="flex min-h-9 items-center justify-between gap-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted)]">
           Filter By
@@ -278,12 +285,15 @@ export function ExploreSection({
       </ScrollReveal>
 
       <div className="mt-6 md:hidden">
-        <details className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)]">
-          <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)]">
-            Filters
+        <details className="overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)] marker:hidden">
+            <span>Filters</span>
+            <span className="text-[10px] tracking-[0.14em] text-[var(--color-muted)]">
+              Refine
+            </span>
           </summary>
-          <div className="mt-4">
-            <FiltersPanel catalog={catalog} idPrefix="explore-mobile" />
+          <div className="border-t border-[var(--color-line)] p-4">
+            <FiltersPanel catalog={catalog} idPrefix="explore-mobile" flat />
           </div>
         </details>
       </div>

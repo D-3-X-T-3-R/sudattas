@@ -170,7 +170,7 @@ function WishlistCard({
         <button
           type="button"
           onClick={() => onRemove(p)}
-          className="absolute right-2.5 top-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--color-line)] bg-white/95 text-[var(--color-green)]"
+          className="absolute right-2 top-2 z-10 flex h-10 w-10 items-center justify-center rounded-sm border border-[var(--color-line)] bg-white/95 text-[var(--color-green)] sm:right-2.5 sm:top-2.5 sm:h-8 sm:w-8"
           aria-label={`Remove ${p.name} from wishlist`}
         >
           <X className="h-4 w-4" strokeWidth={2.2} />
@@ -179,7 +179,7 @@ function WishlistCard({
 
       <div className="p-3 sm:p-4">
         <Link href={`/product/${p.id}`}>
-          <h3 className="line-clamp-2 font-display text-lg leading-tight text-[var(--color-ink)] sm:text-[1.35rem]">{p.name}</h3>
+          <h3 className="line-clamp-2 break-words font-display text-lg leading-tight text-[var(--color-ink)] sm:text-[1.35rem]">{p.name}</h3>
         </Link>
         <p className="mt-2 font-sans text-lg font-semibold text-[var(--color-ink)]">{priceLabel}</p>
       </div>

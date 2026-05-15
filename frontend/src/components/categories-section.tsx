@@ -19,8 +19,8 @@ type DisplayCollection = {
 const categoryCard = {
   default: {
     media: "aspect-[4/5]",
-    panel: "min-h-[116px] p-4",
-    title: "text-[1.25rem] md:text-[1.4rem]",
+    panel: "min-h-[108px] p-3.5 md:min-h-[116px] md:p-4",
+    title: "text-[1.08rem] md:text-[1.4rem]",
   },
 } as const;
 
@@ -117,7 +117,7 @@ export function CategoriesSection({
         />
       </ScrollReveal>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3.5 sm:gap-5 md:mt-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <AnimatePresence initial={false}>
           {visible.map((item, idx) => (
             <motion.div

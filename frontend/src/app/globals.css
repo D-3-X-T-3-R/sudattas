@@ -67,6 +67,20 @@ html::-webkit-scrollbar {
   --foreground: var(--color-ink);
 }
 
+html.storefront-mobile-utilities nextjs-portal {
+  display: none !important;
+}
+
+@media (max-width: 1023px) {
+  html.storefront-mobile-utilities {
+    scroll-padding-top: calc(3.5rem + env(safe-area-inset-top));
+  }
+
+  html.storefront-mobile-utilities .storefront-root {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+}
+
 .admin-root {
   --background: var(--admin-surface);
   --foreground: var(--color-ink);

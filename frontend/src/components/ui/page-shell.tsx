@@ -49,7 +49,7 @@ export function SectionHeader({
   return (
     <header
       className={cn(
-        "flex flex-col gap-4 border-b border-[var(--color-line)] pb-6 md:flex-row md:items-end md:justify-between",
+        "flex flex-col gap-3 border-b border-[var(--color-line)] pb-5 md:flex-row md:items-end md:justify-between md:gap-4 md:pb-6",
         className
       )}
     >
@@ -59,11 +59,11 @@ export function SectionHeader({
             {label}
           </p>
         ) : null}
-        <h2 className="mt-1 font-display text-[1.95rem] leading-[1.2] tracking-[-0.01em] text-[var(--color-ink)] md:text-[2.4rem]">
+        <h2 className="mt-1 font-display text-[1.85rem] leading-[1.18] tracking-[-0.01em] text-[var(--color-ink)] md:text-[2.4rem]">
           {title}
         </h2>
         {description ? (
-          <p className="mt-2 text-base text-[var(--color-muted)]">{description}</p>
+          <p className="mt-2 text-[0.95rem] leading-relaxed text-[var(--color-muted)] md:text-base">{description}</p>
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

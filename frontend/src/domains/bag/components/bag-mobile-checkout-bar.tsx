@@ -17,7 +17,7 @@ export function BagMobileCheckoutBar({
 }: BagMobileCheckoutBarProps) {
   const total = selectedSubtotal + shippingAmount;
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--color-line)] bg-[var(--color-surface)]/96 px-4 py-3 backdrop-blur-sm md:hidden">
+    <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-0 right-0 z-30 border-t border-[var(--color-line)] bg-[var(--color-surface)]/98 px-4 py-3 shadow-[0_-8px_22px_rgba(45,42,38,0.07)] backdrop-blur-sm lg:hidden">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--color-muted)]">Total</p>

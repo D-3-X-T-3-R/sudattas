@@ -62,7 +62,7 @@ export function ProductCard({
             e.stopPropagation();
             onToggleWish(product);
           }}
-          className="absolute right-2.5 top-2.5 h-8 w-8 rounded-sm border-[var(--color-line)] bg-white/95"
+          className="absolute right-2 top-2 h-10 w-10 rounded-sm border-[var(--color-line)] bg-white/95 sm:right-2.5 sm:top-2.5 sm:h-8 sm:w-8"
           aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
         >
           <Heart
@@ -75,7 +75,7 @@ export function ProductCard({
       </div>
 
       <div className="p-3 sm:p-4">
-        <h3 className="line-clamp-2 font-display text-lg leading-tight text-[var(--color-ink)] sm:text-[1.35rem]">
+        <h3 className="line-clamp-2 break-words font-display text-lg leading-tight text-[var(--color-ink)] sm:text-[1.35rem]">
           {product.name}
         </h3>
         <p className="mt-2 font-sans text-lg font-semibold text-[var(--color-ink)]">

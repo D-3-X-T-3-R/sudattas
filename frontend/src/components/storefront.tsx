@@ -7,7 +7,6 @@ import { useReducedMotion } from "framer-motion";
 import { useStorefront } from "@/context/storefront-context";
 import { useStorefrontCatalog } from "@/domains/storefront/hooks/use-storefront-catalog";
 import { useStorefrontNavigationEffects } from "@/domains/storefront/hooks/use-storefront-navigation-effects";
-import { useActiveSection } from "@/hooks/use-active-section";
 import { ensureGuestSession } from "@/lib/session";
 import { consumePendingHomeCollection, goTo, PENDING_HOME_COLLECTION_EVENT } from "@/hooks/use-scroll-to";
 import { HeroSection } from "@/components/hero-section";
@@ -16,7 +15,6 @@ import { CollectionsSection } from "@/components/collections-section";
 import { CategoriesSection } from "@/components/categories-section";
 import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
-import { MobileBottomBar } from "@/components/mobile-bottom-bar";
 import { Section } from "@/components/ui/section";
 import { TrustStrip } from "@/components/trust-strip";
 import { useToast } from "@/components/ui/toast";
@@ -57,7 +55,7 @@ export function Storefront() {
   const router = useRouter();
   const reduceMotion = !!useReducedMotion();
   const { showToast } = useToast();
-  const { wishlist, toggleWish, cartCount, wishCount } = useStorefront();
+  const { wishlist, toggleWish } = useStorefront();
 
   const catalog = useStorefrontCatalog({ showToast });
   const {
@@ -73,7 +71,6 @@ export function Storefront() {
     applyShopMoodFilter,
   } = catalog;
 
-  const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
   useStorefrontNavigationEffects({ pathname, reduceMotion, loadingProducts });
 
   useEffect(() => {
@@ -184,15 +181,6 @@ export function Storefront() {
       <StorySection />
       <Footer goTo={goToWithMotion} />
 
-      <MobileBottomBar
-        activeSection={activeSection}
-        wishCount={wishCount}
-        cartCount={cartCount}
-        onCartOpen={() => router.push("/bag")}
-        reduceMotion={reduceMotion}
-      />
-
-      <div className="h-16 md:hidden" />
     </div>
   );
 }

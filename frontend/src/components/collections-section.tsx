@@ -32,25 +32,25 @@ type MoodCardVariant = "sm" | "md" | "feature";
 const moodCard = {
   sm: {
     media: "aspect-[4/5]",
-    panel: "min-h-[132px] p-4 md:min-h-[142px] lg:min-h-[154px] flex flex-1 flex-col",
-    title: "text-[1.2rem] md:text-[1.3rem]",
+    panel: "min-h-[118px] p-3.5 md:min-h-[142px] md:p-4 lg:min-h-[154px] flex flex-1 flex-col",
+    title: "text-[1.08rem] md:text-[1.3rem]",
   },
   md: {
     media: "aspect-[4/5]",
-    panel: "min-h-[132px] p-4 md:min-h-[142px] lg:min-h-[154px] flex flex-1 flex-col",
-    title: "text-[1.25rem] md:text-[1.45rem]",
+    panel: "min-h-[118px] p-3.5 md:min-h-[142px] md:p-4 lg:min-h-[154px] flex flex-1 flex-col",
+    title: "text-[1.1rem] md:text-[1.45rem]",
   },
   feature: {
     media: "aspect-[4/5] md:aspect-[5/6] lg:aspect-[4/5]",
-    panel: "min-h-[132px] p-4 md:min-h-[142px] lg:min-h-[154px] md:p-5 flex flex-1 flex-col",
-    title: "text-[1.32rem] md:text-[1.55rem]",
+    panel: "min-h-[118px] p-3.5 md:min-h-[142px] lg:min-h-[154px] md:p-5 flex flex-1 flex-col",
+    title: "text-[1.1rem] md:text-[1.55rem]",
   },
 } as const;
 
 const moodLayoutDesktop = [
   "lg:col-span-3",
   "lg:col-span-3",
-  "md:col-span-2 lg:col-span-3",
+  "lg:col-span-3",
   "lg:col-span-3",
 ] as const;
 
@@ -180,7 +180,7 @@ export function CollectionsSection({
         />
       </ScrollReveal>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-12 lg:items-stretch">
+      <div className="mt-5 grid grid-cols-2 gap-3.5 sm:gap-5 md:mt-6 md:grid-cols-2 lg:grid-cols-12 lg:items-stretch">
         <AnimatePresence initial={false}>
           {leadCards.map((item, idx) => (
             <motion.div
@@ -208,7 +208,7 @@ export function CollectionsSection({
       </div>
 
       {overflowCards.length > 0 ? (
-        <div className="mt-5 grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-3.5 sm:gap-5 md:mt-5 lg:grid-cols-4">
           {overflowCards.map((item, idx) => (
             <CollectionCard
               key={item.key}
