@@ -15,7 +15,7 @@ export function BagSelectionHeader({
   onToggleAll,
 }: BagSelectionHeaderProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-[var(--shadow-subtle)]">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-none md:shadow-[var(--shadow-subtle)]">
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
           Selected Pieces
@@ -28,7 +28,7 @@ export function BagSelectionHeader({
         type="button"
         onClick={onToggleAll}
         className={cn(
-          "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em]",
+          "inline-flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em]",
           allSelected
             ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
             : "border-[var(--color-line)] bg-white text-[var(--color-ink)]"

@@ -11,6 +11,7 @@ type OrderSummaryPanelProps = {
   shippingLoading: boolean;
   shippingNote?: string | null;
   checkoutLoading?: boolean;
+  showMobileCheckoutCta?: boolean;
   onCheckout: () => void;
 };
 
@@ -22,6 +23,7 @@ export function OrderSummaryPanel({
   shippingLoading,
   shippingNote,
   checkoutLoading = false,
+  showMobileCheckoutCta = false,
   onCheckout,
 }: OrderSummaryPanelProps) {
   const totalAmount = cartSubtotal + shippingAmount;
@@ -69,12 +71,14 @@ export function OrderSummaryPanel({
         onClick={onCheckout}
         disabled={checkoutLoading || cartCount === 0}
         aria-busy={checkoutLoading}
-        className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md border border-[var(--color-green)] bg-[var(--color-green)] px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-[var(--color-green-2)] disabled:cursor-not-allowed disabled:opacity-50"
+        className={`mt-5 h-11 w-full items-center justify-center rounded-md border border-[var(--color-green)] bg-[var(--color-green)] px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-[var(--color-green-2)] disabled:cursor-not-allowed disabled:opacity-50 lg:inline-flex ${
+          showMobileCheckoutCta ? "inline-flex" : "hidden"
+        }`}
       >
         {checkoutLoading ? "Processing..." : "Proceed To Checkout"}
       </button>
 
-      <p className="mt-2 text-center text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--color-muted)]">
+      <p className="mt-3 text-center text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--color-muted)] lg:mt-2">
         Secure payments and verified order updates
       </p>
     </SummaryCard>

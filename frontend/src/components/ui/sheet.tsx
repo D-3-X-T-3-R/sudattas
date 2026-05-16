@@ -13,6 +13,10 @@ interface SheetProps {
   side?: "left" | "right";
   children: React.ReactNode;
   className?: string;
+  overlayClassName?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
+  closeButtonClassName?: string;
 }
 
 const Sheet = ({
@@ -22,6 +26,10 @@ const Sheet = ({
   side = "right",
   children,
   className,
+  overlayClassName,
+  headerClassName,
+  bodyClassName,
+  closeButtonClassName,
 }: SheetProps) => {
   const fromX = side === "left" ? -420 : 420;
   const titleId = React.useId();
@@ -98,7 +106,7 @@ const Sheet = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/30"
+            className={cn("fixed inset-0 z-40 bg-black/30", overlayClassName)}
             aria-hidden
           />
           <motion.div
@@ -118,7 +126,12 @@ const Sheet = ({
             aria-labelledby={titleId}
             tabIndex={-1}
           >
-            <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4 pt-[calc(1rem+env(safe-area-inset-top))]">
+            <div
+              className={cn(
+                "flex items-center justify-between border-b border-[var(--color-line)] p-4 pt-[calc(1rem+env(safe-area-inset-top))]",
+                headerClassName
+              )}
+            >
               <span
                 id={titleId}
                 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]"
@@ -131,11 +144,12 @@ const Sheet = ({
                 size="icon"
                 onClick={onClose}
                 aria-label="Close"
+                className={closeButtonClassName}
               >
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            <div className="flex-1 overflow-auto p-5">{children}</div>
+            <div className={cn("flex-1 overflow-auto p-5", bodyClassName)}>{children}</div>
           </motion.div>
         </>
       )}

@@ -4,8 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
-import { COLLECTIONS } from "@/lib/constants";
-import { goTo, setPendingHomeCollection, setPendingHomeSection } from "@/hooks/use-scroll-to";
+import { goTo, setPendingHomeSection } from "@/hooks/use-scroll-to";
 
 export interface MenuDrawerProps {
   open: boolean;
@@ -25,7 +24,6 @@ type DrawerNavItem =
 export function MenuDrawer({
   open,
   onClose,
-  setCollection,
   reduceMotion = false,
 }: MenuDrawerProps) {
   const pathname = usePathname();
@@ -56,96 +54,48 @@ export function MenuDrawer({
       onClose={onClose}
       title="Menu"
       side="left"
-      className="max-w-[22rem] bg-[var(--color-surface)]"
+      className="w-[86vw] max-w-[21rem] border-[var(--color-line)] bg-[var(--color-surface)] shadow-[18px_0_44px_rgba(45,42,38,0.12)]"
+      overlayClassName="z-[45] bg-[var(--color-green)]/18 backdrop-blur-[1px]"
+      headerClassName="px-5 pb-4 pt-[calc(0.95rem+env(safe-area-inset-top))]"
+      bodyClassName="px-5 pb-8 pt-5"
+      closeButtonClassName="h-10 w-10 rounded-full border-[var(--color-line)] bg-[var(--color-surface-soft)] text-[var(--color-green)] hover:border-[var(--color-gold)] hover:bg-[var(--color-surface)]"
     >
-      <div className="space-y-7">
-        <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-soft)] p-4">
-          <p className="font-display text-[1.65rem] leading-none text-[var(--color-green)]">
-            Sudatta&apos;s
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted)]">
-            Curated occasionwear, festive edits, and everyday pieces.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          {nav.map((x) =>
-            x.type === "route" ? (
-              <Link
-                key={x.label}
-                href={x.href}
-                onClick={onClose}
-                className="flex min-h-12 w-full items-center justify-between rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-3 text-left hover:border-[var(--color-gold)] hover:bg-[var(--color-surface-soft)]"
-              >
-                <span className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
-                  {x.label}
-                </span>
-                <ChevronRight className="h-4 w-4 text-[var(--color-muted)]" />
-              </Link>
-            ) : (
-              <button
-                key={x.label}
-                type="button"
-                onClick={() => {
-                  navigateToSection(x.goToId);
-                  onClose();
-                }}
-                className="flex min-h-12 w-full items-center justify-between rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-3 text-left hover:border-[var(--color-gold)] hover:bg-[var(--color-surface-soft)]"
-              >
-                <span className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
-                  {x.label}
-                </span>
-                <ChevronRight className="h-4 w-4 text-[var(--color-muted)]" />
-              </button>
-            )
-          )}
-        </div>
-
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-muted)]">
-            COLLECTIONS
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {COLLECTIONS.map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                onClick={() => {
-                  setPendingHomeCollection(c.key);
-                  setCollection(c.key);
-                  navigateToSection("shop");
-                  onClose();
-                }}
-                className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] hover:border-[var(--color-gold)] hover:text-[var(--color-green)]"
-              >
-                {c.key}
-              </button>
-            ))}
+      <nav className="border-y border-[var(--color-line)]" aria-label="Mobile menu">
+        {nav.map((x) =>
+          x.type === "route" ? (
+            <Link
+              key={x.label}
+              href={x.href}
+              onClick={onClose}
+              className="group flex min-h-[3.45rem] w-full items-center justify-between border-b border-[var(--color-line)] py-3.5 text-left last:border-b-0"
+            >
+              <span className="font-display text-[1.18rem] leading-tight text-[var(--color-green)]">
+                {x.label}
+              </span>
+              <ChevronRight className="h-4 w-4 text-[var(--color-gold)] opacity-65 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
+            </Link>
+          ) : (
             <button
+              key={x.label}
               type="button"
               onClick={() => {
-                setPendingHomeCollection("All");
-                setCollection("All");
-                navigateToSection("shop");
+                navigateToSection(x.goToId);
                 onClose();
               }}
-              className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] hover:border-[var(--color-gold)] hover:text-[var(--color-green)]"
+              className="group flex min-h-[3.45rem] w-full items-center justify-between border-b border-[var(--color-line)] py-3.5 text-left last:border-b-0"
             >
-              All
+              <span className="font-display text-[1.18rem] leading-tight text-[var(--color-green)]">
+                {x.label}
+              </span>
+              <ChevronRight className="h-4 w-4 text-[var(--color-gold)] opacity-65 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
             </button>
-          </div>
-        </div>
+          )
+        )}
+      </nav>
 
-        <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--color-muted)]">
-            CURATED
-          </div>
-          <div className="mt-2 text-sm text-[var(--color-muted)]">
-            Explore collections and moods to discover the drape that fits your
-            moment.
-          </div>
-        </div>
-      </div>
+      <p className="mt-7 text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--color-muted)]">
+        Sudatta&apos;s Designer Boutique
+      </p>
     </Sheet>
   );
 }

@@ -54,7 +54,7 @@ export function BagContent({
         onToggleAll={onToggleAll}
       />
 
-      <div className="space-y-4">
+      <div className="space-y-3 md:space-y-4">
         <AnimatePresence initial={false} mode="popLayout">
           {cartLines.map((line) => (
             <BagLineCard
@@ -85,7 +85,7 @@ export function BagContent({
         </AnimatePresence>
       </div>
 
-      <TrustStrip />
+      <TrustStrip className="hidden lg:block" />
     </div>
   );
 }

@@ -66,6 +66,15 @@ function formatAddress(a: ShippingAddressRow | null): string {
   return parts.join(" | ");
 }
 
+function formatCompactDeliveryAddress(a: ShippingAddressRow | null): string {
+  if (!a) return "Select delivery address";
+  const recipient = a.recipientName?.trim() || "Selected Address";
+  const pincode = a.postalCode?.trim();
+  if (pincode) return `${recipient}, ${pincode}`;
+  const parts = [recipient, a.city?.trim(), a.stateRegion?.trim()].filter(Boolean);
+  return parts.join(", ") || "Selected Address";
+}
+
 // eslint-disable-next-line max-lines-per-function
 export default function BagPage() {
   const router = useRouter();
@@ -88,6 +97,7 @@ export default function BagPage() {
   const addressErrorId = useId();
   const addAddressTriggerRef = useRef<HTMLElement | null>(null);
   const addAddressFirstInputRef = useRef<HTMLInputElement | null>(null);
+  const orderSummaryRef = useRef<HTMLDivElement | null>(null);
   const [newAddress, setNewAddress] = useState<AddressFormState>({
     recipientName: "",
     phoneNumber: "",
@@ -103,6 +113,7 @@ export default function BagPage() {
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingNote, setShippingNote] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<"prepaid" | "cod">("prepaid");
+  const [orderSummaryInView, setOrderSummaryInView] = useState(false);
   const cartSignature = useMemo(
     () => cartLines.map((line) => `${line.id}:${line.qty}`).join("|"),
     [cartLines]
@@ -118,6 +129,23 @@ export default function BagPage() {
       setSelectedLineIds(new Set(cartLines.map((line) => line.id)));
     }
   }, [cartLines.length, cartLines, selectedLineIds.size]);
+
+  useEffect(() => {
+    const summaryNode = orderSummaryRef.current;
+    if (!summaryNode || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setOrderSummaryInView(entry.isIntersecting),
+      {
+        root: null,
+        rootMargin: "0px 0px -28% 0px",
+        threshold: 0.12,
+      },
+    );
+
+    observer.observe(summaryNode);
+    return () => observer.disconnect();
+  }, [cartLines.length]);
 
   useEffect(() => {
     const sessionId = getGuestSessionId();
@@ -353,96 +381,161 @@ export default function BagPage() {
 
   return (
     <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
-      <main className="mx-auto w-full max-w-[1380px] px-[var(--gutter-mobile)] pb-20 pt-8 md:px-[var(--gutter-tablet)] md:pb-14 md:pt-10">
+      <main className="mx-auto w-full max-w-[1380px] px-[var(--gutter-mobile)] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-8 md:px-[var(--gutter-tablet)] md:pt-10 lg:pb-14">
         {cartLines.length === 0 ? (
           <BagEmptyState />
         ) : (
           <>
             <header className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-5 shadow-[var(--shadow-subtle)] md:px-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                    Shopping Bag
-                  </p>
-                  <h1 className="mt-1 font-display text-[2rem] leading-[1.2] text-[var(--color-ink)] md:text-[2.3rem]">
-                    Review Your Selection
-                  </h1>
-                  <p className="mt-1 text-sm text-[var(--color-muted)]">
-                    Review your selected pieces before checkout.
-                  </p>
-                </div>
-                <span className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)]">
-                  {selectedCount} item{selectedCount === 1 ? "" : "s"}
-                </span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
+                  Shopping Bag
+                </p>
+                <h1 className="mt-1 font-display text-[2rem] leading-[1.2] text-[var(--color-ink)] md:text-[2.3rem]">
+                  Review Your Selection
+                </h1>
               </div>
             </header>
 
             <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
               <div className="space-y-4">
-                <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)] md:p-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                    Delivery & Payment
-                  </p>
-                  <p className="mt-2 text-sm text-[var(--color-ink)]">
-                    {status === "authenticated" ? formatAddress(selectedAddress) : "Sign in to choose address"}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">
-                      Payment mode
+                <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-none md:p-5 md:shadow-[var(--shadow-subtle)]">
+                  <div className="lg:hidden">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
+                      Delivery & Payment
                     </p>
-                    <button
-                      type="button"
-                      disabled={paymentLoading}
-                      onClick={() => setPaymentMode("prepaid")}
-                      className={`rounded-md border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                        paymentMode === "prepaid"
-                          ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
-                          : "border-[var(--color-line)] text-[var(--color-muted)]"
-                      } disabled:opacity-50`}
-                    >
-                      Prepaid
-                    </button>
-                    <button
-                      type="button"
-                      disabled={paymentLoading}
-                      onClick={() => setPaymentMode("cod")}
-                      className={`rounded-md border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                        paymentMode === "cod"
-                          ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
-                          : "border-[var(--color-line)] text-[var(--color-muted)]"
-                      } disabled:opacity-50`}
-                    >
-                      Cash on Delivery
-                    </button>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {status === "authenticated" ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setAddressPickerOpen(true)}
-                          className="rounded-md border border-[var(--color-line)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]"
-                        >
-                          Change Address
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => openAddAddressDialog(event.currentTarget)}
-                          className="rounded-md border border-[var(--color-gold)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)]"
-                        >
-                          Add New Address
-                        </button>
-                      </>
-                    ) : (
+                    <div className="mt-2 flex items-start justify-between gap-3 border-b border-[var(--color-line)] pb-3">
+                      <p className="min-w-0 text-sm leading-snug text-[var(--color-ink)]">
+                        <span className="font-semibold text-[var(--color-green)]">Deliver To: </span>
+                        <span className="break-words">
+                          {status === "authenticated"
+                            ? formatCompactDeliveryAddress(selectedAddress)
+                            : "Sign in to choose address"}
+                        </span>
+                      </p>
                       <button
                         type="button"
-                        onClick={() => openLogin("/bag")}
-                        className="rounded-md border border-[var(--color-gold)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)]"
+                        onClick={() =>
+                          status === "authenticated"
+                            ? setAddressPickerOpen(true)
+                            : openLogin("/bag")
+                        }
+                        className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] underline decoration-[var(--color-gold)] decoration-1 underline-offset-4"
                       >
-                        Sign In
+                        Change
                       </button>
-                    )}
+                    </div>
+
+                    <div className="mt-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">
+                        Payment mode
+                      </p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          disabled={paymentLoading}
+                          onClick={() => setPaymentMode("prepaid")}
+                          aria-pressed={paymentMode === "prepaid"}
+                          className={`min-h-9 rounded-md border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                            paymentMode === "prepaid"
+                              ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
+                              : "border-[var(--color-line)] bg-[var(--color-surface-soft)] text-[var(--color-muted)]"
+                          } disabled:opacity-50`}
+                        >
+                          Prepaid
+                        </button>
+                        <button
+                          type="button"
+                          disabled={paymentLoading}
+                          onClick={() => setPaymentMode("cod")}
+                          aria-pressed={paymentMode === "cod"}
+                          className={`min-h-9 rounded-md border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                            paymentMode === "cod"
+                              ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
+                              : "border-[var(--color-line)] bg-[var(--color-surface-soft)] text-[var(--color-muted)]"
+                          } disabled:opacity-50`}
+                        >
+                          Cash on Delivery
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <div className="hidden lg:block">
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
+                          Delivery & Payment
+                        </p>
+                        <p className="mt-1.5 text-sm leading-relaxed text-[var(--color-ink)]">
+                          {status === "authenticated" ? formatAddress(selectedAddress) : "Sign in to choose address"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">
+                          Payment mode
+                        </p>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            disabled={paymentLoading}
+                            onClick={() => setPaymentMode("prepaid")}
+                            aria-pressed={paymentMode === "prepaid"}
+                            className={`min-h-10 rounded-md border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                              paymentMode === "prepaid"
+                                ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
+                                : "border-[var(--color-line)] bg-[var(--color-surface-soft)] text-[var(--color-muted)]"
+                            } disabled:opacity-50`}
+                          >
+                            Prepaid
+                          </button>
+                          <button
+                            type="button"
+                            disabled={paymentLoading}
+                            onClick={() => setPaymentMode("cod")}
+                            aria-pressed={paymentMode === "cod"}
+                            className={`min-h-10 rounded-md border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                              paymentMode === "cod"
+                                ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
+                                : "border-[var(--color-line)] bg-[var(--color-surface-soft)] text-[var(--color-muted)]"
+                            } disabled:opacity-50`}
+                          >
+                            Cash on Delivery
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {status === "authenticated" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setAddressPickerOpen(true)}
+                            className="min-h-10 rounded-md border border-[var(--color-line)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]"
+                          >
+                            Change Address
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => openAddAddressDialog(event.currentTarget)}
+                            className="min-h-10 rounded-md border border-[var(--color-gold)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)]"
+                          >
+                            Add New Address
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openLogin("/bag")}
+                          className="col-span-2 min-h-10 rounded-md border border-[var(--color-gold)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)]"
+                        >
+                          Sign In
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </section>
 
@@ -474,7 +567,7 @@ export default function BagPage() {
                 />
               </div>
 
-              <div>
+              <div ref={orderSummaryRef}>
                 <OrderSummaryPanel
                   cartLines={selectedLines}
                   cartSubtotal={selectedSubtotal}
@@ -483,6 +576,7 @@ export default function BagPage() {
                   shippingLoading={shippingLoading}
                   shippingNote={shippingNote || paymentMessage}
                   checkoutLoading={paymentLoading}
+                  showMobileCheckoutCta={orderSummaryInView}
                   onCheckout={handleCheckout}
                 />
               </div>
@@ -497,6 +591,7 @@ export default function BagPage() {
           shippingAmount={shippingAmount}
           selectedCount={selectedCount}
           checkoutLoading={paymentLoading}
+          visible={!orderSummaryInView}
           onCheckout={handleCheckout}
         />
       )}
