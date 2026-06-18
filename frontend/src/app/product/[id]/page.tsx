@@ -9,6 +9,7 @@ import {
   fetchProductByIdWithVariantStock,
   fetchCategoriesWithSession,
   fetchSizesWithSession,
+  fetchProductsListWithSession,
 } from "@/lib/storefront-queries";
 import {
   mintGuestSessionIdSingleFlight,
@@ -20,6 +21,7 @@ import { siteUrl } from "@/lib/site-url";
 interface ProductPageData {
   product: Product;
   sizes: { sizeId: string; sizeName: string }[];
+  relatedProducts: Product[];
 }
 
 function absoluteImageUrl(base: string, image: string | undefined): string {
@@ -77,7 +79,14 @@ const getProductPageData = cache(async (id: string): Promise<ProductPageData | n
         fetchCategoriesWithSession(activeSessionId, forwardedHeaders),
         fetchSizesWithSession(activeSessionId, forwardedHeaders),
       ]);
-      return { row, categories, sizes };
+      const relatedRows = row?.categoryId
+        ? await fetchProductsListWithSession(
+            activeSessionId,
+            { categoryId: row.categoryId, limit: "8" },
+            forwardedHeaders
+          )
+        : [];
+      return { row, categories, sizes, relatedRows };
     }
   );
 
@@ -87,9 +96,14 @@ const getProductPageData = cache(async (id: string): Promise<ProductPageData | n
   for (const c of recovered.value.categories) {
     categoryNameById[c.categoryId] = c.name;
   }
+  const relatedProducts = recovered.value.relatedRows
+    .filter((r) => r.productId !== row.productId)
+    .slice(0, 6)
+    .map((r) => mapToStorefrontProduct(r, categoryNameById));
   return {
     product: mapToStorefrontProduct(row, categoryNameById),
     sizes: recovered.value.sizes,
+    relatedProducts,
   };
 });
 
@@ -137,7 +151,7 @@ export default async function ProductPage({
     notFound();
   }
 
-  const { product, sizes } = data;
+  const { product, sizes, relatedProducts } = data;
   const base = siteUrl();
   const productUrl = `${base}/product/${encodeURIComponent(product.id)}`;
   const image = absoluteImageUrl(base, product.image);
@@ -206,7 +220,7 @@ export default async function ProductPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
-      <ProductPageClient product={product} sizes={sizes} />
+      <ProductPageClient product={product} sizes={sizes} relatedProducts={relatedProducts} />
     </>
   );
 }

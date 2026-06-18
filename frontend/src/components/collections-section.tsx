@@ -47,19 +47,6 @@ const moodCard = {
   },
 } as const;
 
-const moodLayoutDesktop = [
-  "lg:col-span-3",
-  "lg:col-span-3",
-  "lg:col-span-3",
-  "lg:col-span-3",
-] as const;
-
-function moodVariantForIndex(index: number): MoodCardVariant {
-  if (index === 2) return "feature";
-  if (index === 1) return "md";
-  return "sm";
-}
-
 export function CollectionCard({
   c,
   idx,
@@ -152,22 +139,19 @@ export function CollectionsSection({
     moods.length > 0
       ? showAll
         ? allMoodItems
-        : allMoodItems.slice(0, 4)
-      : defaultCollections.slice(0, 4);
+        : allMoodItems.slice(0, 6)
+      : defaultCollections.slice(0, 6);
 
   if (displayCollections.length === 0) return null;
-  const leadCards = displayCollections.slice(0, 4);
-  const overflowCards = displayCollections.slice(4);
 
   return (
-    <Section id="collections">
+    <Section id="collections" className="relative z-0 bg-[var(--background)]">
       <ScrollReveal>
         <SectionHeader
-          label="Curated For You"
           title="Signature Moods & Collections"
-          description="Browse boutique edits crafted for celebrations, gifting, and everyday elegance."
+          centered
           action={
-            moods.length > 4 ? (
+            moods.length > 6 ? (
               <button
                 type="button"
                 onClick={() => setShowAll((v) => !v)}
@@ -180,19 +164,16 @@ export function CollectionsSection({
         />
       </ScrollReveal>
 
-      <div className="mt-5 grid grid-cols-2 gap-3.5 sm:gap-5 md:mt-6 md:grid-cols-2 lg:grid-cols-12 lg:items-stretch">
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:gap-5 md:mt-6">
         <AnimatePresence initial={false}>
-          {leadCards.map((item, idx) => (
+          {displayCollections.map((item, idx) => (
             <motion.div
               key={item.key}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className={cn(
-                "col-span-1 h-full",
-                leadCards.length >= 4 ? moodLayoutDesktop[idx] : "lg:col-span-4"
-              )}
+              className="h-full"
             >
               <CollectionCard
                 c={item}
@@ -200,28 +181,12 @@ export function CollectionsSection({
                 setCollection={setCollection}
                 onPickMood={onPickMood}
                 reduceMotion={reduceMotion}
-                variant={moodVariantForIndex(idx)}
+                variant="md"
               />
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
-
-      {overflowCards.length > 0 ? (
-        <div className="mt-4 grid grid-cols-2 gap-3.5 sm:gap-5 md:mt-5 lg:grid-cols-4">
-          {overflowCards.map((item, idx) => (
-            <CollectionCard
-              key={item.key}
-              c={item}
-              idx={idx + leadCards.length}
-              setCollection={setCollection}
-              onPickMood={onPickMood}
-              reduceMotion={reduceMotion}
-              variant="md"
-            />
-          ))}
-        </div>
-      ) : null}
     </Section>
   );
 }

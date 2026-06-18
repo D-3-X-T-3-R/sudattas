@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Heart } from "lucide-react";
+import { Heart, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { INR } from "@/lib/constants";
 import type { Product } from "@/lib/schemas";
@@ -25,6 +25,7 @@ export interface ProductCardProps {
   wished: boolean;
   onToggleWish: (p: Product) => void;
   onQuickView: (p: Product) => void;
+  onQuickAdd?: (p: Product) => void;
   featured?: boolean;
 }
 
@@ -33,26 +34,46 @@ export function ProductCard({
   wished,
   onToggleWish,
   onQuickView,
+  onQuickAdd,
   featured = false,
 }: ProductCardProps) {
+  const hasHoverImage = !!product.hoverImage && product.hoverImage !== product.image;
+
   return (
-    <article className={cn("group rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]", featured && "h-full")}>
-      <div className="relative overflow-hidden rounded-t-lg border-b border-[var(--color-line)]">
+    <article className={cn("group flex flex-col", featured && "h-full")}>
+      <div className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]">
         <button
           type="button"
           onClick={() => onQuickView(product)}
           className={cn("relative block w-full text-left", featured ? "aspect-[4/5]" : "aspect-[3/4]")}
-          aria-label={`Quick view ${product.name}`}
+          aria-label={`View ${product.name}`}
         >
           <Image
             src={product.image || PLACEHOLDER_IMAGE}
             alt={product.imageAlt || product.name}
             fill
-            className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+            className={cn(
+              "object-cover transition-[transform,opacity] duration-500 ease-out",
+              hasHoverImage ? "group-hover:opacity-0" : "group-hover:scale-[1.04]"
+            )}
             sizes="(max-width: 768px) 50vw, 25vw"
             unoptimized={isExternalProductImage(product.image)}
           />
+          {hasHoverImage ? (
+            <Image
+              src={product.hoverImage!}
+              alt={product.imageAlt || product.name}
+              fill
+              className="object-cover opacity-0 transition-opacity duration-500 ease-out group-hover:opacity-100"
+              sizes="(max-width: 768px) 50vw, 25vw"
+              unoptimized={isExternalProductImage(product.hoverImage)}
+            />
+          ) : null}
         </button>
+
+        <span className="pointer-events-none absolute left-3 top-3 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)]/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-green)] backdrop-blur-sm">
+          New
+        </span>
 
         <Button
           variant="outline"
@@ -62,7 +83,7 @@ export function ProductCard({
             e.stopPropagation();
             onToggleWish(product);
           }}
-          className="absolute right-2 top-2 h-10 w-10 rounded-sm border-[var(--color-line)] bg-white/95 sm:right-2.5 sm:top-2.5 sm:h-8 sm:w-8"
+          className="absolute right-3 top-3 h-9 w-9 rounded-full border-white/50 bg-[var(--color-surface)]/85 backdrop-blur-sm hover:border-[var(--color-gold)]"
           aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
         >
           <Heart
@@ -72,17 +93,29 @@ export function ProductCard({
             )}
           />
         </Button>
+
+        {onQuickAdd ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onQuickAdd(product);
+            }}
+            className="absolute inset-x-0 bottom-0 flex translate-y-0 items-center justify-center gap-2 bg-[var(--color-green)] py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white transition-transform duration-300 ease-out md:translate-y-full md:group-hover:translate-y-0"
+          >
+            <ShoppingBag className="h-3.5 w-3.5" />
+            Quick Add
+          </button>
+        ) : null}
       </div>
 
-      <div className="p-3 sm:p-4">
-        <h3 className="line-clamp-2 break-words font-display text-lg leading-tight text-[var(--color-ink)] sm:text-[1.35rem]">
+      <div className="mt-3 flex items-start justify-between gap-3 sm:mt-4">
+        <h3 className="line-clamp-2 break-words font-display text-[1.05rem] leading-snug text-[var(--color-ink)] sm:text-xl">
           {product.name}
         </h3>
-        <p className="mt-2 font-sans text-lg font-semibold text-[var(--color-ink)]">
+        <p className="whitespace-nowrap pt-0.5 font-sans text-sm font-semibold text-[var(--color-ink)] sm:text-base">
           {product.priceFormatted ?? INR.format(product.price)}
-        </p>
-        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-gold)]">
-          New
         </p>
       </div>
     </article>

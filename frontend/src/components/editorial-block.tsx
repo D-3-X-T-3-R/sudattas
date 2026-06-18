@@ -43,21 +43,32 @@ export function EditorialBlock() {
               </motion.div>
             </div>
             <div className="flex flex-col justify-center lg:col-span-5 lg:py-20">
-              <Kicker className="text-[var(--color-muted)]">
+              <Kicker tone="accent">
                 {EDITORIAL.kicker}
               </Kicker>
-              <SectionHeading
-                size="lg"
-                className="mt-4 text-2xl md:text-3xl lg:text-4xl"
-              >
+              <SectionHeading size="lg" className="mt-4">
                 {EDITORIAL.headline}
               </SectionHeading>
               <p className="mt-8 max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
                 {EDITORIAL.body}
               </p>
+              <div className="mt-6 grid gap-3">
+                {[
+                  "Clarity over clutter",
+                  "Editorial imagery",
+                  "Details that feel intentional",
+                ].map((x) => (
+                  <div key={x} className="flex items-center gap-4">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-gold)]" />
+                    <span className="text-sm font-medium text-[var(--color-ink)]">
+                      {x}
+                    </span>
+                  </div>
+                ))}
+              </div>
               <Button
                 variant="outline"
-                className="mt-12 w-fit rounded-full border-[var(--color-line)] px-8 py-3.5 font-semibold"
+                className="mt-8 w-fit rounded-full border-[var(--color-line)] px-8 py-3.5 font-semibold"
                 onClick={() => goTo("shop", false)}
               >
                 {EDITORIAL.ctaLabel}

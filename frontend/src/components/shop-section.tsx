@@ -2,6 +2,7 @@
 
 import { ProductCard } from "@/components/product-card";
 import type { Product } from "@/lib/schemas";
+import { Button } from "@/components/ui/button";
 import { Section } from "@/components/ui/section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SectionHeader } from "@/components/ui/page-shell";
@@ -11,6 +12,7 @@ export interface ShopSectionProps {
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
   onQuickView: (p: Product) => void;
+  onQuickAdd?: (p: Product) => void;
   onViewAll?: () => void;
 }
 
@@ -19,18 +21,18 @@ export function ShopSection({
   wishlist,
   onToggleWish,
   onQuickView,
+  onQuickAdd,
   onViewAll,
 }: ShopSectionProps) {
-  const preview = products.slice(0, 4);
+  const preview = products.slice(0, 6);
   if (preview.length === 0) return null;
 
   return (
-    <Section id="shop">
+    <Section id="shop" className="relative z-0 bg-[var(--background)]">
       <ScrollReveal>
         <SectionHeader
-          label="New Arrivals"
           title="Thoughtfully Designed, Beautifully Crafted"
-          description="Freshly added pieces curated for this season's celebrations and everyday dressing."
+          centered
           action={
             <button
               type="button"
@@ -43,7 +45,7 @@ export function ShopSection({
         />
       </ScrollReveal>
 
-      <div className="mt-8 grid grid-cols-2 gap-4 md:gap-5 lg:grid-cols-4">
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-5">
         {preview.map((p, i) => (
           <ScrollReveal key={p.id} delay={i * 0.05}>
             <ProductCard
@@ -51,9 +53,16 @@ export function ShopSection({
               wished={!!wishlist[p.id]}
               onToggleWish={onToggleWish}
               onQuickView={onQuickView}
+              onQuickAdd={onQuickAdd}
             />
           </ScrollReveal>
         ))}
+      </div>
+
+      <div className="mt-8 flex justify-center">
+        <Button variant="outline" className="rounded-full px-8" onClick={onViewAll}>
+          Shop the Collection
+        </Button>
       </div>
     </Section>
   );

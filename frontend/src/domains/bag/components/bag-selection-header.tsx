@@ -31,7 +31,7 @@ export function BagSelectionHeader({
           "inline-flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em]",
           allSelected
             ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
-            : "border-[var(--color-line)] bg-white text-[var(--color-ink)]"
+            : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink)]"
         )}
       >
         <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm border border-current">

@@ -97,7 +97,7 @@ export function BagSizeDropdown({
                     "flex w-full items-center px-4 py-3 text-left text-base font-semibold tracking-wide text-[var(--color-ink)] transition-colors",
                     selected
                       ? "bg-[var(--color-surface-soft)] text-[var(--color-green)]"
-                      : "hover:bg-white/70"
+                      : "hover:bg-[var(--color-surface-soft)]"
                   )}
                   onClick={() => {
                     setOpen(false);

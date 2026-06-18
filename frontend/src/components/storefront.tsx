@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
@@ -10,15 +10,17 @@ import { useStorefrontNavigationEffects } from "@/domains/storefront/hooks/use-s
 import { ensureGuestSession } from "@/lib/session";
 import { consumePendingHomeCollection, goTo, PENDING_HOME_COLLECTION_EVENT } from "@/hooks/use-scroll-to";
 import { HeroSection } from "@/components/hero-section";
-import { BlockPrintStorySection } from "@/components/block-print-story-section";
 import { CollectionsSection } from "@/components/collections-section";
 import { CategoriesSection } from "@/components/categories-section";
 import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
+import { FullBleedVideoSection } from "@/components/full-bleed-video-section";
+import { QuickViewModal } from "@/components/quick-view-modal";
 import { Section } from "@/components/ui/section";
 import { TrustStrip } from "@/components/trust-strip";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
+import type { Product } from "@/lib/schemas";
 
 const EditorialBlock = dynamic(() => import("@/components/editorial-block").then((m) => m.EditorialBlock), {
   loading: () => (
@@ -42,9 +44,9 @@ const StorySection = dynamic(() => import("@/components/story-section").then((m)
 
 const Footer = dynamic(() => import("@/components/footer").then((m) => m.Footer), {
   loading: () => (
-    <footer className="border-t border-[var(--color-line)] py-10">
+    <footer className="bg-deep-feature mt-10 py-14 md:mt-14 md:py-20">
       <div className="mx-auto max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
-        <div className="h-16 animate-pulse rounded bg-[var(--color-line)]/40" />
+        <div className="h-16 animate-pulse rounded bg-white/10" />
       </div>
     </footer>
   ),
@@ -55,7 +57,8 @@ export function Storefront() {
   const router = useRouter();
   const reduceMotion = !!useReducedMotion();
   const { showToast } = useToast();
-  const { wishlist, toggleWish } = useStorefront();
+  const { wishlist, toggleWish, addToCart } = useStorefront();
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
   const catalog = useStorefrontCatalog({ showToast });
   const {
@@ -102,7 +105,7 @@ export function Storefront() {
   const goToWithMotion = (id: string, instant?: boolean) => goTo(id, instant ?? reduceMotion);
 
   return (
-    <div id="top" className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <div id="top" className="min-h-screen text-[var(--foreground)]">
       <HeroSection />
       <Section compact className="pt-5">
         <TrustStrip />
@@ -126,6 +129,52 @@ export function Storefront() {
         </div>
       )}
 
+      <CategoriesSection
+        categories={categories.filter((category) => collectionOptions.includes(category.name))}
+        onPickCategory={(name) => setCollection(name)}
+        reduceMotion={reduceMotion}
+      />
+
+      <FullBleedVideoSection
+        id="block-print-story"
+        src="/videos/block_print_story_new.mp4"
+        kicker="The Block Print Story"
+        heading="Print, stitch, rhythm, and patience."
+        body="Every print begins with touch, pressure, rhythm, and care — chosen for textile character, quiet irregularities, and boutique finish."
+        ctaLabel="Discover the Collection"
+        onCtaClick={() => goTo("shop", reduceMotion)}
+        align="right"
+      />
+
+      {loadingProducts ? (
+        <Section id="shop" className="relative z-0 bg-[var(--background)]">
+          <div className="flex justify-center py-16">
+            <Spinner />
+          </div>
+        </Section>
+      ) : (
+        <ShopSection
+          products={products}
+          wishlist={wishlist}
+          onToggleWish={toggleWish}
+          onQuickView={(product) => goToProduct(product.id)}
+          onQuickAdd={(product) => setQuickViewProduct(product)}
+          onViewAll={() => {
+            catalog.setSort("Featured");
+            goTo("explore", reduceMotion);
+          }}
+        />
+      )}
+
+      <FullBleedVideoSection
+        src="/videos/Woman_posing_in_saree_202606140847.mp4"
+        kicker="Sudatta's Atelier"
+        heading="Made to be worn, kept, and passed on."
+        body="From loom to wardrobe — every piece is finished by hand, in small batches, with time-honoured techniques."
+        ctaLabel="Explore Collections"
+        onCtaClick={() => goTo("collections", reduceMotion)}
+      />
+
       <CollectionsSection
         setCollection={setCollection}
         moods={moods}
@@ -135,52 +184,37 @@ export function Storefront() {
         reduceMotion={reduceMotion}
       />
 
-      <CategoriesSection
-        categories={categories.filter((category) => collectionOptions.includes(category.name))}
-        onPickCategory={(name) => setCollection(name)}
-        reduceMotion={reduceMotion}
-      />
-
       {loadingProducts ? (
-        <>
-          <Section id="shop">
-            <div className="flex justify-center py-16">
-              <Spinner />
-            </div>
-          </Section>
-          <Section id="explore">
-            <div className="flex justify-center py-16">
-              <Spinner />
-            </div>
-          </Section>
-        </>
+        <Section id="explore">
+          <div className="flex justify-center py-16">
+            <Spinner />
+          </div>
+        </Section>
       ) : (
-        <>
-          <ShopSection
-            products={products}
-            wishlist={wishlist}
-            onToggleWish={toggleWish}
-            onQuickView={(product) => goToProduct(product.id)}
-            onViewAll={() => {
-              catalog.setSort("Featured");
-              goTo("explore", reduceMotion);
-            }}
-          />
-
-          <ExploreSection
-            catalog={catalog}
-            wishlist={wishlist}
-            onToggleWish={toggleWish}
-            onQuickView={(product) => goToProduct(product.id)}
-          />
-        </>
+        <ExploreSection
+          catalog={catalog}
+          wishlist={wishlist}
+          onToggleWish={toggleWish}
+          onQuickView={(product) => goToProduct(product.id)}
+          onQuickAdd={(product) => setQuickViewProduct(product)}
+        />
       )}
 
       <EditorialBlock />
-      <BlockPrintStorySection />
       <StorySection />
       <Footer goTo={goToWithMotion} />
 
+      <QuickViewModal
+        product={quickViewProduct}
+        open={!!quickViewProduct}
+        onClose={() => setQuickViewProduct(null)}
+        wished={quickViewProduct ? !!wishlist[quickViewProduct.id] : false}
+        onToggleWish={toggleWish}
+        onAddToCart={(product, qty, sizeName) => {
+          addToCart(product, qty, sizeName);
+          setQuickViewProduct(null);
+        }}
+      />
     </div>
   );
 }

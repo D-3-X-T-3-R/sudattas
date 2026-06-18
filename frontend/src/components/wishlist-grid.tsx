@@ -153,40 +153,38 @@ function WishlistCard({
   const priceLabel = p.priceFormatted ?? INR.format(p.price);
 
   return (
-    <article className="group rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]">
-      <div className="relative overflow-hidden rounded-t-lg border-b border-[var(--color-line)]">
-        <Link href={`/product/${p.id}`} className="block" aria-label={`View ${p.name}`}>
-          <div className="relative aspect-[3/4] w-full">
-            <Image
-              src={p.image || PLACEHOLDER_IMAGE}
-              alt={p.imageAlt || p.name}
-              fill
-              className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-              sizes="(max-width: 768px) 50vw, 25vw"
-              unoptimized={isExternalProductImage(p.image)}
-            />
-          </div>
+    <article className="group flex flex-col">
+      <div className="relative aspect-[3/4] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]">
+        <Link href={`/product/${p.id}`} className="block h-full w-full" aria-label={`View ${p.name}`}>
+          <Image
+            src={p.image || PLACEHOLDER_IMAGE}
+            alt={p.imageAlt || p.name}
+            fill
+            className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+            sizes="(max-width: 768px) 50vw, 25vw"
+            unoptimized={isExternalProductImage(p.image)}
+          />
         </Link>
         <button
           type="button"
           onClick={() => onRemove(p)}
-          className="absolute right-2 top-2 z-10 flex h-10 w-10 items-center justify-center rounded-sm border border-[var(--color-line)] bg-white/95 text-[var(--color-green)] sm:right-2.5 sm:top-2.5 sm:h-8 sm:w-8"
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)]/90 text-[var(--color-ink)] backdrop-blur-sm transition-colors hover:text-[var(--color-green)]"
           aria-label={`Remove ${p.name} from wishlist`}
         >
           <X className="h-4 w-4" strokeWidth={2.2} />
         </button>
       </div>
 
-      <div className="p-3 sm:p-4">
-        <Link href={`/product/${p.id}`}>
-          <h3 className="line-clamp-2 break-words font-display text-lg leading-tight text-[var(--color-ink)] sm:text-[1.35rem]">{p.name}</h3>
+      <div className="mt-3 flex items-start justify-between gap-3 sm:mt-4">
+        <Link href={`/product/${p.id}`} className="min-w-0">
+          <h3 className="line-clamp-2 break-words font-display text-[1.05rem] leading-snug text-[var(--color-ink)] sm:text-xl">{p.name}</h3>
         </Link>
-        <p className="mt-2 font-sans text-lg font-semibold text-[var(--color-ink)]">{priceLabel}</p>
+        <p className="whitespace-nowrap pt-0.5 font-sans text-sm font-semibold text-[var(--color-ink)] sm:text-base">{priceLabel}</p>
       </div>
 
-      <div className="border-t border-[var(--color-line)] p-3 sm:p-4">
+      <div className="mt-3">
         {out ? (
-          <div className="py-2 text-center text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]" role="status">
+          <div className="rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] py-2.5 text-center text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]" role="status">
             Out Of Stock
           </div>
         ) : (

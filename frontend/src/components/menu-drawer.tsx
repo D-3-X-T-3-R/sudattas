@@ -41,9 +41,9 @@ export function MenuDrawer({
 
   const nav: DrawerNavItem[] = [
     { type: "section", label: "Home", goToId: "top" },
-    { type: "section", label: "Moods", goToId: "collections" },
     { type: "section", label: "Collections", goToId: "category-collections" },
     { type: "section", label: "New Arrivals", goToId: "shop" },
+    { type: "section", label: "Moods", goToId: "collections" },
     { type: "section", label: "Explore", goToId: "explore" },
     { type: "route", label: "About Us", href: "/about" },
   ];
@@ -60,42 +60,47 @@ export function MenuDrawer({
       bodyClassName="px-5 pb-8 pt-5"
       closeButtonClassName="h-10 w-10 rounded-full border-[var(--color-line)] bg-[var(--color-surface-soft)] text-[var(--color-green)] hover:border-[var(--color-gold)] hover:bg-[var(--color-surface)]"
     >
-      <nav className="border-y border-[var(--color-line)]" aria-label="Mobile menu">
-        {nav.map((x) =>
-          x.type === "route" ? (
-            <Link
-              key={x.label}
-              href={x.href}
-              onClick={onClose}
-              className="group flex min-h-[3.45rem] w-full items-center justify-between border-b border-[var(--color-line)] py-3.5 text-left last:border-b-0"
-            >
-              <span className="font-display text-[1.18rem] leading-tight text-[var(--color-green)]">
-                {x.label}
-              </span>
-              <ChevronRight className="h-4 w-4 text-[var(--color-gold)] opacity-65 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
-            </Link>
-          ) : (
-            <button
-              key={x.label}
-              type="button"
-              onClick={() => {
-                navigateToSection(x.goToId);
-                onClose();
-              }}
-              className="group flex min-h-[3.45rem] w-full items-center justify-between border-b border-[var(--color-line)] py-3.5 text-left last:border-b-0"
-            >
-              <span className="font-display text-[1.18rem] leading-tight text-[var(--color-green)]">
-                {x.label}
-              </span>
-              <ChevronRight className="h-4 w-4 text-[var(--color-gold)] opacity-65 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
-            </button>
-          )
-        )}
-      </nav>
+      <div className="flex h-full flex-col">
+        <nav className="border-y border-[var(--color-line)]" aria-label="Mobile menu">
+          {nav.map((x) =>
+            x.type === "route" ? (
+              <Link
+                key={x.label}
+                href={x.href}
+                onClick={onClose}
+                className="group flex min-h-[3.45rem] w-full items-center justify-between border-b border-[var(--color-line)] py-3.5 text-left last:border-b-0"
+              >
+                <span className="font-display text-[1.18rem] leading-tight text-[var(--color-green)]">
+                  {x.label}
+                </span>
+                <ChevronRight className="h-4 w-4 text-[var(--color-gold)] opacity-65 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
+              </Link>
+            ) : (
+              <button
+                key={x.label}
+                type="button"
+                onClick={() => {
+                  navigateToSection(x.goToId);
+                  onClose();
+                }}
+                className="group flex min-h-[3.45rem] w-full items-center justify-between border-b border-[var(--color-line)] py-3.5 text-left last:border-b-0"
+              >
+                <span className="font-display text-[1.18rem] leading-tight text-[var(--color-green)]">
+                  {x.label}
+                </span>
+                <ChevronRight className="h-4 w-4 text-[var(--color-gold)] opacity-65 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
+              </button>
+            )
+          )}
+        </nav>
 
-      <p className="mt-7 text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--color-muted)]">
-        Sudatta&apos;s Designer Boutique
-      </p>
+        <div className="mt-auto border-t border-[var(--color-line)] pt-5">
+          <p className="font-display text-base leading-snug text-[var(--color-green)]">Sudatta&apos;s</p>
+          <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--color-muted)]">
+            Designer Boutique
+          </p>
+        </div>
+      </div>
     </Sheet>
   );
 }

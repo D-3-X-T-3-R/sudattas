@@ -3,13 +3,24 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ShieldCheck, Truck, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Accordion } from "@/components/ui/accordion";
+import { ScrollCarousel } from "@/components/ui/carousel";
+import { Kicker, SectionHeading } from "@/components/ui/typography";
+import { ProductCard } from "@/components/product-card";
 import { INR } from "@/lib/constants";
 import type { Product } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
 const FALLBACK_SIZE_NAMES = ["Free Size", "XS", "S", "M", "L", "XL", "XXL", "3XL"];
+
+const TRUST_POINTS = [
+  { icon: ShieldCheck, text: "Secure checkout and protected payments." },
+  { icon: Truck, text: "Delivery timelines confirmed at checkout for your pincode." },
+  { icon: Undo2, text: "Easy return support available from your order dashboard." },
+] as const;
 
 type VariantStockRow = { sizeName: string; quantity: number };
 
@@ -49,44 +60,43 @@ function ProductGallery({
   setSelectedImageIndex: (value: number) => void;
 }) {
   return (
-    <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-[var(--shadow-subtle)] md:sticky md:top-24 md:p-4">
-      <div className="grid gap-3 md:grid-cols-[72px_minmax(0,1fr)]">
-        <div className="order-2 flex gap-2 overflow-x-auto pb-1 md:order-1 md:flex-col md:overflow-visible">
-          {images.map((src, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setSelectedImageIndex(i)}
-              aria-label={`View image ${i + 1} of ${images.length} for ${productName}`}
-              className={cn(
-                "relative h-16 w-14 shrink-0 overflow-hidden rounded-sm border",
-                selectedImageIndex === i
-                  ? "border-[var(--color-green)]"
-                  : "border-[var(--color-line)] hover:border-[var(--color-gold)]"
-              )}
-            >
-              <Image
-                src={src}
-                alt={`${productName} view ${i + 1}`}
-                fill
-                className="object-cover"
-                sizes="64px"
-                unoptimized={isExternalImage(src)}
-              />
-            </button>
-          ))}
-        </div>
+    <div className="grid grid-cols-1 gap-3 md:sticky md:top-24 md:grid-cols-[88px_minmax(0,1fr)] md:gap-4">
+      <div className="order-2 flex gap-2.5 overflow-x-auto pb-1 md:order-1 md:flex-col md:overflow-visible">
+        {images.map((src, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setSelectedImageIndex(i)}
+            aria-label={`View image ${i + 1} of ${images.length} for ${productName}`}
+            className={cn(
+              "relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface-soft)] md:w-full",
+              selectedImageIndex === i
+                ? "border-[var(--color-green)]"
+                : "border-[var(--color-line)] hover:border-[var(--color-gold)]"
+            )}
+          >
+            <Image
+              src={src}
+              alt={`${productName} view ${i + 1}`}
+              fill
+              className="object-cover"
+              sizes="88px"
+              unoptimized={isExternalImage(src)}
+            />
+          </button>
+        ))}
+      </div>
 
-        <div className="order-1 relative min-h-0 overflow-hidden rounded-sm border border-[var(--color-line)] bg-white aspect-[3/4] md:order-2">
-          <Image
-            src={mainImage}
-            alt={productName}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, 50vw"
-            unoptimized={isExternalImage(mainImage)}
-          />
-        </div>
+      <div className="order-1 relative aspect-[3/4] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] shadow-[var(--shadow-soft)] md:order-2">
+        <Image
+          src={mainImage}
+          alt={productName}
+          fill
+          priority
+          className="object-cover"
+          sizes="(max-width: 768px) 100vw, 50vw"
+          unoptimized={isExternalImage(mainImage)}
+        />
       </div>
     </div>
   );
@@ -94,10 +104,9 @@ function ProductGallery({
 
 function ProductDetails({ product }: { product: Product }) {
   return (
-    <div className="space-y-2">
-      <details className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-4" open>
-        <summary className="cursor-pointer text-sm font-semibold text-[var(--color-ink)]">Details</summary>
-        <div className="mt-3 grid gap-2 text-sm text-[var(--color-muted)]">
+    <div>
+      <Accordion title="Product Details" defaultOpen>
+        <div className="grid gap-2">
           <div className="flex justify-between gap-2">
             <span>Material</span>
             <span className="text-[var(--color-ink)]">{product.fabric || "N/A"}</span>
@@ -107,17 +116,41 @@ function ProductDetails({ product }: { product: Product }) {
             <span className="text-[var(--color-ink)]">{product.occasion || "N/A"}</span>
           </div>
         </div>
-      </details>
+        {product.description ? <p className="mt-3 leading-relaxed">{product.description}</p> : null}
+      </Accordion>
 
-      <details className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-[var(--color-ink)]">Care Instructions</summary>
-        <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-[var(--color-muted)]">
+      <Accordion title="Delivery & Returns">
+        <p className="leading-relaxed">
+          Delivery timelines are confirmed at checkout for your pincode. Read our{" "}
+          <Link href="/shipping-policy" className="font-semibold text-[var(--color-ink)] underline">
+            Shipping Policy
+          </Link>{" "}
+          and{" "}
+          <Link href="/returns-exchanges" className="font-semibold text-[var(--color-ink)] underline">
+            Returns &amp; Exchanges
+          </Link>{" "}
+          for eligibility and process details.
+        </p>
+      </Accordion>
+
+      <Accordion title="Care Instructions">
+        <ul className="list-disc space-y-1 pl-4">
           <li>Dry clean or gentle hand wash recommended.</li>
           <li>Do not bleach or wring aggressively.</li>
           <li>Dry in shade and iron on reverse side.</li>
           <li>Store folded in a breathable cotton cover.</li>
         </ul>
-      </details>
+      </Accordion>
+
+      <Accordion title="Need Help?">
+        <p className="leading-relaxed">
+          Have a question about this piece? Our{" "}
+          <Link href="/contact-support" className="font-semibold text-[var(--color-ink)] underline">
+            Customer Support
+          </Link>{" "}
+          team is happy to help.
+        </p>
+      </Accordion>
     </div>
   );
 }
@@ -128,6 +161,9 @@ export interface ProductDetailViewProps {
   wished: boolean;
   onToggleWish: (p: Product) => void;
   onAddToCart: (p: Product, qty?: number, sizeName?: string | null) => void;
+  relatedProducts?: Product[];
+  relatedWishlist?: Record<string, boolean>;
+  onQuickAdd?: (p: Product) => void;
 }
 
 export function ProductDetailView({
@@ -136,7 +172,11 @@ export function ProductDetailView({
   wished,
   onToggleWish,
   onAddToCart,
+  relatedProducts = [],
+  relatedWishlist = {},
+  onQuickAdd,
 }: ProductDetailViewProps) {
+  const router = useRouter();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const variantStock = product.variantStock ?? [];
 
@@ -176,7 +216,8 @@ export function ProductDetailView({
   const mainImage = images[selectedImageIndex] || product.image;
 
   return (
-    <section className="grid gap-6 md:grid-cols-[58%_42%] md:items-start">
+    <>
+    <section className="grid gap-8 md:grid-cols-[58%_42%] md:items-start md:gap-10 lg:gap-14">
       <ProductGallery
         images={images}
         mainImage={mainImage}
@@ -185,30 +226,28 @@ export function ProductDetailView({
         setSelectedImageIndex={setSelectedImageIndex}
       />
 
-      <div className="space-y-5 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)] md:sticky md:top-24 md:p-5">
-        <div className="border-b border-[var(--color-line)] pb-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-            {product.collection}
-          </p>
-          <h1 className="mt-1 font-display text-[1.9rem] leading-[1.18] text-[var(--color-ink)] md:text-[2.3rem]">
+      <div className="md:sticky md:top-24">
+        <div className="border-b border-[var(--color-line)] pb-6">
+          <Kicker tone="accent">{product.collection}</Kicker>
+          <h1 className="mt-2 font-display text-[2.1rem] font-medium leading-[1.12] tracking-[-0.01em] text-[var(--color-ink)] sm:text-[2.5rem]">
             {product.name}
           </h1>
-          <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted)]">{product.description}</p>
-          <p className="mt-3 font-sans text-2xl font-semibold text-[var(--color-ink)]">
+          <p className="mt-3 text-sm leading-relaxed text-[var(--color-muted)]">{product.description}</p>
+          <p className="mt-4 font-sans text-2xl font-semibold text-[var(--color-ink)] md:text-[1.75rem]">
             {product.priceFormatted ?? INR.format(product.price)}
           </p>
         </div>
 
-        <div>
+        <div className="space-y-6 border-b border-[var(--color-line)] py-6">
           {hasSizeSelector(product) ? (
-            <>
+            <div>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-[var(--color-ink)]">Select size</p>
-                <Link href="/size-fit-guide" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-green)]">
+                <Link href="/size-fit-guide" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-green)] hover:text-[var(--color-green-2)]">
                   Size &amp; Fit Guide
                 </Link>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 {sizeNames.map((sizeName) => {
                   const qty = getStockForSize(variantStock, sizeName);
                   const outOfStock = qty <= 0;
@@ -219,10 +258,10 @@ export function ProductDetailView({
                       disabled={outOfStock}
                       onClick={() => !outOfStock && setSelectedSize(sizeName)}
                       className={cn(
-                        "min-w-[2.7rem] rounded-sm border px-3 py-2 text-sm font-medium",
+                        "min-w-[3rem] rounded-[var(--radius-md)] border px-3.5 py-2 text-sm font-medium transition-colors",
                         outOfStock && "cursor-not-allowed border-[var(--color-line)] bg-[var(--color-surface-soft)] text-[var(--color-muted)] line-through",
                         !outOfStock && selectedSize === sizeName && "border-[var(--color-green)] bg-[var(--color-green)] text-white",
-                        !outOfStock && selectedSize !== sizeName && "border-[var(--color-line)] bg-white text-[var(--color-ink)] hover:border-[var(--color-gold)]"
+                        !outOfStock && selectedSize !== sizeName && "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:border-[var(--color-gold)]"
                       )}
                     >
                       {sizeName}
@@ -230,43 +269,43 @@ export function ProductDetailView({
                   );
                 })}
               </div>
-            </>
+            </div>
           ) : (
-            <div className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] p-3 text-sm text-[var(--color-muted)]">
+            <div className="rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] p-3.5 text-sm leading-relaxed text-[var(--color-muted)]">
               This style does not use standard size variants. Free-size drape fit can vary by fabric and silhouette.
-              <Link href="/size-fit-guide" className="ml-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-green)]">
+              <Link href="/size-fit-guide" className="ml-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-green)] hover:text-[var(--color-green-2)]">
                 View Size &amp; Fit Guide
               </Link>
             </div>
           )}
-        </div>
 
-        <div>
-          <p className="text-sm font-semibold text-[var(--color-ink)]">Quantity</p>
-          <div className="mt-2 inline-flex items-center rounded-md border border-[var(--color-line)] bg-white p-1">
-            <button
-              type="button"
-              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              disabled={safeQuantity <= 1}
-              className="h-8 w-8 rounded-sm text-lg text-[var(--color-ink)] disabled:opacity-40"
-              aria-label="Decrease quantity"
-            >
-              -
-            </button>
-            <span className="min-w-[2.2rem] text-center text-sm font-semibold text-[var(--color-ink)]">{safeQuantity}</span>
-            <button
-              type="button"
-              onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
-              disabled={safeQuantity >= maxQuantity}
-              className="h-8 w-8 rounded-sm text-lg text-[var(--color-ink)] disabled:opacity-40"
-              aria-label="Increase quantity"
-            >
-              +
-            </button>
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-ink)]">Quantity</p>
+            <div className="mt-3 inline-flex items-center rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface)] p-1">
+              <button
+                type="button"
+                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                disabled={safeQuantity <= 1}
+                className="h-8 w-8 rounded-[var(--radius-sm)] text-lg text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-soft)] disabled:opacity-40 disabled:hover:bg-transparent"
+                aria-label="Decrease quantity"
+              >
+                -
+              </button>
+              <span className="min-w-[2.2rem] text-center text-sm font-semibold text-[var(--color-ink)]">{safeQuantity}</span>
+              <button
+                type="button"
+                onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
+                disabled={safeQuantity >= maxQuantity}
+                className="h-8 w-8 rounded-[var(--radius-sm)] text-lg text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-soft)] disabled:opacity-40 disabled:hover:bg-transparent"
+                aria-label="Increase quantity"
+              >
+                +
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-2">
+        <div className="grid gap-2.5 pt-6">
           <Button
             onClick={() => onAddToCart(product, safeQuantity, selectedSize)}
             disabled={maxQuantity < 1}
@@ -279,23 +318,41 @@ export function ProductDetailView({
           </Button>
         </div>
 
-        <div className="grid gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] p-3">
-          <div className="flex items-start gap-2 text-xs text-[var(--color-muted)]">
-            <ShieldCheck className="mt-0.5 h-4 w-4 text-[var(--color-green)]" />
-            Secure checkout and protected payments.
-          </div>
-          <div className="flex items-start gap-2 text-xs text-[var(--color-muted)]">
-            <Truck className="mt-0.5 h-4 w-4 text-[var(--color-green)]" />
-            Delivery timelines confirmed at checkout for your pincode.
-          </div>
-          <div className="flex items-start gap-2 text-xs text-[var(--color-muted)]">
-            <Undo2 className="mt-0.5 h-4 w-4 text-[var(--color-green)]" />
-            Easy return support available from your order dashboard.
-          </div>
-        </div>
+        <ul className="mt-6 grid gap-3">
+          {TRUST_POINTS.map(({ icon: Icon, text }) => (
+            <li key={text} className="flex items-start gap-2.5 text-xs leading-relaxed text-[var(--color-muted)]">
+              <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-gold)]" strokeWidth={1.75} />
+              <span>{text}</span>
+            </li>
+          ))}
+        </ul>
 
-        <ProductDetails product={product} />
+        <div className="mt-8">
+          <ProductDetails product={product} />
+        </div>
       </div>
     </section>
+
+    {relatedProducts.length > 0 ? (
+      <div className="mt-16 border-t border-[var(--color-line)] pt-12 md:mt-24 md:pt-16">
+        <Kicker tone="accent">Complete the Look</Kicker>
+        <SectionHeading size="lg" className="mt-2">
+          Pair It With
+        </SectionHeading>
+        <ScrollCarousel className="mt-8">
+          {relatedProducts.map((related) => (
+            <ProductCard
+              key={related.id}
+              product={related}
+              wished={!!relatedWishlist[related.id]}
+              onToggleWish={onToggleWish}
+              onQuickView={(p) => router.push(`/product/${p.id}`)}
+              onQuickAdd={onQuickAdd}
+            />
+          ))}
+        </ScrollCarousel>
+      </div>
+    ) : null}
+    </>
   );
 }

@@ -8,7 +8,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-[var(--color-green)] bg-[var(--color-green)] text-white hover:bg-[var(--color-green-2)] hover:border-[var(--color-green-2)]",
+        default: "border-[var(--color-green)] bg-[var(--color-green)] text-white shadow-[0_1px_0_rgba(255,255,255,0.08)_inset] hover:bg-[var(--color-green-2)] hover:border-[var(--color-green-2)] hover:shadow-[var(--shadow-action)]",
         outline: "border-[var(--color-line-strong)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:border-[var(--color-gold)] hover:text-[var(--color-green)]",
         ghost: "border-transparent bg-transparent text-[var(--color-ink)] hover:bg-[var(--color-surface-soft)]",
       },

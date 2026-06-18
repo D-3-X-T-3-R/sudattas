@@ -60,7 +60,7 @@ export function BagLineCard({
       <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 md:grid-cols-[140px_minmax(0,1fr)] md:gap-4 md:pr-8">
         <Link
           href={`/product/${product.id}`}
-          className="block aspect-[3/4] w-full overflow-hidden rounded-sm border border-[var(--color-line)] bg-white"
+          className="block aspect-[3/4] w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]"
         >
           {product.image ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -100,7 +100,7 @@ export function BagLineCard({
               />
             ) : null}
 
-            <div className="inline-flex h-9 items-center rounded-md border border-[var(--color-line)] bg-white p-1">
+            <div className="inline-flex h-9 items-center rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface)] p-1">
               <button
                 type="button"
                 onClick={() => onDec(id)}
@@ -149,10 +149,10 @@ export function BagLineCard({
         onClick={onSelect}
         aria-label={`Select ${product.name}`}
         className={cn(
-          "absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-sm border shadow-[0_2px_8px_rgba(45,42,38,0.08)] md:left-auto md:right-4 md:top-4",
+          "absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] border shadow-[0_2px_8px_rgba(45,42,38,0.08)] md:left-auto md:right-4 md:top-4",
           isSelected
             ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
-            : "border-[var(--color-line-strong)] bg-white text-transparent"
+            : "border-[var(--color-line-strong)] bg-[var(--color-surface)] text-transparent"
         )}
       >
         <CheckIcon className="h-3.5 w-3.5" />

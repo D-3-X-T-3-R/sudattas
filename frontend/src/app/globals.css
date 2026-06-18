@@ -33,6 +33,13 @@ html::-webkit-scrollbar {
   --color-surface-muted: var(--color-surface-soft);
   --color-paper: var(--color-surface);
 
+  /* Tonal layering for alternating section rhythm */
+  --color-section-alt: #F1E9D8;
+  --color-deep: var(--color-green);
+  --color-deep-2: #143F30;
+  --color-on-deep: #F3EFE3;
+  --color-on-deep-muted: rgba(243, 239, 227, 0.68);
+
   --radius-xs: 0.125rem;
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
@@ -42,10 +49,11 @@ html::-webkit-scrollbar {
   --shadow-soft: 0 8px 24px rgba(45, 42, 38, 0.06);
   --shadow-subtle: 0 2px 10px rgba(45, 42, 38, 0.05);
   --shadow-action: 0 10px 24px rgba(15, 61, 46, 0.12);
+  --shadow-lift: 0 22px 48px rgba(15, 61, 46, 0.14);
 
-  --container-max: 1280px;
+  --container-max: 2560px;
   --gutter-mobile: 16px;
-  --gutter-tablet: 24px;
+  --gutter-tablet: 16px;
 
   --background: var(--color-bg-ivory);
   --foreground: var(--color-ink);
@@ -202,6 +210,36 @@ textarea {
   transform: scale(1.03);
 }
 
+/* Deep tonal band for feature/CTA sections — woven texture echoes the brand mark */
+.bg-deep-feature {
+  background-color: var(--color-deep);
+  background-image:
+    radial-gradient(circle at 14% 18%, rgba(201, 166, 70, 0.16), transparent 55%),
+    radial-gradient(circle at 86% 82%, rgba(30, 91, 67, 0.55), transparent 60%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 7px);
+  color: var(--color-on-deep);
+}
+
+/* Thin ornamental rule used to separate or bracket editorial sections */
+.ornament-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.ornament-rule::before,
+.ornament-rule::after {
+  content: "";
+  height: 1px;
+  flex: 1 1 auto;
+  background: var(--color-line-strong);
+}
+
+.ornament-rule--inverse::before,
+.ornament-rule--inverse::after {
+  background: rgba(243, 239, 227, 0.22);
+}
+
 .scroll-reveal {
   opacity: 0;
   transform: translateY(24px);
@@ -326,4 +364,18 @@ textarea {
   :root {
     --gutter-mobile: var(--gutter-tablet);
   }
+}
+
+@keyframes announcement-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.announcement-marquee {
+  animation: announcement-marquee 28s linear infinite;
+  will-change: transform;
+}
+
+.announcement-marquee:hover {
+  animation-play-state: paused;
 }

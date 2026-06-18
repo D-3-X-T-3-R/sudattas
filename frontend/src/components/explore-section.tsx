@@ -5,7 +5,7 @@ import { ProductCard } from "@/components/product-card";
 import type { Product } from "@/lib/schemas";
 import { Section } from "@/components/ui/section";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { SectionHeader, EmptyState } from "@/components/ui/page-shell";
+import { EmptyState } from "@/components/ui/page-shell";
 import {
   EXPLORE_SORT_OPTIONS,
   type AvailabilityValue,
@@ -25,6 +25,7 @@ export interface ExploreSectionProps {
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
   onQuickView: (p: Product) => void;
+  onQuickAdd?: (p: Product) => void;
 }
 
 function PriceRange({
@@ -214,12 +215,14 @@ function ProductResults({
   wishlist,
   onToggleWish,
   onQuickView,
+  onQuickAdd,
   onReset,
 }: {
   products: Product[];
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
   onQuickView: (p: Product) => void;
+  onQuickAdd?: (p: Product) => void;
   onReset: () => void;
 }) {
   if (products.length === 0) {
@@ -249,6 +252,7 @@ function ProductResults({
             wished={!!wishlist[product.id]}
             onToggleWish={onToggleWish}
             onQuickView={onQuickView}
+            onQuickAdd={onQuickAdd}
           />
         </ScrollReveal>
       ))}
@@ -261,16 +265,18 @@ export function ExploreSection({
   wishlist,
   onToggleWish,
   onQuickView,
+  onQuickAdd,
 }: ExploreSectionProps) {
   return (
     <Section id="explore">
       <ScrollReveal>
-        <SectionHeader
-          label="Catalog"
-          title="Explore"
-          description="Browse curated sarees, kurtis, and occasion-ready pieces from Sudatta's."
-          action={
-            <div className="flex flex-wrap items-end gap-3">
+        <header className="border-b border-[var(--color-line)] pb-6 md:pb-8">
+          <div className="flex items-center gap-4">
+            <div className="flex-1" />
+            <h2 className="font-display text-[2rem] leading-tight text-[var(--color-ink)] md:text-[2.5rem]">
+              Explore
+            </h2>
+            <div className="flex flex-1 flex-wrap items-end justify-end gap-3">
               <span className="pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
                 {catalog.filtered.length} items
               </span>
@@ -280,8 +286,8 @@ export function ExploreSection({
                 className="min-w-[12rem]"
               />
             </div>
-          }
-        />
+          </div>
+        </header>
       </ScrollReveal>
 
       <div className="mt-6 md:hidden">
@@ -308,6 +314,7 @@ export function ExploreSection({
             wishlist={wishlist}
             onToggleWish={onToggleWish}
             onQuickView={onQuickView}
+            onQuickAdd={onQuickAdd}
             onReset={catalog.resetFilters}
           />
         </div>

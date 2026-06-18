@@ -562,37 +562,37 @@ function ProductGrid({ products }: { products: CollectionCardProduct[] }) {
   return (
     <div className="grid grid-cols-2 gap-4 md:gap-5 lg:grid-cols-3">
       {products.map((product) => (
-        <article
+        <Link
           key={product.id}
-          className="group rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]"
+          href={`/product/${encodeURIComponent(product.id)}`}
+          className="group flex flex-col"
         >
-          <Link
-            href={`/product/${encodeURIComponent(product.id)}`}
-            className="block overflow-hidden rounded-t-lg border-b border-[var(--color-line)]"
-          >
-            <div className="relative aspect-[3/4] w-full">
-              <Image
-                src={product.imageUrl || PLACEHOLDER_IMAGE}
-                alt={product.name}
-                fill
-                className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                sizes="(max-width: 768px) 50vw, 25vw"
-                unoptimized={isExternalProductImage(product.imageUrl)}
-              />
-            </div>
-          </Link>
-          <div className="p-3 sm:p-4">
-            <h2 className="line-clamp-2 break-words font-display text-lg leading-tight text-[var(--color-ink)] sm:text-[1.35rem]">
+          <div className="relative aspect-[3/4] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]">
+            <Image
+              src={product.imageUrl || PLACEHOLDER_IMAGE}
+              alt={product.name}
+              fill
+              className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+              sizes="(max-width: 768px) 50vw, 25vw"
+              unoptimized={isExternalProductImage(product.imageUrl)}
+            />
+            <span className="pointer-events-none absolute left-3 top-3 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)]/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-green)] backdrop-blur-sm">
+              New
+            </span>
+            {/* Extension point: once CollectionCardProduct carries hoverImage/description, swap this for the full ProductCard Quick Add overlay. */}
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-[var(--color-green)] py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-white transition-transform duration-300 ease-out group-hover:translate-y-0">
+              View Details
+            </span>
+          </div>
+          <div className="mt-3 flex items-start justify-between gap-3 sm:mt-4">
+            <h2 className="line-clamp-2 break-words font-display text-[1.05rem] leading-snug text-[var(--color-ink)] sm:text-xl">
               {product.name}
             </h2>
-            <p className="mt-2 font-sans text-lg font-semibold text-[var(--color-ink)]">
+            <p className="whitespace-nowrap pt-0.5 font-sans text-sm font-semibold text-[var(--color-ink)] sm:text-base">
               {product.priceLabel}
             </p>
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-gold)]">
-              New
-            </p>
           </div>
-        </article>
+        </Link>
       ))}
     </div>
   );

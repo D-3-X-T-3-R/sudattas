@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Kicker, SectionHeading } from "@/components/ui/typography";
 
 type PageShellProps = {
   children: ReactNode;
@@ -37,6 +38,7 @@ type SectionHeaderProps = {
   description?: string;
   action?: ReactNode;
   className?: string;
+  centered?: boolean;
 };
 
 export function SectionHeader({
@@ -45,25 +47,29 @@ export function SectionHeader({
   description,
   action,
   className,
+  centered = false,
 }: SectionHeaderProps) {
+  if (centered) {
+    return (
+      <header className={cn("border-b border-[var(--color-line)] pb-6 md:pb-8", className)}>
+        <SectionHeading className="text-center">{title}</SectionHeading>
+        {action ? <div className="mt-3 flex justify-end">{action}</div> : null}
+      </header>
+    );
+  }
+
   return (
     <header
       className={cn(
-        "flex flex-col gap-3 border-b border-[var(--color-line)] pb-5 md:flex-row md:items-end md:justify-between md:gap-4 md:pb-6",
+        "flex flex-col gap-4 border-b border-[var(--color-line)] pb-6 md:flex-row md:items-end md:justify-between md:gap-6 md:pb-8",
         className
       )}
     >
       <div className="max-w-2xl">
-        {label ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-            {label}
-          </p>
-        ) : null}
-        <h2 className="mt-1 font-display text-[1.85rem] leading-[1.18] tracking-[-0.01em] text-[var(--color-ink)] md:text-[2.4rem]">
-          {title}
-        </h2>
+        {label ? <Kicker tone="accent">{label}</Kicker> : null}
+        <SectionHeading className="mt-2">{title}</SectionHeading>
         {description ? (
-          <p className="mt-2 text-[0.95rem] leading-relaxed text-[var(--color-muted)] md:text-base">{description}</p>
+          <p className="mt-3 text-[0.95rem] leading-relaxed text-[var(--color-muted)] md:text-base">{description}</p>
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

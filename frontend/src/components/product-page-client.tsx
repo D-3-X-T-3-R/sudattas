@@ -1,19 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductDetailView } from "@/components/product-detail-view";
+import { QuickViewModal } from "@/components/quick-view-modal";
 import { useStorefront } from "@/context/storefront-context";
 import type { Product } from "@/lib/schemas";
 
 interface ProductPageClientProps {
   product: Product;
   sizes: { sizeId: string; sizeName: string }[];
+  relatedProducts: Product[];
 }
 
-export function ProductPageClient({ product, sizes }: ProductPageClientProps) {
+export function ProductPageClient({ product, sizes, relatedProducts }: ProductPageClientProps) {
   const { wishlist, toggleWish, addToCart } = useStorefront();
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--color-ink)]">
@@ -37,8 +41,23 @@ export function ProductPageClient({ product, sizes }: ProductPageClientProps) {
           wished={!!wishlist[product.id]}
           onToggleWish={toggleWish}
           onAddToCart={addToCart}
+          relatedProducts={relatedProducts}
+          relatedWishlist={wishlist}
+          onQuickAdd={(p) => setQuickViewProduct(p)}
         />
       </div>
+
+      <QuickViewModal
+        product={quickViewProduct}
+        open={!!quickViewProduct}
+        onClose={() => setQuickViewProduct(null)}
+        wished={quickViewProduct ? !!wishlist[quickViewProduct.id] : false}
+        onToggleWish={toggleWish}
+        onAddToCart={(p, qty, sizeName) => {
+          addToCart(p, qty, sizeName);
+          setQuickViewProduct(null);
+        }}
+      />
     </div>
   );
 }

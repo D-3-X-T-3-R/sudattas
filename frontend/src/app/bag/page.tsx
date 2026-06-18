@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Kicker } from "@/components/ui/typography";
 import { useStorefront } from "@/context/storefront-context";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { getGuestSessionId } from "@/lib/session";
@@ -386,15 +387,11 @@ export default function BagPage() {
           <BagEmptyState />
         ) : (
           <>
-            <header className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-5 shadow-[var(--shadow-subtle)] md:px-6">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                  Shopping Bag
-                </p>
-                <h1 className="mt-1 font-display text-[2rem] leading-[1.2] text-[var(--color-ink)] md:text-[2.3rem]">
-                  Review Your Selection
-                </h1>
-              </div>
+            <header className="border-b border-[var(--color-line)] pb-6 md:pb-8">
+              <Kicker tone="accent">Shopping Bag</Kicker>
+              <h1 className="mt-2 font-display text-[1.9rem] font-medium leading-[1.12] tracking-[-0.01em] text-[var(--color-ink)] md:text-[2.4rem] lg:text-[2.65rem]">
+                Review Your Selection
+              </h1>
             </header>
 
             <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
