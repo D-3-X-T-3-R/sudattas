@@ -28,7 +28,7 @@ export function ShopSection({
   if (preview.length === 0) return null;
 
   return (
-    <Section id="shop" compact className="relative z-0 bg-[var(--background)] pt-4 md:pt-6">
+    <Section id="shop" compact className="relative z-0 bg-[var(--background)] pt-4 pb-10 md:pt-6 md:pb-14">
       <ScrollReveal>
         <SectionHeader
           title="Thoughtfully Designed, Beautifully Crafted"
