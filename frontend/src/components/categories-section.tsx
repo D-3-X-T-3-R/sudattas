@@ -107,12 +107,13 @@ export function CategoriesSection({
   const visible = showAll ? items : items.slice(0, 6);
 
   return (
-    <section id="category-collections" className="bg-[var(--color-section-alt)] py-10 md:py-16">
+    <section id="category-collections" className="bg-[var(--color-section-alt)] py-6 md:py-10">
       <div className="mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
         <ScrollReveal>
           <SectionHeader
             title="Shop By Category"
             centered
+            className="pb-4 md:pb-5"
             action={
               items.length > 6 ? (
                 <button
@@ -127,7 +128,7 @@ export function CategoriesSection({
           />
         </ScrollReveal>
 
-        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 md:mt-8">
+        <div className="mx-auto mt-4 grid max-w-[1450px] grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence initial={false}>
             {visible.map((item, idx) => (
               <motion.div

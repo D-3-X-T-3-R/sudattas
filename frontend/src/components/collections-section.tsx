@@ -145,11 +145,12 @@ export function CollectionsSection({
   if (displayCollections.length === 0) return null;
 
   return (
-    <Section id="collections" className="relative z-0 bg-[var(--background)]">
+    <Section id="collections" compact className="relative z-0 bg-[var(--background)] pt-4 md:pt-6">
       <ScrollReveal>
         <SectionHeader
           title="Signature Moods & Collections"
           centered
+          className="pb-4 md:pb-5"
           action={
             moods.length > 6 ? (
               <button
@@ -164,7 +165,7 @@ export function CollectionsSection({
         />
       </ScrollReveal>
 
-      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:gap-5 md:mt-6">
+      <div className="mx-auto mt-4 grid max-w-[1300px] grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:gap-5">
         <AnimatePresence initial={false}>
           {displayCollections.map((item, idx) => (
             <motion.div

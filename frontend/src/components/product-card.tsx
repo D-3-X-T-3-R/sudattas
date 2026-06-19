@@ -45,7 +45,7 @@ export function ProductCard({
         <button
           type="button"
           onClick={() => onQuickView(product)}
-          className={cn("relative block w-full text-left", featured ? "aspect-[4/5]" : "aspect-[3/4]")}
+          className="relative block w-full text-left aspect-[4/5]"
           aria-label={`View ${product.name}`}
         >
           <Image

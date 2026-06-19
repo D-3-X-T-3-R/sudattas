@@ -28,11 +28,12 @@ export function ShopSection({
   if (preview.length === 0) return null;
 
   return (
-    <Section id="shop" className="relative z-0 bg-[var(--background)]">
+    <Section id="shop" compact className="relative z-0 bg-[var(--background)] pt-4 md:pt-6">
       <ScrollReveal>
         <SectionHeader
           title="Thoughtfully Designed, Beautifully Crafted"
           centered
+          className="pb-4 md:pb-5"
           action={
             <button
               type="button"
@@ -45,7 +46,7 @@ export function ShopSection({
         />
       </ScrollReveal>
 
-      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-5">
+      <div className="mx-auto mt-4 grid max-w-[1450px] grid-cols-2 gap-4 lg:grid-cols-3 md:gap-5">
         {preview.map((p, i) => (
           <ScrollReveal key={p.id} delay={i * 0.05}>
             <ProductCard
