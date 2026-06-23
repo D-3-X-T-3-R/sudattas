@@ -63,9 +63,9 @@ function QuickViewActions({
 }) {
   const variantStock = product.variantStock ?? [];
   const sizeNames = hasSizeSelector(product)
-    ? variantStock
-        .map((variant) => variant.sizeName)
-        .filter((sizeName) => sizeName.trim().toLowerCase() !== "free size")
+    ? [...new Set(variantStock.map((variant) => variant.sizeName))].filter(
+        (sizeName) => sizeName.trim().toLowerCase() !== "free size"
+      )
     : [];
   const defaultSize = sizeNames.find((sizeName) => getStockForSize(variantStock, sizeName) > 0) ?? sizeNames[0] ?? null;
   const [selectedSize, setSelectedSize] = useState<string | null>(defaultSize);

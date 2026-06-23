@@ -19,6 +19,7 @@ export function BagSizeDropdown({
   onOpenChange,
 }: BagSizeDropdownProps) {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,8 +41,20 @@ export function BagSizeDropdown({
 
   useEffect(() => {
     onOpenChange?.(open);
+    if (!open) return undefined;
+
+    // Flip the menu above the trigger when there isn't enough room below — otherwise it
+    // can get clipped at the bottom of the viewport on cards lower down the page.
+    const root = rootRef.current;
+    if (root) {
+      const rect = root.getBoundingClientRect();
+      const estimatedMenuHeight = Math.min(208, options.length * 44 + 16);
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpenUpward(spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight);
+    }
+
     return () => onOpenChange?.(false);
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, options.length]);
 
   const display = hasCurrent && sizeName ? sizeName : "Choose";
 
@@ -80,7 +93,10 @@ export function BagSizeDropdown({
       {open && (
         <ul
           role="listbox"
-          className="absolute left-0 top-[calc(100%+6px)] z-50 max-h-52 w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] py-1.5 shadow-[var(--shadow-soft)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className={cn(
+            "absolute left-0 z-50 max-h-52 w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] py-1.5 shadow-[var(--shadow-soft)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+            openUpward ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"
+          )}
         >
           {!hasCurrent && (
             <li className="px-4 py-2 text-xs uppercase tracking-[0.12em] text-[var(--color-muted)]">

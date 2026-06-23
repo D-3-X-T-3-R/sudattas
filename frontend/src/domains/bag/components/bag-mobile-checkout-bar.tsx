@@ -21,7 +21,7 @@ export function BagMobileCheckoutBar({
   return (
     <div
       aria-hidden={!visible}
-      className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-0 right-0 z-30 border-t border-[var(--color-line)] bg-[var(--color-surface)]/98 px-4 py-3 shadow-[0_-8px_22px_rgba(45,42,38,0.07)] backdrop-blur-sm transition duration-200 ease-out lg:hidden ${
+      className={`fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-0 right-0 z-30 border-t border-[var(--color-line)] bg-[var(--color-surface)]/98 px-4 py-3 shadow-[0_-8px_22px_rgba(45,42,38,0.07)] backdrop-blur-sm transition duration-200 ease-out lg:hidden ${
         visible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"
       }`}
     >

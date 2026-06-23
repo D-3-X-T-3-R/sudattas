@@ -26,10 +26,11 @@ export function MobileBottomBar({
 
   return (
     <nav
-      className="mobile-bottom-bar fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--color-line)] bg-[var(--color-surface)]/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_28px_rgba(45,42,38,0.08)] backdrop-blur lg:hidden"
+      className="mobile-bottom-bar fixed inset-x-3 z-40 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)]/98 shadow-[0_10px_30px_rgba(45,42,38,0.18)] backdrop-blur lg:hidden"
+      style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
       aria-label="Mobile utilities"
     >
-      <div className="mx-auto grid w-full max-w-[var(--container-max)] grid-cols-4 gap-1 px-[var(--gutter-mobile)] py-1.5">
+      <div className="mx-auto grid w-full grid-cols-4 gap-1 px-2 py-1.5">
         {authenticated ? (
           <Link href="/profile" className={itemClass} aria-label="Profile">
             <span className={iconWrapClass}>

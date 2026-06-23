@@ -85,7 +85,7 @@ html.storefront-mobile-utilities nextjs-portal {
   }
 
   html.storefront-mobile-utilities .storefront-root {
-    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
   }
 }
 
@@ -372,7 +372,7 @@ textarea {
 }
 
 .announcement-marquee {
-  animation: announcement-marquee 28s linear infinite;
+  animation: announcement-marquee 14s linear infinite;
   will-change: transform;
 }
 

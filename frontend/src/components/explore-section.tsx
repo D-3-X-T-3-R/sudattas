@@ -271,19 +271,19 @@ export function ExploreSection({
     <Section id="explore">
       <ScrollReveal>
         <header className="border-b border-[var(--color-line)] pb-6 md:pb-8">
-          <div className="flex items-center gap-4">
-            <div className="flex-1" />
-            <h2 className="font-display text-[2rem] leading-tight text-[var(--color-ink)] md:text-[2.5rem]">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center">
+            <div className="hidden flex-1 md:block" />
+            <h2 className="font-display text-[2rem] leading-tight text-[var(--color-ink)] md:text-center md:text-[2.5rem]">
               Explore
             </h2>
-            <div className="flex flex-1 flex-wrap items-end justify-end gap-3">
-              <span className="pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
+            <div className="flex items-center justify-between gap-3 md:flex-1 md:items-end md:justify-end">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)] md:pb-2">
                 {catalog.filtered.length} items
               </span>
               <SortSelect
                 value={catalog.sort}
                 onChange={catalog.setSort}
-                className="min-w-[12rem]"
+                className="min-w-[9.5rem] md:min-w-[12rem]"
               />
             </div>
           </div>

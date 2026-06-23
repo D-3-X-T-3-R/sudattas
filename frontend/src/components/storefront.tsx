@@ -15,22 +15,13 @@ import { CategoriesSection } from "@/components/categories-section";
 import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
 import { FullBleedVideoSection } from "@/components/full-bleed-video-section";
+import { JournalTeaserSection } from "@/components/journal-teaser-section";
 import { QuickViewModal } from "@/components/quick-view-modal";
 import { Section } from "@/components/ui/section";
 import { TrustStrip } from "@/components/trust-strip";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
 import type { Product } from "@/lib/schemas";
-
-const EditorialBlock = dynamic(() => import("@/components/editorial-block").then((m) => m.EditorialBlock), {
-  loading: () => (
-    <Section>
-      <div className="flex justify-center py-16">
-        <Spinner />
-      </div>
-    </Section>
-  ),
-});
 
 const StorySection = dynamic(() => import("@/components/story-section").then((m) => m.StorySection), {
   loading: () => (
@@ -138,11 +129,10 @@ export function Storefront() {
       <FullBleedVideoSection
         id="block-print-story"
         src="/videos/block_print_story_new.mp4"
+        mobileSrc="/videos/block_print_story_original.MP4"
         kicker="The Block Print Story"
         heading="Print, stitch, rhythm, and patience."
         body="Every print begins with touch, pressure, rhythm, and care — chosen for textile character, quiet irregularities, and boutique finish."
-        ctaLabel="Discover the Collection"
-        onCtaClick={() => goTo("shop", reduceMotion)}
         align="right"
       />
 
@@ -168,11 +158,10 @@ export function Storefront() {
 
       <FullBleedVideoSection
         src="/videos/Woman_posing_in_saree_202606140847.mp4"
+        mobilePlaylist={["/videos/IMG_6700.MP4", "/videos/IMG_6701.MP4", "/videos/IMG_6704.MP4"]}
         kicker="Sudatta's Atelier"
         heading="Made to be worn, kept, and passed on."
         body="From loom to wardrobe — every piece is finished by hand, in small batches, with time-honoured techniques."
-        ctaLabel="Explore Collections"
-        onCtaClick={() => goTo("collections", reduceMotion)}
       />
 
       <CollectionsSection
@@ -200,7 +189,7 @@ export function Storefront() {
         />
       )}
 
-      <EditorialBlock />
+      <JournalTeaserSection />
       <StorySection />
       <Footer goTo={goToWithMotion} />
 

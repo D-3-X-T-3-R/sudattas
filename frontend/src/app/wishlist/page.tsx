@@ -46,7 +46,7 @@ function writeWishlistCatalogCache(products: Product[], sizes: CatalogSize[]) {
 }
 
 export default function WishlistPage() {
-  const { wishlist, toggleWish, addToCart, wishCount } = useStorefront();
+  const { wishlist, toggleWish, addToCart } = useStorefront();
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [catalogSizes, setCatalogSizes] = useState<CatalogSize[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,19 +100,12 @@ export default function WishlistPage() {
     [catalogProducts, wishlist]
   );
 
-  const titleN = !loading ? wishedProducts.length : wishCount;
-  const titleCount = titleN === 1 ? "1 item" : `${titleN} items`;
-
   return (
     <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
-      <PageShell containerClassName="pt-8 pb-20 md:pt-10 md:pb-14">
-        <SectionHeader
-          label="Wishlist"
-          title="Saved Favourites"
-          description={`Review your shortlisted styles before adding them to your bag. (${titleCount})`}
-        />
+      <PageShell containerClassName="pt-3 pb-20 md:pt-4 md:pb-14">
+        <SectionHeader title="Saved Favourites" className="pb-3 md:pb-4" />
 
-        <div className="mt-8">
+        <div className="mt-5">
           {loading ? (
             <div className="grid grid-cols-2 gap-4 md:gap-5 lg:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -120,7 +113,7 @@ export default function WishlistPage() {
                   key={i}
                   className="animate-pulse overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]"
                 >
-                  <div className="aspect-[3/4] bg-[var(--color-line)]/60" />
+                  <div className="aspect-[4/5] bg-[var(--color-line)]/60" />
                   <div className="space-y-2 p-4">
                     <div className="h-5 w-3/4 rounded bg-[var(--color-line)]/80" />
                     <div className="h-4 w-1/2 rounded bg-[var(--color-line)]/60" />

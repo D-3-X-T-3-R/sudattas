@@ -154,7 +154,7 @@ function WishlistCard({
 
   return (
     <article className="group flex flex-col">
-      <div className="relative aspect-[3/4] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]">
+      <div className="relative aspect-[4/5] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]">
         <Link href={`/product/${p.id}`} className="block h-full w-full" aria-label={`View ${p.name}`}>
           <Image
             src={p.image || PLACEHOLDER_IMAGE}

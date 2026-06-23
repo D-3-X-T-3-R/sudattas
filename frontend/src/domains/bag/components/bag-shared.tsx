@@ -10,11 +10,14 @@ export function buildSizeOptions(product: Product, catalog: CatalogSize[]): Cata
   const byId = new Map(stock.map((variant) => [variant.sizeId, variant]));
 
   if (catalog.length > 0) {
+    const seenIds = new Set<string>();
     return catalog
       .filter((size) => size.sizeName.toLowerCase() !== "free size")
       .map((size) => {
+        if (seenIds.has(size.sizeId)) return null;
         const variant = byId.get(size.sizeId);
         if (!variant || variant.quantity <= 0) return null;
+        seenIds.add(size.sizeId);
         return { sizeId: size.sizeId, sizeName: size.sizeName };
       })
       .filter((value): value is CatalogSize => value !== null);

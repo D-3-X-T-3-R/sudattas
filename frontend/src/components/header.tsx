@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { type: "section", id: "shop", label: "New Arrivals" },
   { type: "section", id: "collections", label: "Moods" },
   { type: "section", id: "explore", label: "Explore" },
+  { type: "section", id: "journal", label: "Journal" },
   { type: "route", href: "/about", label: "About Us" },
 ] as const;
 

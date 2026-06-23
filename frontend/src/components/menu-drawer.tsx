@@ -17,7 +17,7 @@ type DrawerNavItem =
   | {
       type: "section";
       label: string;
-      goToId: "top" | "collections" | "category-collections" | "shop" | "explore";
+      goToId: "top" | "collections" | "category-collections" | "shop" | "explore" | "journal";
     }
   | { type: "route"; label: string; href: "/about" };
 
@@ -45,6 +45,7 @@ export function MenuDrawer({
     { type: "section", label: "New Arrivals", goToId: "shop" },
     { type: "section", label: "Moods", goToId: "collections" },
     { type: "section", label: "Explore", goToId: "explore" },
+    { type: "section", label: "Journal", goToId: "journal" },
     { type: "route", label: "About Us", href: "/about" },
   ];
 
