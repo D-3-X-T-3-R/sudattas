@@ -163,7 +163,6 @@ export interface ProductDetailViewProps {
   onAddToCart: (p: Product, qty?: number, sizeName?: string | null) => void;
   relatedProducts?: Product[];
   relatedWishlist?: Record<string, boolean>;
-  onQuickAdd?: (p: Product) => void;
 }
 
 export function ProductDetailView({
@@ -174,7 +173,6 @@ export function ProductDetailView({
   onAddToCart,
   relatedProducts = [],
   relatedWishlist = {},
-  onQuickAdd,
 }: ProductDetailViewProps) {
   const router = useRouter();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -217,7 +215,7 @@ export function ProductDetailView({
 
   return (
     <>
-    <section className="grid gap-8 md:grid-cols-[58%_42%] md:items-start md:gap-10 lg:gap-14">
+    <section className="grid gap-8 md:grid-cols-[3fr_2fr] md:items-start md:gap-10 lg:gap-14">
       <ProductGallery
         images={images}
         mainImage={mainImage}
@@ -347,7 +345,6 @@ export function ProductDetailView({
               wished={!!relatedWishlist[related.id]}
               onToggleWish={onToggleWish}
               onQuickView={(p) => router.push(`/product/${p.id}`)}
-              onQuickAdd={onQuickAdd}
             />
           ))}
         </ScrollCarousel>

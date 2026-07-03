@@ -18,8 +18,10 @@ export function HeroSection() {
       transition={{ duration: reduce ? 0 : 0.8, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
-        <div className="grid overflow-hidden rounded-lg border border-[var(--color-line)] shadow-[var(--shadow-soft)] lg:grid-cols-[30fr_70fr]">
-          <div className="bg-deep-feature relative order-2 flex flex-col justify-center gap-5 px-6 py-10 sm:px-10 sm:py-14 lg:order-1 lg:px-10 lg:py-16">
+        <div className="grid overflow-hidden rounded-lg border border-[var(--color-line)] shadow-[var(--shadow-soft)] lg:grid-cols-[30fr_70fr] lg:max-h-[800px]">
+
+          {/* Left: woven-texture brand panel */}
+          <div className="bg-deep-feature relative order-2 flex flex-col justify-center gap-5 px-6 py-8 sm:px-10 sm:py-10 lg:order-1 lg:px-10 lg:py-12">
             <div className="ornament-rule ornament-rule--inverse w-28">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-gold)]" />
             </div>
@@ -27,10 +29,7 @@ export function HeroSection() {
             <HeroHeading inverse className="max-w-md">
               Heirloom weaves for the modern wardrobe
             </HeroHeading>
-            <p className="max-w-sm text-sm leading-relaxed text-[var(--color-on-deep-muted)] sm:text-base">
-              Hand-finished sarees, kurtas, and ethnic wear crafted in small batches — designed to be worn often, and kept for years.
-            </p>
-            <div className="flex flex-wrap gap-3 pt-2">
+            <div className="flex flex-wrap gap-3">
               <Button
                 size="lg"
                 onClick={() => goTo("shop")}
@@ -50,16 +49,18 @@ export function HeroSection() {
             </div>
           </div>
 
-          <div className="relative order-1 aspect-[5/4] sm:aspect-[16/10] lg:order-2 lg:aspect-auto">
+          {/* Right: models photo anchored to top — image is large enough to never upscale */}
+          <div className="relative order-1 aspect-[4/3] lg:order-2 lg:aspect-auto">
             <Image
-              src="/hero/hero-sudattas-6.png"
-              alt="Sudatta's models wearing handcrafted sarees in signature weaves and borders"
+              src="/hero/hero_new.png"
+              alt="Four models wearing Sudatta's handcrafted sarees — silk, cotton, and block-print weaves"
               fill
               priority
-              className="object-cover"
+              className="object-cover [object-position:center_117%]"
               sizes="(max-width: 1023px) 100vw, 70vw"
             />
           </div>
+
         </div>
       </div>
     </motion.section>

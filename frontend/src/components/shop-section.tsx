@@ -12,7 +12,6 @@ export interface ShopSectionProps {
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
   onQuickView: (p: Product) => void;
-  onQuickAdd?: (p: Product) => void;
   onViewAll?: () => void;
 }
 
@@ -21,7 +20,6 @@ export function ShopSection({
   wishlist,
   onToggleWish,
   onQuickView,
-  onQuickAdd,
   onViewAll,
 }: ShopSectionProps) {
   const preview = products.slice(0, 6);
@@ -54,7 +52,6 @@ export function ShopSection({
               wished={!!wishlist[p.id]}
               onToggleWish={onToggleWish}
               onQuickView={onQuickView}
-              onQuickAdd={onQuickAdd}
             />
           </ScrollReveal>
         ))}

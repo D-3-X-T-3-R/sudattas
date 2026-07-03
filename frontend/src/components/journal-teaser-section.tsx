@@ -41,7 +41,7 @@ export function JournalTeaserSection() {
     <Section id="journal" fullWidth className="overflow-hidden">
       <div className="relative aspect-[4/5] w-full sm:aspect-[16/9] lg:aspect-[21/9]">
         {/* Overlapping photo mosaic, sits behind the frosted glass */}
-        <div className="absolute inset-0 bg-[var(--color-deep)]">
+        <div className="absolute inset-0 bg-deep-feature">
           {COLLAGE_TILES.map((tile, i) => (
             <div
               key={i}

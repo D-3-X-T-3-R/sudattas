@@ -210,13 +210,14 @@ textarea {
   transform: scale(1.03);
 }
 
-/* Deep tonal band for feature/CTA sections — woven texture echoes the brand mark */
+/* Deep tonal band for feature/CTA sections — woven canvas texture echoes the brand mark */
 .bg-deep-feature {
   background-color: var(--color-deep);
   background-image:
-    radial-gradient(circle at 14% 18%, rgba(201, 166, 70, 0.16), transparent 55%),
-    radial-gradient(circle at 86% 82%, rgba(30, 91, 67, 0.55), transparent 60%),
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 7px);
+    radial-gradient(ellipse at 18% 20%, rgba(201, 166, 70, 0.08) 0%, transparent 55%),
+    url('/hero/logo_weave_pattern.png');
+  background-repeat: repeat;
+  background-size: auto, 180px;
   color: var(--color-on-deep);
 }
 

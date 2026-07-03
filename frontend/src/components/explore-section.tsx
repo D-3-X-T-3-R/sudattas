@@ -25,7 +25,6 @@ export interface ExploreSectionProps {
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
   onQuickView: (p: Product) => void;
-  onQuickAdd?: (p: Product) => void;
 }
 
 function PriceRange({
@@ -215,14 +214,12 @@ function ProductResults({
   wishlist,
   onToggleWish,
   onQuickView,
-  onQuickAdd,
   onReset,
 }: {
   products: Product[];
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
   onQuickView: (p: Product) => void;
-  onQuickAdd?: (p: Product) => void;
   onReset: () => void;
 }) {
   if (products.length === 0) {
@@ -252,7 +249,6 @@ function ProductResults({
             wished={!!wishlist[product.id]}
             onToggleWish={onToggleWish}
             onQuickView={onQuickView}
-            onQuickAdd={onQuickAdd}
           />
         </ScrollReveal>
       ))}
@@ -265,7 +261,6 @@ export function ExploreSection({
   wishlist,
   onToggleWish,
   onQuickView,
-  onQuickAdd,
 }: ExploreSectionProps) {
   return (
     <Section id="explore">
@@ -314,7 +309,6 @@ export function ExploreSection({
             wishlist={wishlist}
             onToggleWish={onToggleWish}
             onQuickView={onQuickView}
-            onQuickAdd={onQuickAdd}
             onReset={catalog.resetFilters}
           />
         </div>

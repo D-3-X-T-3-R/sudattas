@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Heart, ShoppingBag } from "lucide-react";
+import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { INR } from "@/lib/constants";
 import type { Product } from "@/lib/schemas";
@@ -25,7 +25,6 @@ export interface ProductCardProps {
   wished: boolean;
   onToggleWish: (p: Product) => void;
   onQuickView: (p: Product) => void;
-  onQuickAdd?: (p: Product) => void;
   featured?: boolean;
 }
 
@@ -34,7 +33,6 @@ export function ProductCard({
   wished,
   onToggleWish,
   onQuickView,
-  onQuickAdd,
   featured = false,
 }: ProductCardProps) {
   const hasHoverImage = !!product.hoverImage && product.hoverImage !== product.image;
@@ -94,20 +92,6 @@ export function ProductCard({
           />
         </Button>
 
-        {onQuickAdd ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onQuickAdd(product);
-            }}
-            className="absolute inset-x-0 bottom-0 flex translate-y-0 items-center justify-center gap-2 bg-[var(--color-green)] py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white transition-transform duration-300 ease-out md:translate-y-full md:group-hover:translate-y-0"
-          >
-            <ShoppingBag className="h-3.5 w-3.5" />
-            Quick Add
-          </button>
-        ) : null}
       </div>
 
       <div className="mt-3 flex items-start justify-between gap-3 sm:mt-4">

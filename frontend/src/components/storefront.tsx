@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
@@ -16,12 +16,10 @@ import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
 import { FullBleedVideoSection } from "@/components/full-bleed-video-section";
 import { JournalTeaserSection } from "@/components/journal-teaser-section";
-import { QuickViewModal } from "@/components/quick-view-modal";
 import { Section } from "@/components/ui/section";
 import { TrustStrip } from "@/components/trust-strip";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
-import type { Product } from "@/lib/schemas";
 
 const StorySection = dynamic(() => import("@/components/story-section").then((m) => m.StorySection), {
   loading: () => (
@@ -48,8 +46,7 @@ export function Storefront() {
   const router = useRouter();
   const reduceMotion = !!useReducedMotion();
   const { showToast } = useToast();
-  const { wishlist, toggleWish, addToCart } = useStorefront();
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const { wishlist, toggleWish } = useStorefront();
 
   const catalog = useStorefrontCatalog({ showToast });
   const {
@@ -148,7 +145,6 @@ export function Storefront() {
           wishlist={wishlist}
           onToggleWish={toggleWish}
           onQuickView={(product) => goToProduct(product.id)}
-          onQuickAdd={(product) => setQuickViewProduct(product)}
           onViewAll={() => {
             catalog.setSort("Featured");
             goTo("explore", reduceMotion);
@@ -185,7 +181,6 @@ export function Storefront() {
           wishlist={wishlist}
           onToggleWish={toggleWish}
           onQuickView={(product) => goToProduct(product.id)}
-          onQuickAdd={(product) => setQuickViewProduct(product)}
         />
       )}
 
@@ -193,17 +188,6 @@ export function Storefront() {
       <StorySection />
       <Footer goTo={goToWithMotion} />
 
-      <QuickViewModal
-        product={quickViewProduct}
-        open={!!quickViewProduct}
-        onClose={() => setQuickViewProduct(null)}
-        wished={quickViewProduct ? !!wishlist[quickViewProduct.id] : false}
-        onToggleWish={toggleWish}
-        onAddToCart={(product, qty, sizeName) => {
-          addToCart(product, qty, sizeName);
-          setQuickViewProduct(null);
-        }}
-      />
     </div>
   );
 }
