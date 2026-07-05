@@ -28,5 +28,9 @@ pub async fn export_my_pii(context: &Context) -> Result<UserPiiExport, GqlError>
         address: response.address,
         phone: response.phone,
         create_date: response.create_date,
+        first_name: response.first_name,
+        last_name: response.last_name,
+        gender: response.gender,
+        date_of_birth: response.date_of_birth,
     })
 }

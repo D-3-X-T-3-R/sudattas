@@ -25,6 +25,34 @@ export const phoneSchema = z
     "Phone must contain at least 10 digits and only valid phone characters"
   );
 
+export const requiredPhoneSchema = z
+  .string()
+  .trim()
+  .min(1, "Mobile number is required")
+  .refine(
+    (v) => PHONE_ALLOWED_REGEX.test(v) && v.replace(/\D/g, "").length >= 10,
+    "Phone must contain at least 10 digits and only valid phone characters"
+  );
+
+export const genderSchema = z.enum(["male", "female", "other"]);
+
+export const dateOfBirthSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date of birth must be a valid date")
+  .refine((v) => {
+    const parsed = new Date(v);
+    return !Number.isNaN(parsed.getTime()) && parsed.getTime() <= Date.now();
+  }, "Date of birth cannot be in the future");
+
+export const profileUpdateSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required"),
+  lastName: z.string().trim().optional(),
+  gender: genderSchema.optional(),
+  dateOfBirth: dateOfBirthSchema.optional(),
+  phoneNumber: requiredPhoneSchema,
+});
+
 export const addressInputSchema = z.object({
   country: z.string().trim().min(2, "Country is required"),
   stateRegion: z.string().trim().min(2, "State/region is required"),

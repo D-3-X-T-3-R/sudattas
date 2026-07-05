@@ -33,6 +33,10 @@ pub async fn delete_user(
                         session_id: None,
                         role_id: model.role_id,
                         user_status_id: model.user_status_id,
+                        first_name: model.first_name,
+                        last_name: model.last_name,
+                        gender: model.gender.as_ref().map(super::gender_to_string),
+                        date_of_birth: model.date_of_birth.map(|d| d.to_string()),
                     }],
                 }))
             }

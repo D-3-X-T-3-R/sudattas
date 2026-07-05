@@ -13,7 +13,7 @@ import {
   type SetStateAction,
   type SVGProps,
 } from "react";
-import type { AddressFormState } from "@/domains/profile/types";
+import type { AddressFormState, ProfileFormState } from "@/domains/profile/types";
 import { formatInrFromPaise } from "@/lib/money";
 import { Check, X } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -58,6 +58,10 @@ export type AccountProfileRow = {
   address?: string | null;
   phone?: string | null;
   createDate: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  gender?: string | null;
+  dateOfBirth?: string | null;
 };
 
 export type AccountOrderDetailRow = {
@@ -687,7 +691,6 @@ type ProfileAuthenticatedContentProps = {
   displayName: string;
   displayEmail: string;
   loginMethodLabel: string;
-  accountProfile: AccountProfileRow | null;
   error: string | null;
   loadingData: boolean;
   addresses: ShippingAddressRow[];
@@ -701,6 +704,11 @@ type ProfileAuthenticatedContentProps = {
   updateAddress: (shippingAddressId: string) => Promise<void>;
   deleteAddress: (shippingAddressId: string) => Promise<void>;
   setDefaultAddress: (shippingAddressId: string) => Promise<void>;
+  profileForm: ProfileFormState;
+  setProfileForm: Dispatch<SetStateAction<ProfileFormState>>;
+  canSaveProfile: boolean;
+  savingProfile: boolean;
+  updateProfile: () => Promise<void>;
   ensureOrderDetailLoaded: (orderId: string) => Promise<void>;
   refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
@@ -709,49 +717,10 @@ type ProfileAuthenticatedContentProps = {
   onSignOut: () => void;
 };
 
-function PillButton({
-  children,
-  onClick,
-  type = "button",
-}: {
-  children: ReactNode;
-  onClick?: () => void;
-  type?: "button" | "submit";
-}) {
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      className="rounded-full border border-[#C9A646]/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A37D34] transition hover:bg-[#fff7e6]"
-    >
-      {children}
-    </button>
-  );
-}
-
-function DashboardCard({
-  label,
-  value,
-  action,
-}: {
-  label: string;
-  value: ReactNode;
-  action: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col rounded-[24px] border border-[#0F3D2E]/8 bg-[#FAF6EE] p-5 shadow-[0_12px_28px_rgba(15,61,46,0.05)]">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8B816D]">{label}</p>
-      <p className="mt-3 text-lg font-medium text-[#0F3D2E]">{value}</p>
-      <div className="mt-4">{action}</div>
-    </div>
-  );
-}
-
 export function ProfileAuthenticatedContent({
   displayName,
   displayEmail,
   loginMethodLabel,
-  accountProfile,
   error,
   loadingData,
   addresses,
@@ -765,6 +734,11 @@ export function ProfileAuthenticatedContent({
   updateAddress,
   deleteAddress,
   setDefaultAddress,
+  profileForm,
+  setProfileForm,
+  canSaveProfile,
+  savingProfile,
+  updateProfile,
   ensureOrderDetailLoaded,
   refreshOrderDetail,
   cancelOrder,
@@ -773,8 +747,6 @@ export function ProfileAuthenticatedContent({
   onSignOut,
 }: ProfileAuthenticatedContentProps) {
   const [activeNav, setActiveNav] = useState<ProfileNavId>("profile");
-  const [emailHint, setEmailHint] = useState(false);
-  const [loginHint, setLoginHint] = useState(false);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancellingItemKey, setCancellingItemKey] = useState<string | null>(null);
   const [cancelDialogOrderId, setCancelDialogOrderId] = useState<string | null>(null);
@@ -905,8 +877,6 @@ export function ProfileAuthenticatedContent({
   };
 
   const firstName = displayName.trim().split(/\s+/)[0] || displayName;
-  const phoneDisplay = accountProfile?.phone?.trim() ? accountProfile.phone.trim() : "Not available";
-  const phoneMissing = !accountProfile?.phone?.trim();
   const defaultAddress = addresses.find((a) => a.isDefault) ?? addresses[0];
 
   const supportIssues = useMemo(() => {
@@ -1325,49 +1295,105 @@ export function ProfileAuthenticatedContent({
               <p className="mt-3 text-white/75">{displayEmail}</p>
             </section>
 
-            {emailHint && (
-              <p className="mt-4 text-sm text-[var(--color-muted)]" role="status">
-                Sign-in email is managed by your account provider. For changes, contact support.
-              </p>
-            )}
-            {loginHint && (
-              <p className="mt-4 text-sm text-[var(--color-muted)]" role="status">
-                You signed in with {loginMethodLabel}. Session security is handled by our auth provider.
-              </p>
-            )}
+            <div className="mt-8 rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)] sm:p-8">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B816D]">Edit Profile</p>
 
-            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <DashboardCard
-                label="Email"
-                value={displayEmail}
-                action={<PillButton onClick={() => setEmailHint((v) => !v)}>Edit</PillButton>}
-              />
-              <DashboardCard
-                label="Phone"
-                value={phoneDisplay}
-                action={
-                  phoneMissing ? (
-                    <PillButton onClick={() => setActiveNav("support")}>Add</PillButton>
-                  ) : (
-                    <PillButton onClick={() => setActiveNav("support")}>Edit</PillButton>
-                  )
-                }
-              />
-              <DashboardCard
-                label="Login method"
-                value={loginMethodLabel}
-                action={<PillButton onClick={() => setLoginHint((v) => !v)}>Review</PillButton>}
-              />
-              <DashboardCard
-                label="Orders"
-                value="View recent purchases"
-                action={<PillButton onClick={() => setActiveNav("orders")}>Open</PillButton>}
-              />
-              <DashboardCard
-                label="Addresses"
-                value="Manage delivery details"
-                action={<PillButton onClick={() => setActiveNav("addresses")}>Manage</PillButton>}
-              />
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="profile-first-name" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    First name *
+                  </label>
+                  <input
+                    id="profile-first-name"
+                    value={profileForm.firstName}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, firstName: e.target.value }))}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profile-last-name" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Last name
+                  </label>
+                  <input
+                    id="profile-last-name"
+                    value={profileForm.lastName}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, lastName: e.target.value }))}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <p className="mb-1 block text-xs text-[var(--color-muted)]">Gender</p>
+                  <div className="flex h-10 items-center gap-5">
+                    {(["male", "female", "other"] as const).map((option) => (
+                      <label key={option} className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-[var(--color-ink)]">
+                        <input
+                          type="radio"
+                          name="profile-gender"
+                          value={option}
+                          checked={profileForm.gender === option}
+                          onChange={() => setProfileForm((p) => ({ ...p, gender: option }))}
+                          className="h-4 w-4 accent-[#0F3D2E]"
+                        />
+                        <span className="capitalize">{option}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="profile-dob" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Date of Birth
+                  </label>
+                  <input
+                    id="profile-dob"
+                    type="date"
+                    value={profileForm.dateOfBirth}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="profile-mobile-number" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Mobile Number *
+                  </label>
+                  <input
+                    id="profile-mobile-number"
+                    value={profileForm.phoneNumber}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, phoneNumber: e.target.value }))}
+                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-xs text-[var(--color-muted)]">Default Address</p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveNav("addresses")}
+                      className="text-xs font-semibold text-[var(--color-green)] underline-offset-2 hover:underline"
+                    >
+                      Change/Edit
+                    </button>
+                  </div>
+                  <p className="min-h-10 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-sm leading-relaxed text-[var(--color-ink)]">
+                    {defaultAddress ? formatAddress(defaultAddress) : "No default address saved yet."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => void updateProfile()}
+                  disabled={!canSaveProfile || savingProfile}
+                  className="rounded-md bg-[var(--color-green)] px-10 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingProfile ? "Saving..." : "Save"}
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -1376,7 +1402,7 @@ export function ProfileAuthenticatedContent({
           <div className="space-y-8">
             <header className="border-b border-[#0F3D2E]/8 pb-8">
               <SectionBadge>Addresses</SectionBadge>
-              <h1 className="mt-4 font-[family-name:var(--font-display)] text-6xl text-[#0F3D2E]">Saved Addresses</h1>
+              <h1 className="mt-4 font-[family-name:var(--font-display)] text-4xl sm:text-6xl text-[#0F3D2E]">Saved Addresses</h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[#615A50]">Manage delivery destinations for checkout.</p>
             </header>
 
@@ -1402,7 +1428,7 @@ export function ProfileAuthenticatedContent({
                         ) : null}
                       </span>
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => void deleteAddress(a.shippingAddressId)} className="text-xs font-semibold uppercase tracking-[0.12em] text-red-600">
+                        <button type="button" onClick={() => void deleteAddress(a.shippingAddressId)} className="text-xs font-semibold uppercase tracking-[0.12em] text-[#A34A4A]">
                           Remove
                         </button>
                         <button
@@ -1586,7 +1612,7 @@ export function ProfileAuthenticatedContent({
           <div className="space-y-8">
             <header className="border-b border-[#0F3D2E]/8 pb-8">
               <SectionBadge>Settings</SectionBadge>
-              <h1 className="mt-4 font-[family-name:var(--font-display)] text-6xl text-[#0F3D2E]">Account Settings</h1>
+              <h1 className="mt-4 font-[family-name:var(--font-display)] text-4xl sm:text-6xl text-[#0F3D2E]">Account Settings</h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[#615A50]">Session and sign-in for your account.</p>
             </header>
             <div className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-7 shadow-[0_4px_24px_rgba(10,42,32,0.04)] sm:p-8">
@@ -1608,7 +1634,7 @@ export function ProfileAuthenticatedContent({
           <div className="space-y-8">
             <header className="border-b border-[#0F3D2E]/8 pb-8">
               <SectionBadge>Support</SectionBadge>
-              <h1 className="mt-4 font-[family-name:var(--font-display)] text-6xl text-[#0F3D2E]">Support</h1>
+              <h1 className="mt-4 font-[family-name:var(--font-display)] text-4xl sm:text-6xl text-[#0F3D2E]">Support</h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[#615A50]">We are here for order and account questions.</p>
             </header>
             <div className="grid gap-4 lg:grid-cols-2">

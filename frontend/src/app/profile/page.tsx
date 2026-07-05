@@ -5,7 +5,7 @@ import { signOut, useSession } from "next-auth/react";
 import { RouteFailureBanner } from "@/components/route-failure-banner";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
-import { addressInputSchema } from "@/lib/validation-schemas";
+import { addressInputSchema, profileUpdateSchema } from "@/lib/validation-schemas";
 import { toRouteFailureUi, type RouteFailureUi } from "@/lib/route-state";
 import { useLiveAnnouncer } from "@/components/ui/live-announcer";
 import { PageShell } from "@/components/ui/page-shell";
@@ -16,7 +16,7 @@ import type {
   AccountProfileRow,
   ShippingAddressRow,
 } from "@/domains/profile/components/profile-authenticated-content";
-import type { AddressFormState } from "@/domains/profile/types";
+import type { AddressFormState, ProfileFormState } from "@/domains/profile/types";
 
 function flowLog(message: string, meta?: Record<string, unknown>) {
   if (meta) {
@@ -33,7 +33,6 @@ type AuthenticatedSectionProps = {
   displayName: string;
   displayEmail: string;
   loginMethodLabel: string;
-  accountProfile: AccountProfileRow | null;
   error: string | null;
   loadingData: boolean;
   addresses: ShippingAddressRow[];
@@ -47,6 +46,11 @@ type AuthenticatedSectionProps = {
   updateAddress: (shippingAddressId: string) => Promise<void>;
   deleteAddress: (shippingAddressId: string) => Promise<void>;
   setDefaultAddress: (shippingAddressId: string) => Promise<void>;
+  profileForm: ProfileFormState;
+  setProfileForm: Dispatch<SetStateAction<ProfileFormState>>;
+  canSaveProfile: boolean;
+  savingProfile: boolean;
+  updateProfile: () => Promise<void>;
   ensureOrderDetailLoaded: (orderId: string) => Promise<void>;
   refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
@@ -138,7 +142,6 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     displayName,
     displayEmail,
     loginMethodLabel,
-    accountProfile,
     error,
     loadingData,
     addresses,
@@ -152,6 +155,11 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
   updateAddress,
   deleteAddress,
   setDefaultAddress,
+    profileForm,
+    setProfileForm,
+    canSaveProfile,
+    savingProfile,
+    updateProfile,
     ensureOrderDetailLoaded,
     refreshOrderDetail,
     cancelOrder,
@@ -173,7 +181,6 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         displayName={displayName}
         displayEmail={displayEmail}
         loginMethodLabel={loginMethodLabel}
-        accountProfile={accountProfile}
         error={error}
         loadingData={loadingData}
         addresses={addresses}
@@ -187,6 +194,11 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         updateAddress={updateAddress}
         deleteAddress={deleteAddress}
         setDefaultAddress={setDefaultAddress}
+        profileForm={profileForm}
+        setProfileForm={setProfileForm}
+        canSaveProfile={canSaveProfile}
+        savingProfile={savingProfile}
+        updateProfile={updateProfile}
         ensureOrderDetailLoaded={ensureOrderDetailLoaded}
         refreshOrderDetail={refreshOrderDetail}
         cancelOrder={cancelOrder}
@@ -223,6 +235,14 @@ export default function ProfilePage() {
     road: "",
     apartmentNoOrName: "",
   });
+  const [profileForm, setProfileForm] = useState<ProfileFormState>({
+    firstName: "",
+    lastName: "",
+    gender: "",
+    dateOfBirth: "",
+    phoneNumber: "",
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
   const authenticated = status === "authenticated", loadingSession = status === "loading";
   const displayName = accountProfile?.fullName?.trim() || session?.user?.name?.trim() || "Member";
   const displayEmail = accountProfile?.email?.trim() || session?.user?.email?.trim() || "No email linked";
@@ -241,6 +261,30 @@ export default function ProfilePage() {
     });
     return parsed.success;
   }, [form]);
+
+  const profileFormSeededRef = useRef(false);
+  useEffect(() => {
+    if (!accountProfile || profileFormSeededRef.current) return;
+    profileFormSeededRef.current = true;
+    setProfileForm({
+      firstName: accountProfile.firstName?.trim() ?? "",
+      lastName: accountProfile.lastName?.trim() ?? "",
+      gender: accountProfile.gender?.trim() ?? "",
+      dateOfBirth: accountProfile.dateOfBirth?.trim() ?? "",
+      phoneNumber: accountProfile.phone?.trim() ?? "",
+    });
+  }, [accountProfile]);
+
+  const canSaveProfile = useMemo(() => {
+    const parsed = profileUpdateSchema.safeParse({
+      firstName: profileForm.firstName,
+      lastName: profileForm.lastName || undefined,
+      gender: profileForm.gender || undefined,
+      dateOfBirth: profileForm.dateOfBirth || undefined,
+      phoneNumber: profileForm.phoneNumber,
+    });
+    return parsed.success;
+  }, [profileForm]);
 
   const loadAccountData = useAccountDataLoader({
     authenticated,
@@ -401,6 +445,35 @@ export default function ProfilePage() {
     },
     [announce, loadAccountData]
   );
+
+  const updateProfile = async () => {
+    if (!canSaveProfile || savingProfile) return;
+    setSavingProfile(true);
+    setRouteFailure(null);
+    try {
+      const parsed = profileUpdateSchema.safeParse({
+        firstName: profileForm.firstName,
+        lastName: profileForm.lastName || undefined,
+        gender: profileForm.gender || undefined,
+        dateOfBirth: profileForm.dateOfBirth || undefined,
+        phoneNumber: profileForm.phoneNumber,
+      });
+      if (!parsed.success) return;
+      await fetchApiEnvelope("/api/account/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: parsed.data }),
+      });
+      await loadAccountData();
+      announce("Profile updated successfully.");
+    } catch (e) {
+      const ui = toRouteFailureUi("account", e);
+      setRouteFailure(ui);
+      announce(ui.message, "assertive");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const addAddress = async () => {
     if (!canSaveAddress || adding) return;
@@ -566,7 +639,6 @@ export default function ProfilePage() {
             displayName={displayName}
             displayEmail={displayEmail}
             loginMethodLabel={loginMethodLabel}
-            accountProfile={accountProfile}
             error={error}
             loadingData={loadingData}
             addresses={addresses}
@@ -580,6 +652,11 @@ export default function ProfilePage() {
             updateAddress={updateAddress}
             deleteAddress={deleteAddress}
             setDefaultAddress={setDefaultAddress}
+            profileForm={profileForm}
+            setProfileForm={setProfileForm}
+            canSaveProfile={canSaveProfile}
+            savingProfile={savingProfile}
+            updateProfile={updateProfile}
             ensureOrderDetailLoaded={ensureOrderDetailLoaded}
             refreshOrderDetail={refreshOrderDetail}
             cancelOrder={cancelOrder}

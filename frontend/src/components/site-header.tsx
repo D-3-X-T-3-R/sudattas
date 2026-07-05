@@ -92,7 +92,7 @@ export function SiteHeader() {
         cartCount={cartCount}
         authenticated={status === "authenticated"}
         onProfileOpen={() => openLogin(pathname || "/")}
-        onSearchOpen={() => setSearchOpen(true)}
+        onSearchOpen={() => setSearchOpen((open) => !open)}
       />
     </>
   );

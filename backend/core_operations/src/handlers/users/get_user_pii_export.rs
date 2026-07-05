@@ -25,5 +25,9 @@ pub async fn get_user_pii_export(
         address: model.address,
         phone: model.phone,
         create_date: model.create_date.to_rfc3339(),
+        first_name: model.first_name,
+        last_name: model.last_name,
+        gender: model.gender.as_ref().map(super::gender_to_string),
+        date_of_birth: model.date_of_birth.map(|d| d.to_string()),
     }))
 }

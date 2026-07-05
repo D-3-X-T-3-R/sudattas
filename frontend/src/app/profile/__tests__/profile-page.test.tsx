@@ -221,6 +221,72 @@ describe("ProfilePage", () => {
     );
   });
 
+  it("edits and saves profile fields via /api/account/profile", async () => {
+    const user = userEvent.setup();
+    fetchApiEnvelopeMock
+      .mockResolvedValueOnce({ ...baseProfile, phone: null })
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        userId: "1",
+        firstName: "Sougata",
+        lastName: "Bhattacharjee",
+        gender: "male",
+        dateOfBirth: "1994-07-05",
+        phone: "9876543210",
+      })
+      .mockResolvedValueOnce({
+        ...baseProfile,
+        firstName: "Sougata",
+        lastName: "Bhattacharjee",
+        gender: "male",
+        dateOfBirth: "1994-07-05",
+        phone: "9876543210",
+      })
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    render(
+      <LiveAnnouncerProvider>
+        <ProfilePage />
+      </LiveAnnouncerProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Test User")).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByLabelText(/first name/i), "Sougata");
+    await user.type(screen.getByLabelText(/last name/i), "Bhattacharjee");
+    await user.type(screen.getByLabelText(/mobile number/i), "9876543210");
+    await user.click(screen.getByLabelText("male"));
+    fireEvent.input(screen.getByLabelText(/date of birth/i), { target: { value: "1994-07-05" } });
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(fetchApiEnvelopeMock).toHaveBeenCalledWith(
+        "/api/account/profile",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({
+            input: {
+              firstName: "Sougata",
+              lastName: "Bhattacharjee",
+              gender: "male",
+              dateOfBirth: "1994-07-05",
+              phoneNumber: "9876543210",
+            },
+          }),
+        })
+      )
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Profile updated successfully.")).toBeInTheDocument();
+    });
+  });
+
   it("shows return selection controls only for eligible prepaid delivered orders within window", async () => {
     await renderOrdersWithDetail(makeOrderDetailPayload());
     await waitFor(() => {

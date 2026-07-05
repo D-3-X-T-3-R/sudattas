@@ -26,6 +26,10 @@ fn user_to_response(user: users::Model) -> UserResponse {
         session_id: None,
         role_id: user.role_id,
         user_status_id: user.user_status_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        gender: user.gender.as_ref().map(super::gender_to_string),
+        date_of_birth: user.date_of_birth.map(|d| d.to_string()),
     }
 }
 
@@ -114,6 +118,10 @@ pub async fn create_user(
         full_name: ActiveValue::Set(req.full_name),
         address: ActiveValue::Set(req.address),
         phone: ActiveValue::Set(req.phone.clone()),
+        first_name: ActiveValue::NotSet,
+        last_name: ActiveValue::NotSet,
+        gender: ActiveValue::NotSet,
+        date_of_birth: ActiveValue::NotSet,
         create_date: ActiveValue::Set(Utc::now()),
         role_id: ActiveValue::Set(req.role_id),
         email_verified: ActiveValue::NotSet,

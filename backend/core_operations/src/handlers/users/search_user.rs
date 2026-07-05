@@ -86,6 +86,10 @@ pub async fn search_user(
                         session_id: None,
                         role_id: m.role_id,
                         user_status_id: m.user_status_id,
+                        first_name: m.first_name,
+                        last_name: m.last_name,
+                        gender: m.gender.as_ref().map(super::gender_to_string),
+                        date_of_birth: m.date_of_birth.map(|d| d.to_string()),
                     }
                 })
                 .collect();

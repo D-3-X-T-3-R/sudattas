@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, Menu, Heart, ShoppingBag } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { setPendingHomeSection } from "@/hooks/use-scroll-to";
@@ -199,7 +198,7 @@ export function Header({
               ) : null}
               <button
                 type="button"
-                onClick={() => setSearchOpen(true)}
+                onClick={() => setSearchOpen(!searchOpen)}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent text-[var(--color-ink)] transition-colors hover:border-[var(--color-line)] hover:text-[var(--color-green)]"
                 aria-label="Search"
               >
@@ -226,23 +225,13 @@ export function Header({
 
           {searchOpen ? (
             <div className="absolute left-auto right-[var(--gutter-tablet)] top-full z-50 mt-2 w-[420px] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-soft)]">
-              <div className="flex items-center gap-2">
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search collections, fabrics, styles"
-                  className="h-9"
-                  autoFocus
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSearchOpen(false)}
-                >
-                  Close
-                </Button>
-              </div>
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search collections, fabrics, styles"
+                className="h-9"
+                autoFocus
+              />
             </div>
           ) : null}
         </div>
@@ -250,23 +239,13 @@ export function Header({
 
       {searchOpen ? (
         <div className="fixed left-[var(--gutter-mobile)] right-[var(--gutter-mobile)] top-[calc(env(safe-area-inset-top)+4.55rem)] z-50 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-soft)] lg:hidden">
-          <div className="flex items-center gap-2">
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search collections, fabrics, styles"
-              className="h-9"
-              autoFocus
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setSearchOpen(false)}
-            >
-              Close
-            </Button>
-          </div>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search collections, fabrics, styles"
+            className="h-9"
+            autoFocus
+          />
         </div>
       ) : null}
     </header>

@@ -23,6 +23,10 @@ fn user_response_to_gql(u: UserResponse) -> User {
         address: u.address,
         phone: u.phone,
         create_date: u.create_date,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        gender: u.gender,
+        date_of_birth: u.date_of_birth,
     }
 }
 
@@ -106,6 +110,10 @@ pub(crate) async fn update_user(input: UpdateUserInput) -> Result<Vec<User>, Gql
             address: input.address,
             phone: input.phone,
             role_id: to_option_i64(input.role_id),
+            first_name: input.first_name,
+            last_name: input.last_name,
+            gender: input.gender,
+            date_of_birth: input.date_of_birth,
         })
         .await?;
     Ok(response

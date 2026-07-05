@@ -392,6 +392,16 @@ pub struct UpdateUserRequest {
     pub phone: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "9")]
     pub role_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "10")]
+    pub first_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "11")]
+    pub last_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// "male" | "female" | "other"
+    #[prost(string, optional, tag = "12")]
+    pub gender: ::core::option::Option<::prost::alloc::string::String>,
+    /// ISO yyyy-mm-dd
+    #[prost(string, optional, tag = "13")]
+    pub date_of_birth: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -428,6 +438,16 @@ pub struct UserResponse {
     pub role_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "11")]
     pub user_status_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "12")]
+    pub first_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "13")]
+    pub last_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// "male" | "female" | "other"
+    #[prost(string, optional, tag = "14")]
+    pub gender: ::core::option::Option<::prost::alloc::string::String>,
+    /// ISO yyyy-mm-dd
+    #[prost(string, optional, tag = "15")]
+    pub date_of_birth: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -478,6 +498,16 @@ pub struct GetUserPiiExportResponse {
     pub phone: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, tag = "6")]
     pub create_date: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "7")]
+    pub first_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "8")]
+    pub last_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// "male" | "female" | "other"
+    #[prost(string, optional, tag = "9")]
+    pub gender: ::core::option::Option<::prost::alloc::string::String>,
+    /// ISO yyyy-mm-dd
+    #[prost(string, optional, tag = "10")]
+    pub date_of_birth: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

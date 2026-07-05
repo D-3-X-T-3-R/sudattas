@@ -213,6 +213,10 @@ message UpdateUserRequest {
     optional string address = 7;
     optional string phone = 8;
     optional int64 role_id = 9;
+    optional string first_name = 10;
+    optional string last_name = 11;
+    optional string gender = 12;         // "male" | "female" | "other"
+    optional string date_of_birth = 13;  // ISO yyyy-mm-dd
 }
 
 message DeleteUserRequest {
@@ -231,6 +235,10 @@ message UserResponse {
     optional string session_id = 9;      // Set on create_user when Redis session is created
     optional int64 role_id = 10;
     optional int64 user_status_id = 11;
+    optional string first_name = 12;
+    optional string last_name = 13;
+    optional string gender = 14;         // "male" | "female" | "other"
+    optional string date_of_birth = 15;  // ISO yyyy-mm-dd
 }
 
 message UsersResponse {
@@ -257,6 +265,10 @@ message GetUserPiiExportResponse {
     optional string address = 4;
     optional string phone = 5;
     string create_date = 6;
+    optional string first_name = 7;
+    optional string last_name = 8;
+    optional string gender = 9;          // "male" | "female" | "other"
+    optional string date_of_birth = 10;  // ISO yyyy-mm-dd
 }
 
 // Categories

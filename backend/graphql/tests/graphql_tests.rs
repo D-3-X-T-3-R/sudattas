@@ -959,6 +959,50 @@ async fn test_update_user_rejects_cross_user_access_for_customer() {
     assert!(err.contains("own profile"));
 }
 
+/// Customer-editable profile fields (firstName/lastName/gender/dateOfBirth) must not
+/// bypass the same cross-user ownership guard that plain field updates already enforce.
+#[tokio::test]
+async fn test_update_user_rejects_cross_user_access_with_profile_fields() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::InternalCustomer("42".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("internal".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation {
+            updateUser(input: {
+                userId: "99"
+                firstName: "Wrong"
+                lastName: "User"
+                gender: "male"
+                dateOfBirth: "1990-01-01"
+                roleId: "1"
+            }) { userId }
+        }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "cross-user updateUser with profile fields should fail"
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("own profile"));
+}
+
 #[tokio::test]
 async fn test_create_user_rejects_session_auth() {
     let ctx = Context {

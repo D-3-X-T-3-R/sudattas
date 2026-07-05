@@ -21,6 +21,10 @@ fn make_user(id: i64) -> users::Model {
         full_name: Some(format!("User {}", id)),
         address: Some("Address".to_string()),
         phone: Some("1234567890".to_string()),
+        first_name: None,
+        last_name: None,
+        gender: None,
+        date_of_birth: None,
         user_status_id: None,
         role_id: Some(1),
         last_login_at: None,
@@ -126,6 +130,10 @@ async fn update_user_not_found_yields_not_found_status() {
         address: None,
         phone: None,
         role_id: None,
+        first_name: None,
+        last_name: None,
+        gender: None,
+        date_of_birth: None,
     });
     let result = update_user(&txn, req).await;
     assert!(result.is_err());
@@ -164,6 +172,10 @@ async fn update_user_updates_fields_and_preserves_existing_when_missing() {
         address: None,
         phone: None,
         role_id: None,
+        first_name: None,
+        last_name: None,
+        gender: None,
+        date_of_birth: None,
     });
 
     let result = update_user(&txn, req).await;

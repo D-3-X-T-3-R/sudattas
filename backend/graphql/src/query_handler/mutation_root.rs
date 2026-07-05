@@ -334,7 +334,13 @@ impl MutationRoot {
                 ));
             }
             input.user_id = uid;
+            // Least-privilege: a self-service profile update must never smuggle in
+            // account/security fields — only name/address/phone/gender/DOB are customer-editable.
             input.role_id = None;
+            input.username = None;
+            input.email = None;
+            input.password_plain = None;
+            input.google_sub = None;
         }
         users::handlers::update_user(input)
             .await
