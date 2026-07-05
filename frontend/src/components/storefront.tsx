@@ -33,7 +33,7 @@ const StorySection = dynamic(() => import("@/components/story-section").then((m)
 
 const Footer = dynamic(() => import("@/components/footer").then((m) => m.Footer), {
   loading: () => (
-    <footer className="bg-deep-feature mt-10 py-14 md:mt-14 md:py-20">
+    <footer className="bg-deep-feature py-14 md:py-20">
       <div className="mx-auto max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
         <div className="h-16 animate-pulse rounded bg-white/10" />
       </div>

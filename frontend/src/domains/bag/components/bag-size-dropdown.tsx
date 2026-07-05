@@ -21,6 +21,8 @@ export function BagSizeDropdown({
   const [open, setOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
 
   useEffect(() => {
     const onDoc = (event: MouseEvent) => {
@@ -40,7 +42,7 @@ export function BagSizeDropdown({
   }, []);
 
   useEffect(() => {
-    onOpenChange?.(open);
+    onOpenChangeRef.current?.(open);
     if (!open) return undefined;
 
     // Flip the menu above the trigger when there isn't enough room below — otherwise it
@@ -48,13 +50,13 @@ export function BagSizeDropdown({
     const root = rootRef.current;
     if (root) {
       const rect = root.getBoundingClientRect();
-      const estimatedMenuHeight = Math.min(208, options.length * 44 + 16);
+      const estimatedMenuHeight = Math.min(288, options.length * 44 + 16);
       const spaceBelow = window.innerHeight - rect.bottom;
       setOpenUpward(spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight);
     }
 
-    return () => onOpenChange?.(false);
-  }, [open, onOpenChange, options.length]);
+    return () => onOpenChangeRef.current?.(false);
+  }, [open, options.length]);
 
   const display = hasCurrent && sizeName ? sizeName : "Choose";
 
@@ -94,7 +96,7 @@ export function BagSizeDropdown({
         <ul
           role="listbox"
           className={cn(
-            "absolute left-0 z-50 max-h-52 w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] py-1.5 shadow-[var(--shadow-soft)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+            "absolute left-0 z-50 max-h-72 w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] py-1.5 shadow-[var(--shadow-soft)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
             openUpward ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"
           )}
         >

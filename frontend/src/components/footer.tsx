@@ -10,7 +10,7 @@ interface FooterProps {
 
 export function Footer({ goTo }: FooterProps) {
   return (
-    <footer className="bg-deep-feature mt-10 py-14 md:mt-14 md:py-20">
+    <footer className="bg-deep-feature py-14 md:py-20">
       <div className="mx-auto grid w-full max-w-[var(--container-max)] gap-10 px-[var(--gutter-mobile)] md:grid-cols-4 md:px-[var(--gutter-tablet)]">
         <div>
           <Image

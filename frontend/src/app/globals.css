@@ -373,7 +373,8 @@ textarea {
 }
 
 .announcement-marquee {
-  animation: announcement-marquee 14s linear infinite;
+  width: max-content;
+  animation: announcement-marquee 40s linear infinite;
   will-change: transform;
 }
 

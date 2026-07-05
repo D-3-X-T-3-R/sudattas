@@ -132,16 +132,20 @@ export default function BagPage() {
     [cartLines]
   );
 
-  useEffect(() => {
-    const currentIds = new Set(cartLines.map((line) => line.id));
-    setSelectedLineIds((prev) => new Set([...prev].filter((id) => currentIds.has(id))));
-  }, [cartLines]);
+  const previousLineIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (cartLines.length > 0 && selectedLineIds.size === 0) {
-      setSelectedLineIds(new Set(cartLines.map((line) => line.id)));
-    }
-  }, [cartLines.length, cartLines, selectedLineIds.size]);
+    const currentIds = new Set(cartLines.map((line) => line.id));
+    const previousIds = previousLineIdsRef.current;
+    setSelectedLineIds((prev) => {
+      const next = new Set([...prev].filter((id) => currentIds.has(id)));
+      for (const line of cartLines) {
+        if (!previousIds.has(line.id)) next.add(line.id);
+      }
+      return next;
+    });
+    previousLineIdsRef.current = currentIds;
+  }, [cartLines]);
 
   useEffect(() => {
     const summaryNode = orderSummaryRef.current;
