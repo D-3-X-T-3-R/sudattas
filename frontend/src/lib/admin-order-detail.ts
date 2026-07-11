@@ -1,13 +1,5 @@
 import { gqlAdmin } from "./graphql-client";
 
-function flowLog(message: string, meta?: Record<string, unknown>) {
-  if (meta) {
-    console.info(`[orders-flow][admin-ui] ${message}`, meta);
-    return;
-  }
-  console.info(`[orders-flow][admin-ui] ${message}`);
-}
-
 /** One line item on an admin order detail view. */
 export interface AdminOrderDetailLine {
   orderDetailId: string;
@@ -81,7 +73,6 @@ function deriveRefundTrackingState(
 export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDetail | null> {
   const id = orderId.trim();
   if (!id) return null;
-  flowLog("fetching admin order detail", { orderId: id });
   const [data, eventsData] = await Promise.all([
     gqlAdmin<{
       searchOrder?: Array<{
@@ -113,7 +104,6 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
   ]);
   const row = data?.searchOrder?.[0];
   if (!row) {
-    flowLog("admin order detail not found", { orderId: id });
     return null;
   }
   const lines: AdminOrderDetailLine[] = (row.orderDetails ?? []).map((d) => {
@@ -143,13 +133,6 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
     lines,
     refundTrackingState,
   };
-  flowLog("admin order detail loaded", {
-    orderId: result.orderId,
-    userId: result.userId,
-    statusId: result.statusId,
-    lineCount: result.lines.length,
-    refundTrackingState,
-  });
   return result;
 }
 
@@ -184,22 +167,12 @@ export async function updateAdminOrderStatus(
   newStatusId: string,
   options?: { shiprocketBook?: boolean }
 ): Promise<void> {
-  flowLog("admin status update requested", {
-    orderId: order.orderId,
-    currentStatusId: order.statusId,
-    targetStatusId: newStatusId.trim(),
-    shiprocketBook: Boolean(options?.shiprocketBook),
-  });
   if (options?.shiprocketBook) {
     await gqlAdmin(ADMIN_MARK_ORDER_SHIPPED_MUTATION, {
       input: {
         orderId: order.orderId,
         shiprocketBook: true,
       },
-    });
-    flowLog("admin shipped mutation completed", {
-      orderId: order.orderId,
-      targetStatusId: newStatusId.trim(),
     });
     return;
   }
@@ -213,10 +186,6 @@ export async function updateAdminOrderStatus(
       totalAmountPaise: String(order.totalAmountPaise ?? ""),
       statusId: newStatusId.trim(),
     },
-  });
-  flowLog("admin updateOrder mutation completed", {
-    orderId: order.orderId,
-    targetStatusId: newStatusId.trim(),
   });
 }
 

@@ -11,8 +11,8 @@ const SUPPORT_CARDS = [
     body: (
       <>
         Email{" "}
-        <a className="font-semibold text-[var(--color-green)] hover:text-[var(--color-green-2)]" href="mailto:support@sudattas.com">
-          support@sudattas.com
+        <a className="font-semibold text-[var(--color-green)] hover:text-[var(--color-green-2)]" href="mailto:sudattasdesignerboutique@gmail.com">
+          sudattasdesignerboutique@gmail.com
         </a>{" "}
         with your event date, order reference if available, and the assistance you need.
       </>

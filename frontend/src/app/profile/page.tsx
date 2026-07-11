@@ -18,14 +18,6 @@ import type {
 } from "@/domains/profile/components/profile-authenticated-content";
 import type { AddressFormState, ProfileFormState } from "@/domains/profile/types";
 
-function flowLog(message: string, meta?: Record<string, unknown>) {
-  if (meta) {
-    console.info(`[orders-flow][customer-ui] ${message}`, meta);
-    return;
-  }
-  console.info(`[orders-flow][customer-ui] ${message}`);
-}
-
 type AuthenticatedSectionProps = {
   routeFailure: RouteFailureUi | null;
   loadAccountData: () => Promise<void>;
@@ -306,7 +298,6 @@ export default function ProfilePage() {
       if (!forceRefresh && orderDetailsRef.current[orderId]) return;
       if (orderDetailFetchRef.current.has(orderId)) return;
       orderDetailFetchRef.current.add(orderId);
-      flowLog("fetching order detail", { orderId, forceRefresh });
       setRouteFailure(null);
       try {
         const detail = await fetchApiEnvelope<AccountOrderDetailPayload>(
@@ -314,23 +305,9 @@ export default function ProfilePage() {
           { cache: "no-store" }
         );
         if (detail) {
-          const eventTypes = (detail.events ?? []).map((e) => (e.eventType ?? "").trim().toLowerCase());
-          flowLog("order detail received", {
-            orderId,
-            statusName: detail.statusName,
-            paymentState: detail.paymentState,
-            fulfillmentState: detail.fulfillmentState,
-            refundInitiated: eventTypes.includes("refund_initiated"),
-            refundProcessed: eventTypes.includes("refund_recorded"),
-            refundFailed: eventTypes.includes("refund_failed"),
-          });
           setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
         }
       } catch (e) {
-        flowLog("order detail fetch failed", {
-          orderId,
-          error: e instanceof Error ? e.message : String(e),
-        });
         setRouteFailure(toRouteFailureUi("account", e));
       } finally {
         orderDetailFetchRef.current.delete(orderId);
@@ -356,24 +333,14 @@ export default function ProfilePage() {
   const cancelOrder = useCallback(
     async (orderId: string) => {
       setRouteFailure(null);
-      flowLog("cancel order requested by customer", { orderId });
       try {
-        const res = await fetchApiEnvelope<{ orderId: string; statusId: string }>(
+        await fetchApiEnvelope<{ orderId: string; statusId: string }>(
           `/api/account/orders/${encodeURIComponent(orderId)}/cancel`,
           { method: "POST" }
         );
-        flowLog("cancel order API success", {
-          orderId,
-          updatedStatusId: res?.statusId ?? null,
-        });
         await loadAccountData();
-        flowLog("account data refreshed after cancel", { orderId });
         announce("Order cancelled.");
       } catch (e) {
-        flowLog("cancel order failed", {
-          orderId,
-          error: e instanceof Error ? e.message : String(e),
-        });
         const ui = toRouteFailureUi("account", e);
         setRouteFailure(ui);
         announce(ui.message, "assertive");
@@ -386,9 +353,8 @@ export default function ProfilePage() {
     async (orderId: string, orderDetailIds: string[]) => {
       if (!orderDetailIds.length) return;
       setRouteFailure(null);
-      flowLog("cancel order items requested by customer", { orderId, orderDetailIds });
       try {
-        const res = await fetchApiEnvelope<{ orderId: string; statusId: string }>(
+        await fetchApiEnvelope<{ orderId: string; statusId: string }>(
           `/api/account/orders/${encodeURIComponent(orderId)}/cancel-items`,
           {
             method: "POST",
@@ -396,19 +362,9 @@ export default function ProfilePage() {
             body: JSON.stringify({ orderDetailIds }),
           }
         );
-        flowLog("cancel order items API success", {
-          orderId,
-          orderDetailIds,
-          updatedStatusId: res?.statusId ?? null,
-        });
         await loadAccountData();
         announce("Item cancelled.");
       } catch (e) {
-        flowLog("cancel order items failed", {
-          orderId,
-          orderDetailIds,
-          error: e instanceof Error ? e.message : String(e),
-        });
         const ui = toRouteFailureUi("account", e);
         setRouteFailure(ui);
         announce(ui.message, "assertive");
@@ -423,7 +379,6 @@ export default function ProfilePage() {
       const trimmedReason = reason.trim();
       if (!trimmedReason) return;
       setRouteFailure(null);
-      flowLog("return requested by customer", { orderId, orderDetailIds });
       try {
         await fetchApiEnvelope(`/api/account/orders/${encodeURIComponent(orderId)}/returns`, {
           method: "POST",
@@ -433,11 +388,6 @@ export default function ProfilePage() {
         await loadAccountData();
         announce("Return request submitted.");
       } catch (e) {
-        flowLog("return request failed", {
-          orderId,
-          orderDetailIds,
-          error: e instanceof Error ? e.message : String(e),
-        });
         const ui = toRouteFailureUi("account", e);
         setRouteFailure(ui);
         announce(ui.message, "assertive");

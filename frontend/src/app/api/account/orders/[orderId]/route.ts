@@ -10,14 +10,6 @@ import {
   statusNameFromId,
 } from "@/lib/order-state";
 
-function flowLog(message: string, meta?: Record<string, unknown>) {
-  if (meta) {
-    console.info(`[orders-flow][customer-api] ${message}`, meta);
-    return;
-  }
-  console.info(`[orders-flow][customer-api] ${message}`);
-}
-
 type OrderDetailRow = {
   orderDetailId: string;
   variantId: string;
@@ -260,6 +252,32 @@ const SYNC_SHIPMENTS_MUTATION = `mutation AccountSyncOrderShipments($orderId: St
   }
 }`;
 
+type OrderStatusesResult = {
+  data?: { searchOrderStatus?: Array<{ statusId: string; statusName: string }> };
+  errors?: Array<{ message?: string }>;
+};
+
+// Order statuses are global reference data, identical for every order. When a
+// customer opens the Orders tab, one detail request fires per order, so
+// without this cache the same status list gets refetched from the backend
+// once per order in the list.
+const ORDER_STATUSES_CACHE_MS = 30_000;
+let cachedOrderStatuses: { result: OrderStatusesResult; expiresAt: number } | null = null;
+
+function getOrderStatuses(userId: string): Promise<OrderStatusesResult> {
+  const now = Date.now();
+  if (cachedOrderStatuses && cachedOrderStatuses.expiresAt > now) {
+    return Promise.resolve(cachedOrderStatuses.result);
+  }
+  return callGraphqlAsCustomer<{
+    searchOrderStatus?: Array<{ statusId: string; statusName: string }>;
+  }>(userId, ORDER_STATUS_QUERY).then((result) => {
+    if (!result.errors?.length) {
+      cachedOrderStatuses = { result, expiresAt: now + ORDER_STATUSES_CACHE_MS };
+    }
+    return result;
+  });
+}
 
 function parseMinorAmount(raw: unknown): number | null {
   const value = Number(raw);
@@ -325,56 +343,43 @@ function parseRefundBreakdown(
   }
 }
 
-// eslint-disable-next-line max-lines-per-function
 export async function GET(
   _request: Request,
   context: { params: Promise<{ orderId: string }> }
 ) {
-  flowLog("order detail request received");
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
-    flowLog("request rejected: unauthenticated");
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
   }
 
   const { orderId } = await context.params;
   const trimmedOrderId = orderId.trim();
   if (!trimmedOrderId) {
-    flowLog("request rejected: missing order id", { userId });
     return apiError("Order ID is required", 400, "VALIDATION_ERROR");
   }
-  flowLog("loading order detail", { userId, orderId: trimmedOrderId });
 
   // Best-effort freshness: refresh courier scans from Shiprocket when available.
-  // Ignore sync failures so normal order details still load.
-  await callGraphqlAsCustomer(userId, SYNC_SHIPMENTS_MUTATION, {
+  // Ignore sync failures so normal order details still load. Only the shipment
+  // query depends on this, so run it alongside the other queries instead of
+  // blocking the whole response (and the order's product images) on it.
+  const shipmentSyncPromise = callGraphqlAsCustomer(userId, SYNC_SHIPMENTS_MUTATION, {
     orderId: trimmedOrderId,
-  })
-    .then(() => {
-      flowLog("shiprocket sync attempted", { orderId: trimmedOrderId });
-    })
-    .catch((e) => {
-      flowLog("shiprocket sync skipped/failure (non-fatal)", {
-        orderId: trimmedOrderId,
-        error: e instanceof Error ? e.message : String(e),
-      });
-      return null;
-    });
+  }).catch(() => null);
 
   const [orderResult, statusesResult, paymentResult, shipmentResult, eventsResult, refundsResult, returnsResult] =
     await Promise.all([
       callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(userId, ORDER_DETAIL_QUERY, {
         search: { userId, orderId: trimmedOrderId, limit: "1", offset: "0" },
       }),
-      callGraphqlAsCustomer<{
-        searchOrderStatus?: Array<{ statusId: string; statusName: string }>;
-      }>(userId, ORDER_STATUS_QUERY),
+      getOrderStatuses(userId),
       callGraphqlAsCustomer<{ getPaymentIntent?: PaymentIntentRow[] }>(userId, PAYMENT_QUERY, {
         input: { orderId: trimmedOrderId },
       }),
-      callGraphqlAsCustomer<{ getShipment?: ShipmentRow[] }>(userId, SHIPMENT_QUERY, {
-        input: { orderId: trimmedOrderId },
-      }),
+      shipmentSyncPromise.then(() =>
+        callGraphqlAsCustomer<{ getShipment?: ShipmentRow[] }>(userId, SHIPMENT_QUERY, {
+          input: { orderId: trimmedOrderId },
+        })
+      ),
       callGraphqlAsCustomer<{ getOrderEvents?: OrderEventRow[] }>(userId, EVENTS_QUERY, {
         orderId: trimmedOrderId,
       }),
@@ -397,24 +402,14 @@ export async function GET(
     refundsResult.errors?.[0]?.message ??
     returnsResult.errors?.[0]?.message;
   if (firstError) {
-    flowLog("graphql error while loading order detail", {
-      orderId: trimmedOrderId,
-      error: firstError,
-    });
     return apiError(firstError, 400, "GRAPHQL_ERROR");
   }
 
   const order = orderResult.data?.searchOrder?.[0];
   if (!order) {
-    flowLog("order not found", { orderId: trimmedOrderId, userId });
     return apiError("Order not found", 404, "NOT_FOUND");
   }
   if (order.userId !== userId) {
-    flowLog("order identity mismatch", {
-      orderId: trimmedOrderId,
-      userId,
-      ownerUserId: order.userId,
-    });
     return apiError(
       "Order identity mismatch for authenticated customer",
       403,
@@ -498,23 +493,6 @@ export async function GET(
       shippingRefundFormatted: `₹${(shippingRefundMinor / 100).toFixed(2)}`,
     },
   };
-  const eventTypes = events.map((e) => (e.eventType ?? "").trim().toLowerCase());
-  flowLog("order detail loaded", {
-    orderId: order.orderId,
-    userId,
-    statusName,
-    paymentState: payload.paymentState,
-    fulfillmentState: payload.fulfillmentState,
-    shipmentCount: shipments.length,
-    shipmentStatusIds: shipments.map((s) => s.shiprocketStatusId ?? ""),
-    shipmentStatusLabels: shipments.map((s) => s.shiprocketStatusLabel ?? ""),
-    refundInitiated: eventTypes.includes("refund_initiated"),
-    refundProcessed: eventTypes.includes("refund_recorded"),
-    refundFailed: eventTypes.includes("refund_failed"),
-    refundRows: refunds.length,
-    processedRefundRows: processedRefunds.length,
-    totalRefundMinor,
-  });
 
   return Response.json({
     ok: true,

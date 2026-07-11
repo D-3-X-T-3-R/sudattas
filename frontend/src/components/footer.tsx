@@ -94,7 +94,7 @@ export function Footer({ goTo }: FooterProps) {
                 Support, styling, and bulk enquiries
               </Link>
             </li>
-            <li>Email support@sudattas.com for quick assistance.</li>
+            <li>Email sudattasdesignerboutique@gmail.com for quick assistance.</li>
           </ul>
           <div className="mt-6 flex items-center gap-2 text-xs text-[var(--color-on-deep-muted)]">
             <span className="h-px w-5 bg-[var(--color-gold)]" />

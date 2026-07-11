@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ListOrdered, Package } from "lucide-react";
@@ -107,16 +107,6 @@ export default function AdminOrderDetailPage() {
         : order?.refundTrackingState === "initiated"
           ? "Refund in progress at Razorpay."
           : null;
-
-  useEffect(() => {
-    if (!order) return;
-    console.info("[orders-flow][admin-ui] admin order page state", {
-      orderId: order.orderId,
-      statusId: order.statusId,
-      refundTrackingState: order.refundTrackingState,
-      refundTrackingNote,
-    });
-  }, [order, refundTrackingNote]);
 
   return (
     <AdminPageShell
