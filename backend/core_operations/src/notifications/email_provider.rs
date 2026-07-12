@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 use tonic::Status;
-use tracing::info;
+use tracing::{debug, info};
 
 const RESEND_API: &str = "https://api.resend.com/emails";
 
@@ -87,23 +87,27 @@ pub async fn send_transactional_email_with_attachments(
 
     match email_provider_from_env() {
         EmailProviderKind::Log => {
+            // No PII (recipient, address, body) at info: this path runs whenever
+            // EMAIL_PROVIDER is unset, so logging full email bodies here would put
+            // customer names/addresses/order details in application logs by default.
             info!(
-                to = %to,
-                subject = %subject,
+                subject_len = subject.len(),
                 text_len = text_body.len(),
                 html_len = html_body.len(),
                 attachment_count = attachments.len(),
-                "transactional email (EMAIL_PROVIDER=log - set EMAIL_PROVIDER=resend + RESEND_API_KEY to send)"
+                "transactional email not sent (EMAIL_PROVIDER=log - set EMAIL_PROVIDER=resend + RESEND_API_KEY + EMAIL_FROM to send)"
             );
+            // Full recipient/subject/body are only at debug, for local troubleshooting.
+            debug!(to = %to, subject = %subject, "transactional email (log mode) recipient/subject");
             for attachment in attachments {
-                info!(
+                debug!(
                     file_name = %attachment.filename,
                     mime_type = %attachment.mime_type,
                     base64_len = attachment.content_base64.len(),
-                    "transactional email attachment"
+                    "transactional email attachment (log mode)"
                 );
             }
-            info!(body = %text_body, "transactional email plain-text body");
+            debug!(body = %text_body, "transactional email plain-text body (log mode)");
             Ok(())
         }
         EmailProviderKind::Resend => {

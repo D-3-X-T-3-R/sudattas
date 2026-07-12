@@ -133,6 +133,14 @@ fi
 echo "Applying forward DB migrations..."
 bash "$BACKEND_ROOT/apply-db-migrations.sh"
 
+echo "Validating required DB schema..."
+ASSERT_SCHEMA_SCRIPT="$BACKEND_ROOT/assert-required-schema.sh"
+if [[ ! -f "$ASSERT_SCHEMA_SCRIPT" ]]; then
+  echo "Required schema validator not found: $ASSERT_SCHEMA_SCRIPT" >&2
+  exit 1
+fi
+bash "$ASSERT_SCHEMA_SCRIPT"
+
 # 5) Regenerate SeaORM entities from current DB schema
 echo "Regenerating SeaORM entities..."
 ENTITY_GENERATE_SCRIPT="$BACKEND_ROOT/core_db_entities/src/entity/generate.sh"
@@ -144,6 +152,11 @@ else
     sh "$ENTITY_GENERATE_SCRIPT"
   ) || { echo "Entity regeneration failed." >&2; exit 1; }
 fi
+
+# Clone SUDATTAS into SUDATTAS_CLONED for integration tests (TEST_DATABASE_URL).
+read_db_credentials
+docker exec -i -e MYSQL_PWD="$DB_PASSWORD" "$DB_CONTAINER_NAME" sh -c \
+  "mysql -u$DB_USER -e 'DROP DATABASE IF EXISTS SUDATTAS_CLONED; CREATE DATABASE SUDATTAS_CLONED;' && mysqldump --set-gtid-purged=OFF -u$DB_USER SUDATTAS | mysql -u$DB_USER SUDATTAS_CLONED"
 
 # 6) Build and start app services after DB + entities are ready (optional)
 if [[ "$ORM_ONLY" == "true" ]]; then

@@ -155,6 +155,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .install_recorder()
         .expect("Prometheus metrics recorder");
 
+    // Readiness pings the DB rather than returning 200 unconditionally, so an
+    // orchestrator stops routing traffic to an instance whose DB pool has died.
+    // `DatabaseConnection` isn't `Clone`, so it's wrapped in an `Arc` to be shared
+    // across every invocation of the readiness filter below.
+    let readiness_db = std::sync::Arc::new(
+        get_db()
+            .await
+            .map_err(|e| format!("readiness route: database connect failed: {e}"))?,
+    );
+
     let metrics_addr = startup.grpc_metrics_addr;
     let metrics_route = warp::get()
         .and(warp::path("metrics"))
@@ -170,7 +180,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let readiness_route = warp::get()
         .and(warp::path("ready"))
         .and(warp::path::end())
-        .map(|| warp::reply::with_status("ready", warp::http::StatusCode::OK));
+        .and_then(move || {
+            let db = readiness_db.clone();
+            async move {
+                match db.ping().await {
+                    Ok(()) => Ok(warp::reply::with_status(
+                        "ready",
+                        warp::http::StatusCode::OK,
+                    )),
+                    Err(e) => {
+                        log::warn!("readiness check failed: DB ping error: {e}");
+                        Ok::<_, std::convert::Infallible>(warp::reply::with_status(
+                            "database unavailable",
+                            warp::http::StatusCode::SERVICE_UNAVAILABLE,
+                        ))
+                    }
+                }
+            }
+        });
     tokio::spawn(async move {
         warp::serve(metrics_route.or(health_route).or(readiness_route))
             .run(metrics_addr)

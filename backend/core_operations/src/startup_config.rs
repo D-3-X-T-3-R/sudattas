@@ -39,6 +39,7 @@ impl StartupConfig {
             for key in STRICT_REQUIRED_ENV_KEYS {
                 require_non_empty_env(key)?;
             }
+            require_real_email_provider()?;
         }
         if grpc_auth_required {
             require_grpc_auth_token()?;
@@ -65,6 +66,27 @@ fn require_non_empty_env(key: &str) -> Result<(), String> {
         _ => Err(format!(
             "{key} is required when strict startup validation is enabled"
         )),
+    }
+}
+
+/// `EMAIL_PROVIDER` defaults to a log-only no-op provider (see `notifications::email_provider`)
+/// so that leaving it unset in production silently drops every transactional email
+/// (order confirmation, shipped, delivered, refund) while writing full customer PII
+/// (name, address, order details) into application logs. Require it to be explicitly
+/// set to a real provider whenever strict startup validation is on.
+fn require_real_email_provider() -> Result<(), String> {
+    match std::env::var("EMAIL_PROVIDER") {
+        Ok(raw) if raw.trim().eq_ignore_ascii_case("resend") => {
+            require_non_empty_env("RESEND_API_KEY")?;
+            require_non_empty_env("EMAIL_FROM")?;
+            Ok(())
+        }
+        _ => Err(
+            "EMAIL_PROVIDER must be set to 'resend' (with RESEND_API_KEY and EMAIL_FROM) \
+             when strict startup validation is enabled; the default log-only provider never \
+             sends customer email and logs PII"
+                .to_string(),
+        ),
     }
 }
 
@@ -115,6 +137,9 @@ mod tests {
             "STRICT_STARTUP_VALIDATION",
             "GRPC_SERVER",
             "GRPC_METRICS_ADDR",
+            "EMAIL_PROVIDER",
+            "RESEND_API_KEY",
+            "EMAIL_FROM",
         ];
         keys.extend(STRICT_REQUIRED_ENV_KEYS.iter().copied());
         keys
@@ -164,6 +189,9 @@ mod tests {
         for key in STRICT_REQUIRED_ENV_KEYS {
             env.set(key, &format!("{key}_value"));
         }
+        env.set("EMAIL_PROVIDER", "resend");
+        env.set("RESEND_API_KEY", "test_resend_key");
+        env.set("EMAIL_FROM", "orders@example.com");
     }
 
     #[test]
@@ -242,6 +270,55 @@ mod tests {
         assert_eq!(
             config.grpc_metrics_addr,
             "0.0.0.0:9090".parse().expect("valid metrics addr")
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_missing_email_provider() {
+        let env = StartupEnvGuard::new();
+        set_all_strict_required_envs(&env);
+        env.set("APP_ENV", "development");
+        env.set("STRICT_STARTUP_VALIDATION", "true");
+        env.set("GRPC_AUTH_TOKEN", "expected_token");
+        env.remove("EMAIL_PROVIDER");
+
+        let err = StartupConfig::from_env().expect_err(
+            "startup should fail under strict validation when EMAIL_PROVIDER is not set to a real provider",
+        );
+        assert!(
+            err.contains("EMAIL_PROVIDER must be set to 'resend'"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_resend_provider_without_api_key() {
+        let env = StartupEnvGuard::new();
+        set_all_strict_required_envs(&env);
+        env.set("APP_ENV", "development");
+        env.set("STRICT_STARTUP_VALIDATION", "true");
+        env.set("GRPC_AUTH_TOKEN", "expected_token");
+        env.remove("RESEND_API_KEY");
+
+        let err = StartupConfig::from_env().expect_err(
+            "startup should fail when EMAIL_PROVIDER=resend but RESEND_API_KEY is missing",
+        );
+        assert!(
+            err.contains("RESEND_API_KEY is required"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_accepts_resend_email_provider() {
+        let env = StartupEnvGuard::new();
+        set_all_strict_required_envs(&env);
+        env.set("APP_ENV", "development");
+        env.set("STRICT_STARTUP_VALIDATION", "true");
+        env.set("GRPC_AUTH_TOKEN", "expected_token");
+
+        StartupConfig::from_env().expect(
+            "startup should pass under strict validation with EMAIL_PROVIDER=resend configured",
         );
     }
 

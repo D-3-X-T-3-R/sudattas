@@ -9,7 +9,7 @@ use graphql::resolvers::invoices::handlers as invoice_handlers;
 use graphql::schema;
 use graphql::security::csrf;
 use graphql::security::guest_session;
-use graphql::security::jwks_loader::load_jwks;
+use graphql::security::jwks_loader::{load_jwks, load_jwks_with_retries, JWKSet};
 use graphql::security::jwt_validator::validate_token;
 use graphql::security::phone_otp;
 use graphql::security::session_validator;
@@ -124,6 +124,26 @@ fn resolve_graphql_rate_limit_key(
     None
 }
 
+/// Resolves when the process receives SIGINT (Ctrl+C) or, on Unix, SIGTERM — the
+/// signal Docker/Kubernetes send on `docker stop`/pod termination. Without handling
+/// SIGTERM specifically, graceful shutdown never triggers on a normal container stop.
+async fn shutdown_signal() {
+    let ctrl_c = tokio::signal::ctrl_c();
+    #[cfg(unix)]
+    {
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler");
+        tokio::select! {
+            _ = ctrl_c => {}
+            _ = sigterm.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = ctrl_c.await;
+    }
+}
+
 fn status_from_gql_code(code: GqlCode) -> StatusCode {
     match code {
         GqlCode::InvalidArgument => StatusCode::BAD_REQUEST,
@@ -135,6 +155,13 @@ fn status_from_gql_code(code: GqlCode) -> StatusCode {
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
+
+/// Shared state threaded into the per-request context filter closure below.
+type ContextFilterState = (
+    Arc<tokio::sync::RwLock<JWKSet>>,
+    Option<String>,
+    Option<Arc<Vec<String>>>,
+);
 
 const CORS_ALLOWED_HEADERS: &[&str] = &[
     "content-type",
@@ -187,7 +214,55 @@ async fn main() {
 
     let startup = startup_config::StartupConfig::from_env()
         .unwrap_or_else(|e| panic!("invalid startup environment: {e}"));
-    let jwks = load_jwks().await.expect("Failed to load JWKS");
+
+    // Load JWKS with a bounded retry; on total failure, start with an empty key set
+    // rather than crashing the whole process. A transient/unreachable IdP at boot
+    // should not take down catalog browsing, health checks, and other non-auth routes —
+    // only JWT-authenticated requests fail (with a normal 401) until the background
+    // refresh below succeeds.
+    let initial_jwks = match load_jwks_with_retries(3, std::time::Duration::from_secs(2)).await {
+        Ok(jwks) => jwks,
+        Err(e) => {
+            warn!(
+                error = %e,
+                "Failed to load JWKS after retries at startup; starting with an empty key set — \
+                 JWT-authenticated requests will be rejected until the next successful background refresh"
+            );
+            JWKSet { keys: Vec::new() }
+        }
+    };
+    let jwks_state: Arc<tokio::sync::RwLock<JWKSet>> =
+        Arc::new(tokio::sync::RwLock::new(initial_jwks));
+
+    // Periodically refresh JWKS in the background so IdP key rotation/revocation takes
+    // effect without requiring a process restart (previously the key set was static for
+    // the lifetime of the process).
+    {
+        let jwks_state = jwks_state.clone();
+        let refresh_interval_sec: u64 = std::env::var("JWKS_REFRESH_INTERVAL_SEC")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(1800);
+        tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(refresh_interval_sec));
+            interval.tick().await; // first tick fires immediately; we already loaded once above
+            loop {
+                interval.tick().await;
+                match load_jwks().await {
+                    Ok(fresh) => {
+                        *jwks_state.write().await = fresh;
+                        info!("JWKS background refresh succeeded");
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "JWKS background refresh failed; keeping previous key set");
+                    }
+                }
+            }
+        });
+    }
+
     let redis_url = startup.redis_url.clone();
     let allowed_origins = startup.allowed_origins.clone().map(Arc::new);
     let rate_limit_per_minute = startup.rate_limit_per_minute;
@@ -331,7 +406,7 @@ async fn main() {
     //   - Public storefront reads must use guest sessions (`X-Session-Id`).
     //   - Authenticated customer/admin flows must use JWT (`Authorization`).
     // Route families are documented in docs/CROSS_LAYER_CONTRACT.md.
-    let jwks_c = jwks.clone();
+    let jwks_state_c = jwks_state.clone();
     let redis_url_c = redis_url.clone();
     let allowed_origins_c = allowed_origins.clone();
     let context_filter = warp::header::optional::<String>("authorization")
@@ -344,7 +419,7 @@ async fn main() {
         .and(warp::header::optional::<String>("idempotency-key"))
         .and(warp::header::optional::<String>("x-client-action"))
         .and(warp::header::optional::<String>("x-guest-session-id"))
-        .and(warp::any().map(move || (jwks_c.clone(), redis_url_c.clone(), allowed_origins_c.clone())))
+        .and(warp::any().map(move || (jwks_state_c.clone(), redis_url_c.clone(), allowed_origins_c.clone())))
         .and_then(
             |token: Option<String>,
              session_id: Option<String>,
@@ -356,7 +431,10 @@ async fn main() {
              idempotency_key: Option<String>,
              x_client_action: Option<String>,
              x_guest_session_id: Option<String>,
-             (jwks, redis_url, allowed_origins): (_, Option<String>, Option<Arc<Vec<String>>>)| async move {
+             (jwks_state, redis_url, allowed_origins): ContextFilterState| async move {
+                // Snapshot the current key set for this request; the background
+                // refresh task may swap it concurrently.
+                let jwks = jwks_state.read().await.clone();
                 let mut auth: Option<AuthSource> = None;
                 let mut jwt_subject: Option<String> = None;
                 let mut admin_authorized: Option<bool> = None;
@@ -850,7 +928,13 @@ async fn main() {
         |_| tracing::info_span!("request", request_id = %Uuid::new_v4()),
     ));
 
-    warp::serve(traced_routes).run(listen_addr).await
+    // Graceful shutdown: drain in-flight requests instead of dropping connections
+    // immediately when the process receives SIGINT/SIGTERM (e.g. during a deploy).
+    let (_, server) = warp::serve(traced_routes).bind_with_graceful_shutdown(listen_addr, async {
+        shutdown_signal().await;
+        info!("graphql shutdown signal received; draining in-flight requests");
+    });
+    server.await
 }
 
 async fn handle_auth_rejection(

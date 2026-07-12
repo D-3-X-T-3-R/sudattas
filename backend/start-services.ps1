@@ -171,7 +171,8 @@ try {
     Pop-Location
 }
 
-docker exec -i $DbContainerName sh -c "mysql -u root -p12345678 -e 'DROP DATABASE IF EXISTS SUDATTAS_CLONED; CREATE DATABASE SUDATTAS_CLONED;' && mysqldump --set-gtid-purged=OFF -u root -p12345678 SUDATTAS | mysql -u root -p12345678 SUDATTAS_CLONED"
+$cloneCreds = Get-DbCredentials
+docker exec -i -e MYSQL_PWD=$($cloneCreds.Password) $DbContainerName sh -c "mysql -u$($cloneCreds.User) -e 'DROP DATABASE IF EXISTS SUDATTAS_CLONED; CREATE DATABASE SUDATTAS_CLONED;' && mysqldump --set-gtid-purged=OFF -u$($cloneCreds.User) SUDATTAS | mysql -u$($cloneCreds.User) SUDATTAS_CLONED"
 if ($Orm) {
     Write-Host "ORM-only mode (-Orm): skipping Core Operations and GraphQL." -ForegroundColor Yellow
 } else {

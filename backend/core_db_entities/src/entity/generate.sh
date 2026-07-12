@@ -7,5 +7,12 @@ set -x
 rm -f *.rs
 # Always use latest SeaORM CLI before generation.
 cargo install sea-orm-cli --locked --force
-#~/.cargo/bin/sea-orm-cli generate entity -u mysql://root:12345678@13.233.125.216:3306/SUDATTAS --with-serde=both --date-time-crate chrono --max-connections=1000 
- ~/.cargo/bin/sea-orm-cli generate entity -u mysql://root:12345678@localhost:3306/SUDATTAS --with-serde=both --date-time-crate chrono --max-connections=1000 
+
+ENV_FILE="$(dirname "$0")/../../../.env"
+DATABASE_URL="$(grep -E '^\s*DATABASE_URL=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
+if [ -z "$DATABASE_URL" ]; then
+  echo "ERROR: DATABASE_URL not found in $ENV_FILE." >&2
+  exit 1
+fi
+
+~/.cargo/bin/sea-orm-cli generate entity -u "$DATABASE_URL" --with-serde=both --date-time-crate chrono --max-connections=1000

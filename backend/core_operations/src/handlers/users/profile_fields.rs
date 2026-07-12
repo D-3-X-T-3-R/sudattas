@@ -5,6 +5,7 @@ use chrono::NaiveDate;
 use core_db_entities::entity::sea_orm_active_enums::Gender;
 use tonic::Status;
 
+#[allow(clippy::result_large_err)]
 pub(crate) fn parse_gender(raw: &str) -> Result<Gender, Status> {
     match raw.trim().to_lowercase().as_str() {
         "male" => Ok(Gender::Male),
@@ -24,6 +25,7 @@ pub(crate) fn gender_to_string(gender: &Gender) -> String {
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub(crate) fn parse_date_of_birth(raw: &str) -> Result<NaiveDate, Status> {
     NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d")
         .map_err(|_| Status::invalid_argument("Invalid date_of_birth; expected yyyy-mm-dd"))

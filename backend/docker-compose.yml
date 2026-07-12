@@ -12,7 +12,7 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: "12345678"
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}"
       MYSQL_DATABASE: SUDATTAS
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
@@ -41,7 +41,7 @@ services:
       - "50051:50051"
     env_file: .env
     environment:
-      DATABASE_URL: mysql://root:12345678@mysql:3306/SUDATTAS
+      DATABASE_URL: "mysql://root:${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}@mysql:3306/SUDATTAS"
       REDIS_URL: redis://redis:6379
       GRPC_SERVER: "0.0.0.0:50051"
     depends_on:

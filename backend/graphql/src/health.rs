@@ -37,8 +37,8 @@ pub async fn check_ready() -> Result<(), String> {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| format!("Redis connection error: {e}"))?;
-        redis::cmd("PING")
-            .query_async::<String>(&mut conn)
+        let _: String = redis::cmd("PING")
+            .query_async(&mut conn)
             .await
             .map_err(|e| format!("Redis ping failed: {e}"))?;
     }
