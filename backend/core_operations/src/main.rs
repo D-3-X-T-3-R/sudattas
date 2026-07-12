@@ -155,14 +155,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .install_recorder()
         .expect("Prometheus metrics recorder");
 
-    // Readiness pings the DB rather than returning 200 unconditionally, so an
-    // orchestrator stops routing traffic to an instance whose DB pool has died.
-    // `DatabaseConnection` isn't `Clone`, so it's wrapped in an `Arc` to be shared
-    // across every invocation of the readiness filter below.
-    let readiness_db = std::sync::Arc::new(
+    // One shared connection pool for the whole process: the gRPC service, every
+    // background worker, and the readiness check below all clone this same `Arc`
+    // instead of each independently calling `get_db()` and opening its own pool
+    // (previously up to 6x DB_MAX_CONNECTIONS worth of pools for one process).
+    let shared_db = std::sync::Arc::new(
         get_db()
             .await
-            .map_err(|e| format!("readiness route: database connect failed: {e}"))?,
+            .map_err(|e| format!("database connect failed: {e}"))?,
     );
 
     let metrics_addr = startup.grpc_metrics_addr;
@@ -177,6 +177,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::path("healthz"))
         .and(warp::path::end())
         .map(|| warp::reply::with_status("ok", warp::http::StatusCode::OK));
+    let readiness_db = shared_db.clone();
     let readiness_route = warp::get()
         .and(warp::path("ready"))
         .and(warp::path::end())
@@ -207,7 +208,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = startup.grpc_server_addr;
     let mut service = MyGRPCServices::default();
     service
-        .init()
+        .init(shared_db.clone())
         .await
         .map_err(|e| format!("service initialization failed: {}", e.message()))?;
 
@@ -215,10 +216,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
     if !outbox_disabled {
-        // Second pool: `sea_orm::DatabaseConnection` is not `Clone` here; gRPC holds the first pool on `service`.
-        let db = get_db()
-            .await
-            .map_err(|e| format!("outbox worker: database connect failed: {e}"))?;
+        let db = shared_db.clone();
         let poll_sec = std::env::var("OUTBOX_POLL_INTERVAL_SEC")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
@@ -262,9 +260,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
     if !stale_order_expiry_disabled {
-        let db = get_db()
-            .await
-            .map_err(|e| format!("stale order expiry worker: database connect failed: {e}"))?;
+        let db = shared_db.clone();
         let poll_sec = std::env::var("STALE_ORDER_EXPIRY_POLL_INTERVAL_SEC")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
@@ -305,9 +301,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
     if !cancel_pending_disabled {
-        let db = get_db().await.map_err(|e| {
-            format!("cancel pending logistics worker: database connect failed: {e}")
-        })?;
+        let db = shared_db.clone();
         let poll_sec = std::env::var("CANCEL_PENDING_LOGISTICS_POLL_INTERVAL_SEC")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
@@ -354,9 +348,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
     if !delayed_shipment_worker_disabled {
-        let db = get_db().await.map_err(|e| {
-            format!("delayed shipment creation worker: database connect failed: {e}")
-        })?;
+        let db = shared_db.clone();
         let poll_sec = std::env::var("DELAYED_SHIPMENT_CREATION_POLL_INTERVAL_SEC")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
@@ -402,9 +394,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
     if !refund_worker_disabled {
-        let db = get_db()
-            .await
-            .map_err(|e| format!("refund attempts worker: database connect failed: {e}"))?;
+        let db = shared_db.clone();
         let poll_sec = std::env::var("REFUND_ATTEMPTS_POLL_INTERVAL_SEC")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())

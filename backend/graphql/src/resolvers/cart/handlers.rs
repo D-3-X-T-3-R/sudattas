@@ -1,6 +1,6 @@
 use proto::proto::core::{
     CreateCartItemRequest, DeleteCartItemRequest, EnqueueAbandonedCartRequest,
-    EnqueueAbandonedCartResponse, GetCartItemsRequest, UpdateCartItemRequest,
+    EnqueueAbandonedCartResponse, GetCartItemsRequest, MergeCartRequest, UpdateCartItemRequest,
 };
 
 use tracing::instrument;
@@ -77,6 +77,38 @@ pub(crate) async fn get_cart_items(
         .get_cart_items(GetCartItemsRequest {
             user_id: uid,
             session_id,
+        })
+        .await?;
+
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::cart_item_response_to_gql)
+        .collect())
+}
+
+/// Merges a guest (session-scoped) cart into the given authenticated user's
+/// cart — call this right after login, passing the guest session id that was
+/// in use beforehand (e.g. from local storage). `user_id` must come from the
+/// authenticated caller's own JWT, never from client input, so one account's
+/// cart can't be merged into another's.
+#[instrument]
+pub(crate) async fn merge_cart(user_id: String, session_id: String) -> Result<Vec<Cart>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+
+    let uid = parse_i64(&user_id, "user id")?;
+    let trimmed_session_id = session_id.trim();
+    if trimmed_session_id.is_empty() {
+        return Err(GqlError::new(
+            "session_id must not be empty for merge_cart",
+            Code::InvalidArgument,
+        ));
+    }
+    let response = client
+        .merge_cart(MergeCartRequest {
+            user_id: uid,
+            session_id: trimmed_session_id.to_string(),
         })
         .await?;
 

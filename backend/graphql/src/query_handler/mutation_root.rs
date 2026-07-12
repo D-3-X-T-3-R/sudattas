@@ -290,6 +290,18 @@ impl MutationRoot {
         .map_err(|e| e.into_field_error())
     }
 
+    /// Merges the caller's guest (session-scoped) cart into their now-authenticated
+    /// account — call right after login, passing the guest session id that was in
+    /// use beforehand. Requires login; `user_id` is always taken from the JWT, not
+    /// from client input.
+    #[instrument(err, ret)]
+    async fn merge_cart(context: &Context, session_id: String) -> FieldResult<Vec<Cart>> {
+        let uid = require_jwt(context)?.to_string();
+        cart::handlers::merge_cart(uid, session_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     /// P2 Abandoned cart: enqueue abandoned-cart events (typically from a cron/scheduler).
     /// Returns the number of events enqueued.
     #[instrument(err, ret)]

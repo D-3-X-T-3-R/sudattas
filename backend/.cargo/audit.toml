@@ -1,6 +1,22 @@
 [advisories]
+# RUSTSEC-2026-0098 / RUSTSEC-2026-0099 (rustls-webpki name-constraint bugs) were
+# previously ignored here but no longer apply: the locked rustls-webpki version
+# (0.103.13, pulled in via aws-sdk-*/aws-smithy-http-client -> rustls) is already
+# inside the patched range (>=0.103.12,<0.104.0-alpha.1). Verified via
+# `cargo tree -i rustls-webpki` + the advisory's [versions] patched range on
+# 2026-07-13; removed rather than kept as stale ignores. Re-add only if a future
+# dependency bump drops rustls-webpki below 0.103.12.
 ignore = [
+    # RUSTSEC-2023-0071 (Marvin Attack: RSA timing sidechannel in the `rsa` crate).
+    # Pulled in transitively via sqlx-mysql -> rsa 0.9.10 (used for MySQL's
+    # caching_sha2_password auth handshake). No fixed upgrade exists upstream
+    # (rustsec: "No fixed upgrade is available!"), and sea-orm/sqlx currently
+    # pin this rsa version, so it can't be bumped independently here. Accepted
+    # because exploiting a timing sidechannel requires an attacker positioned to
+    # take fine-grained timing measurements of the DB's auth handshake, which is
+    # not reachable by any untrusted party in this deployment (MySQL is not
+    # exposed to the public internet — see docker-compose.yml/vps_info.info).
+    # Review-by: re-check when sqlx-mysql/sea-orm ship a release that no longer
+    # depends on `rsa`, or upstream `rsa` publishes a fix.
     "RUSTSEC-2023-0071",
-    "RUSTSEC-2026-0098",
-    "RUSTSEC-2026-0099",
 ]

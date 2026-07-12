@@ -187,6 +187,321 @@ async fn integration_cart_delete_one_item_returns_remaining() {
     txn.rollback().await.ok();
 }
 
+/// C1b – create_cart_item called twice for the same (user, variant) increments quantity
+/// on a single row instead of erroring on the unique constraint.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_create_cart_item_duplicate_variant_increments_quantity() {
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let role = user_roles::ActiveModel {
+        role_id: ActiveValue::NotSet,
+        role_name: ActiveValue::Set(format!("itest_role_c1b_{}", now_tag)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert UserRoles");
+
+    let user_res = core_operations::handlers::users::create_user(
+        &txn,
+        Request::new(CreateUserRequest {
+            username: format!("itest_c1b_{}", now_tag),
+            email: format!("itest_c1b+{}@example.com", now_tag),
+            full_name: None,
+            address: None,
+            phone: None,
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
+            role_id: Some(role.role_id),
+        }),
+    )
+    .await
+    .expect("create_user should succeed");
+    let user_id = user_res.into_inner().items[0].user_id;
+
+    let category = product_categories::ActiveModel {
+        category_id: ActiveValue::NotSet,
+        name: ActiveValue::Set(format!("itest_cat_c1b_{}", now_tag)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert ProductCategories");
+
+    let product = products::ActiveModel {
+        product_id: ActiveValue::NotSet,
+        sku: ActiveValue::Set(None),
+        name: ActiveValue::Set("C1b Product".to_string()),
+        slug: ActiveValue::Set(None),
+        description: ActiveValue::Set(None),
+        price_paise: ActiveValue::Set(150_000),
+        category_id: ActiveValue::Set(category.category_id),
+        fabric: ActiveValue::Set(None),
+        weave: ActiveValue::Set(None),
+        occasion: ActiveValue::Set(None),
+        has_blouse_piece: ActiveValue::Set(None),
+        care_instructions: ActiveValue::Set(None),
+        product_status_id: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(Some(Utc::now())),
+        updated_at: ActiveValue::Set(None),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert Products");
+
+    let variant = product_variants::ActiveModel {
+        variant_id: ActiveValue::NotSet,
+        product_id: ActiveValue::Set(product.product_id),
+        size_id: ActiveValue::Set(None),
+        color_id: ActiveValue::Set(None),
+        additional_price: ActiveValue::Set(Some(0)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert ProductVariants");
+
+    let first = core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: Some(user_id),
+            session_id: None,
+            variant_id: variant.variant_id,
+            quantity: 1,
+        }),
+    )
+    .await
+    .expect("create_cart_item (first add) should succeed");
+    let cart_id = first.into_inner().items[0].cart_id;
+
+    let second = core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: Some(user_id),
+            session_id: None,
+            variant_id: variant.variant_id,
+            quantity: 2,
+        }),
+    )
+    .await
+    .expect("create_cart_item (repeat add) should succeed, not error as a duplicate");
+    let second_items = second.into_inner().items;
+    assert_eq!(
+        second_items.len(),
+        1,
+        "repeat add should return exactly one (incremented) row"
+    );
+    assert_eq!(
+        second_items[0].cart_id, cart_id,
+        "repeat add should update the same cart row, not create a new one"
+    );
+    assert_eq!(
+        second_items[0].quantity, 3,
+        "quantity should be summed (1 + 2), not overwritten or duplicated"
+    );
+
+    let get_res = core_operations::handlers::cart::get_cart_items(
+        &txn,
+        Request::new(GetCartItemsRequest {
+            user_id: Some(user_id),
+            session_id: None,
+        }),
+    )
+    .await
+    .expect("get_cart_items should succeed");
+    assert_eq!(
+        get_res.get_ref().items.len(),
+        1,
+        "only one cart row should exist for this (user, variant) pair"
+    );
+    assert_eq!(get_res.get_ref().items[0].quantity, 3);
+
+    txn.rollback().await.ok();
+}
+
+/// C1c – merge_cart moves guest (session-scoped) cart rows into the user's cart:
+/// a variant only in the guest cart is reassigned; a variant present in both
+/// carts has its quantities summed into the user's row, and the guest row is
+/// dropped. The guest session's cart is empty afterward.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_merge_cart_moves_guest_items_and_sums_overlap() {
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let session_id = format!("itest_guest_session_{}", now_tag);
+    let role = user_roles::ActiveModel {
+        role_id: ActiveValue::NotSet,
+        role_name: ActiveValue::Set(format!("itest_role_c1c_{}", now_tag)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert UserRoles");
+
+    let user_res = core_operations::handlers::users::create_user(
+        &txn,
+        Request::new(CreateUserRequest {
+            username: format!("itest_c1c_{}", now_tag),
+            email: format!("itest_c1c+{}@example.com", now_tag),
+            full_name: None,
+            address: None,
+            phone: None,
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
+            role_id: Some(role.role_id),
+        }),
+    )
+    .await
+    .expect("create_user should succeed");
+    let user_id = user_res.into_inner().items[0].user_id;
+
+    let category = product_categories::ActiveModel {
+        category_id: ActiveValue::NotSet,
+        name: ActiveValue::Set(format!("itest_cat_c1c_{}", now_tag)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert ProductCategories");
+
+    let product = products::ActiveModel {
+        product_id: ActiveValue::NotSet,
+        sku: ActiveValue::Set(None),
+        name: ActiveValue::Set("C1c Product".to_string()),
+        slug: ActiveValue::Set(None),
+        description: ActiveValue::Set(None),
+        price_paise: ActiveValue::Set(150_000),
+        category_id: ActiveValue::Set(category.category_id),
+        fabric: ActiveValue::Set(None),
+        weave: ActiveValue::Set(None),
+        occasion: ActiveValue::Set(None),
+        has_blouse_piece: ActiveValue::Set(None),
+        care_instructions: ActiveValue::Set(None),
+        product_status_id: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(Some(Utc::now())),
+        updated_at: ActiveValue::Set(None),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert Products");
+
+    // Guest-only variant: present only in the guest cart before merge.
+    let variant_guest_only = product_variants::ActiveModel {
+        variant_id: ActiveValue::NotSet,
+        product_id: ActiveValue::Set(product.product_id),
+        size_id: ActiveValue::Set(None),
+        color_id: ActiveValue::Set(None),
+        additional_price: ActiveValue::Set(Some(0)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert ProductVariants (guest-only)");
+
+    // Overlapping variant: present in both the guest cart and the user's cart.
+    let variant_overlap = product_variants::ActiveModel {
+        variant_id: ActiveValue::NotSet,
+        product_id: ActiveValue::Set(product.product_id),
+        size_id: ActiveValue::Set(None),
+        color_id: ActiveValue::Set(None),
+        additional_price: ActiveValue::Set(Some(0)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert ProductVariants (overlap)");
+
+    // Guest cart: 2x guest-only variant, 3x overlap variant.
+    core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: None,
+            session_id: Some(session_id.clone()),
+            variant_id: variant_guest_only.variant_id,
+            quantity: 2,
+        }),
+    )
+    .await
+    .expect("create_cart_item (guest, guest-only variant)");
+    core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: None,
+            session_id: Some(session_id.clone()),
+            variant_id: variant_overlap.variant_id,
+            quantity: 3,
+        }),
+    )
+    .await
+    .expect("create_cart_item (guest, overlap variant)");
+
+    // User already has 1x the overlap variant before merging.
+    core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: Some(user_id),
+            session_id: None,
+            variant_id: variant_overlap.variant_id,
+            quantity: 1,
+        }),
+    )
+    .await
+    .expect("create_cart_item (user, overlap variant)");
+
+    let merge_res = core_operations::handlers::cart::merge_cart(
+        &txn,
+        Request::new(proto::proto::core::MergeCartRequest {
+            user_id,
+            session_id: session_id.clone(),
+        }),
+    )
+    .await
+    .expect("merge_cart should succeed")
+    .into_inner()
+    .items;
+
+    assert_eq!(
+        merge_res.len(),
+        2,
+        "user should have exactly 2 cart rows after merge: {:?}",
+        merge_res
+    );
+    let guest_only_row = merge_res
+        .iter()
+        .find(|item| item.variant_id == variant_guest_only.variant_id)
+        .expect("guest-only variant should be reassigned to the user");
+    assert_eq!(guest_only_row.quantity, 2);
+    assert_eq!(guest_only_row.user_id, user_id);
+    let overlap_row = merge_res
+        .iter()
+        .find(|item| item.variant_id == variant_overlap.variant_id)
+        .expect("overlap variant should exist in the user's cart");
+    assert_eq!(
+        overlap_row.quantity, 4,
+        "overlap variant quantity should be summed (1 existing + 3 from guest)"
+    );
+
+    let guest_cart_after = core_operations::handlers::cart::get_cart_items(
+        &txn,
+        Request::new(GetCartItemsRequest {
+            user_id: None,
+            session_id: Some(session_id.clone()),
+        }),
+    )
+    .await
+    .expect("get_cart_items (guest) should succeed");
+    assert!(
+        guest_cart_after.get_ref().items.is_empty(),
+        "guest session cart should be empty after merge"
+    );
+
+    txn.rollback().await.ok();
+}
+
 /// C2 – Guest cart (session_id only) add + get_cart_items; verify place_order cannot proceed without a user_id (user's cart is empty).
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]

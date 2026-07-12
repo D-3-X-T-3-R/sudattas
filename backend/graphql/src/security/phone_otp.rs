@@ -1,4 +1,19 @@
 use serde_json::Value;
+use std::sync::OnceLock;
+use std::time::Duration;
+
+/// Shared HTTP client for Twilio Verify calls. `reqwest`'s defaults have no timeout,
+/// and these OTP endpoints are public/unauthenticated — a hang here would otherwise
+/// tie up a request handler indefinitely on a natural abuse target.
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .expect("failed to build Twilio HTTP client")
+    })
+}
 
 fn normalize_phone(raw: &str) -> Option<String> {
     let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
@@ -30,7 +45,7 @@ pub async fn request_sms_otp(phone: &str, channel: Option<&str>) -> Result<(), S
         _ => return Err("INVALID_CHANNEL".to_string()),
     };
     let (sid, token, service_sid) = twilio_config()?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .post(format!(
             "https://verify.twilio.com/v2/Services/{}/Verifications",
@@ -54,7 +69,7 @@ pub async fn verify_sms_otp(phone: &str, code: &str) -> Result<bool, String> {
         return Err("INVALID_OTP".to_string());
     }
     let (sid, token, service_sid) = twilio_config()?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .post(format!(
             "https://verify.twilio.com/v2/Services/{}/VerificationCheck",

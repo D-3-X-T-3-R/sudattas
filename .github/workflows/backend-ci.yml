@@ -14,7 +14,12 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  RUST_TOOLCHAIN: nightly-2026-03-30
+  # Matches backend/rust-toolchain.toml — no nightly-only feature is used anywhere
+  # in this workspace (verified: `cargo check --workspace --all-targets --all-features`
+  # passes on stable), so lint/test/security jobs no longer depend on nightly's
+  # availability. The `build` job below still separately checks a nightly matrix
+  # entry as a forward-compatibility signal.
+  RUST_TOOLCHAIN: 1.93.1
 
 jobs:
   # ============================================================================
@@ -266,7 +271,14 @@ jobs:
         # For payment verification tests (optional; tests set their own for P2/P3)
         RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
       run: |
-        for test_binary in integration_abandoned_cart_outbox integration_cart integration_coupons integration_order_state integration_payments integration_products integration_refunds integration_reviews integration_shipping integration_users integration_users_carts_orders_products integration_webhooks integration_wishlist; do
+        # Note: integration_logistics_live is intentionally excluded — per its own
+        # doc comment it creates a real Shiprocket order and cancels it before exit.
+        # It's gated behind RUN_LIVE_LOGISTICS_TESTS=1 (set to "0" above) so it
+        # wouldn't run today regardless, but it's left out of CI entirely so a
+        # future config change here can't accidentally start hitting the real
+        # Shiprocket API. razorpay_connectivity is safe to keep: it points
+        # RAZORPAY_API_BASE at a local mock server and never calls the real API.
+        for test_binary in integration_abandoned_cart_outbox integration_cart integration_coupons integration_order_state integration_payments integration_products integration_refunds integration_reviews integration_shipping integration_users integration_users_carts_orders_products integration_webhooks integration_wishlist integration_launch_concurrency integration_place_order_atomicity integration_returns integration_invoices integration_coupon_redemption_consistency integration_logistics_fulfillment integration_selected_checkout razorpay_connectivity schema_validation; do
           cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored --test-threads=1
         done
         for test_binary in handler_outbox handler_p2 handler_refunds_resolve handler_security; do

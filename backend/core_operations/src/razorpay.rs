@@ -5,7 +5,22 @@
 use crate::load_env_once;
 use reqwest::Client;
 use serde::Deserialize;
-use tracing::info;
+use std::sync::OnceLock;
+use std::time::Duration;
+use tracing::{info, warn};
+
+/// Shared HTTP client for all Razorpay calls. `reqwest`'s defaults have no timeout,
+/// so a hung/slow Razorpay endpoint would otherwise block checkout/refund/verification
+/// flows indefinitely.
+fn http_client() -> &'static Client {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .timeout(Duration::from_secs(15))
+            .build()
+            .expect("failed to build Razorpay HTTP client")
+    })
+}
 
 /// First characters of key id for logs (never log full key id or secret).
 fn mask_razorpay_key_id(key_id: &str) -> String {
@@ -80,7 +95,7 @@ pub async fn create_order(
         "receipt": receipt,
     });
 
-    let client = Client::new();
+    let client = http_client();
     let res = client
         .post(razorpay_orders_url())
         .basic_auth(&key_id, Some(&key_secret))
@@ -166,7 +181,7 @@ pub async fn create_refund(
         "razorpay create_refund outbound request (diagnostic; secret not logged)"
     );
 
-    let client = Client::new();
+    let client = http_client();
     let res = client
         .post(&url)
         .basic_auth(&key_id, Some(&key_secret))
@@ -213,25 +228,47 @@ pub async fn fetch_payment_amount_paise(payment_id: &str) -> Result<i64, String>
     }
 
     let url = format!("{}/{}", razorpay_payments_url(), pid);
-    let client = Client::new();
-    let res = client
-        .get(&url)
-        .basic_auth(&key_id, Some(&key_secret))
-        .send()
-        .await
-        .map_err(|e| format!("Razorpay payment fetch failed: {}", e))?;
+    let client = http_client();
 
-    let status = res.status();
-    let text = res
-        .text()
-        .await
-        .map_err(|e| format!("Razorpay payment response read failed: {}", e))?;
+    // Bounded retry: this is a read-only GET, safe to retry on transient failure
+    // (unlike create_order/create_refund, which must not be blindly retried).
+    const MAX_ATTEMPTS: u32 = 3;
+    let mut last_err = String::new();
+    for attempt in 1..=MAX_ATTEMPTS {
+        let outcome = async {
+            let res = client
+                .get(&url)
+                .basic_auth(&key_id, Some(&key_secret))
+                .send()
+                .await
+                .map_err(|e| format!("Razorpay payment fetch failed: {}", e))?;
 
-    if !status.is_success() {
-        return Err(format!("Razorpay payment API error {}: {}", status, text));
+            let status = res.status();
+            let text = res
+                .text()
+                .await
+                .map_err(|e| format!("Razorpay payment response read failed: {}", e))?;
+
+            if !status.is_success() {
+                return Err(format!("Razorpay payment API error {}: {}", status, text));
+            }
+
+            let parsed: RazorpayPaymentFetchResponse = serde_json::from_str(&text)
+                .map_err(|e| format!("Razorpay payment response parse failed: {}", e))?;
+            Ok(parsed.amount)
+        }
+        .await;
+
+        match outcome {
+            Ok(amount) => return Ok(amount),
+            Err(e) => {
+                warn!(attempt, MAX_ATTEMPTS, error = %e, "Razorpay payment fetch attempt failed");
+                last_err = e;
+                if attempt < MAX_ATTEMPTS {
+                    tokio::time::sleep(Duration::from_millis(300 * u64::from(attempt))).await;
+                }
+            }
+        }
     }
-
-    let parsed: RazorpayPaymentFetchResponse = serde_json::from_str(&text)
-        .map_err(|e| format!("Razorpay payment response parse failed: {}", e))?;
-    Ok(parsed.amount)
+    Err(last_err)
 }

@@ -1,3 +1,9 @@
 [toolchain]
-channel = "nightly-2026-03-30"
+# Pinned to stable: grepped for `#![feature(` across the workspace (none found),
+# all crates are edition 2021 with no nightly-only Cargo features, and the whole
+# workspace (`cargo check --workspace --all-targets --all-features`) builds
+# cleanly on this exact stable release. No nightly-only feature is in use, so
+# there's no reason to depend on nightly's availability/behavior guarantees for
+# a production payments backend.
+channel = "1.93.1"
 profile = "minimal"

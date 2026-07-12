@@ -1,7 +1,7 @@
-use core_db_entities::{get_db, CoreDatabaseConnection};
+use core_db_entities::CoreDatabaseConnection;
 use handlers::db_errors::map_db_error_to_status;
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 // Phase 1 additions
@@ -62,16 +62,17 @@ use proto::proto::core::{
     GetProductsByIdRequest, GetRefundsRequest, GetRelatedProductsRequest, GetShipmentRequest,
     GetShippingAddressRequest, GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse,
     GetUserPiiExportRequest, GetUserPiiExportResponse, IngestWebhookRequest,
-    InventoryItemsResponse, InventoryLogsResponse, InvoiceResponse, NewsletterSubscribersResponse,
-    OccasionsResponse, OrderDetailsResponse, OrderEventsResponse, OrderStatusesResponse,
-    OrdersResponse, PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse,
-    ProductImagesResponse, ProductMoodMappingsResponse, ProductMoodsResponse,
-    ProductVariantsResponse, ProductsResponse, ReadinessRequest, ReadinessResponse,
-    RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse, RequestReturnRequest,
-    ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ReturnRequestsResponse, ReviewsResponse,
-    SearchCategoryRequest, SearchColorRequest, SearchEventLogRequest, SearchFabricRequest,
-    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterSubscriberRequest,
-    SearchOccasionRequest, SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
+    InventoryItemsResponse, InventoryLogsResponse, InvoiceResponse, MergeCartRequest,
+    NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse, OrderEventsResponse,
+    OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse, PlaceOrderRequest,
+    PresignedUploadUrlResponse, ProductImagesResponse, ProductMoodMappingsResponse,
+    ProductMoodsResponse, ProductVariantsResponse, ProductsResponse, ReadinessRequest,
+    ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
+    RequestReturnRequest, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
+    ReturnRequestsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
+    SearchEventLogRequest, SearchFabricRequest, SearchInventoryItemRequest,
+    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOccasionRequest,
+    SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
     SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
     SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
     SearchReturnRequestsRequest, SearchReviewRequest, SearchShippingMethodRequest,
@@ -105,7 +106,7 @@ pub mod schema_guard;
 
 #[derive(Default, Debug)]
 pub struct MyGRPCServices {
-    db: Option<CoreDatabaseConnection>,
+    db: Option<Arc<CoreDatabaseConnection>>,
     session_manager: Option<auth::session::SessionManager>,
 }
 
@@ -211,10 +212,12 @@ pub fn check_auth(req: Request<()>) -> Result<Request<()>, Status> {
 }
 
 impl MyGRPCServices {
-    pub async fn init(&mut self) -> Result<(), Status> {
-        let db = get_db()
-            .await
-            .map_err(|e| Status::unavailable(format!("Database initialization failed: {e}")))?;
+    /// Initializes the service with a shared DB connection pool. The pool is
+    /// constructed once by the caller (see `main.rs`) and passed in — rather than
+    /// each of `init()` and every background worker independently calling
+    /// `get_db()` and opening its own pool — so the process opens one bounded
+    /// connection pool instead of one per component (gRPC service + N workers).
+    pub async fn init(&mut self, db: Arc<CoreDatabaseConnection>) -> Result<(), Status> {
         crate::schema_guard::validate_required_schema(&db)
             .await
             .map_err(|e| Status::failed_precondition(e.to_string()))?;
@@ -240,7 +243,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -256,7 +259,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -272,7 +275,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -288,7 +291,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -305,7 +308,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -321,7 +324,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -337,7 +340,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -353,7 +356,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -362,11 +365,30 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
+    async fn merge_cart(
+        &self,
+        request: Request<MergeCartRequest>,
+    ) -> Result<Response<CartItemsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::cart::merge_cart(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
     async fn enqueue_abandoned_cart(
         &self,
         request: Request<EnqueueAbandonedCartRequest>,
     ) -> Result<Response<EnqueueAbandonedCartResponse>, Status> {
-        let db = self.db.as_ref().unwrap();
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
         handlers::cart::enqueue_abandoned_cart(db, request).await
     }
 
@@ -378,7 +400,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -394,7 +416,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -410,7 +432,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -426,7 +448,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -442,7 +464,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -458,7 +480,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -474,7 +496,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -491,7 +513,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -528,7 +550,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -544,7 +566,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -560,7 +582,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -576,7 +598,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -592,7 +614,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -609,7 +631,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -625,7 +647,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -641,7 +663,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -657,7 +679,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -674,7 +696,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -722,7 +744,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -738,7 +760,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -754,7 +776,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -770,7 +792,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -786,7 +808,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -802,7 +824,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -818,7 +840,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -834,7 +856,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -850,7 +872,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -866,7 +888,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -882,7 +904,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -898,7 +920,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -914,7 +936,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -930,7 +952,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -947,7 +969,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -963,7 +985,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -979,7 +1001,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -996,7 +1018,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1012,7 +1034,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1028,7 +1050,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1044,7 +1066,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1060,7 +1082,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1077,7 +1099,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1093,7 +1115,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1109,7 +1131,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1126,7 +1148,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1142,7 +1164,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1158,7 +1180,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1174,7 +1196,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1191,7 +1213,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1207,7 +1229,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1223,7 +1245,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1240,7 +1262,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1256,7 +1278,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1272,7 +1294,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1288,7 +1310,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1304,7 +1326,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1321,7 +1343,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1337,7 +1359,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1353,7 +1375,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1369,7 +1391,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1386,7 +1408,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1402,7 +1424,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1418,7 +1440,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1434,7 +1456,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1451,7 +1473,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1467,7 +1489,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1483,7 +1505,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1499,7 +1521,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1516,7 +1538,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1533,7 +1555,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1550,7 +1572,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1567,7 +1589,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1585,7 +1607,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1601,7 +1623,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1617,7 +1639,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1633,7 +1655,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1650,7 +1672,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1667,7 +1689,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1683,7 +1705,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1699,7 +1721,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1715,7 +1737,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1732,7 +1754,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1748,7 +1770,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1764,7 +1786,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1780,7 +1802,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1796,7 +1818,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1812,7 +1834,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1828,7 +1850,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1845,7 +1867,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1861,7 +1883,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1877,7 +1899,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1893,7 +1915,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1910,7 +1932,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1927,7 +1949,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1944,7 +1966,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1962,7 +1984,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1978,7 +2000,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -1994,7 +2016,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2010,7 +2032,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2027,7 +2049,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2043,7 +2065,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2059,7 +2081,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2075,7 +2097,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2092,7 +2114,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2108,7 +2130,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2124,7 +2146,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2140,7 +2162,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2157,7 +2179,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2173,7 +2195,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2189,7 +2211,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2205,7 +2227,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2221,7 +2243,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2237,7 +2259,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2253,7 +2275,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2269,7 +2291,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2285,7 +2307,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2301,7 +2323,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2317,7 +2339,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2345,7 +2367,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2361,7 +2383,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2377,7 +2399,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2393,7 +2415,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2409,7 +2431,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2425,7 +2447,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2441,7 +2463,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2457,7 +2479,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2473,7 +2495,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2489,7 +2511,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2505,7 +2527,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2532,7 +2554,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2548,7 +2570,7 @@ impl GrpcServices for MyGRPCServices {
         let txn = self
             .db
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
             .begin()
             .await
             .map_err(map_db_error_to_status)?;
@@ -2766,7 +2788,7 @@ mod readiness_tests {
     async fn test_readiness_returns_ok_when_db_ping_succeeds() {
         let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
         let service = MyGRPCServices {
-            db: Some(db),
+            db: Some(std::sync::Arc::new(db)),
             session_manager: None,
         };
         let req = Request::new(ReadinessRequest {});
@@ -2790,6 +2812,28 @@ mod readiness_tests {
         let req = Request::new(ReadinessRequest {});
         let result = service.readiness(req).await;
         assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unavailable);
+    }
+
+    /// Guards against a regression back to `self.db.as_ref().unwrap()`: every RPC
+    /// method should return a clean `Status::unavailable` (like `readiness()` does)
+    /// rather than panicking the handling task if `db` is ever `None` when a request
+    /// comes in. Spot-checks one representative RPC; the same `self.db.as_ref()`
+    /// pattern is used identically across all ~150 methods in this file.
+    #[tokio::test]
+    async fn test_rpc_call_returns_unavailable_not_panic_when_db_not_initialized() {
+        use proto::proto::core::EnqueueAbandonedCartRequest;
+
+        let service = MyGRPCServices {
+            db: None,
+            session_manager: None,
+        };
+        let req = Request::new(EnqueueAbandonedCartRequest { delay_hours: None });
+        let result = service.enqueue_abandoned_cart(req).await;
+        assert!(
+            result.is_err(),
+            "expected Err(Status::unavailable), got Ok (or a panic would have aborted this test)"
+        );
         assert_eq!(result.unwrap_err().code(), tonic::Code::Unavailable);
     }
 }

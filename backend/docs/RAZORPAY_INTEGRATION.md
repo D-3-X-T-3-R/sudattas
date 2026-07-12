@@ -9,7 +9,7 @@ After your Razorpay account is created/verified, wire it up as below.
    - **Key ID** (e.g. `rzp_test_...` or `rzp_live_...`)
    - **Key Secret** (generate/show once)
 3. **Webhooks** (Settings → Webhooks):
-   - Add endpoint: `https://your-graphql-host/webhook/razorpay`
+   - Add endpoint: `https://your-graphql-host/wheresthemoney/razorpay`
    - Subscribe to: `payment.captured`, `payment.failed` (and any others you need)
    - Copy the **Signing secret** (used to verify webhook payloads)
 
@@ -21,7 +21,7 @@ Set these where your **core_operations** and **graphql** services run (e.g. `.en
 |----------|----------|-------------|
 | `RAZORPAY_KEY_ID` | Yes, for creating orders | API Key ID (safe to expose to frontend; we only send it in API responses). |
 | `RAZORPAY_KEY_SECRET` | Yes, for orders + verification | API Key Secret. **Never** expose; used for Orders API and `verifyRazorpayPayment` signature check. |
-| `RAZORPAY_WEBHOOK_SECRET` | Recommended in production | Webhook signing secret. If set, `POST /webhook/razorpay` **requires** a valid `x-razorpay-signature`. |
+| `RAZORPAY_WEBHOOK_SECRET` | Recommended in production | Webhook signing secret. If set, `POST /wheresthemoney/razorpay` **requires** a valid `x-razorpay-signature`. |
 
 - Without `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`, the backend will **not** call Razorpay’s Orders API; `createPaymentIntent` (when backend creates the order) will fail.
 - Without `RAZORPAY_WEBHOOK_SECRET`, webhooks are accepted without signature verification (only acceptable for local/dev).
@@ -46,7 +46,7 @@ See `backend/.env.example` for a template.
   The backend verifies the signature with `RAZORPAY_KEY_SECRET` and, if valid, marks the payment intent as `ClientVerified` and stores `razorpay_payment_id`.
 
 - **Webhook (source of truth)**  
-  Razorpay sends `payment.captured` (and `payment.failed`) to your `POST /webhook/razorpay` URL. The graphql service verifies `x-razorpay-signature` when `RAZORPAY_WEBHOOK_SECRET` is set, then forwards to core; the handler updates the payment intent and order (e.g. marks paid). Webhooks are the authority for final payment status.
+  Razorpay sends `payment.captured` (and `payment.failed`) to your `POST /wheresthemoney/razorpay` URL. The graphql service verifies `x-razorpay-signature` when `RAZORPAY_WEBHOOK_SECRET` is set, then forwards to core; the handler updates the payment intent and order (e.g. marks paid). Webhooks are the authority for final payment status.
 
 ## 4. Test from the storefront
 

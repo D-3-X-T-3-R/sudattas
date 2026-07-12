@@ -635,6 +635,27 @@ async fn place_order_in_txn(
     let grand_total_paise = paise_checked_add(items_total_minor_after_discount, shipping_minor)
         .map_err(|e| Status::internal(format!("Overflow computing grand total in paise: {}", e)))?;
 
+    // Create the Razorpay gateway order before any DB writes for this checkout (COD
+    // skips this entirely). This keeps the external call out of the inventory
+    // FOR UPDATE lock window below: if Razorpay fails, nothing has been written yet
+    // and the whole nested transaction simply rolls back — no order, no inventory
+    // decrement, cart untouched. If Razorpay succeeds but a later step in this
+    // transaction fails (e.g. a stock race), the Razorpay order is just never used;
+    // it's never paid and expires on Razorpay's side, which is harmless.
+    let prepaid_razorpay_order_id: Option<String> = if is_cod_checkout {
+        None
+    } else {
+        let mut receipt = format!("chk_{}_{}", req.user_id, Utc::now().timestamp_millis());
+        receipt.truncate(40);
+        Some(
+            crate::razorpay::create_order(grand_total_paise, "INR", &receipt)
+                .await
+                .map_err(|e| {
+                    Status::unavailable(format!("Unable to create Razorpay order: {e}"))
+                })?,
+        )
+    };
+
     let pending_status_id = order_state_machine::get_status_id(txn, "active_sale")
         .await
         .map_err(|e| Status::internal(e.to_string()))?
@@ -826,8 +847,10 @@ async fn place_order_in_txn(
     }
 
     if !is_cod_checkout {
-        // Create a pending payment intent with a real gateway order id before
-        // returning checkout data to the frontend.
+        // Persist the payment intent using the Razorpay order id obtained above
+        // (before any DB writes) — this is a DB-only write here, no network call,
+        // so it doesn't reintroduce holding the inventory locks during a Razorpay
+        // round-trip.
         let amount_paise = grand_total_paise;
         let _payment_intent = create_payment_intent(
             txn,
@@ -836,7 +859,7 @@ async fn place_order_in_txn(
                 user_id: req.user_id,
                 amount_paise,
                 currency: Some("INR".to_string()),
-                razorpay_order_id: None,
+                razorpay_order_id: prepaid_razorpay_order_id,
             }),
         )
         .await?

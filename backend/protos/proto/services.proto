@@ -20,6 +20,7 @@ service GRPCServices {
     rpc UpdateCartItem(UpdateCartItemRequest) returns (CartItemsResponse);
     rpc DeleteCartItem(DeleteCartItemRequest) returns (CartItemsResponse);
     rpc EnqueueAbandonedCart(EnqueueAbandonedCartRequest) returns (EnqueueAbandonedCartResponse);
+    rpc MergeCart(MergeCartRequest) returns (CartItemsResponse);
 
     // Product
     rpc CreateProduct(CreateProductRequest) returns (ProductsResponse);

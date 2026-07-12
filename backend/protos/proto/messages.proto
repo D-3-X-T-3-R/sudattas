@@ -42,6 +42,15 @@ message CartItemsResponse {
     repeated CartItemResponse items = 1;
 }
 
+// Merges a guest (session-scoped) cart into an authenticated user's cart, e.g.
+// right after login. Rows for a variant already in the user's cart have their
+// quantities summed; rows for a new variant are reassigned to the user.
+// Returns the user's cart after merging.
+message MergeCartRequest {
+    int64 user_id = 1;
+    string session_id = 2;
+}
+
 // ShippingAddress (flattened: no country/state/city lookup; schema has UserID, RecipientName, Country, StateRegion, City, PostalCode, Road, ApartmentNoOrName)
 
 message CreateShippingAddressRequest {
