@@ -259,7 +259,9 @@ async fn ensure_customer_owns_review(
     })
     .await
     .map_err(|e| e.into_field_error())?;
-    let owns = rows.iter().any(|r| r.review_id == review_id && r.user_id == uid);
+    let owns = rows
+        .iter()
+        .any(|r| r.review_id == review_id && r.user_id == uid);
     if owns {
         Ok(())
     } else {

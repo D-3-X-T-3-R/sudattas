@@ -142,7 +142,10 @@ fn independently_verify_signature(req: &IngestWebhookRequest) -> Option<bool> {
 /// intentionally omits raw_signature). `ingest_webhook` must pass false: its real caller (the
 /// HTTP webhook layer) always forwards raw_signature now, so a request that somehow lacks it
 /// should be treated as unverified rather than trusted.
-fn resolve_effective_verified(req: &IngestWebhookRequest, trust_flag_if_no_raw_signature: bool) -> bool {
+fn resolve_effective_verified(
+    req: &IngestWebhookRequest,
+    trust_flag_if_no_raw_signature: bool,
+) -> bool {
     match independently_verify_signature(req) {
         Some(verified) => {
             if verified != req.signature_verified {
@@ -262,13 +265,22 @@ async fn finalize_webhook_row(
     active.update(txn).await.map_err(map_db_error_to_status)
 }
 
+/// Window controlling how long an in-progress webhook row is treated as "still being worked on"
+/// before it's eligible for reclaim/replay. `reclaim_timeout_minutes` and `stale_before` are
+/// always computed together (`stale_before = now - reclaim_timeout_minutes`) and passed together
+/// at every call site, so they're grouped here to keep `handle_existing_webhook`'s argument count
+/// under clippy's `too_many_arguments` threshold.
+struct ReplayWindow {
+    reclaim_timeout_minutes: i64,
+    stale_before: DateTime<Utc>,
+}
+
 async fn handle_existing_webhook(
     txn: &DatabaseTransaction,
     req: &IngestWebhookRequest,
     existing: webhook_events::Model,
     incoming_payload: &serde_json::Value,
-    reclaim_timeout_minutes: i64,
-    stale_before: DateTime<Utc>,
+    window: ReplayWindow,
     dedupe_key: &str,
     verified: bool,
 ) -> Result<webhook_events::Model, TonicStatus> {
@@ -282,7 +294,11 @@ async fn handle_existing_webhook(
         return Ok(existing);
     }
 
-    if is_fresh_in_progress(existing.status.as_ref(), existing.received_at, stale_before) {
+    if is_fresh_in_progress(
+        existing.status.as_ref(),
+        existing.received_at,
+        window.stale_before,
+    ) {
         info!(
             webhook_id = %existing.webhook_id,
             provider_event_id = ?existing.provider_event_id,
@@ -299,7 +315,11 @@ async fn handle_existing_webhook(
         )));
     }
 
-    if is_stale_in_progress(existing.status.as_ref(), existing.received_at, stale_before) {
+    if is_stale_in_progress(
+        existing.status.as_ref(),
+        existing.received_at,
+        window.stale_before,
+    ) {
         let age_seconds = existing
             .received_at
             .map(|ts| (Utc::now() - ts).num_seconds())
@@ -308,7 +328,7 @@ async fn handle_existing_webhook(
             webhook_id = %existing.webhook_id,
             provider_event_id = ?existing.provider_event_id,
             dedupe_key,
-            reclaim_timeout_minutes,
+            reclaim_timeout_minutes = window.reclaim_timeout_minutes,
             age_seconds,
             status = ?existing.status.as_ref(),
             "webhook stale in-progress row reclaimed for replay"
@@ -326,7 +346,8 @@ async fn handle_existing_webhook(
     }
 
     let claimed =
-        claim_existing_webhook_for_replay(txn, existing.event_id, reclaim_timeout_minutes).await?;
+        claim_existing_webhook_for_replay(txn, existing.event_id, window.reclaim_timeout_minutes)
+            .await?;
     if !claimed {
         let latest = webhook_events::Entity::find_by_id(existing.event_id)
             .one(txn)
@@ -379,8 +400,10 @@ pub async fn replay_webhook_by_id(
         &req,
         existing,
         &parse_payload_or_null(&req.payload_json),
-        reclaim_timeout_minutes,
-        stale_before,
+        ReplayWindow {
+            reclaim_timeout_minutes,
+            stale_before,
+        },
         "webhook_id",
         verified,
     )
@@ -423,8 +446,10 @@ pub async fn ingest_webhook(
             &req,
             existing,
             &payload_json,
-            reclaim_timeout_minutes,
-            stale_before,
+            ReplayWindow {
+                reclaim_timeout_minutes,
+                stale_before,
+            },
             "webhook_id",
             verified,
         )
@@ -452,8 +477,10 @@ pub async fn ingest_webhook(
                 &req,
                 existing,
                 &payload_json,
-                reclaim_timeout_minutes,
-                stale_before,
+                ReplayWindow {
+                    reclaim_timeout_minutes,
+                    stale_before,
+                },
                 "provider_event_id",
                 verified,
             )

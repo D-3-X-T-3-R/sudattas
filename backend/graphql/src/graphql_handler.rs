@@ -3,9 +3,7 @@
 //! Parses body, checks query depth, then executes via Juniper and returns JSON.
 //! P1: Records request duration and outcome for Prometheus.
 
-use crate::graphql_limits::{
-    analyze_query, DEFAULT_MAX_QUERY_COMPLEXITY, DEFAULT_MAX_QUERY_DEPTH,
-};
+use crate::graphql_limits::{analyze_query, DEFAULT_MAX_QUERY_COMPLEXITY, DEFAULT_MAX_QUERY_DEPTH};
 use crate::metrics;
 use crate::query_handler::Context;
 use serde::Deserialize;

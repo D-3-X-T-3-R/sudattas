@@ -992,8 +992,7 @@ async fn process_claimed_refund_attempt(
                         "refund worker: gateway refund exhausted retry budget, marking needs_review"
                     );
                     if let Some(return_id) = linked_return_id {
-                        set_return_status_and_items(&fail_txn, return_id, "refund_pending")
-                            .await?;
+                        set_return_status_and_items(&fail_txn, return_id, "refund_pending").await?;
                         let _ = create_order_event(
                             &fail_txn,
                             Request::new(CreateOrderEventRequest {

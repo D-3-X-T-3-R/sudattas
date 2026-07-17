@@ -287,7 +287,8 @@ pub async fn transition_order_status(
     };
     if let Some(evt) = outbox_type {
         let payload = json!({ "order_id": order_id, "user_id": user_id });
-        if let Err(e) = enqueue_outbox_event(txn, evt, "order", &order_id.to_string(), payload).await
+        if let Err(e) =
+            enqueue_outbox_event(txn, evt, "order", &order_id.to_string(), payload).await
         {
             tracing::error!(
                 order_id,
