@@ -141,30 +141,43 @@ function aggregateCustomersByGranularity(
     .map(([label, value]) => ({ label: format(label), value }));
 }
 
+// Chart chrome tokens (hairline, one step off the card surface — never the loud brand ink).
+const GRID_LINE = "#e1e0d9";
+const AXIS_MUTED = "#898781";
+
 const chartTheme = {
   axis: {
     ticks: {
       text: {
-        fill: "#6b7280",
-        fontSize: 11,
+        fill: AXIS_MUTED,
+        fontSize: 13,
       },
     },
   },
   grid: {
     line: {
-      stroke: "#e5e7eb",
+      stroke: GRID_LINE,
       strokeWidth: 1,
     },
   },
-  tooltip: {
-    container: {
-      background: "#ffffff",
-      border: "1px solid #e5e7eb",
-      borderRadius: 8,
-      padding: "8px 12px",
-    },
-  },
 };
+
+function DeltaPill({ current, previous }: { current: number; previous: number }) {
+  if (previous <= 0) return null;
+  const pct = ((current - previous) / previous) * 100;
+  if (!Number.isFinite(pct) || Math.abs(pct) < 0.5) return null;
+  const up = pct > 0;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold",
+        up ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+      )}
+    >
+      {up ? "▲" : "▼"} {Math.abs(pct).toFixed(0)}% vs previous
+    </span>
+  );
+}
 
 function BarChart({
   data,
@@ -182,23 +195,26 @@ function BarChart({
     [data]
   );
   const maxVal = useMemo(() => Math.max(1, ...data.map((d) => d.value)), [data]);
+  const current = data[data.length - 1]?.value ?? 0;
+  const previous = data[data.length - 2]?.value ?? 0;
 
   return (
     <div className={className}>
       <div
-        className="rounded-2xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
-        style={{ height: 260, width: "100%", padding: "18px 12px 12px 16px" }}
+        className="rounded-2xl bg-white"
+        style={{ height: 300, width: "100%", padding: "20px 16px 16px 16px" }}
       >
         <ResponsiveBar
           data={data}
           indexBy="label"
           keys={["value"]}
           valueScale={{ type: "linear", min: 0, max: maxVal, clamp: true }}
-          margin={{ top: 12, right: 12, left: 40, bottom: 40 }}
-          padding={0.3}
+          margin={{ top: 12, right: 12, left: 52, bottom: 44 }}
+          padding={0.45}
           theme={chartTheme}
           colors={[barColor]}
-          borderRadius={8}
+          borderRadius={4}
+          enableLabel={false}
           axisBottom={{
             tickSize: 0,
             tickPadding: 10,
@@ -213,23 +229,19 @@ function BarChart({
           gridYValues={5}
           valueFormat={valueFormat}
           tooltip={({ label, value }) => (
-            <div
-              style={{
-                background: "var(--color-paper)",
-                border: "1px solid var(--color-line)",
-                borderRadius: 8,
-                padding: "8px 12px",
-                fontSize: 12,
-              }}
-            >
-              <strong>{label}</strong>: {valueFormat(Number(value))}
+            <div className="rounded-lg border border-[var(--color-line)] bg-white px-3.5 py-2.5 shadow-[0_8px_24px_rgba(45,42,38,0.12)]">
+              <p className="text-base font-semibold text-[var(--color-ink)]">{valueFormat(Number(value))}</p>
+              <p className="text-sm text-[var(--color-muted)]">{label}</p>
             </div>
           )}
         />
       </div>
-      <p className="mt-2 text-xs text-[var(--color-muted)]">
-        Max: {valueFormat(maxVal)} · Total: {valueFormat(total)}
-      </p>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-[var(--color-muted)]">
+          Highest: {valueFormat(maxVal)} · Total: {valueFormat(total)}
+        </p>
+        <DeltaPill current={current} previous={previous} />
+      </div>
     </div>
   );
 }
@@ -282,15 +294,15 @@ function DashboardChartsInner() {
 
   return (
     <div className="mt-10 space-y-6">
-      <p className="text-sm font-medium text-[var(--color-muted)]">Charts</p>
+      <p className="text-base font-semibold text-[var(--color-ink)]">Charts</p>
 
       <div className="grid gap-6 grid-cols-1">
-        <Card className="overflow-hidden rounded-xl border-[var(--color-line)] bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 p-4 pb-0">
-            <p className="text-sm font-medium text-[var(--color-muted)]">Orders</p>
+        <Card className="overflow-hidden rounded-2xl border-[var(--color-line)] bg-white shadow-[var(--admin-card-shadow)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-0">
+            <p className="text-[15px] font-semibold text-[var(--color-ink)]">Orders over time</p>
             <select
               className={cn(
-                "h-9 rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                "h-11 rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
               )}
               value={ordersGranularity}
@@ -308,17 +320,17 @@ function DashboardChartsInner() {
             <BarChart
               data={ordersData}
               valueFormat={(v) => String(v)}
-              barColor="var(--color-accent-brown)"
+              barColor="var(--color-green-2)"
             />
           </CardContent>
         </Card>
 
-        <Card className="overflow-hidden rounded-xl border-[var(--color-line)] bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 p-4 pb-0">
-            <p className="text-sm font-medium text-[var(--color-muted)]">Revenue</p>
+        <Card className="overflow-hidden rounded-2xl border-[var(--color-line)] bg-white shadow-[var(--admin-card-shadow)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-0">
+            <p className="text-[15px] font-semibold text-[var(--color-ink)]">Revenue over time</p>
             <select
               className={cn(
-                "h-9 rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                "h-11 rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
               )}
               value={revenueGranularity}
@@ -340,12 +352,12 @@ function DashboardChartsInner() {
             />
           </CardContent>
         </Card>
-        <Card className="overflow-hidden rounded-xl border-[var(--color-line)] bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 p-4 pb-0">
-            <p className="text-sm font-medium text-[var(--color-muted)]">New customers</p>
+        <Card className="overflow-hidden rounded-2xl border-[var(--color-line)] bg-white shadow-[var(--admin-card-shadow)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-0">
+            <p className="text-[15px] font-semibold text-[var(--color-ink)]">New customers over time</p>
             <select
               className={cn(
-                "h-9 rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                "h-11 rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
               )}
               value={customersGranularity}
@@ -363,7 +375,7 @@ function DashboardChartsInner() {
             <BarChart
               data={customersData}
               valueFormat={(v) => String(v)}
-              barColor="var(--color-accent-brown)"
+              barColor="#2a78d6"
             />
           </CardContent>
         </Card>

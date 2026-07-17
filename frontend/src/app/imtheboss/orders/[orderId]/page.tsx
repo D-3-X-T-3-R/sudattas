@@ -15,8 +15,9 @@ import {
 } from "@/lib/admin-order-detail";
 import { OrderDetailStatusEditor } from "@/domains/admin/orders/components/order-detail-status-editor";
 import { toRouteFailureUi } from "@/lib/route-state";
-import { formatOrderDate } from "@/domains/admin/orders/utils";
+import { formatOrderDate, getStatusLabel } from "@/domains/admin/orders/utils";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { StatusBadge } from "@/components/admin/status-badge";
 
 function toLocalDateTimeInput(iso?: string | null): string {
   if (!iso) return "";
@@ -154,52 +155,57 @@ export default function AdminOrderDetailPage() {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
             <Card className="bg-[var(--admin-surface-muted)]">
-              <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
-                <ListOrdered className="h-4 w-4 text-[var(--color-green)]" />
-                Summary
-              </CardTitle>
-              <CardContent className="mt-3">
-                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="flex items-center gap-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--color-ink)] md:text-[15px]">
+                  <ListOrdered className="h-4 w-4 text-[var(--color-green)]" />
+                  Summary
+                </CardTitle>
+                <StatusBadge label={getStatusLabel(order.statusId, statuses)} />
+              </div>
+              <CardContent className="mt-4">
+                <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1 border-b border-[var(--color-line)] pb-4">
+                  <div>
+                    <p className="text-sm text-[var(--color-muted)]">Total</p>
+                    <p className="text-2xl font-semibold text-[var(--color-ink)]">{order.totalAmountFormatted}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-[var(--color-muted)]">Placed</p>
+                    <p className="text-base text-[var(--color-ink)]">{formatOrderDate(order.orderDate)}</p>
+                  </div>
+                </div>
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                   <div>
                     <dt className="text-[var(--color-muted)]">Order ID</dt>
-                    <dd className="mt-0.5 font-mono text-[var(--color-ink)]">{order.orderId}</dd>
+                    <dd className="mt-0.5 text-[var(--color-ink)]">{order.orderId}</dd>
                   </div>
                   <div>
-                    <dt className="text-[var(--color-muted)]">Placed</dt>
-                    <dd className="mt-0.5 text-[var(--color-ink)]">{formatOrderDate(order.orderDate)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[var(--color-muted)]">Customer (user ID)</dt>
-                    <dd className="mt-0.5 font-mono text-[var(--color-ink)]">{order.userId}</dd>
+                    <dt className="text-[var(--color-muted)]">Customer ID</dt>
+                    <dd className="mt-0.5 text-[var(--color-ink)]">{order.userId}</dd>
                   </div>
                   <div>
                     <dt className="text-[var(--color-muted)]">Shipping address ID</dt>
-                    <dd className="mt-0.5 font-mono text-[var(--color-ink)]">{order.shippingAddressId}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[var(--color-muted)]">Total</dt>
-                    <dd className="mt-0.5 font-medium text-[var(--color-ink)]">{order.totalAmountFormatted}</dd>
+                    <dd className="mt-0.5 text-[var(--color-ink)]">{order.shippingAddressId}</dd>
                   </div>
                 </dl>
               </CardContent>
             </Card>
 
             <Card className="bg-[var(--admin-surface-muted)]">
-              <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+              <CardTitle className="flex items-center gap-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--color-ink)] md:text-[15px]">
                 <Package className="h-4 w-4 text-[var(--color-green)]" />
                 Line items
               </CardTitle>
-              <CardContent className="mt-3">
+              <CardContent className="mt-4">
                 {order.lines.length === 0 ? (
                   <p className="py-6 text-center text-sm text-[var(--color-muted)]">No line items.</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[640px] border-collapse text-sm">
+                    <table className="w-full min-w-[640px] border-collapse text-[15px]">
                       <caption className="sr-only">Order line items</caption>
                       <thead>
-                        <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
+                        <tr className="border-b border-[var(--color-line)] text-left text-sm text-[var(--color-muted)]">
                           <th className="pb-2 pr-4 font-medium">Product</th>
-                          <th className="pb-2 pr-4 font-medium">Variant ID</th>
+                          <th className="pb-2 pr-4 font-medium">Variant</th>
                           <th className="pb-2 pr-4 font-medium">Qty</th>
                           <th className="pb-2 font-medium">Line total</th>
                         </tr>
@@ -207,15 +213,15 @@ export default function AdminOrderDetailPage() {
                       <tbody>
                         {order.lines.map((line) => (
                           <tr key={line.orderDetailId} className="border-b border-[var(--color-line)] last:border-0">
-                            <td className="py-3 pr-4 text-[var(--color-ink)]">
+                            <td className="py-3.5 pr-4 text-[var(--color-ink)]">
                               {line.productName ?? "-"}
                               {line.productId ? (
-                                <span className="mt-0.5 block font-mono text-xs text-[var(--color-muted)]">Product #{line.productId}</span>
+                                <span className="mt-0.5 block text-xs text-[var(--color-muted)]">Product #{line.productId}</span>
                               ) : null}
                             </td>
-                            <td className="py-3 pr-4 font-mono text-[var(--color-muted)]">{line.variantId}</td>
-                            <td className="py-3 pr-4 text-[var(--color-ink)]">{line.quantity}</td>
-                            <td className="py-3 text-[var(--color-ink)]">{line.priceFormatted}</td>
+                            <td className="py-3.5 pr-4 text-xs text-[var(--color-muted)]">{line.variantId}</td>
+                            <td className="py-3.5 pr-4 text-[var(--color-ink)]">{line.quantity}</td>
+                            <td className="py-3.5 text-[var(--color-ink)]">{line.priceFormatted}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -228,8 +234,10 @@ export default function AdminOrderDetailPage() {
 
           <div className="space-y-6">
             <Card className="bg-[var(--admin-surface-muted)]">
-              <CardTitle>Status</CardTitle>
-              <CardContent className="mt-3">
+              <CardTitle className="text-sm font-semibold normal-case tracking-normal text-[var(--color-ink)] md:text-[15px]">
+                Change status
+              </CardTitle>
+              <CardContent className="mt-4">
                 <OrderDetailStatusEditor
                   key={`${order.orderId}-${order.statusId}`}
                   order={order}
@@ -243,20 +251,22 @@ export default function AdminOrderDetailPage() {
             </Card>
 
             <Card className="bg-[var(--admin-surface-muted)]">
-              <CardTitle>Lifecycle timestamps</CardTitle>
-              <CardContent className="mt-3 space-y-2 text-sm text-[var(--color-ink)]">
+              <CardTitle className="text-sm font-semibold normal-case tracking-normal text-[var(--color-ink)] md:text-[15px]">
+                Lifecycle timestamps
+              </CardTitle>
+              <CardContent className="mt-4 space-y-2 text-[15px] text-[var(--color-ink)]">
                 <p>
-                  Cancel window ends: <span className="font-mono">{order.cancelWindowEndsAt ? formatOrderDate(order.cancelWindowEndsAt) : "N/A"}</span>
+                  Cancel window ends: <span>{order.cancelWindowEndsAt ? formatOrderDate(order.cancelWindowEndsAt) : "N/A"}</span>
                 </p>
                 <p>
-                  Earliest booking at: <span className="font-mono">{order.earliestBookingAt ? formatOrderDate(order.earliestBookingAt) : "N/A"}</span>
+                  Earliest booking at: <span>{order.earliestBookingAt ? formatOrderDate(order.earliestBookingAt) : "N/A"}</span>
                 </p>
                 <p>
-                  Pickup target: <span className="font-mono">{order.pickupTargetAt ? formatOrderDate(order.pickupTargetAt) : "N/A"}</span>
+                  Pickup target: <span>{order.pickupTargetAt ? formatOrderDate(order.pickupTargetAt) : "N/A"}</span>
                 </p>
 
-                <div className="mt-3 grid gap-2">
-                  <label className="text-xs text-[var(--color-muted)]">
+                <div className="mt-4 grid gap-3">
+                  <label className="text-sm font-medium text-[var(--color-muted)]">
                     Pickup target
                     <input
                       type="datetime-local"
@@ -265,24 +275,23 @@ export default function AdminOrderDetailPage() {
                         setPickupTargetDirty(true);
                         setPickupTargetDraft(e.target.value);
                       }}
-                      className="mt-1 h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm text-[var(--color-ink)]"
+                      className="mt-1.5 h-11 w-full rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px] text-[var(--color-ink)]"
                     />
                   </label>
 
-                  <label className="text-xs text-[var(--color-muted)]">
+                  <label className="text-sm font-medium text-[var(--color-muted)]">
                     Reason
                     <input
                       type="text"
                       value={pickupReasonDraft}
                       onChange={(e) => setPickupReasonDraft(e.target.value)}
-                      placeholder="ops reprioritization"
-                      className="mt-1 h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm text-[var(--color-ink)]"
+                      placeholder="e.g. rescheduled by courier"
+                      className="mt-1.5 h-11 w-full rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px] text-[var(--color-ink)]"
                     />
                   </label>
 
                   <Button
                     type="button"
-                    size="sm"
                     disabled={pickupTargetMutation.isPending || !pickupTargetValue.trim()}
                     onClick={() => pickupTargetMutation.mutate()}
                   >
@@ -290,7 +299,7 @@ export default function AdminOrderDetailPage() {
                   </Button>
 
                   {pickupTargetMutation.isError ? (
-                    <p className="text-xs text-rose-700">
+                    <p className="text-sm text-rose-700">
                       {pickupTargetMutation.error instanceof Error
                         ? pickupTargetMutation.error.message
                         : "Could not update pickup target"}

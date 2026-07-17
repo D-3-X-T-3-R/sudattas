@@ -61,11 +61,10 @@ export function OrderDetailStatusEditor({
 
   return (
     <div>
-      <p className="text-xs uppercase tracking-[0.14em] text-[var(--color-muted)]">Change status</p>
-      <div className="mt-2 flex flex-wrap items-end gap-2">
+      <div className="flex flex-wrap items-end gap-3">
         <select
           className={cn(
-            "h-10 min-w-[12rem] rounded-md border border-[var(--color-line)] bg-white px-3 text-sm",
+            "h-11 min-w-[13rem] rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
             "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
           )}
           value={statusDraft}
@@ -90,7 +89,6 @@ export function OrderDetailStatusEditor({
 
         <Button
           type="button"
-          size="sm"
           disabled={statusMutation.isPending || !statusDraft || statusDraft === order.statusId}
           onClick={() => statusMutation.mutate(statusDraft)}
         >
@@ -98,13 +96,12 @@ export function OrderDetailStatusEditor({
         </Button>
       </div>
 
-      <p className="mt-2 text-xs text-[var(--color-muted)]">
-        Current status: <span className="font-medium text-[var(--color-ink)]">{getStatusLabel(order.statusId, statuses)}</span>.
-        Typical flow: pending -&gt; confirmed -&gt; processing -&gt; shipped -&gt; delivered.
+      <p className="mt-3 text-sm text-[var(--color-muted)]">
+        Usual order of things: pending &rarr; confirmed &rarr; processing &rarr; shipped &rarr; delivered.
       </p>
 
       {statusMutation.isError ? (
-        <p className="mt-2 text-xs text-rose-700" role="alert">
+        <p className="mt-2 text-sm text-rose-700" role="alert">
           {formatStatusMutationError(statusMutation.error)}
         </p>
       ) : null}

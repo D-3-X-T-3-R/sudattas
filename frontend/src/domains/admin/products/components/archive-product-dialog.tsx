@@ -20,10 +20,10 @@ export function ArchiveProductDialog({
   return (
     <Dialog open={!!product} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
-        <p className="text-sm text-[var(--color-ink)]">
-          Archive product <strong>{product?.name ?? ""}</strong> (ID: {product?.productId ?? ""})? Its status will be set to Archived; it will not be deleted.
+        <p className="text-[15px] leading-relaxed text-[var(--color-ink)]">
+          Archive <strong>{product?.name ?? ""}</strong>? It will be hidden from the store but not deleted — you can bring it back later.
         </p>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>

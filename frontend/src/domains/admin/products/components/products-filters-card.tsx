@@ -56,13 +56,13 @@ function FilterSelect({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-xs text-[var(--color-muted)]">
+      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
         {label}
       </label>
       <select
         id={id}
         className={cn(
-          "h-10 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-3 text-sm",
+          "h-11 w-full rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
           "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
         )}
         value={value}
@@ -91,8 +91,8 @@ function PriceRangeFilter({
   onMax: (value: string) => void;
 }) {
   return (
-    <div className="min-w-[14rem]">
-      <label htmlFor="products-price-min" className="mb-1 block text-xs text-[var(--color-muted)]">
+    <div>
+      <label htmlFor="products-price-min" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
         Price range (INR)
       </label>
       <div className="flex items-center gap-2">
@@ -104,9 +104,9 @@ function PriceRangeFilter({
           placeholder="Min"
           value={min}
           onChange={(e) => onMin(e.target.value)}
-          className="h-10 w-24"
+          className="h-11"
         />
-        <span className="text-xs text-[var(--color-muted)]">-</span>
+        <span className="text-[var(--color-muted)]">-</span>
         <Input
           id="products-price-max"
           type="number"
@@ -115,7 +115,7 @@ function PriceRangeFilter({
           placeholder="Max"
           value={max}
           onChange={(e) => onMax(e.target.value)}
-          className="h-10 w-24"
+          className="h-11"
         />
       </div>
     </div>
@@ -138,115 +138,117 @@ export function ProductsFiltersCard({
 
   return (
     <AdminFilterCard title="Filters" icon={<Filter className="h-4 w-4 text-[var(--color-green)]" />} className="mt-6">
-      <form onSubmit={onApply} className="flex flex-wrap items-end gap-3">
-        <div>
-          <label htmlFor="products-name" className="mb-1 block text-xs text-[var(--color-muted)]">
-            Name
-          </label>
-          <Input
-            id="products-name"
-            type="text"
-            value={filters.searchName}
-            onChange={(e) => set({ searchName: e.target.value })}
-            placeholder="e.g. silk"
-            className="h-10 w-48"
+      <form onSubmit={onApply} className="space-y-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label htmlFor="products-name" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
+              Name
+            </label>
+            <Input
+              id="products-name"
+              type="text"
+              value={filters.searchName}
+              onChange={(e) => set({ searchName: e.target.value })}
+              placeholder="e.g. silk"
+              className="h-11"
+            />
+          </div>
+
+          <FilterSelect
+            id="products-category"
+            label="Category"
+            value={filters.searchCategoryId}
+            onChange={(value) => set({ searchCategoryId: value })}
+            options={categories}
+            allLabel="All categories"
           />
-        </div>
 
-        <FilterSelect
-          id="products-category"
-          label="Category"
-          value={filters.searchCategoryId}
-          onChange={(value) => set({ searchCategoryId: value })}
-          options={categories}
-          allLabel="All categories"
-        />
+          <div>
+            <label htmlFor="products-status" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
+              Status
+            </label>
+            <select
+              id="products-status"
+              className={cn(
+                "h-11 w-full rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
+                "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+              )}
+              value={filters.searchProductStatusId}
+              onChange={(e) => set({ searchProductStatusId: e.target.value })}
+            >
+              <option value="">All statuses</option>
+              <option value="1">Draft</option>
+              <option value="2">Active</option>
+              <option value="3">Archived</option>
+            </select>
+          </div>
 
-        <div>
-          <label htmlFor="products-status" className="mb-1 block text-xs text-[var(--color-muted)]">
-            Status
-          </label>
-          <select
-            id="products-status"
-            className={cn(
-              "h-10 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-3 text-sm",
-              "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-            )}
-            value={filters.searchProductStatusId}
-            onChange={(e) => set({ searchProductStatusId: e.target.value })}
-          >
-            <option value="">All statuses</option>
-            <option value="1">Draft</option>
-            <option value="2">Active</option>
-            <option value="3">Archived</option>
-          </select>
-        </div>
-
-        <FilterSelect
-          id="products-mood"
-          label="Mood"
-          value={filters.searchMoodId}
-          onChange={(value) => set({ searchMoodId: value })}
-          options={moods}
-          allLabel="All moods"
-        />
-
-        <PriceRangeFilter
-          min={filters.searchPriceMinRupees}
-          max={filters.searchPriceMaxRupees}
-          onMin={(value) => set({ searchPriceMinRupees: value })}
-          onMax={(value) => set({ searchPriceMaxRupees: value })}
-        />
-
-        <div>
-          <label htmlFor="products-limit" className="mb-1 block text-xs text-[var(--color-muted)]">
-            Limit
-          </label>
-          <Input
-            id="products-limit"
-            type="number"
-            min={1}
-            max={100}
-            value={filters.searchLimit}
-            onChange={(e) => set({ searchLimit: e.target.value })}
-            className="h-10 w-20"
+          <FilterSelect
+            id="products-mood"
+            label="Mood"
+            value={filters.searchMoodId}
+            onChange={(value) => set({ searchMoodId: value })}
+            options={moods}
+            allLabel="All moods"
           />
+
+          <FilterSelect
+            id="products-fabric"
+            label="Fabric"
+            value={filters.searchFabric}
+            onChange={(value) => set({ searchFabric: value })}
+            options={fabrics}
+            allLabel="All fabrics"
+            getOptionValue={(o) => o.name}
+          />
+
+          <FilterSelect
+            id="products-weave"
+            label="Weave"
+            value={filters.searchWeave}
+            onChange={(value) => set({ searchWeave: value })}
+            options={weaves}
+            allLabel="All weaves"
+            getOptionValue={(o) => o.name}
+          />
+
+          <FilterSelect
+            id="products-occasion"
+            label="Occasion"
+            value={filters.searchOccasion}
+            onChange={(value) => set({ searchOccasion: value })}
+            options={occasions}
+            allLabel="All occasions"
+            getOptionValue={(o) => o.name}
+          />
+
+          <PriceRangeFilter
+            min={filters.searchPriceMinRupees}
+            max={filters.searchPriceMaxRupees}
+            onMin={(value) => set({ searchPriceMinRupees: value })}
+            onMax={(value) => set({ searchPriceMaxRupees: value })}
+          />
+
+          <div>
+            <label htmlFor="products-limit" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
+              Results per page
+            </label>
+            <Input
+              id="products-limit"
+              type="number"
+              min={1}
+              max={100}
+              value={filters.searchLimit}
+              onChange={(e) => set({ searchLimit: e.target.value })}
+              className="h-11"
+            />
+          </div>
         </div>
 
-        <FilterSelect
-          id="products-fabric"
-          label="Fabric"
-          value={filters.searchFabric}
-          onChange={(value) => set({ searchFabric: value })}
-          options={fabrics}
-          allLabel="All fabrics"
-          getOptionValue={(o) => o.name}
-        />
-
-        <FilterSelect
-          id="products-weave"
-          label="Weave"
-          value={filters.searchWeave}
-          onChange={(value) => set({ searchWeave: value })}
-          options={weaves}
-          allLabel="All weaves"
-          getOptionValue={(o) => o.name}
-        />
-
-        <FilterSelect
-          id="products-occasion"
-          label="Occasion"
-          value={filters.searchOccasion}
-          onChange={(value) => set({ searchOccasion: value })}
-          options={occasions}
-          allLabel="All occasions"
-          getOptionValue={(o) => o.name}
-        />
-
-        <div className="flex gap-2">
-          <Button type="submit" size="sm">Apply</Button>
-          <Button type="button" variant="outline" size="sm" onClick={onClear}>Clear</Button>
-          <Button type="button" variant="outline" size="sm" onClick={onRefresh}>Refresh</Button>
+        <div className="flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-4">
+          <Button type="submit">Apply filters</Button>
+          <Button type="button" variant="outline" onClick={onClear}>Clear</Button>
+          <Button type="button" variant="outline" onClick={onRefresh}>Refresh</Button>
         </div>
       </form>
     </AdminFilterCard>

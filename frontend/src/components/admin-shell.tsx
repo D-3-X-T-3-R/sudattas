@@ -72,18 +72,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <aside
         aria-label="Admin sidebar"
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[268px] flex-col border-r border-[var(--admin-border-subtle)] bg-[var(--admin-sidebar-bg)] transition-transform duration-200",
+          "fixed inset-y-0 left-0 z-40 flex w-[288px] flex-col border-r border-[var(--admin-border-subtle)] bg-[var(--admin-sidebar-bg)] transition-transform duration-200",
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className="flex h-16 items-center justify-between border-b border-[var(--admin-border-subtle)] px-4">
+        <div className="flex h-[72px] items-center justify-between border-b border-[var(--admin-border-subtle)] px-5">
           <Link href={ADMIN_BASE} className="flex items-center gap-3">
             <Image
               src="/logo.png"
               alt="Sudatta's"
-              width={120}
-              height={34}
-              className="h-7 w-auto"
+              width={130}
+              height={37}
+              className="h-8 w-auto"
             />
           </Link>
           <Button
@@ -97,7 +97,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
 
-        <nav className="flex-1 space-y-1 p-3" aria-label="Admin navigation">
+        <nav className="flex-1 space-y-1.5 p-4" aria-label="Admin navigation">
           {NAV.map(({ href, icon: Icon, label }) => {
             const isActive =
               href === ADMIN_BASE
@@ -110,41 +110,41 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 href={href}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm font-semibold uppercase tracking-[0.12em]",
+                  "flex items-center gap-3.5 rounded-xl border px-4 py-3.5 text-[15px] font-semibold",
                   isActive
-                    ? "border-[var(--admin-sidebar-accent)] bg-[#EAF1EE] text-[var(--color-green)]"
-                    : "border-transparent text-[var(--admin-sidebar-text-muted)] hover:border-[var(--color-line)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
+                    ? "border-transparent bg-[var(--color-green)] text-white shadow-[var(--shadow-action)]"
+                    : "border-transparent text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
                 )}
                 aria-current={isActive ? "page" : undefined}
               >
-                <Icon className="h-4 w-4 shrink-0" />
+                <Icon className="h-5 w-5 shrink-0" />
                 {label}
               </Link>
             );
           })}
         </nav>
 
-        <div className="space-y-1 border-t border-[var(--admin-border-subtle)] p-3">
+        <div className="space-y-1.5 border-t border-[var(--admin-border-subtle)] p-4">
           <Link
             href={STORE_URL}
-            className="flex items-center gap-2 rounded-md border border-transparent px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--admin-sidebar-text-muted)] hover:border-[var(--color-line)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
+            className="flex items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Back To Store
+            <ExternalLink className="h-4 w-4" />
+            Back to store
           </Link>
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
-            className="flex w-full items-center gap-2 rounded-md border border-transparent px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.12em] text-[var(--admin-sidebar-text-muted)] hover:border-[var(--color-line)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
+            className="flex w-full items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-left text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
           >
-            <LogOut className="h-3.5 w-3.5" />
-            Sign Out
+            <LogOut className="h-4 w-4" />
+            Sign out
           </button>
         </div>
       </aside>
 
-      <main id="admin-main-content" className="flex min-w-0 flex-1 flex-col md:ml-[268px]">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[var(--admin-border-subtle)] bg-[var(--admin-surface)]/95 px-4 backdrop-blur md:px-6">
+      <main id="admin-main-content" className="flex min-w-0 flex-1 flex-col md:ml-[288px]">
+        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-[var(--admin-border-subtle)] bg-[var(--admin-surface)]/95 px-4 backdrop-blur md:px-7">
           <Button
             variant="ghost"
             size="icon"
@@ -155,12 +155,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5" />
           </Button>
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">Sudatta&apos;s Admin</p>
-            <h1 className="font-display text-xl leading-none text-[var(--color-ink)] md:text-2xl">{title}</h1>
+            <p className="text-sm font-medium text-[var(--color-muted)]">Sudatta&apos;s Admin</p>
+            <h1 className="font-display text-2xl leading-none text-[var(--color-ink)] md:text-[1.7rem]">{title}</h1>
           </div>
         </header>
 
-        <div className="flex-1 p-4 md:p-6 lg:p-7">{children}</div>
+        <div className="flex-1 p-4 md:p-7 lg:p-8">{children}</div>
       </main>
     </div>
   );

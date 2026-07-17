@@ -18,12 +18,12 @@ function AdminCardBase({
   contentClassName?: string;
 }) {
   return (
-    <Card className={cn("rounded-lg border-[var(--color-line)] bg-[var(--admin-surface-muted)] shadow-[var(--admin-card-shadow)]", className)}>
-      <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+    <Card className={cn("rounded-2xl border-[var(--color-line)] bg-[var(--admin-surface-muted)] p-5 shadow-[var(--admin-card-shadow)] md:p-6", className)}>
+      <CardTitle className="flex items-center gap-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--color-ink)] md:text-[15px]">
         {icon}
         {title}
       </CardTitle>
-      <CardContent className={cn("mt-3", contentClassName)}>{children}</CardContent>
+      <CardContent className={cn("mt-4", contentClassName)}>{children}</CardContent>
     </Card>
   );
 }

@@ -56,13 +56,13 @@ export function ProductsGridCard({
       ) : null}
 
       {!productsLoading && !productsError && products.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {products.map((p) => {
             const thumb = getThumbnail(p);
             return (
               <article
                 key={p.productId}
-                className="overflow-hidden rounded-md border border-[var(--color-line)] bg-white"
+                className="overflow-hidden rounded-xl border border-[var(--color-line)] bg-white"
               >
                 <button type="button" onClick={() => onOpenProduct(p)} className="block w-full text-left">
                   <div className="aspect-square w-full bg-[var(--color-surface-soft)]">
@@ -70,45 +70,42 @@ export function ProductsGridCard({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={thumb} alt={p.name} className="h-full w-full object-cover" />
                     ) : (
-                      <div className="flex h-full items-center justify-center text-xs text-[var(--color-muted)]">
+                      <div className="flex h-full items-center justify-center text-sm text-[var(--color-muted)]">
                         No image
                       </div>
                     )}
                   </div>
                 </button>
 
-                <div className="space-y-1.5 border-t border-[var(--color-line)] p-2.5">
-                  <p className="line-clamp-1 text-xs font-semibold text-[var(--color-ink)]">{p.name}</p>
-                  <p className="text-[11px] text-[var(--color-muted)]">
+                <div className="space-y-1.5 border-t border-[var(--color-line)] p-3.5">
+                  <p className="line-clamp-1 text-[15px] font-semibold text-[var(--color-ink)]">{p.name}</p>
+                  <p className="text-sm text-[var(--color-muted)]">
                     {categoryNameById[p.categoryId ?? ""] ?? p.categoryId ?? "-"}
                   </p>
-                  <p className="text-xs text-[var(--color-ink)]">{p.formatted}</p>
-                  <p className="text-[11px] text-[var(--color-muted)]">Stock: {p.stockQuantity ?? "-"}</p>
+                  <p className="text-[15px] font-medium text-[var(--color-ink)]">{p.formatted}</p>
+                  <p className="text-sm text-[var(--color-muted)]">Stock: {p.stockQuantity ?? "-"}</p>
 
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="font-mono text-[11px] text-[var(--color-muted)]">#{p.productId}</span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-8 w-8 p-0"
-                        aria-label={`Edit ${p.name}`}
-                        title="Edit"
-                        onClick={() => onEditProduct(p)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-8 w-8 border-[#D8B2A7] p-0 text-[#7A5348]"
-                        aria-label={`Archive ${p.name}`}
-                        title="Archive"
-                        onClick={() => onArchiveProduct(p)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-center gap-2"
+                      aria-label={`Edit ${p.name}`}
+                      onClick={() => onEditProduct(p)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-center gap-2 border-[#D8B2A7] text-[#7A5348] hover:border-[#D8B2A7]"
+                      aria-label={`Archive ${p.name}`}
+                      onClick={() => onArchiveProduct(p)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Archive
+                    </Button>
                   </div>
                 </div>
               </article>

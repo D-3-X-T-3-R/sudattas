@@ -26,6 +26,7 @@ export interface OrderRow {
 export interface OrderListRow extends OrderRow {
   userId: string;
   statusId: string;
+  paymentMethod: string | null;
 }
 
 export interface ProductRow {
@@ -650,6 +651,7 @@ export async function fetchOrdersList(params: {
         totalAmountFormatted
         orderDate
         statusId
+        paymentMethod
       }
     }`,
     { search }
@@ -674,6 +676,117 @@ export async function fetchAllOrdersList(params: {
     out.push(...page);
     if (page.length < ORDER_PAGE_SIZE) break;
     offset += ORDER_PAGE_SIZE;
+    if (offset > 100_000) break;
+  }
+  return out;
+}
+
+/** One order-line row, flattened out of a nested searchOrder→orderDetails→productDetails query. */
+export interface OrderLineRow {
+  orderId: string;
+  orderDate: string;
+  statusId: string;
+  productId: string | null;
+  productName: string | null;
+  categoryId: string | null;
+  quantity: number;
+  linePricePaise: number;
+}
+
+const ORDER_LINES_QUERY = `query SearchOrderLines($search: SearchOrder!) {
+  searchOrder(search: $search) {
+    orderId
+    orderDate
+    statusId
+    orderDetails {
+      quantity
+      pricePaise
+      productDetails { productId name categoryId }
+    }
+  }
+}`;
+
+/**
+ * Fetch order line items (product, category, quantity, price) across many orders in one date range.
+ * Nested under searchOrder (no flat bulk order-details endpoint exists) — bound the date range,
+ * this resolves order-details and product-details per order server-side.
+ */
+export async function fetchOrderLinesByDateRange(params: {
+  orderDateStart?: string;
+  orderDateEnd?: string;
+}): Promise<OrderLineRow[]> {
+  const out: OrderLineRow[] = [];
+  let offset = 0;
+  for (;;) {
+    const search: Record<string, string> = {
+      userId: "",
+      limit: String(ORDER_PAGE_SIZE),
+      offset: String(offset),
+    };
+    if (params.orderDateStart) search.orderDateStart = params.orderDateStart;
+    if (params.orderDateEnd) search.orderDateEnd = params.orderDateEnd;
+
+    const data = await gqlAdmin<{
+      searchOrder?: Array<{
+        orderId: string;
+        orderDate: string;
+        statusId: string;
+        orderDetails?: Array<{
+          quantity: string;
+          pricePaise: string;
+          productDetails?: Array<{ productId: string; name: string; categoryId: string | null }>;
+        }>;
+      }>;
+    }>(ORDER_LINES_QUERY, { search });
+
+    const page = data?.searchOrder ?? [];
+    for (const order of page) {
+      for (const line of order.orderDetails ?? []) {
+        const product = line.productDetails?.[0];
+        out.push({
+          orderId: order.orderId,
+          orderDate: order.orderDate,
+          statusId: order.statusId,
+          productId: product?.productId ?? null,
+          productName: product?.name ?? null,
+          categoryId: product?.categoryId ?? null,
+          quantity: Number.parseInt(line.quantity, 10) || 0,
+          linePricePaise: Number.parseInt(line.pricePaise, 10) || 0,
+        });
+      }
+    }
+    if (page.length < ORDER_PAGE_SIZE) break;
+    offset += ORDER_PAGE_SIZE;
+    if (offset > 100_000) break;
+  }
+  return out;
+}
+
+const PRODUCT_SUMMARY_QUERY = `query SearchProductSummary($search: SearchProduct!) {
+  searchProduct(search: $search) { productId name categoryId stockQuantity productStatusId }
+}`;
+
+/** Lightweight product row for dashboard aggregation (category mix, low-stock count/list). */
+export interface ProductSummaryRow {
+  productId: string;
+  name: string;
+  categoryId: string | null;
+  stockQuantity: number | null;
+  productStatusId: string | null;
+}
+
+/** Fetch productId/categoryId/stockQuantity/productStatusId for every product (paginated). Used by dashboard charts, not the products list page. */
+export async function fetchAllProductsSummary(): Promise<ProductSummaryRow[]> {
+  const out: ProductSummaryRow[] = [];
+  let offset = 0;
+  for (;;) {
+    const data = await gqlAdmin<{ searchProduct?: ProductSummaryRow[] }>(PRODUCT_SUMMARY_QUERY, {
+      search: { limit: String(PRODUCT_PAGE_SIZE), offset: String(offset) },
+    });
+    const page = data?.searchProduct ?? [];
+    out.push(...page);
+    if (page.length < PRODUCT_PAGE_SIZE) break;
+    offset += PRODUCT_PAGE_SIZE;
     if (offset > 100_000) break;
   }
   return out;

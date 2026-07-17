@@ -44,14 +44,14 @@ const EXTRA_STATS_CONFIG: Array<{
 
 function StatCard({ label, value, Icon }: { label: string; value: string; Icon: LucideIcon }) {
   return (
-    <article className="rounded-lg border border-[var(--color-line)] bg-[var(--admin-surface-muted)] p-4 shadow-[var(--admin-card-shadow)]">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">{label}</p>
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--color-line)] bg-white text-[var(--color-green)]">
-          <Icon className="h-4 w-4" />
+    <article className="rounded-2xl border border-[var(--color-line)] bg-[var(--admin-surface-muted)] p-5 shadow-[var(--admin-card-shadow)]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-[var(--color-muted)]">{label}</p>
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--color-line)] bg-white text-[var(--color-green)]">
+          <Icon className="h-5 w-5" />
         </span>
       </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight text-[var(--color-ink)]">{value}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-[var(--color-ink)]">{value}</p>
     </article>
   );
 }
@@ -76,9 +76,9 @@ export function DashboardStats() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[...ORDER_STATS_CONFIG, ...EXTRA_STATS_CONFIG].map(({ label }) => (
-          <div key={label} className="min-h-[96px] animate-pulse rounded-lg border border-[var(--color-line)] bg-[var(--admin-surface-muted)]" />
+          <div key={label} className="min-h-[104px] animate-pulse rounded-2xl border border-[var(--color-line)] bg-[var(--admin-surface-muted)]" />
         ))}
       </div>
     );
@@ -94,7 +94,7 @@ export function DashboardStats() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
       {ORDER_STATS_CONFIG.map(({ key, label, format, icon: Icon }) => (
         <StatCard key={key} label={label} value={format(counts)} Icon={Icon} />
       ))}

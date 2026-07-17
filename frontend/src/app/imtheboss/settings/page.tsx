@@ -14,14 +14,14 @@ export default function AdminSettingsPage() {
         icon={<Settings className="h-4 w-4 text-[var(--color-green)]" />}
         className="max-w-3xl"
       >
-        <div className="space-y-3 text-sm leading-relaxed text-[var(--color-muted)]">
+        <div className="space-y-3 text-[15px] leading-relaxed text-[var(--color-muted)]">
           <p>
-            Settings for Sudatta&apos;s will be available here once backend
-            integration for editable controls is enabled.
+            Settings for Sudatta&apos;s will be available here once these
+            controls are ready to turn on.
           </p>
           <p>
-            Typical modules include payment providers, shipping zones, tax rules,
-            and feature toggles.
+            This will include things like payment options, delivery areas, and
+            tax rules.
           </p>
         </div>
       </AdminTableCard>

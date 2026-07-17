@@ -52,6 +52,7 @@ import {
 import { ProductVariantsSection } from "@/domains/admin/products/components/product-variants-section";
 import { ProductMoodsSection } from "@/domains/admin/products/components/product-moods-section";
 import { ProductImagesSection } from "@/domains/admin/products/components/product-images-section";
+import { ProductFormPreview } from "@/domains/admin/products/components/product-form-preview";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
@@ -82,6 +83,32 @@ type ProductFormState = {
 };
 
 const DRAFT_KEY = "sudattas_admin_product_draft";
+
+type FormSection = "basics" | "details" | "stock" | "moods" | "photos";
+
+const SECTION_FOR_FIELD: Partial<Record<keyof ProductFormState, FormSection>> = {
+  name: "basics",
+  description: "basics",
+  priceRupees: "basics",
+  categoryId: "basics",
+  sku: "details",
+  slug: "details",
+  fabric: "details",
+  weave: "details",
+  occasion: "details",
+  careInstructions: "details",
+  productStatusId: "details",
+};
+
+/** Derive a URL-safe slug from a product name (lowercase, hyphenated, no repeats). */
+function slugify(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 100);
+}
 
 /** Get first non-empty URL from an image (supports camelCase and snake_case from API). */
 function getImageUrl(img: ProductImageListItem | undefined): string {
@@ -257,6 +284,9 @@ export default function AdminProductsPage() {
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryError, setCategoryError] = useState("");
+  const [activeSection, setActiveSection] = useState<FormSection>("basics");
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProductFormState, string>>>({});
+  const [slugTouched, setSlugTouched] = useState(false);
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -753,11 +783,21 @@ export default function AdminProductsPage() {
   ) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
+    if (name === "slug") setSlugTouched(true);
     setForm((prev) => {
       const next = { ...prev, [name]: type === "checkbox" ? checked : value };
+      if (name === "name" && !slugTouched) {
+        next.slug = slugify(value);
+      }
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next));
       }
+      return next;
+    });
+    setFieldErrors((prev) => {
+      if (!prev[name as keyof ProductFormState]) return prev;
+      const next = { ...prev };
+      delete next[name as keyof ProductFormState];
       return next;
     });
     setError("");
@@ -781,36 +821,44 @@ export default function AdminProductsPage() {
     setMessage("");
     setImageError("");
     setImageMessage("");
+    setFieldErrors({});
 
     if (!editingProductId && imageFiles.length === 0) {
+      setActiveSection("photos");
       setImageError("At least one product image is required.");
       return;
     }
     const parsed = adminProductFormSchema.safeParse(form);
     if (!parsed.success) {
-      const first = parsed.error.flatten().fieldErrors;
-      const msg =
-        first.name?.[0] ??
-        first.priceRupees?.[0] ??
-        first.categoryId?.[0] ??
-        first.sku?.[0] ??
-        first.slug?.[0] ??
-        parsed.error.message;
-      setError(msg);
+      const flat = parsed.error.flatten().fieldErrors;
+      const nextFieldErrors: Partial<Record<keyof ProductFormState, string>> = {};
+      let firstSection: FormSection | null = null;
+      for (const [key, messages] of Object.entries(flat)) {
+        const msg = messages?.[0];
+        if (!msg) continue;
+        const field = key as keyof ProductFormState;
+        nextFieldErrors[field] = msg;
+        if (!firstSection) firstSection = SECTION_FOR_FIELD[field] ?? "basics";
+      }
+      setFieldErrors(nextFieldErrors);
+      setActiveSection(firstSection ?? "basics");
       return;
     }
     const { name, description, priceRupees, categoryId, sku, slug, fabric, weave, occasion, hasBlousePiece, careInstructions, productStatusId } =
       parsed.data;
     const pricePaise = rupeesInputToPaise(priceRupees || "0");
     if (pricePaise <= 0) {
+      setActiveSection("basics");
       setError("Price must be greater than 0.");
       return;
     }
     if (pricePaise > MAX_MONEY_PAISE) {
+      setActiveSection("basics");
       setError("Price exceeds supported maximum.");
       return;
     }
     if (variants.length === 0) {
+      setActiveSection("stock");
       setError("Add at least one variant (size) with stock.");
       return;
     }
@@ -822,6 +870,7 @@ export default function AdminProductsPage() {
         Number(v.quantityAvailable) < 0
     );
     if (invalidVariant && variants.length > 0) {
+      setActiveSection("stock");
       setError("Each variant must have a size and non-negative stock quantity.");
       return;
     }
@@ -1006,6 +1055,9 @@ export default function AdminProductsPage() {
     setActiveTab("add");
     setEditingProductId(p.productId);
     setError("");
+    setFieldErrors({});
+    setActiveSection("basics");
+    setSlugTouched(true);
     setMessage(`Loading product…`);
     let product: ProductListRow = p;
     let moodIds: string[] = [];
@@ -1160,6 +1212,15 @@ export default function AdminProductsPage() {
     },
   });
 
+  const totalPhotos = existingProductImages.length + imageFiles.length;
+  const FORM_SECTIONS: { id: FormSection; label: string; fields: (keyof ProductFormState)[]; completion?: string }[] = [
+    { id: "basics", label: "Basics", fields: ["name", "description", "priceRupees", "categoryId"] },
+    { id: "details", label: "Details", fields: ["sku", "slug", "fabric", "weave", "occasion", "careInstructions", "productStatusId"] },
+    { id: "stock", label: "Sizes & stock", fields: [], completion: variants.length > 0 ? `(${variants.length})` : undefined },
+    { id: "moods", label: "Moods", fields: [], completion: selectedMoodIds.length > 0 ? `(${selectedMoodIds.length})` : undefined },
+    { id: "photos", label: "Photos", fields: [], completion: totalPhotos > 0 ? `(${totalPhotos})` : undefined },
+  ];
+
   return (
     <AdminPageShell
       label="Products"
@@ -1167,19 +1228,19 @@ export default function AdminProductsPage() {
       description="View, search, and add products. Filter by category, status, and price."
       action={
         activeTab === "view" ? (
-          <span className="inline-flex items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
-            <Package className="h-3.5 w-3.5" />
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-4 py-2 text-sm font-semibold text-[var(--color-ink)]">
+            <Package className="h-4 w-4" />
             {products.length} products
           </span>
         ) : null
       }
     >
-      <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 text-xs shadow-[var(--shadow-subtle)]">
+      <div className="inline-flex rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-[var(--shadow-subtle)]">
         <button
           type="button"
           onClick={() => setActiveTab("view")}
           className={cn(
-            "rounded-sm px-4 py-1.5 font-semibold uppercase tracking-[0.12em] transition-colors",
+            "rounded-lg px-5 py-2.5 text-[15px] font-semibold transition-colors",
             activeTab === "view"
               ? "bg-[var(--color-green)] text-white"
               : "text-[var(--color-muted)] hover:bg-[var(--color-surface-soft)]"
@@ -1195,10 +1256,13 @@ export default function AdminProductsPage() {
             setExistingProductImages([]);
             setOrderedProductImages(null);
             setInitialExistingImageIdsWhenEdit([]);
-        setInitialVariantIdsWhenEdit([]);
+            setInitialVariantIdsWhenEdit([]);
+            setFieldErrors({});
+            setActiveSection("basics");
+            setSlugTouched(false);
           }}
           className={cn(
-            "rounded-sm px-4 py-1.5 font-semibold uppercase tracking-[0.12em] transition-colors",
+            "rounded-lg px-5 py-2.5 text-[15px] font-semibold transition-colors",
             activeTab === "add"
               ? "bg-[var(--color-green)] text-white"
               : "text-[var(--color-muted)] hover:bg-[var(--color-surface-soft)]"
@@ -1280,12 +1344,12 @@ export default function AdminProductsPage() {
       )}
 
       {activeTab === "add" && (
-        <Card className="mt-6 rounded-lg border-[var(--color-line)] bg-[var(--admin-surface-muted)] shadow-[var(--admin-card-shadow)]">
-          <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
+        <Card className="mt-6 rounded-2xl border-[var(--color-line)] bg-[var(--admin-surface-muted)] shadow-[var(--admin-card-shadow)]">
+          <CardTitle className="flex items-center gap-2.5 text-sm font-semibold normal-case tracking-normal text-[var(--color-ink)] md:text-[15px]">
             {editingProductId ? (
-              <Pencil className="h-4 w-4 text-emerald-500" />
+              <Pencil className="h-4 w-4 text-emerald-600" />
             ) : (
-              <Plus className="h-4 w-4 text-emerald-500" />
+              <Plus className="h-4 w-4 text-emerald-600" />
             )}
             {editingProductId ? "Edit product" : "Add new product"}
           </CardTitle>
@@ -1328,15 +1392,49 @@ export default function AdminProductsPage() {
             )}
             {message && (
               <div
-                className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+                className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-600"
                 role="status"
               >
                 {message}
               </div>
             )}
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit}>
+              <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-8">
+                <div className="min-w-0 space-y-4">
+                  <div
+                    role="tablist"
+                    aria-label="Product form sections"
+                    className="flex flex-wrap gap-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-[var(--shadow-subtle)]"
+                  >
+                    {FORM_SECTIONS.map((s) => {
+                      const isActive = activeSection === s.id;
+                      const hasError = s.fields.some((f) => Boolean(fieldErrors[f]));
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={isActive}
+                          onClick={() => setActiveSection(s.id)}
+                          className={cn(
+                            "flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
+                            isActive
+                              ? "bg-[var(--color-green)] text-white"
+                              : "text-[var(--color-muted)] hover:bg-[var(--color-surface-soft)]",
+                            hasError && !isActive && "text-rose-600"
+                          )}
+                        >
+                          {s.label}
+                          {s.completion ? <span className="text-xs opacity-80">{s.completion}</span> : null}
+                          {hasError ? <span className="h-1.5 w-1.5 rounded-full bg-rose-500" aria-hidden="true" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+              <div className={cn(activeSection === "basics" ? "block space-y-4" : "hidden")}>
               <div>
-                <label htmlFor="admin-product-name" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                <label htmlFor="admin-product-name" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">
                   Name *
                 </label>
                 <Input
@@ -1346,14 +1444,19 @@ export default function AdminProductsPage() {
                   value={form.name}
                   onChange={handleChange}
                   placeholder="e.g. Ivory Silk Saree"
-                  className="rounded-lg"
+                  className={cn("rounded-lg text-[15px]", fieldErrors.name && "border-rose-400 focus:ring-rose-200")}
                   autoFocus
-                  aria-invalid={Boolean(error)}
-                  aria-describedby={error ? "admin-product-form-error" : undefined}
+                  aria-invalid={Boolean(fieldErrors.name)}
+                  aria-describedby={fieldErrors.name ? "admin-product-name-error" : undefined}
                 />
+                {fieldErrors.name ? (
+                  <p id="admin-product-name-error" className="mt-1.5 text-sm text-rose-600" role="alert">
+                    {fieldErrors.name}
+                  </p>
+                ) : null}
               </div>
               <div>
-                <label htmlFor="admin-product-description" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                <label htmlFor="admin-product-description" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">
                   Description
                 </label>
                 <textarea
@@ -1364,7 +1467,7 @@ export default function AdminProductsPage() {
                   placeholder="Short description"
                   rows={3}
                   className={cn(
-                    "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3 text-[15px] outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                   )}
                   aria-invalid={Boolean(error)}
                   aria-describedby={error ? "admin-product-form-error" : undefined}
@@ -1372,7 +1475,7 @@ export default function AdminProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="admin-product-price" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                  <label htmlFor="admin-product-price" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">
                     Price (₹) *
                   </label>
                   <Input
@@ -1382,14 +1485,19 @@ export default function AdminProductsPage() {
                     value={form.priceRupees}
                     onChange={handleChange}
                     placeholder="e.g. 499.00"
-                    className="rounded-lg"
-                    aria-invalid={Boolean(error)}
-                    aria-describedby={error ? "admin-product-form-error" : undefined}
+                    className={cn("rounded-lg text-[15px]", fieldErrors.priceRupees && "border-rose-400 focus:ring-rose-200")}
+                    aria-invalid={Boolean(fieldErrors.priceRupees)}
+                    aria-describedby={fieldErrors.priceRupees ? "admin-product-price-error" : undefined}
                   />
+                  {fieldErrors.priceRupees ? (
+                    <p id="admin-product-price-error" className="mt-1.5 text-sm text-rose-600" role="alert">
+                      {fieldErrors.priceRupees}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div>
-                <label htmlFor="admin-product-category" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">
+                <label htmlFor="admin-product-category" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">
                   Category *
                 </label>
                 <select
@@ -1398,12 +1506,12 @@ export default function AdminProductsPage() {
                   value={form.categoryId}
                   onChange={handleChange}
                   className={cn(
-                    "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3 text-[15px] outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20",
+                    fieldErrors.categoryId && "border-rose-400 focus:ring-rose-200"
                   )}
                   disabled={categoriesLoading || categoriesError}
-                  required
-                  aria-invalid={Boolean(error)}
-                  aria-describedby={error ? "admin-product-form-error" : undefined}
+                  aria-invalid={Boolean(fieldErrors.categoryId)}
+                  aria-describedby={fieldErrors.categoryId ? "admin-product-category-error" : undefined}
                 >
                   <option value="">
                     {categoriesLoading ? "Loading categories…" : "Select category"}
@@ -1414,6 +1522,11 @@ export default function AdminProductsPage() {
                     </option>
                   ))}
                 </select>
+                {fieldErrors.categoryId ? (
+                  <p id="admin-product-category-error" className="mt-1.5 text-sm text-rose-600" role="alert">
+                    {fieldErrors.categoryId}
+                  </p>
+                ) : null}
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     type="button"
@@ -1440,7 +1553,7 @@ export default function AdminProductsPage() {
                           setCategoryError("");
                         }}
                         placeholder="e.g. Silk Sarees"
-                        className="rounded-lg"
+                        className="rounded-lg text-[15px]"
                         autoFocus
                       />
                     </div>
@@ -1466,9 +1579,12 @@ export default function AdminProductsPage() {
                   </p>
                 )}
               </div>
-              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              </div>
+
+              <div className={cn(activeSection === "details" ? "block space-y-4" : "hidden")}>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="admin-product-sku" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">SKU</label>
+                  <label htmlFor="admin-product-sku" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">SKU</label>
                   <Input
                     id="admin-product-sku"
                     type="text"
@@ -1476,32 +1592,40 @@ export default function AdminProductsPage() {
                     value={form.sku}
                     onChange={handleChange}
                     placeholder="Optional unique code"
-                    className="rounded-lg"
+                    className={cn("rounded-lg text-[15px]", fieldErrors.sku && "border-rose-400 focus:ring-rose-200")}
+                    aria-invalid={Boolean(fieldErrors.sku)}
                   />
+                  {fieldErrors.sku ? <p className="mt-1.5 text-sm text-rose-600" role="alert">{fieldErrors.sku}</p> : null}
                 </div>
                 <div>
-                  <label htmlFor="admin-product-slug" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Slug</label>
+                  <label htmlFor="admin-product-slug" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">Slug</label>
                   <Input
                     id="admin-product-slug"
                     type="text"
                     name="slug"
                     value={form.slug}
                     onChange={handleChange}
-                    placeholder="Optional URL slug"
-                    className="rounded-lg"
+                    placeholder="Auto-filled from the name"
+                    className={cn("rounded-lg text-[15px]", fieldErrors.slug && "border-rose-400 focus:ring-rose-200")}
+                    aria-invalid={Boolean(fieldErrors.slug)}
                   />
+                  {fieldErrors.slug ? (
+                    <p className="mt-1.5 text-sm text-rose-600" role="alert">{fieldErrors.slug}</p>
+                  ) : (
+                    <p className="mt-1.5 text-sm text-[var(--color-muted)]">Used in the product&apos;s web address.</p>
+                  )}
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
-                  <label htmlFor="admin-product-fabric" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Fabric</label>
+                  <label htmlFor="admin-product-fabric" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">Fabric</label>
                   <select
                     id="admin-product-fabric"
                     name="fabric"
                     value={form.fabric}
                     onChange={handleChange}
                     className={cn(
-                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3 text-[15px] outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                     )}
                   >
                     <option value="">Select fabric</option>
@@ -1513,14 +1637,14 @@ export default function AdminProductsPage() {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="admin-product-weave" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Weave</label>
+                  <label htmlFor="admin-product-weave" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">Weave</label>
                   <select
                     id="admin-product-weave"
                     name="weave"
                     value={form.weave}
                     onChange={handleChange}
                     className={cn(
-                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3 text-[15px] outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                     )}
                   >
                     <option value="">Select weave</option>
@@ -1532,14 +1656,14 @@ export default function AdminProductsPage() {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="admin-product-occasion" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Occasion</label>
+                  <label htmlFor="admin-product-occasion" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">Occasion</label>
                   <select
                     id="admin-product-occasion"
                     name="occasion"
                     value={form.occasion}
                     onChange={handleChange}
                     className={cn(
-                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                      "w-full rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3 text-[15px] outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                     )}
                   >
                     <option value="">Select occasion</option>
@@ -1565,7 +1689,7 @@ export default function AdminProductsPage() {
                 </label>
               </div>
               <div className="mt-4">
-                <label htmlFor="admin-product-care-instructions" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Care instructions</label>
+                <label htmlFor="admin-product-care-instructions" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">Care instructions</label>
                 <textarea
                   id="admin-product-care-instructions"
                   name="careInstructions"
@@ -1574,19 +1698,19 @@ export default function AdminProductsPage() {
                   placeholder="Optional care instructions"
                   rows={2}
                   className={cn(
-                    "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3 text-[15px] outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                   )}
                 />
               </div>
               <div className="mt-4">
-                <label htmlFor="admin-product-status" className="mb-1 block text-sm font-medium text-[var(--color-ink)]">Product status</label>
+                <label htmlFor="admin-product-status" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">Product status</label>
                 <select
                   id="admin-product-status"
                   name="productStatusId"
                   value={form.productStatusId}
                   onChange={handleChange}
                   className={cn(
-                    "w-full max-w-xs rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
+                    "w-full max-w-xs rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3 text-[15px] outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20"
                   )}
                 >
                   <option value="">— Not set —</option>
@@ -1595,12 +1719,18 @@ export default function AdminProductsPage() {
                   <option value="3">Archived</option>
                 </select>
               </div>
+              </div>
+
+              <div className={cn(activeSection === "stock" ? "block" : "hidden")}>
               <ProductVariantsSection
                 variants={variants}
                 setVariants={setVariants}
                 sizes={sizes}
                 colors={colors}
               />
+              </div>
+
+              <div className={cn(activeSection === "moods" ? "block" : "hidden")}>
               <ProductMoodsSection
                 existingMoods={existingMoods}
                 selectedMoodIds={selectedMoodIds}
@@ -1611,7 +1741,10 @@ export default function AdminProductsPage() {
                 setMoodCreateError={setMoodCreateError}
                 createMoodMutation={createMoodMutation}
               />
-                            <ProductImagesSection
+              </div>
+
+              <div className={cn(activeSection === "photos" ? "block" : "hidden")}>
+              <ProductImagesSection
                 imageError={imageError}
                 imageMessage={imageMessage}
                 fileInputRef={fileInputRef}
@@ -1630,7 +1763,26 @@ export default function AdminProductsPage() {
                 productImagesLoadKey={productImagesLoadKey}
                 getImageUrlWithCacheBuster={getImageUrlWithCacheBuster}
                 setExistingProductImages={setExistingProductImages}
-              /><div className="mt-4 flex items-center gap-2">
+              />
+              </div>
+                </div>
+
+                <div className="mt-6 lg:mt-0 lg:sticky lg:top-24">
+                  <ProductFormPreview
+                    name={form.name}
+                    priceRupees={form.priceRupees}
+                    categoryName={categoryNameById[form.categoryId] ?? ""}
+                    statusLabel={getProductStatusLabel(form.productStatusId)}
+                    imageUrl={
+                      imagePreviews[0] ||
+                      getImageUrlWithCacheBuster(existingProductImages[0], productImagesLoadKey) ||
+                      undefined
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="sticky bottom-4 z-10 mt-6 flex items-center gap-2 rounded-xl border border-[var(--color-line)] bg-white/95 p-3 shadow-[0_8px_24px_rgba(45,42,38,0.12)] backdrop-blur">
                 <Button
                   type="submit"
                   disabled={createProductMutation.isPending || updateProductMutation.isPending || isUpdateReflecting}
@@ -1673,6 +1825,9 @@ export default function AdminProductsPage() {
                       setInitialVariantIdsWhenEdit([]);
                       setImageError("");
                       setImageMessage("");
+                      setSlugTouched(false);
+                      setFieldErrors({});
+                      setActiveSection("basics");
                     }}
                   >
                     Cancel edit

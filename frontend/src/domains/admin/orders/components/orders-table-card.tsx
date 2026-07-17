@@ -6,6 +6,7 @@ import type { OrderListRow } from "@/lib/admin-queries";
 import { ListOrdered } from "lucide-react";
 import { formatOrderDate, getStatusLabel } from "@/domains/admin/orders/utils";
 import { AdminTableCard } from "@/components/admin/admin-cards";
+import { StatusBadge } from "@/components/admin/status-badge";
 
 type OrdersTableCardProps = {
   isLoading: boolean;
@@ -52,15 +53,15 @@ export function OrdersTableCard({
       {!isLoading && !isError && orders.length > 0 ? (
         <div className="space-y-4">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] border-collapse text-sm">
+            <table className="w-full min-w-[680px] border-collapse text-[15px]">
               <caption className="sr-only">Orders list with pagination controls</caption>
               <thead>
-                <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
-                  <th className="pb-3 pr-4 font-semibold uppercase tracking-[0.12em]">Order ID</th>
-                  <th className="pb-3 pr-4 font-semibold uppercase tracking-[0.12em]">Date</th>
-                  <th className="pb-3 pr-4 font-semibold uppercase tracking-[0.12em]">Customer</th>
-                  <th className="pb-3 pr-4 font-semibold uppercase tracking-[0.12em]">Amount</th>
-                  <th className="pb-3 font-semibold uppercase tracking-[0.12em]">Status</th>
+                <tr className="border-b border-[var(--color-line)] text-left text-sm text-[var(--color-muted)]">
+                  <th className="pb-3 pr-4 font-semibold">Order ID</th>
+                  <th className="pb-3 pr-4 font-semibold">Date</th>
+                  <th className="pb-3 pr-4 font-semibold">Customer ID</th>
+                  <th className="pb-3 pr-4 font-semibold">Amount</th>
+                  <th className="pb-3 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -78,11 +79,13 @@ export function OrdersTableCard({
                       }
                     }}
                   >
-                    <td className="py-3 pr-4 font-mono">{order.orderId}</td>
-                    <td className="py-3 pr-4">{formatOrderDate(order.orderDate)}</td>
-                    <td className="py-3 pr-4">{order.userId}</td>
-                    <td className="py-3 pr-4">{order.totalAmountFormatted}</td>
-                    <td className="py-3 text-[var(--color-muted)]">{getStatusLabel(order.statusId, statuses)}</td>
+                    <td className="py-4 pr-4 font-medium">{order.orderId}</td>
+                    <td className="py-4 pr-4">{formatOrderDate(order.orderDate)}</td>
+                    <td className="py-4 pr-4 text-[var(--color-muted)]">{order.userId}</td>
+                    <td className="py-4 pr-4 font-medium">{order.totalAmountFormatted}</td>
+                    <td className="py-4">
+                      <StatusBadge label={getStatusLabel(order.statusId, statuses)} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -90,14 +93,13 @@ export function OrdersTableCard({
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-[var(--color-muted)]">
+            <p className="text-sm text-[var(--color-muted)]">
               Page {page} - showing up to {pageSize} rows
             </p>
             <div className="flex gap-2">
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 disabled={page <= 1 || isLoading}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
@@ -106,7 +108,6 @@ export function OrdersTableCard({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 disabled={orders.length < pageSize || isLoading}
                 onClick={() => setPage((p) => p + 1)}
               >

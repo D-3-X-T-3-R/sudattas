@@ -1,11 +1,13 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { ProductImageListItem } from "@/lib/admin-queries";
 import type { AdminReorderableImage } from "@/domains/admin/products/components/product-images-dialogs";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { X } from "lucide-react";
+import { X, UploadCloud } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type ProductImagesSectionProps = {
   imageError: string;
@@ -44,30 +46,52 @@ function ImagesToolbar({
   | "setImageMessage"
   | "setImageDialogOpen"
 >) {
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const applyFiles = (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? []).filter((f) => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+    setOrderedProductImages(null);
+    setImageFiles(files);
+    setImageError("");
+    setImageMessage("");
+    setImageDialogOpen(true);
+  };
+
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        applyFiles(e.dataTransfer.files);
+      }}
+      className={cn(
+        "flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors",
+        isDragOver ? "border-[var(--color-green)] bg-[var(--color-surface-soft)]" : "border-[var(--color-line)]"
+      )}
+    >
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
         multiple
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          setOrderedProductImages(null);
-          setImageFiles(files);
-          setImageError("");
-          setImageMessage("");
-          if (files.length > 0) setImageDialogOpen(true);
-        }}
+        onChange={(e) => applyFiles(e.target.files)}
         className="hidden"
       />
+      <UploadCloud className="h-6 w-6 text-[var(--color-muted)]" aria-hidden="true" />
+      <p className="text-sm text-[var(--color-muted)]">Drag photos here, or</p>
       <Button
         type="button"
         variant="outline"
-        className="h-9 rounded-full border-[var(--color-line)] px-4 text-xs"
+        className="rounded-full border-[var(--color-line)] px-5"
         onClick={() => fileInputRef.current?.click()}
       >
-        Choose images...
+        Choose photos…
       </Button>
     </div>
   );
@@ -105,7 +129,7 @@ function ExistingOrNewImageGrid({
         {orderedProductImages.map((item, idx) => (
           <div
             key={item.type === "existing" ? `existing-${idx}-${item.image.imageId ?? item.image.url ?? ""}` : `new-${idx}-${item.previewUrl}`}
-            className={`relative aspect-square w-24 shrink-0 overflow-hidden rounded-lg border bg-[var(--color-ivory)] ${
+            className={`relative aspect-square w-28 shrink-0 overflow-hidden rounded-lg border bg-[var(--color-ivory)] ${
               item.type === "existing" ? "border-[var(--color-line)]" : "border-dashed border-[var(--color-line)]"
             }`}
           >
@@ -122,13 +146,13 @@ function ExistingOrNewImageGrid({
               <button
                 type="button"
                 aria-label="Remove image (saved when you click Update product)"
-                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
+                className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
                 onClick={() => {
                   setOrderedProductImages((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev));
                   setImageMessage("Image will be removed when you click Update product.");
                 }}
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-4 w-4" />
               </button>
             )}
           </div>
@@ -142,7 +166,7 @@ function ExistingOrNewImageGrid({
       {existingProductImages.map((img, idx) => (
         <div
           key={`existing-${idx}-${img.imageId ?? img.url ?? img.thumbnailUrl ?? ""}`}
-          className="relative aspect-square w-24 shrink-0 overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-ivory)]"
+          className="relative aspect-square w-28 shrink-0 overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-ivory)]"
         >
           {getImageUrlWithCacheBuster(img, productImagesLoadKey) ? <img src={getImageUrlWithCacheBuster(img, productImagesLoadKey)} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-[var(--color-line)]/30 text-[10px] text-[var(--color-muted)]">No image</div>}
           {editingProductId && <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">Existing</span>}
@@ -150,7 +174,7 @@ function ExistingOrNewImageGrid({
             <button
               type="button"
               aria-label="Remove image (saved when you click Update product)"
-              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
+              className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
               onClick={() => {
                 const toRemove = img;
                 setExistingProductImages((prev) => {
@@ -167,13 +191,13 @@ function ExistingOrNewImageGrid({
         </div>
       ))}
       {imagePreviews.map((url, idx) => (
-        <div key={`new-${idx}-${url}`} className="relative aspect-square w-24 shrink-0 overflow-hidden rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-ivory)]">
+        <div key={`new-${idx}-${url}`} className="relative aspect-square w-28 shrink-0 overflow-hidden rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-ivory)]">
           <img src={url} alt="" className="h-full w-full object-cover" />
           <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">New</span>
           <button
             type="button"
             aria-label="Remove image"
-            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
+            className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-red-500/90 text-white hover:bg-red-600"
             onClick={() => {
               setImageFiles((prev) => prev.filter((_, i) => i !== idx));
               setImageError("");
@@ -208,14 +232,14 @@ export function ProductImagesSection(props: ProductImagesSectionProps) {
   } = props;
 
   return (
-    <div className="mt-8 border-t border-[var(--color-line)] pt-4">
-      <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">Images *</h3>
-      <p className="mt-2 text-xs text-[var(--color-muted)]">Select at least one image. All selected images will be uploaded and linked after the product is created.</p>
+    <div>
+      <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">Photos *</h3>
+      <p className="mt-1.5 text-sm text-[var(--color-muted)]">Add at least one photo. Photos are uploaded once you save the product.</p>
 
-      {imageError && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert">{imageError}</div>}
-      {imageMessage && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800" role="status">{imageMessage}</div>}
+      {imageError && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">{imageError}</div>}
+      {imageMessage && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-600" role="status">{imageMessage}</div>}
 
-      <div className="mt-3 space-y-3 text-xs text-[var(--color-muted)]">
+      <div className="mt-3 space-y-3 text-sm text-[var(--color-muted)]">
         <ImagesToolbar
           fileInputRef={fileInputRef}
           setOrderedProductImages={setOrderedProductImages}
@@ -225,15 +249,15 @@ export function ProductImagesSection(props: ProductImagesSectionProps) {
           setImageDialogOpen={setImageDialogOpen}
         />
 
-        <p className="text-[11px] text-[var(--color-muted)]">
-          {editingProductId ? "Add more images below; they will upload when you click Update product." : "All selected images will be uploaded when you click Add product."}
+        <p className="text-sm text-[var(--color-muted)]">
+          {editingProductId ? "Add more photos below; they upload when you click Update product." : "All selected photos upload when you click Add product."}
         </p>
 
         {(orderedProductImages !== null || existingProductImages.length > 0 || imagePreviews.length > 0) && (
           <div className="mt-4">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-xs font-medium text-[var(--color-ink)]">
-                Added images
+              <p className="text-sm font-medium text-[var(--color-ink)]">
+                Added photos
                 {orderedProductImages != null
                   ? ` (${orderedProductImages.length})`
                   : existingProductImages.length > 0 && imagePreviews.length > 0
@@ -246,7 +270,7 @@ export function ProductImagesSection(props: ProductImagesSectionProps) {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-8 rounded-full border-[var(--color-line)] px-3 text-xs"
+                  className="h-9 rounded-full border-[var(--color-line)] px-4 text-sm"
                   onClick={() => {
                     const list = orderedProductImages ?? [
                       ...existingProductImages.map((image) => ({ type: "existing" as const, image })),

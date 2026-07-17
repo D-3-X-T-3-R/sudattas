@@ -115,8 +115,8 @@ export default function AdminCustomersPage() {
       title="Customer directory"
       description="Search, filter, and inspect customer history with fast order context."
       action={
-        <span className="inline-flex items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
-          <Users className="h-3.5 w-3.5" />
+        <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-4 py-2 text-sm font-semibold text-[var(--color-ink)]">
+          <Users className="h-4 w-4" />
           {filteredAndSorted.length} customers
         </span>
       }

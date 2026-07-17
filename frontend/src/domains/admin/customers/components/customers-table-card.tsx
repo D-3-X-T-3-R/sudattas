@@ -4,9 +4,20 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CustomerListRow } from "@/lib/admin-queries";
-import { ExternalLink, Users } from "lucide-react";
+import { ExternalLink, Mail, Phone, Chrome, Users } from "lucide-react";
 import { formatCreateDate, formatCurrency } from "@/domains/admin/customers/utils";
 import { AdminTableCard } from "@/components/admin/admin-cards";
+
+function AuthBadge({ provider }: { provider: string }) {
+  const key = provider.trim().toLowerCase();
+  const Icon = key === "google" ? Chrome : key === "phone" ? Phone : Mail;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+      <span className="capitalize">{provider}</span>
+    </span>
+  );
+}
 
 type SortKey = "name" | "email" | "created" | "orders" | "spent";
 
@@ -45,7 +56,7 @@ function SortHeader({
   return (
     <button
       type="button"
-      className="flex items-center font-semibold uppercase tracking-[0.12em] hover:text-[var(--color-ink)]"
+      className="flex items-center font-semibold hover:text-[var(--color-ink)]"
       onClick={() => onSort(column)}
     >
       {label}
@@ -72,32 +83,32 @@ function CustomerRow({
         selectedCustomer?.userId === customer.userId && "bg-[var(--color-surface-soft)]"
       )}
     >
-      <td className="py-3 pr-4 text-[var(--color-ink)]">{customer.fullName ?? customer.username ?? "-"}</td>
-      <td className="py-3 pr-4 text-[var(--color-ink)]">{customer.email}</td>
-      <td className="py-3 pr-4 font-mono text-[var(--color-ink)]">{customer.userId}</td>
-      <td className="py-3 pr-4 text-[var(--color-muted)]">{customer.authProvider}</td>
-      <td className="py-3 pr-4 text-[var(--color-ink)]">{stats?.count ?? 0}</td>
-      <td className="py-3 pr-4 text-[var(--color-ink)]">{stats ? formatCurrency(stats.totalPaise) : "-"}</td>
-      <td className="py-3 pr-4 text-[var(--color-muted)]">{formatCreateDate(customer.createDate)}</td>
-      <td className="py-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mr-2"
-          onClick={() => setSelectedCustomer(customer)}
-          aria-label={`View profile for ${customer.fullName ?? customer.username ?? customer.email}`}
-        >
-          View
-        </Button>
-        <Link
-          href={`/imtheboss/orders?userId=${encodeURIComponent(customer.userId)}`}
-          className="inline-flex items-center gap-1 text-sm text-[var(--color-green)] hover:underline"
-          aria-label={`Open orders for ${customer.fullName ?? customer.username ?? customer.email}`}
-        >
-          Orders
-          <ExternalLink className="h-3.5 w-3" />
-        </Link>
+      <td className="py-4 pr-4 font-medium text-[var(--color-ink)]">{customer.fullName ?? customer.username ?? "-"}</td>
+      <td className="py-4 pr-4 text-[var(--color-ink)]">{customer.email}</td>
+      <td className="py-4 pr-4 text-[var(--color-muted)]">{customer.userId}</td>
+      <td className="py-4 pr-4"><AuthBadge provider={customer.authProvider} /></td>
+      <td className="py-4 pr-4 text-[var(--color-ink)]">{stats?.count ?? 0}</td>
+      <td className="py-4 pr-4 text-[var(--color-ink)]">{stats ? formatCurrency(stats.totalPaise) : "-"}</td>
+      <td className="py-4 pr-4 text-[var(--color-muted)]">{formatCreateDate(customer.createDate)}</td>
+      <td className="py-4">
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setSelectedCustomer(customer)}
+            aria-label={`View profile for ${customer.fullName ?? customer.username ?? customer.email}`}
+          >
+            View
+          </Button>
+          <Link
+            href={`/imtheboss/orders?userId=${encodeURIComponent(customer.userId)}`}
+            className="inline-flex items-center gap-1 text-[15px] text-[var(--color-green)] hover:underline"
+            aria-label={`Open orders for ${customer.fullName ?? customer.username ?? customer.email}`}
+          >
+            Orders
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+        </div>
       </td>
     </tr>
   );
@@ -151,18 +162,18 @@ export function CustomersTableCard({
       {!isLoading && !isError && filteredLength > 0 ? (
         <div className="space-y-4">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
+            <table className="w-full min-w-[760px] border-collapse text-[15px]">
               <caption className="sr-only">Customer list with sortable columns and quick actions</caption>
               <thead>
-                <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
+                <tr className="border-b border-[var(--color-line)] text-left text-sm text-[var(--color-muted)]">
                   <th className="pb-3 pr-4" aria-sort={ariaSortFor("name")}>
                     <SortHeader label="Name" column="name" onSort={handleSort} icon={sortIconFor("name")} />
                   </th>
                   <th className="pb-3 pr-4" aria-sort={ariaSortFor("email")}>
                     <SortHeader label="Email" column="email" onSort={handleSort} icon={sortIconFor("email")} />
                   </th>
-                  <th className="pb-3 pr-4 font-semibold uppercase tracking-[0.12em]">User ID</th>
-                  <th className="pb-3 pr-4 font-semibold uppercase tracking-[0.12em]">Auth</th>
+                  <th className="pb-3 pr-4 font-semibold">Customer ID</th>
+                  <th className="pb-3 pr-4 font-semibold">Signed in with</th>
                   <th className="pb-3 pr-4" aria-sort={ariaSortFor("orders")}>
                     <SortHeader label="Orders" column="orders" onSort={handleSort} icon={sortIconFor("orders")} />
                   </th>
@@ -170,9 +181,9 @@ export function CustomersTableCard({
                     <SortHeader label="Spent" column="spent" onSort={handleSort} icon={sortIconFor("spent")} />
                   </th>
                   <th className="pb-3 pr-4" aria-sort={ariaSortFor("created")}>
-                    <SortHeader label="Created" column="created" onSort={handleSort} icon={sortIconFor("created")} />
+                    <SortHeader label="Joined" column="created" onSort={handleSort} icon={sortIconFor("created")} />
                   </th>
-                  <th className="pb-3 font-semibold uppercase tracking-[0.12em]">Actions</th>
+                  <th className="pb-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -190,14 +201,14 @@ export function CustomersTableCard({
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-[var(--color-muted)]">
+            <p className="text-sm text-[var(--color-muted)]">
               Page {page} - showing up to {pageSize} rows
             </p>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              <Button type="button" variant="outline" disabled={page <= 1 || isLoading} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                 Previous
               </Button>
-              <Button type="button" variant="outline" size="sm" disabled={pagedCustomers.length < pageSize || isLoading} onClick={() => setPage((p) => p + 1)}>
+              <Button type="button" variant="outline" disabled={pagedCustomers.length < pageSize || isLoading} onClick={() => setPage((p) => p + 1)}>
                 Next
               </Button>
             </div>

@@ -61,8 +61,8 @@ export default function AdminOrdersPage() {
       title="Order management"
       description="Filter by date, status, and customer to manage fulfillment efficiently."
       action={
-        <span className="inline-flex items-center gap-2 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]">
-          <ListOrdered className="h-3.5 w-3.5" />
+        <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-4 py-2 text-sm font-semibold text-[var(--color-ink)]">
+          <ListOrdered className="h-4 w-4" />
           {orders.length} orders
         </span>
       }
