@@ -37,13 +37,15 @@ export async function POST(
     { orderId: trimmed }
   );
 
-  const gqlMessage = result.errors?.[0]?.message;
+  const firstError = result.errors?.[0];
+  const gqlMessage = firstError?.message;
   if (gqlMessage) {
+    const code = firstError?.extensions?.code;
     const lower = gqlMessage.toLowerCase();
     const status =
-      lower.includes("not found") || lower.includes("order not found")
+      code === "NotFound" || lower.includes("not found") || lower.includes("order not found")
         ? 404
-        : lower.includes("failed_precondition")
+        : code === "FailedPrecondition" || lower.includes("failed_precondition")
           ? 409
         : lower.includes("illegal") || lower.includes("invalid")
           ? 400

@@ -362,7 +362,13 @@ export const authOptions: NextAuthOptions = {
         // within roughly the same window the backend itself uses for admin role resolution.
         const checkedAt = (token as { isAdminCheckedAt?: number }).isAdminCheckedAt ?? 0;
         if (Date.now() - checkedAt > ADMIN_RECHECK_INTERVAL_MS) {
-          const stillAdmin = await probeAdminAccessByToken(token.idToken).catch(() => true);
+          // probeAdminAccessByToken already catches internally and resolves `false` on any
+          // network/HTTP failure (never rejects) — so a transient backend hiccup during this
+          // recheck window demotes the admin (fail-closed), not the fail-open behavior a wrapping
+          // .catch() would visually suggest. This is intentionally the safer default; if fail-open
+          // is actually wanted, probeAdminAccessByToken needs to distinguish "confirmed not admin"
+          // from "couldn't check" (e.g. return `boolean | null`) rather than collapsing both to `false`.
+          const stillAdmin = await probeAdminAccessByToken(token.idToken);
           (token as { isAdmin?: boolean }).isAdmin = stillAdmin;
           (token as { isAdminCheckedAt?: number }).isAdminCheckedAt = Date.now();
         }
