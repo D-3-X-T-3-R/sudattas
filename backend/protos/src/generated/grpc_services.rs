@@ -2624,6 +2624,11 @@ pub struct IngestWebhookRequest {
     /// e.g. x-razorpay-event-id for replay protection
     #[prost(string, optional, tag = "6")]
     pub provider_event_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Raw provider signature/token header (e.g. X-Razorpay-Signature, X-Shiprocket-Token), forwarded so
+    /// core_operations can independently re-verify rather than trusting signature_verified from the caller.
+    /// Absent for internally-triggered replays, which fall back to signature_verified.
+    #[prost(string, optional, tag = "7")]
+    pub raw_signature: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

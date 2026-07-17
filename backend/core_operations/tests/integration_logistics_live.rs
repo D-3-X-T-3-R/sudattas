@@ -1150,6 +1150,7 @@ async fn ingest_shiprocket_webhook_once(
             payload_json: payload.to_string(),
             signature_verified,
             provider_event_id: Some(provider_event_id.to_string()),
+            raw_signature: None,
         }),
     )
     .await

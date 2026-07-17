@@ -36,6 +36,7 @@ metrics-exporter-prometheus = "0.13"
 uuid = { version = "1.6", features = ["v4"] }
 subtle = "2.6"
 base64 = "0.21.7"
+graphql-parser = "0.3"
 
 [build-dependencies]
 tonic-build = "0.10.2"

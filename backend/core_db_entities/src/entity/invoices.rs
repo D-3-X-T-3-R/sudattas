@@ -28,7 +28,7 @@ pub enum Relation {
         from = "Column::OrderId",
         to = "super::orders::Column::OrderId",
         on_update = "NoAction",
-        on_delete = "Cascade"
+        on_delete = "Restrict"
     )]
     Orders,
     #[sea_orm(
@@ -36,7 +36,7 @@ pub enum Relation {
         from = "Column::UserId",
         to = "super::users::Column::UserId",
         on_update = "NoAction",
-        on_delete = "Cascade"
+        on_delete = "Restrict"
     )]
     Users,
 }

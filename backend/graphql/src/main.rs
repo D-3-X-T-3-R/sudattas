@@ -612,10 +612,15 @@ async fn main() {
         );
 
     let graphql_schema = Arc::new(schema());
+    // Generous for any legitimate GraphQL query/variables or provider webhook payload; rejected
+    // before the body is buffered, closing a memory-exhaustion DoS vector on unauthenticated
+    // routes (the webhook routes especially, since they accept traffic before signature checks).
+    const MAX_BODY_BYTES: u64 = 2 * 1024 * 1024;
     let graphql_route = warp::post()
         .and(warp::path("v2"))
         .and(warp::path::end())
         .and(context_filter.clone())
+        .and(warp::body::content_length_limit(MAX_BODY_BYTES))
         .and(warp::body::bytes())
         .and_then({
             let schema = graphql_schema.clone();
@@ -665,6 +670,7 @@ async fn main() {
         .and(warp::path("blastoff"))
         .and(warp::path("parcelupdate"))
         .and(warp::path::end())
+        .and(warp::body::content_length_limit(MAX_BODY_BYTES))
         .and(warp::header::optional::<String>("x-razorpay-signature"))
         .and(warp::header::optional::<String>("x-razorpay-event-id"))
         .and(warp::header::optional::<String>("x-shiprocket-token"))
@@ -695,6 +701,7 @@ async fn main() {
         .and(warp::path("wheresthemoney"))
         .and(warp::path("razorpay"))
         .and(warp::path::end())
+        .and(warp::body::content_length_limit(MAX_BODY_BYTES))
         .and(warp::header::optional::<String>("x-razorpay-signature"))
         .and(warp::header::optional::<String>("x-razorpay-event-id"))
         .and(warp::header::optional::<String>("x-shiprocket-token"))
@@ -844,6 +851,10 @@ async fn main() {
                             StatusCode::SERVICE_UNAVAILABLE,
                             serde_json::json!({ "ok": false, "error": code }).to_string(),
                         ),
+                        "OTP_RATE_LIMITED" => (
+                            StatusCode::TOO_MANY_REQUESTS,
+                            serde_json::json!({ "ok": false, "error": code }).to_string(),
+                        ),
                         _ => (
                             StatusCode::BAD_GATEWAY,
                             serde_json::json!({ "ok": false, "error": code }).to_string(),
@@ -883,6 +894,10 @@ async fn main() {
                     ),
                     "OTP_NOT_CONFIGURED" => (
                         StatusCode::SERVICE_UNAVAILABLE,
+                        serde_json::json!({ "ok": false, "error": code }).to_string(),
+                    ),
+                    "OTP_RATE_LIMITED" => (
+                        StatusCode::TOO_MANY_REQUESTS,
                         serde_json::json!({ "ok": false, "error": code }).to_string(),
                     ),
                     _ => (

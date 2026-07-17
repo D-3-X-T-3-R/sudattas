@@ -287,9 +287,11 @@ function useCatalogData(showToast: (args: ToastArgs) => void) {
   const [shopMoodId, setShopMoodId] = useState<string | null>(null);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const didInitialLoadRef = useRef(false);
+  const filterRequestSeqRef = useRef(0);
 
   const applyShopMoodFilter = useCallback(
     async (nextMoodId: string | null) => {
+      const requestId = ++filterRequestSeqRef.current;
       setShopMoodId(nextMoodId);
       setLoadingProducts(true);
       await ensureGuestSession();
@@ -300,6 +302,12 @@ function useCatalogData(showToast: (args: ToastArgs) => void) {
         await ensureGuestSession();
         sid = getGuestSessionId();
         productsResponse = await fetchStorefrontProducts(sid, nextMoodId);
+      }
+
+      if (requestId !== filterRequestSeqRef.current) {
+        // A newer filter change started while this request was in flight; discard this now-stale
+        // response instead of overwriting state a more recent request already set.
+        return;
       }
 
       if (productsResponse.products.length > 0) {

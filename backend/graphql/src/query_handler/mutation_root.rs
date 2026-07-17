@@ -245,6 +245,31 @@ async fn ensure_customer_owns_shipping_address(
     }
 }
 
+async fn ensure_customer_owns_review(
+    context: &Context,
+    review_id: &str,
+) -> Result<(), juniper::FieldError> {
+    if context.is_admin() {
+        return Ok(());
+    }
+    let uid = require_jwt(context)?.to_string();
+    let rows = reviews::handlers::search_review(crate::resolvers::reviews::schema::SearchReview {
+        review_id: Some(review_id.to_string()),
+        ..Default::default()
+    })
+    .await
+    .map_err(|e| e.into_field_error())?;
+    let owns = rows.iter().any(|r| r.review_id == review_id && r.user_id == uid);
+    if owns {
+        Ok(())
+    } else {
+        Err(juniper::FieldError::new(
+            "Review not found for current user",
+            juniper::Value::null(),
+        ))
+    }
+}
+
 fn bind_cart_scope(
     context: &Context,
     requested_user_id: &str,
@@ -1424,14 +1449,19 @@ impl MutationRoot {
 
     // Reviews
     #[instrument(err, ret)]
-    async fn create_review(input: NewReview) -> FieldResult<Vec<Review>> {
+    async fn create_review(context: &Context, mut input: NewReview) -> FieldResult<Vec<Review>> {
+        let uid = require_jwt(context)?.to_string();
+        if !context.is_admin() {
+            input.user_id = uid;
+        }
         reviews::handlers::create_review(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn update_review(input: ReviewMutation) -> FieldResult<Vec<Review>> {
+    async fn update_review(context: &Context, input: ReviewMutation) -> FieldResult<Vec<Review>> {
+        ensure_customer_owns_review(context, &input.review_id).await?;
         reviews::handlers::update_review(input)
             .await
             .map_err(|e| e.into_field_error())

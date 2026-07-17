@@ -3,7 +3,9 @@
 //! Parses body, checks query depth, then executes via Juniper and returns JSON.
 //! P1: Records request duration and outcome for Prometheus.
 
-use crate::graphql_limits::{check_query_complexity, check_query_depth, DEFAULT_MAX_QUERY_DEPTH};
+use crate::graphql_limits::{
+    analyze_query, DEFAULT_MAX_QUERY_COMPLEXITY, DEFAULT_MAX_QUERY_DEPTH,
+};
 use crate::metrics;
 use crate::query_handler::Context;
 use serde::Deserialize;
@@ -32,11 +34,14 @@ fn max_query_depth() -> u32 {
         .unwrap_or(DEFAULT_MAX_QUERY_DEPTH)
 }
 
-/// Max query complexity from env. If not set, complexity check is skipped (optional).
-fn max_query_complexity() -> Option<u64> {
+/// Max query complexity from env, or the default. Enforced unconditionally (not opt-in):
+/// GRAPHQL_MAX_QUERY_COMPLEXITY only overrides the threshold, it doesn't gate whether the
+/// check runs, since a query that skips this check entirely could still be arbitrarily wide.
+fn max_query_complexity() -> u64 {
     std::env::var("GRAPHQL_MAX_QUERY_COMPLEXITY")
         .ok()
         .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_MAX_QUERY_COMPLEXITY)
 }
 
 /// Handles a GraphQL request: parse body, check depth, execute, return JSON response.
@@ -57,15 +62,36 @@ pub async fn handle_graphql_request(
         return Ok(depth_limit_error_response(400, "Missing 'query' field"));
     }
 
+    let metrics = match analyze_query(query) {
+        Ok(m) => m,
+        Err(e) => {
+            return Ok(depth_limit_error_response(
+                400,
+                &format!("Invalid GraphQL query: {e}"),
+            ));
+        }
+    };
+
     let max_depth = max_query_depth();
-    if let Err(msg) = check_query_depth(query, max_depth) {
-        return Ok(depth_limit_error_response(400, &msg));
+    if metrics.depth > max_depth {
+        return Ok(depth_limit_error_response(
+            400,
+            &format!(
+                "Query depth limit exceeded: depth {} exceeds maximum {}",
+                metrics.depth, max_depth
+            ),
+        ));
     }
 
-    if let Some(max_complexity) = max_query_complexity() {
-        if let Err(msg) = check_query_complexity(query, max_complexity) {
-            return Ok(depth_limit_error_response(400, &msg));
-        }
+    let max_complexity = max_query_complexity();
+    if metrics.complexity > max_complexity {
+        return Ok(depth_limit_error_response(
+            400,
+            &format!(
+                "Query complexity limit exceeded: score {} exceeds maximum {}",
+                metrics.complexity, max_complexity
+            ),
+        ));
     }
 
     let operation_name = req.operation_name.as_deref();
@@ -97,9 +123,11 @@ pub async fn handle_graphql_request(
             let errs: Vec<serde_json::Value> = errors
                 .iter()
                 .map(|e| {
-                    // ExecutionError may not implement Display; use debug or field if available
-                    let msg = format!("{:?}", e);
-                    serde_json::json!({ "message": msg })
+                    // juniper::ExecutionError implements Serialize directly, producing the spec
+                    // {message, locations, path, extensions?} shape (extensions included whenever
+                    // IntoFieldError attached one) — use that instead of a Debug dump.
+                    serde_json::to_value(e)
+                        .unwrap_or_else(|_| serde_json::json!({ "message": format!("{:?}", e) }))
                 })
                 .collect();
             let response = serde_json::json!({

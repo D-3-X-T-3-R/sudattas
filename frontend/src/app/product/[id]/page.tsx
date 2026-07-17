@@ -17,6 +17,7 @@ import {
 } from "@/lib/server-guest-session";
 import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
 import { siteUrl } from "@/lib/site-url";
+import { safeJsonLd } from "@/lib/json-ld";
 
 interface ProductPageData {
   product: Product;
@@ -214,11 +215,11 @@ export default async function ProductPage({
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(productJsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbJsonLd) }}
       />
       <ProductPageClient product={product} sizes={sizes} relatedProducts={relatedProducts} />
     </>

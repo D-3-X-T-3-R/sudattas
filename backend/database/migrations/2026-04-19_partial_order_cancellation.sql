@@ -17,6 +17,12 @@ PREPARE od_line_total_stmt FROM @od_line_total_sql;
 EXECUTE od_line_total_stmt;
 DEALLOCATE PREPARE od_line_total_stmt;
 
+-- NOTE: this block re-adds OrderDetails.status, which 2026-04-19_orderdetails_item_status.sql
+-- (written independently, same day) had just renamed to item_status. That overlap is transient
+-- schema drift on a fresh install (status briefly exists again) and is removed for good two days
+-- later by 2026-04-21_orderdetails_remove_stale_status.sql, which backfills into item_status and
+-- drops this column. Left as shipped (each migration already ran and is tracked by filename in
+-- schema_migrations) rather than rewritten after the fact; item_status is the canonical column.
 SET @od_status_exists := (
     SELECT COUNT(*)
     FROM information_schema.columns

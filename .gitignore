@@ -48,3 +48,5 @@ vps_info.info
 
 # Project todo/scratch files
 **/.todo*
+
+.claude/

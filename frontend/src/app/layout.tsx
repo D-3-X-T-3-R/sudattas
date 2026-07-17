@@ -8,6 +8,7 @@ import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { SiteHeader } from "@/components/site-header";
 import { siteUrl } from "@/lib/site-url";
 import { STOREFRONT_GATE_HEADER } from "@/lib/storefront-readiness";
+import { safeJsonLd } from "@/lib/json-ld";
 
 /** Headings: Playfair Display */
 const playfair = Playfair_Display({
@@ -50,7 +51,7 @@ export default async function RootLayout({
       <head>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(organizationJsonLd) }}
         />
       </head>
       <body

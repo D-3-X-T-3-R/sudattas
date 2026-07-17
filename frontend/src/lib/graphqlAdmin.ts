@@ -26,8 +26,8 @@ function resolveAdminRoute(query: string): string {
       "searchShipment",
       "createShipment",
       "updateShipment",
-      "markOrderShipped",
-      "markOrderDelivered",
+      "adminMarkOrderShipped",
+      "adminMarkOrderDelivered",
       "updateOrderStatus",
     ])
   ) {
@@ -37,11 +37,9 @@ function resolveAdminRoute(query: string): string {
   if (
     containsAny(query, [
       "searchReview",
-      "searchProductReview",
       "updateReview",
       "deleteReview",
-      "approveReview",
-      "rejectReview",
+      "adminUpdateReviewStatus",
     ])
   ) {
     return "/api/admin/reviews";

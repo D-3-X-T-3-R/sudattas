@@ -1455,6 +1455,10 @@ message IngestWebhookRequest {
     string payload_json = 4;    // raw JSON payload string
     bool signature_verified = 5;
     optional string provider_event_id = 6;  // e.g. x-razorpay-event-id for replay protection
+    // Raw provider signature/token header (e.g. X-Razorpay-Signature, X-Shiprocket-Token), forwarded so
+    // core_operations can independently re-verify rather than trusting signature_verified from the caller.
+    // Absent for internally-triggered replays, which fall back to signature_verified.
+    optional string raw_signature = 7;
 }
 
 message WebhookEventResponse {

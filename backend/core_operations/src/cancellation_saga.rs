@@ -689,6 +689,7 @@ async fn claim_refund_attempt_ids(
                 DbBackend::MySql,
                 r#"UPDATE RefundAttempts
                    SET status = 'submitting',
+                       attempt_count = attempt_count + 1,
                        provider_error = NULL,
                        updated_at = UTC_TIMESTAMP()
                    WHERE attempt_id = ?
@@ -966,6 +967,74 @@ async fn process_claimed_refund_attempt(
             Err(err) => {
                 observability::record_refund_failure_total("gateway_error");
                 let fail_txn = db.begin().await.map_err(map_db_error_to_status)?;
+                let max_attempts = crate::order_policy::refund_max_attempts();
+                if i64::from(attempt.attempt_count) >= max_attempts {
+                    // Retry budget exhausted (e.g. permanently bad payment_id): stop retrying
+                    // forever and hand off to a terminal state that needs manual review.
+                    fail_txn
+                        .execute(Statement::from_sql_and_values(
+                            DbBackend::MySql,
+                            r#"UPDATE RefundAttempts
+                               SET status = 'needs_review',
+                                   provider_error = ?,
+                                   updated_at = UTC_TIMESTAMP()
+                               WHERE attempt_id = ?"#,
+                            [err.clone().into(), attempt_id.into()],
+                        ))
+                        .await
+                        .map_err(map_db_error_to_status)?;
+                    warn!(
+                        order_id = attempt.order_id,
+                        attempt_id,
+                        attempt_count = attempt.attempt_count,
+                        max_attempts,
+                        error = %err,
+                        "refund worker: gateway refund exhausted retry budget, marking needs_review"
+                    );
+                    if let Some(return_id) = linked_return_id {
+                        set_return_status_and_items(&fail_txn, return_id, "refund_pending")
+                            .await?;
+                        let _ = create_order_event(
+                            &fail_txn,
+                            Request::new(CreateOrderEventRequest {
+                                order_id: attempt.order_id,
+                                event_type: "return_refund_needs_manual_review".to_string(),
+                                from_status: None,
+                                to_status: None,
+                                actor_type: "system".to_string(),
+                                message: Some(format!(
+                                    "Return {} refund gateway call failed {} times, needs manual review: {}",
+                                    return_id, attempt.attempt_count, err
+                                )),
+                            }),
+                        )
+                        .await;
+                    } else {
+                        set_order_refund_settlement_status(
+                            &fail_txn,
+                            attempt.order_id,
+                            "refund_failed",
+                        )
+                        .await?;
+                        let _ = create_order_event(
+                            &fail_txn,
+                            Request::new(CreateOrderEventRequest {
+                                order_id: attempt.order_id,
+                                event_type: "refund_needs_manual_review".to_string(),
+                                from_status: None,
+                                to_status: None,
+                                actor_type: "system".to_string(),
+                                message: Some(format!(
+                                    "Refund gateway call failed {} times, needs manual review: {err}",
+                                    attempt.attempt_count
+                                )),
+                            }),
+                        )
+                        .await;
+                    }
+                    fail_txn.commit().await.map_err(map_db_error_to_status)?;
+                    return Ok(false);
+                }
                 fail_txn
                     .execute(Statement::from_sql_and_values(
                         DbBackend::MySql,
@@ -1181,6 +1250,7 @@ mod tests {
             idempotency_key: format!("idem_{attempt_id}"),
             created_at: updated_at,
             updated_at,
+            attempt_count: 0,
         }
     }
 

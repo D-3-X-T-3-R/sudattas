@@ -756,6 +756,7 @@ async fn integration_verify_and_webhook_overlap_finalize_once() {
                     payload_json: payload.to_string(),
                     signature_verified: true,
                     provider_event_id: None,
+                    raw_signature: None,
                 }),
             )
             .await;

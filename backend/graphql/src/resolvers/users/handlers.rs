@@ -76,7 +76,7 @@ pub(crate) async fn search_user(input: SearchUserInput) -> Result<Vec<User>, Gql
             phone: input.phone,
             role_id: to_option_i64(input.role_id),
             user_status_id: to_option_i64(input.user_status_id),
-            limit: to_option_i64(input.limit),
+            limit: crate::graphql_limits::cap_page_size(to_option_i64(input.limit)),
             offset: to_option_i64(input.offset),
         })
         .await?;

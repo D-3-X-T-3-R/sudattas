@@ -20,6 +20,7 @@ pub struct Model {
     pub idempotency_key: String,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
+    pub attempt_count: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

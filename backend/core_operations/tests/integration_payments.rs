@@ -897,6 +897,7 @@ async fn integration_late_captured_webhook_after_system_expiry_marks_needs_revie
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await;
@@ -921,6 +922,7 @@ async fn integration_late_captured_webhook_after_system_expiry_marks_needs_revie
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await

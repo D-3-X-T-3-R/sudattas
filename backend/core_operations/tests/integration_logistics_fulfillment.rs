@@ -1930,6 +1930,7 @@ END"#
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -2002,6 +2003,7 @@ END"#
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -2078,6 +2080,7 @@ END"#
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -2283,6 +2286,7 @@ async fn integration_customer_cancel_and_webhook_cancel_race_refunds_once() {
                 .to_string(),
                 signature_verified: true,
                 provider_event_id: None,
+                raw_signature: None,
             }),
         )
         .await;
@@ -2485,6 +2489,7 @@ async fn integration_pickup_completed_disables_customer_cancellation() {
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -2549,6 +2554,7 @@ async fn integration_rto_terminal_webhook_refunds_once() {
                 .to_string(),
                 signature_verified: true,
                 provider_event_id: None,
+                raw_signature: None,
             }),
         )
         .await
@@ -2677,6 +2683,7 @@ async fn integration_refund_retry_reuses_same_idempotency_key() {
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -2751,6 +2758,7 @@ async fn integration_refund_retry_reuses_same_idempotency_key() {
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
