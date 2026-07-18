@@ -5,5 +5,11 @@
 # cleanly on this exact stable release. No nightly-only feature is in use, so
 # there's no reason to depend on nightly's availability/behavior guarantees for
 # a production payments backend.
-channel = "1.93.1"
+#
+# Bumped from 1.93.1 -> 1.94.1: Cargo.lock is intentionally not committed (see .gitignore),
+# so CI re-resolves dependencies fresh on every run; the aws-sdk-s3/aws-config family
+# published versions requiring rustc 1.94.1, which broke CI under the old pin. Re-verified
+# the whole workspace (build + test + clippy --all-targets --all-features -D warnings)
+# cleanly on this exact release before bumping.
+channel = "1.94.1"
 profile = "minimal"

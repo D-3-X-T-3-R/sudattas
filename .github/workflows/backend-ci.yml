@@ -19,7 +19,7 @@ env:
   # passes on stable), so lint/test/security jobs no longer depend on nightly's
   # availability. The `build` job below still separately checks a nightly matrix
   # entry as a forward-compatibility signal.
-  RUST_TOOLCHAIN: 1.93.1
+  RUST_TOOLCHAIN: 1.94.1
 
 jobs:
   # ============================================================================
