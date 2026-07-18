@@ -33,9 +33,9 @@ function PlaylistVideo({ playlist }: { playlist: string[] }) {
   const videoRefs = useRef<[HTMLVideoElement | null, HTMLVideoElement | null]>([null, null]);
   const transitioningRef = useRef(false);
   const frontRef = useRef<0 | 1>(0);
-  frontRef.current = front;
 
   useEffect(() => {
+    frontRef.current = front;
     videoRefs.current[front]?.play().catch(() => {});
   }, [front]);
 

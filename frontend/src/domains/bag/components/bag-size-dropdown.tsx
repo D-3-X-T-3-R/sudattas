@@ -22,7 +22,10 @@ export function BagSizeDropdown({
   const [openUpward, setOpenUpward] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const onOpenChangeRef = useRef(onOpenChange);
-  onOpenChangeRef.current = onOpenChange;
+
+  useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  });
 
   useEffect(() => {
     const onDoc = (event: MouseEvent) => {
@@ -44,21 +47,25 @@ export function BagSizeDropdown({
   useEffect(() => {
     onOpenChangeRef.current?.(open);
     if (!open) return undefined;
-
-    // Flip the menu above the trigger when there isn't enough room below — otherwise it
-    // can get clipped at the bottom of the viewport on cards lower down the page.
-    const root = rootRef.current;
-    if (root) {
-      const rect = root.getBoundingClientRect();
-      const estimatedMenuHeight = Math.min(288, options.length * 44 + 16);
-      const spaceBelow = window.innerHeight - rect.bottom;
-      setOpenUpward(spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight);
-    }
-
     return () => onOpenChangeRef.current?.(false);
-  }, [open, options.length]);
+  }, [open]);
 
   const display = hasCurrent && sizeName ? sizeName : "Choose";
+
+  const handleToggle = () => {
+    if (!open) {
+      // Flip the menu above the trigger when there isn't enough room below — otherwise it
+      // can get clipped at the bottom of the viewport on cards lower down the page.
+      const root = rootRef.current;
+      if (root) {
+        const rect = root.getBoundingClientRect();
+        const estimatedMenuHeight = Math.min(288, options.length * 44 + 16);
+        const spaceBelow = window.innerHeight - rect.bottom;
+        setOpenUpward(spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight);
+      }
+    }
+    setOpen((value) => !value);
+  };
 
   return (
     <div ref={rootRef} className="relative inline-flex w-fit max-w-full">
@@ -66,7 +73,7 @@ export function BagSizeDropdown({
         type="button"
         aria-expanded={open}
         aria-haspopup="listbox"
-        onClick={() => setOpen((value) => !value)}
+        onClick={handleToggle}
         className="relative inline-flex h-9 w-fit max-w-full items-center gap-1.5 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] pl-3 pr-8 text-left transition-shadow hover:shadow-sm"
       >
         <span className="shrink-0 text-[10px] font-medium uppercase leading-none tracking-[0.14em] text-[var(--color-muted)]">
