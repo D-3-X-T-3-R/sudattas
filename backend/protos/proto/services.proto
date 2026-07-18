@@ -214,6 +214,8 @@ service GRPCServices {
 
     // P1 Manual NeedsReview resolution (admin)
     rpc ResolveNeedsReview(ResolveNeedsReviewRequest) returns (ResolveNeedsReviewResponse);
+    rpc ResolveRefundAttemptNeedsReview(ResolveRefundAttemptNeedsReviewRequest) returns (ResolveRefundAttemptNeedsReviewResponse);
+    rpc GetOrderStats(GetOrderStatsRequest) returns (GetOrderStatsResponse);
 
     // Shipments
     rpc CreateShipment(CreateShipmentRequest) returns (ShipmentsResponse);

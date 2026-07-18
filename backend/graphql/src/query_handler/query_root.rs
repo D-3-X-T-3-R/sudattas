@@ -22,8 +22,8 @@ use crate::resolvers::{
     orders::{
         self,
         schema::{
-            CheckoutShippingEstimate, EstimateCheckoutShippingInput, Order, OrderStatus,
-            SearchOrder,
+            CheckoutShippingEstimate, EstimateCheckoutShippingInput, GetOrderStatsInput, Order,
+            OrderStats, OrderStatus, SearchOrder,
         },
     },
     payment_intents::{
@@ -265,6 +265,15 @@ impl QueryRoot {
             search.user_id = uid;
         }
         orders::handlers::search_order(search)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Aggregated order/revenue/customer stats for the admin dashboard (admin-only).
+    #[instrument(err, ret)]
+    async fn order_stats(context: &Context, input: GetOrderStatsInput) -> FieldResult<OrderStats> {
+        require_admin(context)?;
+        orders::handlers::get_order_stats(input)
             .await
             .map_err(|e| e.into_field_error())
     }

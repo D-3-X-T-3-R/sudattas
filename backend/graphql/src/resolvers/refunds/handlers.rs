@@ -1,10 +1,12 @@
 use proto::proto::core::{
     CreateRefundRequest, GetRefundsRequest, RefundResponse, RefundsResponse,
-    ResolveNeedsReviewRequest,
+    ResolveNeedsReviewRequest, ResolveRefundAttemptNeedsReviewRequest,
 };
 use tracing::instrument;
 
-use super::schema::{GetRefund, NewRefund, Refund, ResolveNeedsReviewInput};
+use super::schema::{
+    GetRefund, NewRefund, Refund, ResolveNeedsReviewInput, ResolveRefundAttemptNeedsReviewInput,
+};
 use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64},
@@ -48,6 +50,21 @@ pub(crate) async fn resolve_needs_review(input: ResolveNeedsReviewInput) -> Resu
     let resp = client
         .resolve_needs_review(ResolveNeedsReviewRequest {
             order_id: parse_i64(&input.order_id, "order_id")?,
+            resolution: input.resolution,
+            actor_id: input.actor_id,
+        })
+        .await?;
+    Ok(resp.into_inner().success)
+}
+
+#[instrument]
+pub(crate) async fn resolve_refund_attempt_needs_review(
+    input: ResolveRefundAttemptNeedsReviewInput,
+) -> Result<bool, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let resp = client
+        .resolve_refund_attempt_needs_review(ResolveRefundAttemptNeedsReviewRequest {
+            attempt_id: parse_i64(&input.attempt_id, "attempt_id")?,
             resolution: input.resolution,
             actor_id: input.actor_id,
         })

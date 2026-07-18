@@ -186,7 +186,10 @@ pub(crate) async fn get_products_for_variant(variant_id: &str) -> Result<Vec<Pro
     let variant_id = parse_i64(variant_id, "variant id")?;
     let mut client = connect_grpc_client().await?;
     let variant_resp = client
-        .search_product_variant(SearchProductVariantRequest { variant_id })
+        .search_product_variant(SearchProductVariantRequest {
+            variant_id,
+            product_id: None,
+        })
         .await?;
     let items = variant_resp.into_inner().items;
     let product_ids: Vec<i64> = items.into_iter().map(|v| v.product_id).collect();
@@ -230,16 +233,14 @@ pub(crate) async fn get_stock_for_product(product_id: &str) -> Result<Option<Str
     let mut client = connect_grpc_client().await?;
     let product_id_i64 = parse_i64(product_id, "product id")?;
 
-    // Fetch all variants, then filter by product_id.
     let variants_resp = client
-        .search_product_variant(SearchProductVariantRequest { variant_id: 0 })
+        .search_product_variant(SearchProductVariantRequest {
+            variant_id: 0,
+            product_id: Some(product_id_i64),
+        })
         .await?;
     let variants = variants_resp.into_inner().items;
-    let variant_ids: Vec<i64> = variants
-        .into_iter()
-        .filter(|v| v.product_id == product_id_i64)
-        .map(|v| v.variant_id)
-        .collect();
+    let variant_ids: Vec<i64> = variants.into_iter().map(|v| v.variant_id).collect();
 
     if variant_ids.is_empty() {
         return Ok(None);
@@ -274,14 +275,12 @@ pub(crate) async fn get_variant_stock_for_product(
     let product_id_i64 = parse_i64(product_id, "product id")?;
 
     let variants_resp = client
-        .search_product_variant(SearchProductVariantRequest { variant_id: 0 })
+        .search_product_variant(SearchProductVariantRequest {
+            variant_id: 0,
+            product_id: Some(product_id_i64),
+        })
         .await?;
-    let all_variants: Vec<_> = variants_resp
-        .into_inner()
-        .items
-        .into_iter()
-        .filter(|v| v.product_id == product_id_i64)
-        .collect();
+    let all_variants: Vec<_> = variants_resp.into_inner().items;
     let variants_with_size: Vec<_> = all_variants
         .iter()
         .filter(|v| v.size_id.is_some())

@@ -16,6 +16,9 @@ pub async fn search_product_variant(
     if req.variant_id != 0 {
         query = query.filter(product_variants::Column::VariantId.eq(req.variant_id));
     }
+    if let Some(product_id) = req.product_id {
+        query = query.filter(product_variants::Column::ProductId.eq(product_id));
+    }
 
     match query.all(txn).await {
         Ok(models) => {

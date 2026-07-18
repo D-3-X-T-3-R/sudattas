@@ -1,5 +1,5 @@
 use core_db_entities::CoreDatabaseConnection;
-use handlers::db_errors::map_db_error_to_status;
+use handlers::db_errors::{is_deadlock_status, map_db_error_to_status};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -15,6 +15,13 @@ pub mod services;
 
 static DOTENV_LOADED: OnceLock<()> = OnceLock::new();
 static GRPC_AUTH_RELAXED_WARNED: OnceLock<()> = OnceLock::new();
+
+/// How many times to retry a transaction that failed with an InnoDB deadlock before giving up and
+/// returning the error to the caller. Applied only to the two gRPC methods identified as the known
+/// conflicting lock-order pair (see db_errors::is_deadlock_status doc comment) — not applied
+/// codebase-wide, since retrofitting retry onto every transition_order_status call site would be a
+/// much larger, unaudited change (tracked separately as ISSUE-007 option A).
+const DEADLOCK_MAX_RETRIES: u32 = 3;
 
 pub fn load_env_once() {
     DOTENV_LOADED.get_or_init(|| {
@@ -58,17 +65,18 @@ use proto::proto::core::{
     EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse, EstimateCheckoutShippingRequest,
     EstimateCheckoutShippingResponse, EventLogsResponse, FabricsResponse, GetCartItemsRequest,
     GetOrderEventsRequest, GetOrderInvoiceDownloadRequest, GetOrderInvoiceDownloadResponse,
-    GetOrderInvoiceRequest, GetPaymentIntentRequest, GetPresignedUploadUrlRequest,
-    GetProductsByIdRequest, GetRefundsRequest, GetRelatedProductsRequest, GetShipmentRequest,
-    GetShippingAddressRequest, GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse,
-    GetUserPiiExportRequest, GetUserPiiExportResponse, IngestWebhookRequest,
-    InventoryItemsResponse, InventoryLogsResponse, InvoiceResponse, MergeCartRequest,
-    NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse, OrderEventsResponse,
-    OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse, PlaceOrderRequest,
-    PresignedUploadUrlResponse, ProductImagesResponse, ProductMoodMappingsResponse,
-    ProductMoodsResponse, ProductVariantsResponse, ProductsResponse, ReadinessRequest,
-    ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
-    RequestReturnRequest, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
+    GetOrderInvoiceRequest, GetOrderStatsRequest, GetOrderStatsResponse, GetPaymentIntentRequest,
+    GetPresignedUploadUrlRequest, GetProductsByIdRequest, GetRefundsRequest,
+    GetRelatedProductsRequest, GetShipmentRequest, GetShippingAddressRequest,
+    GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse, GetUserPiiExportRequest,
+    GetUserPiiExportResponse, IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
+    InvoiceResponse, MergeCartRequest, NewsletterSubscribersResponse, OccasionsResponse,
+    OrderDetailsResponse, OrderEventsResponse, OrderStatusesResponse, OrdersResponse,
+    PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
+    ProductMoodMappingsResponse, ProductMoodsResponse, ProductVariantsResponse, ProductsResponse,
+    ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
+    RefundsResponse, RequestReturnRequest, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
+    ResolveRefundAttemptNeedsReviewRequest, ResolveRefundAttemptNeedsReviewResponse,
     ReturnRequestsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
     SearchEventLogRequest, SearchFabricRequest, SearchInventoryItemRequest,
     SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOccasionRequest,
@@ -933,16 +941,41 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<AdminMarkReturnReceivedRequest>,
     ) -> Result<Response<ReturnRequestsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .ok_or_else(|| Status::unavailable("database not initialized"))?
-            .begin()
+        let req = request.into_inner();
+        let mut attempt: u32 = 0;
+        loop {
+            let txn = self
+                .db
+                .as_ref()
+                .ok_or_else(|| Status::unavailable("database not initialized"))?
+                .begin()
+                .await
+                .map_err(map_db_error_to_status)?;
+            let result = match handlers::returns::admin_mark_return_received(
+                &txn,
+                Request::new(req.clone()),
+            )
             .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::returns::admin_mark_return_received(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
+            {
+                Ok(res) => txn
+                    .commit()
+                    .await
+                    .map_err(map_db_error_to_status)
+                    .map(|_| res),
+                Err(status) => Err(status),
+            };
+            match result {
+                Err(status) if attempt < DEADLOCK_MAX_RETRIES && is_deadlock_status(&status) => {
+                    attempt += 1;
+                    tracing::warn!(
+                        attempt,
+                        "admin_mark_return_received: retrying after InnoDB deadlock"
+                    );
+                    continue;
+                }
+                other => return other,
+            }
+        }
     }
 
     async fn admin_update_return_status(
@@ -2476,16 +2509,34 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreateRefundRequest>,
     ) -> Result<Response<RefundsResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .ok_or_else(|| Status::unavailable("database not initialized"))?
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::refunds::create_refund(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
+        let req = request.into_inner();
+        let mut attempt: u32 = 0;
+        loop {
+            let txn = self
+                .db
+                .as_ref()
+                .ok_or_else(|| Status::unavailable("database not initialized"))?
+                .begin()
+                .await
+                .map_err(map_db_error_to_status)?;
+            let result =
+                match handlers::refunds::create_refund(&txn, Request::new(req.clone())).await {
+                    Ok(res) => txn
+                        .commit()
+                        .await
+                        .map_err(map_db_error_to_status)
+                        .map(|_| res),
+                    Err(status) => Err(status),
+                };
+            match result {
+                Err(status) if attempt < DEADLOCK_MAX_RETRIES && is_deadlock_status(&status) => {
+                    attempt += 1;
+                    tracing::warn!(attempt, "create_refund: retrying after InnoDB deadlock");
+                    continue;
+                }
+                other => return other,
+            }
+        }
     }
 
     async fn get_refunds(
@@ -2516,6 +2567,38 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::orders::resolve_needs_review(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn resolve_refund_attempt_needs_review(
+        &self,
+        request: Request<ResolveRefundAttemptNeedsReviewRequest>,
+    ) -> Result<Response<ResolveRefundAttemptNeedsReviewResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::refunds::resolve_refund_attempt_needs_review(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_order_stats(
+        &self,
+        request: Request<GetOrderStatsRequest>,
+    ) -> Result<Response<GetOrderStatsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::orders::get_order_stats(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

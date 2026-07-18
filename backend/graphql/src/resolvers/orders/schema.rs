@@ -222,6 +222,59 @@ pub struct SearchOrder {
     pub offset: Option<String>,
 }
 
+#[derive(GraphQLInputObject, Default, Debug, Clone)]
+#[graphql(description = "Filter for order-stats aggregation")]
+pub struct GetOrderStatsInput {
+    pub order_date_start: Option<String>,
+    pub order_date_end: Option<String>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct OrderStatusCount {
+    pub status_id: String,
+    pub status_name: String,
+    pub count: String,
+}
+
+#[graphql_object]
+#[graphql(description = "Order count for one status")]
+impl OrderStatusCount {
+    async fn status_id(&self) -> &String {
+        &self.status_id
+    }
+    async fn status_name(&self) -> &String {
+        &self.status_name
+    }
+    async fn count(&self) -> &String {
+        &self.count
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct OrderStats {
+    pub total_orders: String,
+    pub total_revenue_paise: String,
+    pub by_status: Vec<OrderStatusCount>,
+    pub customer_count: String,
+}
+
+#[graphql_object]
+#[graphql(description = "Aggregated order/revenue/customer stats for the admin dashboard")]
+impl OrderStats {
+    async fn total_orders(&self) -> &String {
+        &self.total_orders
+    }
+    async fn total_revenue_paise(&self) -> &String {
+        &self.total_revenue_paise
+    }
+    async fn by_status(&self) -> &Vec<OrderStatusCount> {
+        &self.by_status
+    }
+    async fn customer_count(&self) -> &String {
+        &self.customer_count
+    }
+}
+
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
 pub struct OrderMutation {
     pub user_id: String,

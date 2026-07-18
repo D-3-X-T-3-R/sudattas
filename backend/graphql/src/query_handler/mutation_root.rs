@@ -98,7 +98,9 @@ use crate::resolvers::{
     },
     refunds::{
         self,
-        schema::{NewRefund, Refund, ResolveNeedsReviewInput},
+        schema::{
+            NewRefund, Refund, ResolveNeedsReviewInput, ResolveRefundAttemptNeedsReviewInput,
+        },
     },
     returns::{
         self,
@@ -1445,6 +1447,18 @@ impl MutationRoot {
     ) -> FieldResult<bool> {
         require_admin(context)?;
         refunds::handlers::resolve_needs_review(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Resolve a RefundAttempt stuck in needs_review (retry / mark_settled).
+    #[instrument(err, ret)]
+    async fn resolve_refund_attempt_needs_review(
+        context: &Context,
+        input: ResolveRefundAttemptNeedsReviewInput,
+    ) -> FieldResult<bool> {
+        require_admin(context)?;
+        refunds::handlers::resolve_refund_attempt_needs_review(input)
             .await
             .map_err(|e| e.into_field_error())
     }

@@ -6,6 +6,7 @@ const ORDER_ROOTS = [
   "updateOrder",
   "createOrder",
   "updatePickupTarget",
+  "resolveNeedsReview",
 ];
 
 export async function POST(request: Request) {

@@ -52,3 +52,15 @@ pub fn map_db_error_to_status(db_error: DbErr) -> Status {
         DbErr::RecordNotUpdated => Status::failed_precondition("None of the records are updated"),
     }
 }
+
+/// True if `status` was produced from a MySQL/InnoDB deadlock (error 1213: "Deadlock found when
+/// trying to get lock; try restarting transaction"). Deadlocks are expected occasionally when
+/// concurrent code paths lock the same tables in different orders — e.g. create_refund /
+/// transition_order_status lock `orders` first, while admin_mark_return_received locks
+/// `return_requests` first (see audit-report-2026-07-17.md § NEW-02). InnoDB always fully rolls
+/// back the losing transaction before returning this error, so retrying from scratch is safe and
+/// equivalent to the retried attempt never having raced in the first place.
+pub fn is_deadlock_status(status: &Status) -> bool {
+    status.code() == tonic::Code::Internal
+        && (status.message().contains("Deadlock found") || status.message().contains("1213"))
+}

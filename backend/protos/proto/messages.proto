@@ -1141,6 +1141,7 @@ message CreateProductVariantRequest {
 
 message SearchProductVariantRequest {
     int64 variant_id = 1;
+    optional int64 product_id = 2;  // when set, filters server-side instead of the caller fetching every variant and filtering client-side
 }
 
 message UpdateProductVariantRequest {
@@ -1551,6 +1552,35 @@ message ResolveNeedsReviewRequest {
 message ResolveNeedsReviewResponse {
     bool success = 1;
     string message = 2;  // e.g. "Order marked as paid"
+}
+
+message ResolveRefundAttemptNeedsReviewRequest {
+    int64 attempt_id = 1;
+    string resolution = 2;  // "retry" | "mark_settled"
+    string actor_id = 3;    // admin identifier for audit (e.g. user_id or "admin")
+}
+
+message ResolveRefundAttemptNeedsReviewResponse {
+    bool success = 1;
+    string message = 2;  // e.g. "Refund attempt reset to pending_external for retry"
+}
+
+message GetOrderStatsRequest {
+    optional int64 order_date_start = 1;  // unix seconds; omit for all-time
+    optional int64 order_date_end = 2;
+}
+
+message OrderStatusCount {
+    int64 status_id = 1;
+    string status_name = 2;
+    int64 count = 3;
+}
+
+message GetOrderStatsResponse {
+    int64 total_orders = 1;
+    int64 total_revenue_paise = 2;
+    repeated OrderStatusCount by_status = 3;
+    int64 customer_count = 4;  // not date-filtered — current total registered users
 }
 
 // Readiness (health) check — used by orchestrators to verify DB and optional deps.

@@ -147,6 +147,10 @@ const ADMIN_MARK_ORDER_SHIPPED_MUTATION = `mutation AdminMarkOrderShipped($input
   adminMarkOrderShipped(input: $input)
 }`;
 
+const RESOLVE_NEEDS_REVIEW_MUTATION = `mutation AdminResolveNeedsReview($input: ResolveNeedsReviewInput!) {
+  resolveNeedsReview(input: $input)
+}`;
+
 const UPDATE_PICKUP_TARGET_MUTATION = `mutation UpdatePickupTarget($input: UpdatePickupTargetInput!) {
   updatePickupTarget(input: $input) {
     orderId
@@ -185,6 +189,26 @@ export async function updateAdminOrderStatus(
       shippingAddressId: order.shippingAddressId,
       totalAmountPaise: String(order.totalAmountPaise ?? ""),
       statusId: newStatusId.trim(),
+    },
+  });
+}
+
+/**
+ * Admin: resolve an order stuck in `needs_review` (e.g. an ambiguous payment-webhook outcome) by
+ * marking it paid, cancelled, or refunded. Unlike the generic status dropdown (updateOrder), this
+ * goes through the backend's dedicated resolution path, which also sets payment_status correctly
+ * per outcome (core_operations::handlers::orders::resolve_needs_review) — a plain updateOrder call
+ * would change status_id without touching payment_status, leaving it stale.
+ */
+export async function resolveOrderNeedsReview(
+  orderId: string,
+  resolution: "paid" | "cancelled" | "refunded"
+): Promise<void> {
+  await gqlAdmin(RESOLVE_NEEDS_REVIEW_MUTATION, {
+    input: {
+      orderId,
+      resolution,
+      actorId: "admin",
     },
   });
 }

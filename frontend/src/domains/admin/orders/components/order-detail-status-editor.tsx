@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   updateAdminOrderStatus,
+  resolveOrderNeedsReview,
   type AdminOrderDetail,
 } from "@/lib/admin-order-detail";
 import { cn } from "@/lib/utils";
@@ -59,8 +60,60 @@ export function OrderDetailStatusEditor({
     },
   });
 
+  const resolveMutation = useMutation({
+    mutationFn: (resolution: "paid" | "cancelled" | "refunded") =>
+      resolveOrderNeedsReview(order.orderId, resolution),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "order", orderIdParam] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
+  });
+
+  const needsReview = currentName === "needs_review";
+
   return (
     <div>
+      {needsReview ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-900">
+            This order needs manual review (e.g. an ambiguous payment result).
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={resolveMutation.isPending}
+              onClick={() => resolveMutation.mutate("paid")}
+            >
+              Mark paid
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={resolveMutation.isPending}
+              onClick={() => resolveMutation.mutate("cancelled")}
+            >
+              Cancel order
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={resolveMutation.isPending}
+              onClick={() => resolveMutation.mutate("refunded")}
+            >
+              Mark refunded
+            </Button>
+          </div>
+          {resolveMutation.isError ? (
+            <p className="mt-2 text-sm text-rose-700" role="alert">
+              {formatStatusMutationError(resolveMutation.error)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-end gap-3">
         <select
           className={cn(

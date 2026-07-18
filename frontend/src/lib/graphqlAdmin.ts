@@ -49,7 +49,15 @@ function resolveAdminRoute(query: string): string {
     return "/api/admin/customers";
   }
 
-  if (containsAny(query, ["searchOrder", "searchOrderStatus", "updateOrder", "createOrder"])) {
+  if (
+    containsAny(query, [
+      "searchOrder",
+      "searchOrderStatus",
+      "updateOrder",
+      "createOrder",
+      "resolveNeedsReview",
+    ])
+  ) {
     return "/api/admin/orders";
   }
 

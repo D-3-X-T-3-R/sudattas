@@ -872,44 +872,71 @@ export interface OrderCountsByStatus {
   inTransit: number;
 }
 
+const ORDER_STATS_QUERY = `query AdminOrderStats($input: GetOrderStatsInput!) {
+  orderStats(input: $input) {
+    totalOrders
+    totalRevenuePaise
+    byStatus { statusId statusName count }
+    customerCount
+  }
+}`;
+
+interface OrderStatsGqlResult {
+  totalOrders: string;
+  totalRevenuePaise: string;
+  byStatus: Array<{ statusId: string; statusName: string; count: string }>;
+  customerCount: string;
+}
+
+/**
+ * Fetch aggregated order/revenue/customer stats via a single GraphQL query computed server-side
+ * with SQL COUNT/SUM/GROUP BY, instead of paginating the entire Orders/Users tables into the
+ * browser and counting/summing client-side (previously up to ~2000 requests per dashboard load).
+ */
+async function fetchOrderStats(
+  params: { orderDateStart?: string; orderDateEnd?: string } = {}
+): Promise<OrderStatsGqlResult> {
+  const data = await gqlAdmin<{ orderStats?: OrderStatsGqlResult }>(ORDER_STATS_QUERY, {
+    input: {
+      orderDateStart: params.orderDateStart ?? null,
+      orderDateEnd: params.orderDateEnd ?? null,
+    },
+  });
+  return (
+    data?.orderStats ?? {
+      totalOrders: "0",
+      totalRevenuePaise: "0",
+      byStatus: [],
+      customerCount: "0",
+    }
+  );
+}
+
 /** Fetch order counts: total and by status (pending, delivered, cancelled, in transit = shipped). */
 export async function fetchOrderCountsByStatus(): Promise<OrderCountsByStatus> {
-  const [orders, statuses] = await Promise.all([
-    fetchAllOrdersList(),
-    fetchOrderStatuses(),
-  ]);
-  const idToName = new Map<string, string>(
-    statuses.map((s) => [s.statusId, s.statusName.toLowerCase()])
+  const stats = await fetchOrderStats();
+  const byName = new Map<string, number>(
+    stats.byStatus.map((s) => [s.statusName.toLowerCase(), Number.parseInt(s.count, 10) || 0])
   );
-  let pending = 0;
-  let delivered = 0;
-  let cancelled = 0;
-  let inTransit = 0;
-  for (const o of orders) {
-    const name = idToName.get(o.statusId) ?? "";
-    if (name === "pending") pending++;
-    else if (name === "delivered") delivered++;
-    else if (name === "cancelled") cancelled++;
-    else if (name === "shipped") inTransit++;
-  }
   return {
-    total: orders.length,
-    pending,
-    delivered,
-    cancelled,
-    inTransit,
+    total: Number.parseInt(stats.totalOrders, 10) || 0,
+    pending: byName.get("pending") ?? 0,
+    delivered: byName.get("delivered") ?? 0,
+    cancelled: byName.get("cancelled") ?? 0,
+    inTransit: byName.get("shipped") ?? 0,
   };
 }
 
-/** Fetch customer count via searchUser(userId: "0") which returns all users; we count the list. */
+/** Fetch customer count via the orderStats aggregation (single query, not a full paginated fetch). */
 async function fetchCustomerCount(): Promise<number> {
-  const list = await fetchAllCustomersList();
-  return list.length;
+  const stats = await fetchOrderStats();
+  return Number.parseInt(stats.customerCount, 10) || 0;
 }
 
 /**
  * Fetch all metrics for the admin dashboard.
- * Customers: searchUser(userId: "0") returns all users; we use list length as count.
+ * Orders/revenue/customers come from the orderStats aggregation query per date range instead of
+ * paginating the full Orders/Users tables.
  */
 export async function fetchDashboardStats(): Promise<DashboardStats> {
   const todayStart = String(startOfTodaySeconds());
@@ -917,25 +944,21 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   const monthStart = String(startOfMonthSeconds());
   const monthEnd = String(endOfMonthSeconds());
 
-  const [ordersToday, ordersMtd, productsCount, customersCount] = await Promise.all([
-    fetchAllOrdersList({ orderDateStart: todayStart, orderDateEnd: todayEnd }),
-    fetchAllOrdersList({ orderDateStart: monthStart, orderDateEnd: monthEnd }),
+  const [statsToday, statsMtd, productsCount] = await Promise.all([
+    fetchOrderStats({ orderDateStart: todayStart, orderDateEnd: todayEnd }),
+    fetchOrderStats({ orderDateStart: monthStart, orderDateEnd: monthEnd }),
     fetchProductCount(),
-    fetchCustomerCount(),
   ]);
 
-  const revenueMtdPaise = ordersMtd.reduce(
-    (sum, o) => sum + parseInt(o.totalAmountPaise, 10) || 0,
-    0
-  );
+  const revenueMtdPaise = Number.parseInt(statsMtd.totalRevenuePaise, 10) || 0;
   const revenueMtdFormatted = revenueMtdPaise >= 0 ? formatInrFromPaise(revenueMtdPaise) : "-";
 
   return {
-    ordersToday: ordersToday.length,
+    ordersToday: Number.parseInt(statsToday.totalOrders, 10) || 0,
     revenueMtdPaise,
     revenueMtdFormatted,
     productsCount,
-    customersCount,
+    customersCount: Number.parseInt(statsMtd.customerCount, 10) || 0,
   };
 }
 
@@ -948,14 +971,11 @@ export interface DashboardExtras {
 
 /** Fetch revenue MTD, revenue total (all orders), and customer count for dashboard. */
 export async function fetchDashboardExtras(): Promise<DashboardExtras> {
-  const [stats, allOrders] = await Promise.all([
+  const [stats, allTimeStats] = await Promise.all([
     fetchDashboardStats(),
-    fetchAllOrdersList(),
+    fetchOrderStats(),
   ]);
-  const totalPaise = allOrders.reduce(
-    (sum, o) => sum + (parseInt(o.totalAmountPaise, 10) || 0),
-    0
-  );
+  const totalPaise = Number.parseInt(allTimeStats.totalRevenuePaise, 10) || 0;
   const revenueTotalFormatted = totalPaise >= 0 ? formatInrFromPaise(totalPaise) : "-";
   return {
     revenueMtdFormatted: stats.revenueMtdFormatted,
