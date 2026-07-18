@@ -82,9 +82,20 @@ impl Drop for OutboxDeliverFailGuard {
 async fn integration_outbox_enqueue_and_worker() {
     use core_operations::handlers::outbox::enqueue_outbox_event;
     use core_operations::procedures::outbox_worker::process_pending_outbox_events;
-    use sea_orm::TransactionTrait;
+    use sea_orm::{ConnectionTrait, TransactionTrait};
 
     let db = connect_test_db().await;
+    // Clear pre-existing pending outbox rows so this run's LIMIT-5 batch isn't starved
+    // by older undeliverable backlog from other integration tests (mirrors the same
+    // cleanup already done in integration_outbox_two_workers_cannot_claim_same_row_concurrently).
+    db.execute_unprepared(
+        r#"UPDATE OutboxEvents
+           SET status = 'processed',
+               published_at = UTC_TIMESTAMP()
+           WHERE status = 'pending'"#,
+    )
+    .await
+    .expect("clear pre-existing pending outbox rows for deterministic assertion");
     let txn = db.begin().await.expect("begin");
     enqueue_outbox_event(
         &txn,

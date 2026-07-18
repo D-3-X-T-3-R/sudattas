@@ -191,9 +191,10 @@ async fn e2e_graphql_syntax_error_returns_200_with_errors() {
     if res.status().as_u16() == 401 {
         return;
     }
-    assert!(
-        res.status().is_success(),
-        "GraphQL typically returns 200 even for errors"
+    assert_eq!(
+        res.status().as_u16(),
+        400,
+        "this server rejects unparseable queries with 400 before reaching GraphQL execution"
     );
     let body: serde_json::Value = res.json().await.expect("JSON");
     let errors = body.get("errors");
@@ -249,7 +250,7 @@ async fn e2e_post_without_auth_returns_401() {
 #[ignore = "requires GraphQL server running; run with --ignored"]
 async fn e2e_depth_limit_returns_400() {
     let client = Client::new();
-    let deep_query = "{ a { b { c { d { e { f { g { h { i { j { x } } } } } } } } } } } }";
+    let deep_query = "{ a { b { c { d { e { f { g { h { i { j { x } } } } } } } } } } }";
     let res = add_session_and_allowed_origin(
         client
             .post(format!("{}/v2", base_url()))
