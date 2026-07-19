@@ -185,3 +185,103 @@ pub fn extract_scan_from_webhook_item(
         .cloned();
     (status_id, label, scan)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        extract_scan_from_webhook_item, flatten_shiprocket_webhook_items,
+        parse_local_order_id_from_ref,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn flatten_handles_top_level_array() {
+        let payload = json!([{ "awb": "AWB1" }, { "awb": "AWB2" }]);
+        let items = flatten_shiprocket_webhook_items(&payload);
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0]["awb"], "AWB1");
+    }
+
+    #[test]
+    fn flatten_handles_shipments_array_wrapper() {
+        let payload = json!({ "shipments": [{ "awb": "AWB1" }] });
+        let items = flatten_shiprocket_webhook_items(&payload);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["awb"], "AWB1");
+    }
+
+    #[test]
+    fn flatten_handles_singular_shipment_wrapper() {
+        let payload = json!({ "shipment": { "awb": "AWB1" } });
+        let items = flatten_shiprocket_webhook_items(&payload);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["awb"], "AWB1");
+    }
+
+    #[test]
+    fn flatten_falls_back_to_bare_object() {
+        let payload = json!({ "awb": "AWB1" });
+        let items = flatten_shiprocket_webhook_items(&payload);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["awb"], "AWB1");
+    }
+
+    #[test]
+    fn extract_scan_prefers_shipment_status_id_over_current_status_id() {
+        let item = json!({ "shipment_status_id": 7, "current_status_id": 42 });
+        let (status_id, _, _) = extract_scan_from_webhook_item(&item);
+        assert_eq!(status_id, Some(7));
+    }
+
+    #[test]
+    fn extract_scan_falls_back_to_current_status_id() {
+        let item = json!({ "current_status_id": 42 });
+        let (status_id, _, _) = extract_scan_from_webhook_item(&item);
+        assert_eq!(status_id, Some(42));
+    }
+
+    #[test]
+    fn extract_scan_reads_label_and_track_array() {
+        let item = json!({
+            "shipment_status": "Delivered",
+            "shipment_track": [{ "date": "2026-01-01", "status": "Delivered" }],
+        });
+        let (_, label, scan) = extract_scan_from_webhook_item(&item);
+        assert_eq!(label, Some("Delivered".to_string()));
+        assert!(scan.unwrap().is_array());
+    }
+
+    #[test]
+    fn extract_scan_ignores_non_array_scans_field() {
+        let item = json!({ "scans": "not-an-array" });
+        let (_, _, scan) = extract_scan_from_webhook_item(&item);
+        assert_eq!(scan, None);
+    }
+
+    #[test]
+    fn extract_scan_returns_none_when_no_status_fields_present() {
+        let item = json!({ "unrelated": true });
+        let (status_id, label, scan) = extract_scan_from_webhook_item(&item);
+        assert_eq!(status_id, None);
+        assert_eq!(label, None);
+        assert_eq!(scan, None);
+    }
+
+    #[test]
+    fn parse_local_order_id_accepts_plain_integer() {
+        assert_eq!(parse_local_order_id_from_ref("123"), Some(123));
+    }
+
+    #[test]
+    fn parse_local_order_id_accepts_sud_prefix_case_insensitively() {
+        assert_eq!(parse_local_order_id_from_ref("sud-456"), Some(456));
+        assert_eq!(parse_local_order_id_from_ref("SUD-456"), Some(456));
+    }
+
+    #[test]
+    fn parse_local_order_id_rejects_empty_or_garbage() {
+        assert_eq!(parse_local_order_id_from_ref(""), None);
+        assert_eq!(parse_local_order_id_from_ref("   "), None);
+        assert_eq!(parse_local_order_id_from_ref("not-an-order-ref"), None);
+    }
+}

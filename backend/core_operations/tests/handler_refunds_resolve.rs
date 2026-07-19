@@ -2,13 +2,19 @@
 
 mod integration_common;
 
+use core_db_entities::entity::order_events;
 use core_db_entities::entity::order_status;
 use core_db_entities::entity::orders;
+use core_db_entities::entity::refund_attempts;
 use core_db_entities::entity::refunds;
-use core_db_entities::entity::sea_orm_active_enums::{FulfillmentStatus, Status as RefundStatus};
-use proto::proto::core::{CreateRefundRequest, ResolveNeedsReviewRequest};
+use core_db_entities::entity::sea_orm_active_enums::{
+    ActorType, FulfillmentStatus, Status as RefundStatus,
+};
+use proto::proto::core::{
+    CreateRefundRequest, ResolveNeedsReviewRequest, ResolveRefundAttemptNeedsReviewRequest,
+};
 use sea_orm::entity::prelude::Decimal;
-use sea_orm::{DatabaseBackend, MockDatabase, TransactionTrait};
+use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
 use tonic::Request;
 
 fn order_confirmed(id: i64, status_id: i64, grand_total_minor: i64) -> orders::Model {
@@ -73,6 +79,37 @@ fn refund_model(
         currency: Some("INR".to_string()),
         status: Some(RefundStatus::Processed),
         line_items_refunded: None,
+        created_at: Some(chrono::Utc::now()),
+    }
+}
+
+fn refund_attempt(attempt_id: i64, order_id: i64, status: &str) -> refund_attempts::Model {
+    refund_attempts::Model {
+        attempt_id,
+        order_id,
+        payment_intent_id: None,
+        razorpay_payment_id: None,
+        amount_requested_paise: 5_000,
+        amount_sent_to_gateway_paise: 5_000,
+        gateway_refund_id: None,
+        status: status.to_string(),
+        provider_error: Some("gateway timeout".to_string()),
+        idempotency_key: format!("itest_attempt_{attempt_id}"),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        attempt_count: 3,
+    }
+}
+
+fn order_event_row(event_id: i64, order_id: i64) -> order_events::Model {
+    order_events::Model {
+        event_id,
+        order_id,
+        event_type: "refund_attempt_needs_review_resolved".to_string(),
+        from_status: None,
+        to_status: None,
+        actor_type: ActorType::Admin,
+        message: Some("resolved".to_string()),
         created_at: Some(chrono::Utc::now()),
     }
 }
@@ -204,6 +241,194 @@ async fn resolve_needs_review_rejects_invalid_resolution() {
     let result = resolve_needs_review(&txn, req).await;
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+}
+
+#[tokio::test]
+async fn resolve_refund_attempt_needs_review_not_found() {
+    use core_operations::handlers::refunds::resolve_refund_attempt_needs_review;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<refund_attempts::Model>::new()])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(ResolveRefundAttemptNeedsReviewRequest {
+        attempt_id: 999,
+        resolution: "retry".to_string(),
+        actor_id: "admin_1".to_string(),
+    });
+
+    let result = resolve_refund_attempt_needs_review(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
+}
+
+#[tokio::test]
+async fn resolve_refund_attempt_needs_review_rejects_non_needs_review() {
+    use core_operations::handlers::refunds::resolve_refund_attempt_needs_review;
+
+    let attempt = refund_attempt(1, 10, "processed");
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![attempt]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(ResolveRefundAttemptNeedsReviewRequest {
+        attempt_id: 1,
+        resolution: "retry".to_string(),
+        actor_id: "admin_1".to_string(),
+    });
+
+    let result = resolve_refund_attempt_needs_review(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::FailedPrecondition);
+}
+
+#[tokio::test]
+async fn resolve_refund_attempt_needs_review_rejects_invalid_resolution() {
+    use core_operations::handlers::refunds::resolve_refund_attempt_needs_review;
+
+    let attempt = refund_attempt(1, 10, "needs_review");
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![attempt]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(ResolveRefundAttemptNeedsReviewRequest {
+        attempt_id: 1,
+        resolution: "bogus".to_string(),
+        actor_id: "admin_1".to_string(),
+    });
+
+    let result = resolve_refund_attempt_needs_review(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+}
+
+#[tokio::test]
+async fn resolve_refund_attempt_needs_review_retry_resets_attempt_for_worker() {
+    use core_operations::handlers::refunds::resolve_refund_attempt_needs_review;
+
+    let attempt = refund_attempt(1, 10, "needs_review");
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![attempt]])
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        }])
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 1,
+            rows_affected: 1,
+        }])
+        .append_query_results(vec![vec![order_event_row(1, 10)]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(ResolveRefundAttemptNeedsReviewRequest {
+        attempt_id: 1,
+        resolution: "retry".to_string(),
+        actor_id: "admin_1".to_string(),
+    });
+
+    let result = resolve_refund_attempt_needs_review(&txn, req).await;
+    assert!(result.is_ok(), "retry should succeed: {:?}", result.err());
+    let resp = result.unwrap().into_inner();
+    assert!(resp.success);
+    assert!(
+        resp.message.contains("pending_external") || resp.message.to_lowercase().contains("retry"),
+        "message should describe the retry reset: {}",
+        resp.message
+    );
+
+    txn.commit().await.expect("commit");
+    let logs = db.into_transaction_log();
+    let sql: Vec<String> = logs
+        .iter()
+        .flat_map(|txn| txn.statements().iter().map(|stmt| stmt.sql.to_lowercase()))
+        .collect();
+    let reset_stmt = sql
+        .iter()
+        .find(|s| s.contains("update refundattempts") && s.contains("attempt_id = ?"))
+        .expect("expected the RefundAttempts reset UPDATE to run");
+    assert!(
+        reset_stmt.contains("attempt_count = 0"),
+        "retry must reset attempt_count so the worker retries fresh: {}",
+        reset_stmt
+    );
+}
+
+#[tokio::test]
+async fn resolve_refund_attempt_needs_review_mark_settled_does_not_touch_attempt_count() {
+    use core_operations::handlers::refunds::resolve_refund_attempt_needs_review;
+
+    let attempt = refund_attempt(2, 11, "needs_review");
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![attempt]])
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        }])
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 2,
+            rows_affected: 1,
+        }])
+        .append_query_results(vec![vec![order_event_row(2, 11)]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(ResolveRefundAttemptNeedsReviewRequest {
+        attempt_id: 2,
+        resolution: "mark_settled".to_string(),
+        actor_id: "admin_2".to_string(),
+    });
+
+    let result = resolve_refund_attempt_needs_review(&txn, req).await;
+    assert!(
+        result.is_ok(),
+        "mark_settled should succeed: {:?}",
+        result.err()
+    );
+    assert!(result.unwrap().into_inner().success);
+
+    txn.commit().await.expect("commit");
+    let logs = db.into_transaction_log();
+    let sql: Vec<String> = logs
+        .iter()
+        .flat_map(|txn| txn.statements().iter().map(|stmt| stmt.sql.to_lowercase()))
+        .collect();
+    let settle_stmt = sql
+        .iter()
+        .find(|s| s.contains("update refundattempts") && s.contains("attempt_id = ?"))
+        .expect("expected the RefundAttempts settle UPDATE to run");
+    assert!(
+        !settle_stmt.contains("attempt_count"),
+        "mark_settled must not reset attempt_count (it's a manual resolution, not a retry): {}",
+        settle_stmt
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_resolve_refund_attempt_needs_review_not_found() {
+    use core_operations::handlers::refunds::resolve_refund_attempt_needs_review;
+    use sea_orm::{Database, TransactionTrait};
+
+    let db = Database::connect(&integration_common::test_db_url())
+        .await
+        .expect("connect");
+    let txn = db.begin().await.expect("begin");
+    let req = Request::new(ResolveRefundAttemptNeedsReviewRequest {
+        attempt_id: 999_999,
+        resolution: "retry".to_string(),
+        actor_id: "admin_test".to_string(),
+    });
+    let result = resolve_refund_attempt_needs_review(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
 }
 
 #[tokio::test]
