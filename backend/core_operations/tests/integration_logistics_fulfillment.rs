@@ -476,8 +476,9 @@ fn configure_mock_provider_env(port: u16) {
     load_test_env_from_repo();
     std::env::set_var("SHIPROCKET_EMAIL", "test@example.com");
     std::env::set_var("SHIPROCKET_PASSWORD", "test-password");
-    let _ = std::env::var("SHIPROCKET_PICKUP_LOCATION")
-        .expect("SHIPROCKET_PICKUP_LOCATION must be set in env/.env for logistics tests");
+    if std::env::var("SHIPROCKET_PICKUP_LOCATION").is_err() {
+        std::env::set_var("SHIPROCKET_PICKUP_LOCATION", "Test Pickup");
+    }
     std::env::set_var("SHIPROCKET_PICKUP_POSTCODE", "560001");
     std::env::set_var(
         "SHIPROCKET_API_BASE",

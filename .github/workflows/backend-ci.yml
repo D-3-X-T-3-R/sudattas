@@ -434,8 +434,14 @@ jobs:
       with:
         toolchain: ${{ env.RUST_TOOLCHAIN }}
 
+    - name: Install a stable toolchain for cargo-audit
+      run: rustup toolchain install stable --profile minimal --no-self-update
+
     - name: Install cargo-audit
-      run: cargo install cargo-audit
+      # cargo-audit only reads Cargo.lock against the RustSec advisory DB; it doesn't
+      # compile or run any workspace code, so building it with a newer toolchain than
+      # the pinned ${{ env.RUST_TOOLCHAIN }} is safe and doesn't affect what's audited.
+      run: cargo +stable install cargo-audit --locked
 
     - name: Run security audit
       working-directory: ./backend
@@ -500,8 +506,14 @@ jobs:
       with:
         toolchain: ${{ env.RUST_TOOLCHAIN }}
 
+    - name: Install a stable toolchain for cargo-outdated
+      run: rustup toolchain install stable --profile minimal --no-self-update
+
     - name: Install cargo-outdated
-      run: cargo install cargo-outdated
+      # cargo-outdated only inspects Cargo.toml/Cargo.lock against the crates.io index; it
+      # doesn't compile or run any workspace code, so building it with a newer toolchain than
+      # the pinned ${{ env.RUST_TOOLCHAIN }} is safe and doesn't affect what's checked.
+      run: cargo +stable install cargo-outdated --locked
 
     - name: Check for outdated dependencies
       working-directory: ./backend
