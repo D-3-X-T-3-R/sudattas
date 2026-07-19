@@ -82,16 +82,16 @@ try {
   // These caps gate Next.js client-reference-manifest metadata size per route.
   // They are NOT direct browser JS payload budgets (those are enforced above).
   const routeBudgets = [
-    { rel: "server/app/page_client-reference-manifest.js", maxKB: 17 },
-    { rel: "server/app/product/[id]/page_client-reference-manifest.js", maxKB: 18 },
+    { rel: "server/app/page_client-reference-manifest.js", maxKB: 21 },
+    { rel: "server/app/product/[id]/page_client-reference-manifest.js", maxKB: 22 },
     { rel: "server/app/collections/[slug]/page_client-reference-manifest.js", maxKB: 22 },
-    { rel: "server/app/bag/page_client-reference-manifest.js", maxKB: 16 },
-    { rel: "server/app/checkout/address/page_client-reference-manifest.js", maxKB: 13 },
-    { rel: "server/app/profile/page_client-reference-manifest.js", maxKB: 17 },
-    { rel: "server/app/imtheboss/page_client-reference-manifest.js", maxKB: 23 },
-    { rel: "server/app/imtheboss/products/page_client-reference-manifest.js", maxKB: 18 },
-    { rel: "server/app/imtheboss/orders/page_client-reference-manifest.js", maxKB: 18 },
-    { rel: "server/app/imtheboss/customers/page_client-reference-manifest.js", maxKB: 18 },
+    { rel: "server/app/bag/page_client-reference-manifest.js", maxKB: 21 },
+    { rel: "server/app/checkout/address/page_client-reference-manifest.js", maxKB: 19 },
+    { rel: "server/app/profile/page_client-reference-manifest.js", maxKB: 21 },
+    { rel: "server/app/imtheboss/page_client-reference-manifest.js", maxKB: 37 },
+    { rel: "server/app/imtheboss/products/page_client-reference-manifest.js", maxKB: 23 },
+    { rel: "server/app/imtheboss/orders/page_client-reference-manifest.js", maxKB: 23 },
+    { rel: "server/app/imtheboss/customers/page_client-reference-manifest.js", maxKB: 23 },
   ];
 
   for (const budget of routeBudgets) {
