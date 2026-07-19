@@ -4,6 +4,10 @@ import React from "react";
 import { ProductDetailView } from "@/components/product-detail-view";
 import type { Product } from "@/lib/schemas";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 vi.mock("next/image", () => ({
   default: (props: Record<string, unknown>) => {
     const { src = "", alt = "", ...rest } = props;
