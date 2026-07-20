@@ -122,6 +122,7 @@ jobs:
       working-directory: ./frontend
       env:
         PW_DISABLE_ARTIFACTS: "1"
+        IS_STOREFRONT_READY: "1"
         NEXTAUTH_SECRET: ci-test-nextauth-secret-at-least-32-chars
         AUTH_SECRET: ci-test-nextauth-secret-at-least-32-chars
         NEXTAUTH_URL: http://127.0.0.1:3000
@@ -247,6 +248,7 @@ jobs:
       env:
         APP_ENV: test
         STRICT_STARTUP_VALIDATION: "false"
+        IS_STOREFRONT_READY: "1"
         DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/SUDATTAS
         REDIS_URL: redis://127.0.0.1:6379
         GRPC_SERVER: 0.0.0.0:50051
