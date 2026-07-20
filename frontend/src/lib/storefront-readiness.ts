@@ -84,6 +84,14 @@ export async function isStorefrontBackendAvailable({
   now?: number;
   timeoutMs?: number;
 } = {}): Promise<boolean> {
+  // Browser-only E2E suites (e.g. critical-browser-e2e) intentionally run with no real
+  // backend, mocking every API call at the browser level via page.route(); this middleware
+  // check runs server-side and can't be reached by those mocks. Explicit, narrowly-scoped
+  // opt-out for exactly that scenario.
+  if (process.env.SKIP_STOREFRONT_BACKEND_HEALTH_CHECK === "1") {
+    return true;
+  }
+
   const healthUrl = storefrontBackendHealthUrl();
 
   if (!healthUrl) {
