@@ -137,7 +137,7 @@ async function runCheckoutFlowToCompletion(
 ) {
   const mocks = await installCommerceMocks(page, options);
   await prepareAuthenticatedBag(page, mocks);
-  await page.getByRole("button", { name: /^Checkout$/i }).first().click();
+  await page.getByRole("button", { name: /^Proceed To Checkout$/i }).first().click();
   return mocks;
 }
 
@@ -205,13 +205,13 @@ test("bucket: entry_discovery representative harness", async ({ page }) => {
 test("bucket: catalog_browsing representative harness", async ({ page }) => {
   await installCommerceMocks(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.locator('button[aria-label^="Quick view "]').first()).toBeVisible();
+  await expect(page.locator('button[aria-label^="View "]').first()).toBeVisible();
 
   await page.getByRole("button", { name: "Search" }).click();
-  await expect(page.getByPlaceholder("Search")).toBeVisible();
-  await page.getByPlaceholder("Search").fill("silk");
+  await expect(page.getByPlaceholder("Search collections, fabrics, styles").first()).toBeVisible();
+  await page.getByPlaceholder("Search collections, fabrics, styles").first().fill("silk");
 
-  await page.locator("#explore-sort").selectOption("Latest");
+  await page.getByLabel("Sort").selectOption("Price: Low to High");
   await expect(page.locator("body")).toContainText(/Amber Saree|Emerald Saree/i);
 });
 
@@ -233,7 +233,7 @@ test("bucket: cart representative harness", async ({ page }) => {
 
   await page.getByRole("button", { name: /Increase quantity for Amber Saree/i }).click();
   await page.getByRole("button", { name: /Decrease quantity for Amber Saree/i }).click();
-  await expect(page.locator("body")).toContainText(/Price Details/i);
+  await expect(page.locator("body")).toContainText(/Order Summary/i);
 });
 
 test("bucket: checkout representative harness (stateful, not empty-bag)", async ({ page }) => {
@@ -244,9 +244,9 @@ test("bucket: checkout representative harness (stateful, not empty-bag)", async 
   await expect(page).toHaveURL(/\/bag$/);
 
   await expect(page.locator("body")).not.toContainText("Your bag is empty");
-  await expect(page.locator("body")).toContainText(/Delivery address/i);
-  await expect(page.locator("body")).toContainText(/Price Details/i);
-  await expect(page.getByRole("button", { name: /^Checkout/i }).first()).toBeVisible();
+  await expect(page.locator("body")).toContainText(/Delivery & Payment/i);
+  await expect(page.locator("body")).toContainText(/Order Summary/i);
+  await expect(page.getByRole("button", { name: /^Proceed To Checkout$/i }).first()).toBeVisible();
 });
 
 test("bucket: payment_states representative harness (paid)", async ({ page }) => {
@@ -299,14 +299,16 @@ test("bucket: wishlist representative harness", async ({ page }) => {
   mocks.setAuthenticated(true);
 
   await page.goto("/wishlist", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("#wishlist-page-title")).toContainText("My Wishlist");
+  await expect(page.getByRole("heading", { name: "Saved Favourites" })).toBeVisible();
   await expect(page.locator("body")).toContainText("Amber Saree");
 });
 
 test("bucket: admin_auth representative harness", async ({ page }) => {
   await page.goto("/imtheboss/orders", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/imtheboss\/login/);
-  await expect(page.getByRole("button", { name: /^Sign in(?: with Google)?$/i }).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^(Sign in(?: with Google)?|Try another account)$/i }).first()
+  ).toBeVisible();
 });
 
 test("bucket: security_negative representative harness", async ({ page, request }) => {
@@ -334,7 +336,7 @@ test("bucket: accessibility_smoke representative harness", async ({ page }) => {
   const mocks = await installCommerceMocks(page);
   await prepareAuthenticatedBag(page, mocks);
 
-  const addAddressButton = page.getByRole("button", { name: "Add new address" }).first();
+  const addAddressButton = page.getByRole("button", { name: "Add New" }).first();
   await addAddressButton.focus();
   await addAddressButton.click();
 
