@@ -19,8 +19,28 @@ use sea_orm::{
     TransactionTrait,
 };
 use tonic::{Code, Request};
+use warp::Filter;
 
 const FORCED_FAIL_TITLE: &str = "__itest_force_order_details_insert_failure__";
+
+/// Prepaid `place_order` calls out to Razorpay to create the order before OrderDetails is
+/// inserted. CI (and any environment without real Razorpay creds) has no RAZORPAY_KEY_ID, so
+/// without this, prepaid runs fail on "Unable to create Razorpay order" instead of exercising
+/// the OrderDetails-insert-failure path this test is actually about. Mirrors the local mock
+/// server pattern from `razorpay_connectivity.rs` so this test never depends on real credentials.
+async fn ensure_razorpay_mock_for_prepaid(payment_mode: &str) {
+    if payment_mode != "prepaid" {
+        return;
+    }
+    let orders = warp::path!("v1" / "orders")
+        .and(warp::post())
+        .map(|| warp::reply::json(&serde_json::json!({ "id": "order_itest_atomicity" })));
+    let (addr, server) = warp::serve(orders).bind_ephemeral(([127, 0, 0, 1], 0));
+    tokio::task::spawn(server);
+    std::env::set_var("RAZORPAY_KEY_ID", "rzp_test_itest_atomicity");
+    std::env::set_var("RAZORPAY_KEY_SECRET", "itest_atomicity_secret");
+    std::env::set_var("RAZORPAY_API_BASE", format!("http://{}/v1", addr));
+}
 
 async fn ensure_order_status(txn: &DatabaseTransaction, name: &str) -> Result<i64, String> {
     if let Some(existing) = order_status::Entity::find()
@@ -209,6 +229,8 @@ async fn inventory_snapshot(
 }
 
 async fn run_atomicity_scenario(db: &DatabaseConnection, payment_mode: &str) -> Result<(), String> {
+    ensure_razorpay_mock_for_prepaid(payment_mode).await;
+
     let txn = db
         .begin()
         .await

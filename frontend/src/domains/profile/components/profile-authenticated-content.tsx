@@ -13,10 +13,14 @@ import {
   type SetStateAction,
   type SVGProps,
 } from "react";
-import type { AddressFormState } from "@/domains/profile/types";
+import type { AddressFormState, ProfileFormState } from "@/domains/profile/types";
 import { formatInrFromPaise } from "@/lib/money";
-import { Check, X } from "lucide-react";
+import { Check, MapPin, X } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Kicker, HeroHeading } from "@/components/ui/typography";
+import { cn } from "@/lib/utils";
 
 export type ShippingAddressRow = {
   shippingAddressId: string;
@@ -58,6 +62,10 @@ export type AccountProfileRow = {
   address?: string | null;
   phone?: string | null;
   createDate: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  gender?: string | null;
+  dateOfBirth?: string | null;
 };
 
 export type AccountOrderDetailRow = {
@@ -153,6 +161,18 @@ function formatAddress(a: ShippingAddressRow): string {
   const parts = [
     a.recipientName,
     a.phoneNumber,
+    [a.apartmentNoOrName, a.road].filter(Boolean).join(", "),
+    a.city,
+    a.stateRegion,
+    a.postalCode,
+    a.country,
+  ].filter((v) => v && String(v).trim());
+  return parts.join(", ");
+}
+
+/** Address line only, without name/phone which are rendered separately in the address card. */
+function formatAddressBody(a: ShippingAddressRow): string {
+  const parts = [
     [a.apartmentNoOrName, a.road].filter(Boolean).join(", "),
     a.city,
     a.stateRegion,
@@ -280,22 +300,22 @@ function customerOrderStatusHeadline(
 function OrderTrackingPanel({ fulfillmentState }: { fulfillmentState: string | undefined }) {
   const steps = fulfillmentTrackingSteps(fulfillmentState);
   return (
-    <div className="shrink-0 rounded-2xl border border-[#C9A646]/35 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,61,46,0.06)] sm:min-w-[140px]">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#C9A646]">Tracking</p>
+    <div className="shrink-0 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-4 shadow-[var(--shadow-subtle)] sm:min-w-[140px]">
+      <Kicker tone="accent">Tracking</Kicker>
       <ul className="mt-4 space-y-0">
         {steps.map((s, i) => {
           const dot =
             s.step === "done"
-              ? "bg-[#0F3D2E]"
+              ? "bg-[var(--color-green)]"
               : s.step === "current"
-                ? "bg-[#C9A646]"
-                : "bg-[#D4D0C8]";
-          const textMuted = s.step === "pending" ? "text-[#A8A29A]" : "text-[#0F3D2E]";
+                ? "bg-[var(--color-gold)]"
+                : "bg-[var(--color-line-strong)]";
+          const textMuted = s.step === "pending" ? "text-[var(--color-muted)]" : "text-[var(--color-ink)]";
           return (
             <li key={s.label} className="flex gap-3">
               <div className="flex flex-col items-center pt-0.5">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} aria-hidden />
-                {i < steps.length - 1 ? <span className="my-0.5 min-h-[14px] w-px flex-1 bg-[#E0DCD4]" aria-hidden /> : null}
+                {i < steps.length - 1 ? <span className="my-0.5 min-h-[14px] w-px flex-1 bg-[var(--color-line)]" aria-hidden /> : null}
               </div>
               <span className={`pb-3 text-sm font-medium leading-tight ${textMuted}`}>{s.label}</span>
             </li>
@@ -320,30 +340,30 @@ function FulfillmentTrackingPanel({
   if (courierSteps.length > 0) {
     const delivered = courierSteps.some((x) => x.label.toLowerCase().includes("deliver"));
     return (
-      <div className="shrink-0 rounded-2xl border border-[#C9A646]/35 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,61,46,0.06)] sm:min-w-[180px] sm:max-w-[220px]">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#C9A646]">Delivery updates</p>
+      <div className="shrink-0 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-4 shadow-[var(--shadow-subtle)] sm:min-w-[180px] sm:max-w-[220px]">
+        <Kicker tone="accent">Delivery updates</Kicker>
         {awbCode?.trim() ? (
-          <p className="mt-1.5 font-mono text-[11px] text-[#615A50]">AWB {awbCode.trim()}</p>
+          <p className="mt-1.5 font-mono text-[11px] text-[var(--color-muted)]">AWB {awbCode.trim()}</p>
         ) : null}
         <ul className="mt-3 space-y-0" aria-label="Courier tracking timeline">
           {courierSteps.map((s, i) => {
             const isLast = i === courierSteps.length - 1;
             const step: TrackingStepState = delivered ? "done" : isLast ? "current" : "done";
             const dot =
-              step === "done" ? "bg-[#0F3D2E]" : step === "current" ? "bg-[#C9A646]" : "bg-[#D4D0C8]";
-            const textMuted = "text-[#0F3D2E]";
+              step === "done" ? "bg-[var(--color-green)]" : step === "current" ? "bg-[var(--color-gold)]" : "bg-[var(--color-line-strong)]";
+            const textMuted = "text-[var(--color-ink)]";
             const sub = [formatCourierStepTime(s.at), s.location?.trim()].filter(Boolean).join(" Â· ");
             return (
               <li key={`${i}-${s.label}`} className="flex gap-3">
                 <div className="flex flex-col items-center pt-0.5">
                   <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} aria-hidden />
                   {i < courierSteps.length - 1 ? (
-                    <span className="my-0.5 min-h-[14px] w-px flex-1 bg-[#E0DCD4]" aria-hidden />
+                    <span className="my-0.5 min-h-[14px] w-px flex-1 bg-[var(--color-line)]" aria-hidden />
                   ) : null}
                 </div>
                 <div className={`min-w-0 pb-3 ${textMuted}`}>
                   <span className="block text-sm font-medium leading-tight">{s.label}</span>
-                  {sub ? <span className="mt-0.5 block text-xs text-[#8B816D]">{sub}</span> : null}
+                  {sub ? <span className="mt-0.5 block text-xs text-[var(--color-muted)]">{sub}</span> : null}
                 </div>
               </li>
             );
@@ -370,10 +390,10 @@ function RefundTrackingPanel({ state }: { state: RefundTrackingState }) {
         ? "Refund failed at payment gateway. Please contact support."
         : "Refund has been requested and is being processed by Razorpay.";
   return (
-    <div className="shrink-0 rounded-2xl border border-[#C9A646]/35 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,61,46,0.06)] sm:min-w-[180px] sm:max-w-[240px]">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#C9A646]">Track refund</p>
-      <p className="mt-2 text-sm font-semibold text-[#0F3D2E]">{label}</p>
-      <p className="mt-1 text-xs leading-relaxed text-[#615A50]">{detail}</p>
+    <div className="shrink-0 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-4 shadow-[var(--shadow-subtle)] sm:min-w-[180px] sm:max-w-[240px]">
+      <Kicker tone="accent">Track refund</Kicker>
+      <p className="mt-2 text-sm font-semibold text-[var(--color-ink)]">{label}</p>
+      <p className="mt-1 text-xs leading-relaxed text-[var(--color-muted)]">{detail}</p>
     </div>
   );
 }
@@ -655,31 +675,34 @@ function ProfileSidebarItem({
       type="button"
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={`flex w-full items-center gap-4 rounded-[22px] px-5 py-4 text-left transition duration-300 ${
+      className={`flex w-full items-center gap-3 rounded-md border-l-2 px-4 py-3 text-left transition duration-200 ${
         active
-          ? "bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.08))] text-white shadow-[0_14px_30px_rgba(0,0,0,0.16)]"
-          : "text-white/82 hover:bg-white/5 hover:text-white"
+          ? "border-[var(--color-gold)] bg-[var(--color-surface-soft)] text-[var(--color-green)]"
+          : "border-transparent text-[var(--color-ink)] hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-green)]"
       }`}
     >
       <span
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border transition ${
-          active
-            ? "border-[#C9A646]/18 bg-[radial-gradient(circle_at_top_left,rgba(201,166,70,0.18),rgba(255,255,255,0.05))] text-[#E7CF82]"
-            : "border-white/6 bg-white/8 text-white/86"
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${
+          active ? "text-[var(--color-gold)]" : "text-[var(--color-muted)]"
         }`}
       >
         <Icon className="h-5 w-5" />
       </span>
-      <span className="text-[12px] font-semibold uppercase leading-5 tracking-[0.24em]">{label}</span>
+      <span className="text-[12px] font-semibold uppercase leading-5 tracking-[0.2em]">{label}</span>
     </button>
   );
 }
 
-function SectionBadge({ children }: { children: ReactNode }) {
+function AccountCard({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <span className="inline-flex rounded-full border border-[#C9A646]/30 bg-[#FFF9EF] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#A37D34]">
+    <div
+      className={cn(
+        "rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-subtle)] sm:p-8",
+        className
+      )}
+    >
       {children}
-    </span>
+    </div>
   );
 }
 
@@ -687,7 +710,6 @@ type ProfileAuthenticatedContentProps = {
   displayName: string;
   displayEmail: string;
   loginMethodLabel: string;
-  accountProfile: AccountProfileRow | null;
   error: string | null;
   loadingData: boolean;
   addresses: ShippingAddressRow[];
@@ -701,6 +723,11 @@ type ProfileAuthenticatedContentProps = {
   updateAddress: (shippingAddressId: string) => Promise<void>;
   deleteAddress: (shippingAddressId: string) => Promise<void>;
   setDefaultAddress: (shippingAddressId: string) => Promise<void>;
+  profileForm: ProfileFormState;
+  setProfileForm: Dispatch<SetStateAction<ProfileFormState>>;
+  canSaveProfile: boolean;
+  savingProfile: boolean;
+  updateProfile: () => Promise<void>;
   ensureOrderDetailLoaded: (orderId: string) => Promise<void>;
   refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
@@ -709,49 +736,10 @@ type ProfileAuthenticatedContentProps = {
   onSignOut: () => void;
 };
 
-function PillButton({
-  children,
-  onClick,
-  type = "button",
-}: {
-  children: ReactNode;
-  onClick?: () => void;
-  type?: "button" | "submit";
-}) {
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      className="rounded-full border border-[#C9A646]/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A37D34] transition hover:bg-[#fff7e6]"
-    >
-      {children}
-    </button>
-  );
-}
-
-function DashboardCard({
-  label,
-  value,
-  action,
-}: {
-  label: string;
-  value: ReactNode;
-  action: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col rounded-[24px] border border-[#0F3D2E]/8 bg-[#FAF6EE] p-5 shadow-[0_12px_28px_rgba(15,61,46,0.05)]">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8B816D]">{label}</p>
-      <p className="mt-3 text-lg font-medium text-[#0F3D2E]">{value}</p>
-      <div className="mt-4">{action}</div>
-    </div>
-  );
-}
-
 export function ProfileAuthenticatedContent({
   displayName,
   displayEmail,
   loginMethodLabel,
-  accountProfile,
   error,
   loadingData,
   addresses,
@@ -765,6 +753,11 @@ export function ProfileAuthenticatedContent({
   updateAddress,
   deleteAddress,
   setDefaultAddress,
+  profileForm,
+  setProfileForm,
+  canSaveProfile,
+  savingProfile,
+  updateProfile,
   ensureOrderDetailLoaded,
   refreshOrderDetail,
   cancelOrder,
@@ -773,8 +766,6 @@ export function ProfileAuthenticatedContent({
   onSignOut,
 }: ProfileAuthenticatedContentProps) {
   const [activeNav, setActiveNav] = useState<ProfileNavId>("profile");
-  const [emailHint, setEmailHint] = useState(false);
-  const [loginHint, setLoginHint] = useState(false);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancellingItemKey, setCancellingItemKey] = useState<string | null>(null);
   const [cancelDialogOrderId, setCancelDialogOrderId] = useState<string | null>(null);
@@ -791,7 +782,22 @@ export function ProfileAuthenticatedContent({
 
   useEffect(() => {
     if (activeNav !== "orders" || orders.length === 0) return;
-    void Promise.all(orders.map((o) => ensureOrderDetailLoaded(o.orderId)));
+    let cancelled = false;
+    const queue = sortOrdersLatestFirst(orders).map((o) => o.orderId);
+    const ORDER_DETAIL_FETCH_CONCURRENCY = 4;
+    let next = 0;
+    async function worker() {
+      while (!cancelled && next < queue.length) {
+        const orderId = queue[next++];
+        await ensureOrderDetailLoaded(orderId);
+      }
+    }
+    void Promise.all(
+      Array.from({ length: Math.min(ORDER_DETAIL_FETCH_CONCURRENCY, queue.length) }, worker)
+    );
+    return () => {
+      cancelled = true;
+    };
   }, [activeNav, orders, ensureOrderDetailLoaded]);
 
   const sortedOrders = useMemo(() => sortOrdersLatestFirst(orders), [orders]);
@@ -834,30 +840,10 @@ export function ProfileAuthenticatedContent({
     return out;
   }, [sortedOrders, orderDetailsById]);
 
-  useEffect(() => {
-    if (activeNav !== "orders") return;
-    const summary = sortedOrders.map((o) => {
-      const detail = orderDetailsById[o.orderId];
-      const refundState = refundTrackingStateForOrder(o.statusName, detail);
-      return {
-        orderId: o.orderId,
-        statusName: o.statusName,
-        fulfillmentState: detail?.fulfillmentState ?? null,
-        paymentState: detail?.paymentState ?? null,
-        refundTrackingState: refundState,
-      };
-    });
-    console.info("[orders-flow][customer-ui] orders tab rendered", {
-      totalOrders: sortedOrders.length,
-      summary,
-    });
-  }, [activeNav, sortedOrders, orderDetailsById]);
-
   const confirmCancelOrder = async () => {
     if (cancelDialogItem) {
       const { orderId, orderDetailId } = cancelDialogItem;
       const key = `${orderId}:${orderDetailId}`;
-      console.info("[orders-flow][customer-ui] cancel line dialog confirmed", { orderId, orderDetailId });
       setCancelDialogItem(null);
       setCancellingItemKey(key);
       try {
@@ -869,7 +855,6 @@ export function ProfileAuthenticatedContent({
     }
     const id = cancelDialogOrderId;
     if (!id) return;
-    console.info("[orders-flow][customer-ui] cancel order dialog confirmed", { orderId: id });
     setCancelDialogOrderId(null);
     setCancellingOrderId(id);
     try {
@@ -905,8 +890,6 @@ export function ProfileAuthenticatedContent({
   };
 
   const firstName = displayName.trim().split(/\s+/)[0] || displayName;
-  const phoneDisplay = accountProfile?.phone?.trim() ? accountProfile.phone.trim() : "Not available";
-  const phoneMissing = !accountProfile?.phone?.trim();
   const defaultAddress = addresses.find((a) => a.isDefault) ?? addresses[0];
 
   const supportIssues = useMemo(() => {
@@ -980,7 +963,7 @@ export function ProfileAuthenticatedContent({
         ? `Attachments selected in portal: ${supportFiles.map((f) => f.name).join(", ")}`
         : "",
     ].filter(Boolean);
-    return `mailto:support@sudattas.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
+    return `mailto:sudattasdesignerboutique@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
   }, [displayEmail, displayName, supportCategory, supportFiles, supportMessage, supportOrderId]);
 
   const navItems: { id: ProfileNavId; label: string; Icon: SidebarIconComponent }[] = [
@@ -992,22 +975,22 @@ export function ProfileAuthenticatedContent({
   ];
 
   const mainShell = (
-    <div className="mx-auto max-w-7xl rounded-[36px] border border-white/70 bg-[#FBF8F1] p-4 shadow-[0_30px_90px_rgba(15,61,46,0.08)] sm:p-6 lg:p-8">
-      <div className="grid min-h-0 gap-6 lg:h-[min(720px,calc(100vh-10.5rem))] lg:max-h-[min(720px,calc(100vh-10.5rem))] lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col overflow-hidden rounded-[30px] bg-[radial-gradient(circle_at_top_left,rgba(201,166,70,0.14),transparent_24%),linear-gradient(145deg,#1E5B43_0%,#0F3D2E_32%,#0A2C22_72%,#083126_100%)] p-5 text-white shadow-[0_24px_52px_rgba(15,61,46,0.22)] lg:h-full lg:max-h-full">
-          <div className="rounded-[26px] border border-white/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E7CF82]">Sudatta&apos;s</p>
-            <div className="mt-5 flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,166,70,0.20),rgba(255,255,255,0.06))] text-[#E7CF82] shadow-[0_10px_24px_rgba(0,0,0,0.14)]">
-                <UserIcon className="h-6 w-6" />
+    <div className="mx-auto w-full max-w-[1440px] px-[var(--gutter-mobile)] pb-16 pt-6 md:px-[var(--gutter-tablet)]">
+      <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
+        <aside className="lg:sticky lg:top-24">
+          <div className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-6">
+            <Kicker tone="inverse">Sudatta&apos;s</Kicker>
+            <div className="mt-6 flex items-center gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-[var(--color-gold)]/30 bg-white/5 text-[var(--color-gold-soft)] shadow-[0_0_0_4px_rgba(201,166,70,0.08)]">
+                <UserIcon className="h-7 w-7" />
               </div>
               <div className="min-w-0">
-                <p className="font-[family-name:var(--font-display)] text-[2rem] leading-none text-white">{firstName}</p>
+                <p className="font-display text-[2rem] leading-none text-white">{firstName}</p>
               </div>
             </div>
           </div>
 
-          <nav className="mt-6 flex min-h-0 flex-1 flex-col space-y-2.5 overflow-y-auto overscroll-contain" aria-label="Account sections">
+          <nav className="mt-6 flex flex-col space-y-1" aria-label="Account sections">
             {navItems.map((item) => (
               <ProfileSidebarItem
                 key={item.id}
@@ -1019,30 +1002,22 @@ export function ProfileAuthenticatedContent({
             ))}
           </nav>
 
-          <button
-            type="button"
-            onClick={onSignOut}
-            className="mt-8 w-full rounded-[22px] border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.1),rgba(255,255,255,0.04))] py-3.5 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition duration-300 hover:border-[#C9A646]/35 hover:bg-white/10 hover:text-[#E7CF82]"
-          >
+          <Button type="button" variant="outline" onClick={onSignOut} className="mt-6 w-full">
             Sign out
-          </button>
+          </Button>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[30px] border border-[#0F3D2E]/8 bg-[linear-gradient(180deg,#FFFDF9_0%,#FAF6EF_100%)] shadow-[0_18px_42px_rgba(15,61,46,0.06)] lg:h-full lg:max-h-full">
+        <main className="min-w-0">
           {activeNav === "orders" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden pt-5 px-6 pb-6 sm:px-8 sm:pb-8">
-              <section className="shrink-0 rounded-[28px] bg-[radial-gradient(circle_at_top_left,rgba(201,166,70,0.12),transparent_30%),linear-gradient(135deg,#0F3D2E,#0A2C22)] p-7 text-white shadow-[0_20px_45px_rgba(15,61,46,0.18)]">
-                <h1 className="font-[family-name:var(--font-display)] text-4xl sm:text-5xl">Recent Orders</h1>
+            <div className="flex flex-col gap-6">
+              <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
+                <HeroHeading inverse size="sm">Recent Orders</HeroHeading>
               </section>
-              <div
-                className="mt-6 min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                role="region"
-                aria-label="Order list"
-              >
+              <div role="region" aria-label="Order list">
                 {loadingData ? (
-                  <p className="text-sm text-[#615A50]">Loading orders...</p>
+                  <p className="text-sm text-[var(--color-muted)]">Loading orders...</p>
                 ) : orders.length === 0 ? (
-                  <p className="text-sm text-[#615A50]">No orders yet.</p>
+                  <p className="text-sm text-[var(--color-muted)]">No orders yet.</p>
                 ) : (
                   <div className="space-y-5 pb-2">
                     {orderListEntries.map((entry, index) => {
@@ -1144,27 +1119,27 @@ export function ProfileAuthenticatedContent({
                       return (
                         <article
                           key={key}
-                          className="flex flex-col gap-6 rounded-[24px] border border-[#0F3D2E]/10 bg-[#FAF6EE] p-5 shadow-[0_12px_28px_rgba(15,61,46,0.06)] sm:flex-row sm:items-stretch sm:p-6"
+                          className="group flex flex-col gap-6 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-subtle)] sm:flex-row sm:items-stretch sm:p-6"
                         >
-                          <div className="relative h-28 w-full shrink-0 overflow-hidden rounded-2xl bg-[#E8DCC8] sm:h-auto sm:min-h-[7rem] sm:w-24">
+                          <div className="relative h-28 w-full shrink-0 overflow-hidden rounded-md bg-[var(--color-surface-soft)] sm:h-auto sm:min-h-[7rem] sm:w-24">
                             {thumbUrl ? (
                               <Image
                                 src={thumbUrl}
                                 alt={pres.title}
                                 fill
-                                className="object-cover"
+                                className="object-cover transition duration-500 ease-out group-hover:scale-[1.03]"
                                 sizes="(max-width: 640px) 100vw, 96px"
                                 unoptimized={isExternalProductImage(thumbUrl)}
                               />
                             ) : null}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold text-[#0F3D2E] sm:text-2xl">{pres.title}</h2>
-                            <p className="mt-2 text-sm text-[#6B6560]">{pres.orderLabel}</p>
-                            <p className="mt-2 text-sm leading-relaxed text-[#615A50]">{pres.detailLine}</p>
-                            <p className="mt-3 text-lg font-semibold text-[#0F3D2E]">{pres.price}</p>
+                            <h2 className="font-display text-xl font-semibold text-[var(--color-ink)] sm:text-2xl">{pres.title}</h2>
+                            <p className="mt-2 text-sm text-[var(--color-muted)]">{pres.orderLabel}</p>
+                            <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted)]">{pres.detailLine}</p>
+                            <p className="mt-3 font-sans text-xl font-semibold text-[var(--color-green)] md:text-2xl">{pres.price}</p>
                             {o.statusName ? (
-                              <p className="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-[#8B816D]">
+                              <p className="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-[var(--color-muted)]">
                                 {customerOrderStatusHeadline(o.statusName, detail)}
                               </p>
                             ) : null}
@@ -1180,19 +1155,19 @@ export function ProfileAuthenticatedContent({
                                   })
                                 }
                                 disabled={itemCancelDisabled}
-                                className="mt-3 rounded-full border border-[#C45C5C]/45 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A34A4A] transition hover:bg-[#fff5f5] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="mt-3 rounded-full border border-[#A34A4A]/45 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A34A4A] transition hover:bg-[#A34A4A]/10 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {cancellingItemKey === `${o.orderId}:${line.orderDetailId}`
                                   ? "Cancelling..."
                                   : "Cancel item"}
                               </button>
                             ) : line ? (
-                              <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8B816D]">
+                              <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">
                                 Cancellation window closed. You can refuse delivery.
                               </p>
                             ) : null}
                             {line && lineEligibleForReturn ? (
-                              <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs text-[#0F3D2E]">
+                              <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs text-[var(--color-ink)]">
                                 <input
                                   type="checkbox"
                                   checked={selectedReturnIdSet.has(line.orderDetailId)}
@@ -1201,21 +1176,21 @@ export function ProfileAuthenticatedContent({
                                   }
                                   disabled={requestingReturnOrderId === o.orderId}
                                   aria-label={`Select line ${line.orderDetailId} for return`}
-                                  className="h-4 w-4 rounded border-[#C9A646]/40 text-[#0F3D2E]"
+                                  className="h-4 w-4 rounded border-[var(--color-gold)]/40 text-[var(--color-ink)]"
                                 />
                                 Select for return
                               </label>
                             ) : null}
                             {lineReturnLabel ? (
-                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#0F3D2E]">
+                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink)]">
                                 {lineReturnLabel}
                               </p>
                             ) : isCodOrder && line ? (
-                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8B816D]">
+                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">
                                 Returns are available only for prepaid orders.
                               </p>
                             ) : showReturnWindowClosed ? (
-                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8B816D]">
+                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">
                                 Return window closed.
                               </p>
                             ) : null}
@@ -1224,16 +1199,14 @@ export function ProfileAuthenticatedContent({
                                 type="button"
                                 onClick={() => setCancelDialogOrderId(o.orderId)}
                                 disabled={orderCancelDisabled}
-                                className="mt-2 rounded-full border border-[#A34A4A]/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7A2F2F] transition hover:bg-[#fff4f4] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="mt-2 rounded-full border border-[#A34A4A]/45 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A34A4A] transition hover:bg-[#A34A4A]/10 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {cancellingOrderId === o.orderId ? "Cancelling..." : "Cancel full order"}
                               </button>
                             ) : null}
                             {isFirstForOrder && eligibleLineIdsForOrder.length > 0 ? (
-                              <div className="mt-3 rounded-2xl border border-[#C9A646]/25 bg-[#FFFCF4] p-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#A37D34]">
-                                  Request return
-                                </p>
+                              <div className="mt-3 rounded-lg border border-[var(--color-gold)]/25 bg-[var(--color-surface-soft)] p-3">
+                                <Kicker tone="accent">Request return</Kicker>
                                 <textarea
                                   value={returnReason}
                                   onChange={(e) =>
@@ -1244,24 +1217,26 @@ export function ProfileAuthenticatedContent({
                                   }
                                   placeholder="Reason for return"
                                   rows={2}
-                                  className="mt-2 w-full rounded-lg border border-[#E7D8B6] bg-white px-3 py-2 text-sm text-[#2D2A24]"
+                                  className="mt-2 w-full rounded-md border border-[var(--color-line)] bg-white px-3 py-2 text-sm text-[var(--color-ink)]"
                                 />
-                                <button
+                                <Button
                                   type="button"
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => {
                                     void submitReturnRequest(o.orderId);
                                   }}
                                   disabled={!canSubmitReturn}
-                                  className="mt-2 rounded-full border border-[#A37D34]/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7E622A] transition hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-50"
+                                  className="mt-2 rounded-full"
                                 >
                                   {requestingReturnOrderId === o.orderId
                                     ? "Submitting..."
                                     : "Return selected items"}
-                                </button>
+                                </Button>
                               </div>
                             ) : null}
                             {isFirstForOrder && detail?.refundSummary ? (
-                              <p className="mt-2 text-xs text-[#615A50]">
+                              <p className="mt-2 text-xs text-[var(--color-muted)]">
                                 {refundTrackingState === "processed"
                                   ? "Refunded"
                                   : refundTrackingState === "failed"
@@ -1283,8 +1258,10 @@ export function ProfileAuthenticatedContent({
                                 awbCode={ship?.awbCode}
                               />
                             )}
-                            <button
+                            <Button
                               type="button"
+                              variant="outline"
+                              size="sm"
                               onClick={() => {
                                 setRefreshingOrderId(o.orderId);
                                 void refreshOrderDetail(o.orderId).finally(() => {
@@ -1292,21 +1269,20 @@ export function ProfileAuthenticatedContent({
                                 });
                               }}
                               disabled={refreshingOrderId === o.orderId}
-                              className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#A37D34] transition hover:bg-[#fff7e6] disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-full"
                             >
                               {refreshingOrderId === o.orderId
                                 ? "Refreshing..."
                                 : showRefundTracking
                                   ? "Refresh refund"
                                   : "Refresh tracking"}
-                            </button>
+                            </Button>
                             {detail?.order?.invoiceAvailable ? (
-                              <a
-                                href={`/api/account/orders/${encodeURIComponent(o.orderId)}/invoice`}
-                                className="inline-flex items-center justify-center rounded-full border border-[#0F3D2E]/25 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#0F3D2E] transition hover:bg-[#f4efe4]"
-                              >
-                                Download Invoice
-                              </a>
+                              <Button asChild variant="outline" size="sm" className="rounded-full">
+                                <a href={`/api/account/orders/${encodeURIComponent(o.orderId)}/invoice`}>
+                                  Download Invoice
+                                </a>
+                              </Button>
                             ) : null}
                           </div>
                         </article>
@@ -1317,68 +1293,122 @@ export function ProfileAuthenticatedContent({
               </div>
             </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6 sm:p-8 [-webkit-overflow-scrolling:touch]">
+            <div className="flex flex-col gap-8">
         {activeNav === "profile" && (
           <>
-            <section className="rounded-[28px] bg-[radial-gradient(circle_at_top_left,rgba(201,166,70,0.12),transparent_30%),linear-gradient(135deg,#0F3D2E,#0A2C22)] p-7 text-white shadow-[0_20px_45px_rgba(15,61,46,0.18)]">
-              <p className="font-[family-name:var(--font-display)] text-5xl">{displayName}</p>
-              <p className="mt-3 text-white/75">{displayEmail}</p>
+            <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
+              <HeroHeading inverse size="sm">{displayName}</HeroHeading>
+              <p className="mt-3 text-[var(--color-on-deep-muted)]">{displayEmail}</p>
             </section>
 
-            {emailHint && (
-              <p className="mt-4 text-sm text-[var(--color-muted)]" role="status">
-                Sign-in email is managed by your account provider. For changes, contact support.
-              </p>
-            )}
-            {loginHint && (
-              <p className="mt-4 text-sm text-[var(--color-muted)]" role="status">
-                You signed in with {loginMethodLabel}. Session security is handled by our auth provider.
-              </p>
-            )}
+            <AccountCard className="mt-8">
+              <Kicker>Edit Profile</Kicker>
 
-            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <DashboardCard
-                label="Email"
-                value={displayEmail}
-                action={<PillButton onClick={() => setEmailHint((v) => !v)}>Edit</PillButton>}
-              />
-              <DashboardCard
-                label="Phone"
-                value={phoneDisplay}
-                action={
-                  phoneMissing ? (
-                    <PillButton onClick={() => setActiveNav("support")}>Add</PillButton>
-                  ) : (
-                    <PillButton onClick={() => setActiveNav("support")}>Edit</PillButton>
-                  )
-                }
-              />
-              <DashboardCard
-                label="Login method"
-                value={loginMethodLabel}
-                action={<PillButton onClick={() => setLoginHint((v) => !v)}>Review</PillButton>}
-              />
-              <DashboardCard
-                label="Orders"
-                value="View recent purchases"
-                action={<PillButton onClick={() => setActiveNav("orders")}>Open</PillButton>}
-              />
-              <DashboardCard
-                label="Addresses"
-                value="Manage delivery details"
-                action={<PillButton onClick={() => setActiveNav("addresses")}>Manage</PillButton>}
-              />
-            </div>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="profile-first-name" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    First name *
+                  </label>
+                  <Input
+                    id="profile-first-name"
+                    value={profileForm.firstName}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, firstName: e.target.value }))}
+                    className="h-10"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profile-last-name" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Last name
+                  </label>
+                  <Input
+                    id="profile-last-name"
+                    value={profileForm.lastName}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, lastName: e.target.value }))}
+                    className="h-10"
+                  />
+                </div>
+
+                <div>
+                  <p className="mb-1 block text-xs text-[var(--color-muted)]">Gender</p>
+                  <div className="flex h-10 items-center gap-5">
+                    {(["male", "female", "other"] as const).map((option) => (
+                      <label key={option} className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-[var(--color-ink)]">
+                        <input
+                          type="radio"
+                          name="profile-gender"
+                          value={option}
+                          checked={profileForm.gender === option}
+                          onChange={() => setProfileForm((p) => ({ ...p, gender: option }))}
+                          className="h-4 w-4 accent-[var(--color-green)]"
+                        />
+                        <span className="capitalize">{option}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="profile-dob" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Date of Birth
+                  </label>
+                  <Input
+                    id="profile-dob"
+                    type="date"
+                    value={profileForm.dateOfBirth}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                    className="h-10"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="profile-mobile-number" className="mb-1 block text-xs text-[var(--color-muted)]">
+                    Mobile Number *
+                  </label>
+                  <Input
+                    id="profile-mobile-number"
+                    value={profileForm.phoneNumber}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, phoneNumber: e.target.value }))}
+                    className="h-10"
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-xs text-[var(--color-muted)]">Default Address</p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveNav("addresses")}
+                      className="text-xs font-semibold text-[var(--color-green)] underline-offset-2 hover:underline"
+                    >
+                      Change/Edit
+                    </button>
+                  </div>
+                  <p className="min-h-10 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-sm leading-relaxed text-[var(--color-ink)]">
+                    {defaultAddress ? formatAddress(defaultAddress) : "No default address saved yet."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-center">
+                <Button
+                  type="button"
+                  onClick={() => void updateProfile()}
+                  disabled={!canSaveProfile || savingProfile}
+                  className="px-10"
+                >
+                  {savingProfile ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </AccountCard>
           </>
         )}
 
         {activeNav === "addresses" && (
           <div className="space-y-8">
-            <header className="border-b border-[#0F3D2E]/8 pb-8">
-              <SectionBadge>Addresses</SectionBadge>
-              <h1 className="mt-4 font-[family-name:var(--font-display)] text-6xl text-[#0F3D2E]">Saved Addresses</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#615A50]">Manage delivery destinations for checkout.</p>
-            </header>
+            <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
+              <HeroHeading inverse size="sm">Saved Addresses</HeroHeading>
+            </section>
 
             {error && (
               <p id="profile-form-error" role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1386,163 +1416,195 @@ export function ProfileAuthenticatedContent({
               </p>
             )}
 
-            <div className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)] sm:p-7">
-              {loadingData ? (
-                <p className="text-sm text-[var(--color-muted)]">Loading addresses...</p>
-              ) : addresses.length === 0 ? (
-                <p className="text-sm text-[var(--color-muted)]">No addresses saved yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {addresses.map((a) => (
-                    <li key={a.shippingAddressId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--color-line)] px-3 py-2">
-                      <span className="text-sm text-[var(--color-ink)]">
-                        {formatAddress(a)}
-                        {a.isDefault ? (
-                          <span className="ml-2 rounded-full bg-[var(--color-line)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]">Default</span>
-                        ) : null}
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => void deleteAddress(a.shippingAddressId)} className="text-xs font-semibold uppercase tracking-[0.12em] text-red-600">
-                          Remove
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingAddressId(a.shippingAddressId);
-                            setForm({
-                              recipientName: a.recipientName ?? "",
-                              phoneNumber: a.phoneNumber ?? "",
-                              country: a.country ?? "",
-                              stateRegion: a.stateRegion ?? "",
-                              city: a.city ?? "",
-                              postalCode: a.postalCode ?? "",
-                              road: a.road ?? "",
-                              apartmentNoOrName: a.apartmentNoOrName ?? "",
-                            });
-                          }}
-                          className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-accent-brown)]"
-                        >
-                          Edit
-                        </button>
-                        {!a.isDefault ? (
-                          <button type="button" onClick={() => void setDefaultAddress(a.shippingAddressId)} className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-accent-brown)]">
-                            Make default
-                          </button>
-                        ) : null}
+            {loadingData ? (
+              <p className="text-sm text-[var(--color-muted)]">Loading addresses...</p>
+            ) : addresses.length === 0 ? (
+              <p className="text-sm text-[var(--color-muted)]">No addresses saved yet.</p>
+            ) : (
+              <ul className="grid gap-4 sm:grid-cols-2">
+                {addresses.map((a) => (
+                  <li
+                    key={a.shippingAddressId}
+                    className="flex flex-col gap-4 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-subtle)]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-gold)]" />
+                        <div className="min-w-0">
+                          {a.recipientName ? (
+                            <p className="text-sm font-semibold text-[var(--color-ink)]">{a.recipientName}</p>
+                          ) : null}
+                          <p className="mt-0.5 text-sm leading-relaxed text-[var(--color-muted)]">
+                            {formatAddressBody(a)}
+                          </p>
+                          {a.phoneNumber ? (
+                            <p className="mt-1 text-xs text-[var(--color-muted)]">{a.phoneNumber}</p>
+                          ) : null}
+                        </div>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                      {a.isDefault ? (
+                        <Kicker tone="accent" className="shrink-0">Default</Kicker>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-line)] pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => {
+                          setEditingAddressId(a.shippingAddressId);
+                          setForm({
+                            recipientName: a.recipientName ?? "",
+                            phoneNumber: a.phoneNumber ?? "",
+                            country: a.country ?? "",
+                            stateRegion: a.stateRegion ?? "",
+                            city: a.city ?? "",
+                            postalCode: a.postalCode ?? "",
+                            road: a.road ?? "",
+                            apartmentNoOrName: a.apartmentNoOrName ?? "",
+                          });
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      {!a.isDefault ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full"
+                          onClick={() => void setDefaultAddress(a.shippingAddressId)}
+                        >
+                          Make default
+                        </Button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => void deleteAddress(a.shippingAddressId)}
+                        className="ml-auto rounded-full border border-[#A34A4A]/45 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A34A4A] transition hover:bg-[#A34A4A]/10"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
 
-              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            <AccountCard>
+              <h3 className="font-display text-lg font-semibold text-[var(--color-ink)] sm:text-xl">
+                {editingAddressId ? "Edit address" : "Add a new address"}
+              </h3>
+
+              <div className="mt-5 grid gap-x-6 gap-y-5 sm:grid-cols-2">
                 <div>
                   <label htmlFor="profile-recipient-name" className="mb-1 block text-xs text-[var(--color-muted)]">
                     Recipient name
                   </label>
-                  <input
+                  <Input
                     id="profile-recipient-name"
                     value={form.recipientName}
                     onChange={(e) => setForm((p) => ({ ...p, recipientName: e.target.value }))}
                     aria-invalid={!!error}
                     aria-describedby={error ? "profile-form-error" : undefined}
-                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                    className="h-10"
                   />
                 </div>
                 <div>
                   <label htmlFor="profile-phone-number" className="mb-1 block text-xs text-[var(--color-muted)]">
                     Phone number
                   </label>
-                  <input
+                  <Input
                     id="profile-phone-number"
                     value={form.phoneNumber}
                     onChange={(e) => setForm((p) => ({ ...p, phoneNumber: e.target.value }))}
                     aria-invalid={!!error}
                     aria-describedby={error ? "profile-form-error" : undefined}
-                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                    className="h-10"
                   />
                 </div>
                 <div>
                   <label htmlFor="profile-road" className="mb-1 block text-xs text-[var(--color-muted)]">
                     Road / street
                   </label>
-                  <input
+                  <Input
                     id="profile-road"
                     value={form.road}
                     onChange={(e) => setForm((p) => ({ ...p, road: e.target.value }))}
                     aria-invalid={!!error}
                     aria-describedby={error ? "profile-form-error" : undefined}
-                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                    className="h-10"
                   />
                 </div>
                 <div>
                   <label htmlFor="profile-apartment" className="mb-1 block text-xs text-[var(--color-muted)]">
                     Apartment / house (optional)
                   </label>
-                  <input
+                  <Input
                     id="profile-apartment"
                     value={form.apartmentNoOrName}
                     onChange={(e) => setForm((p) => ({ ...p, apartmentNoOrName: e.target.value }))}
-                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                    className="h-10"
                   />
                 </div>
                 <div>
                   <label htmlFor="profile-city" className="mb-1 block text-xs text-[var(--color-muted)]">
                     City
                   </label>
-                  <input
+                  <Input
                     id="profile-city"
                     value={form.city}
                     onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))}
                     aria-invalid={!!error}
                     aria-describedby={error ? "profile-form-error" : undefined}
-                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                    className="h-10"
                   />
                 </div>
                 <div>
                   <label htmlFor="profile-state" className="mb-1 block text-xs text-[var(--color-muted)]">
                     State / region
                   </label>
-                  <input
+                  <Input
                     id="profile-state"
                     value={form.stateRegion}
                     onChange={(e) => setForm((p) => ({ ...p, stateRegion: e.target.value }))}
                     aria-invalid={!!error}
                     aria-describedby={error ? "profile-form-error" : undefined}
-                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                    className="h-10"
                   />
                 </div>
                 <div>
                   <label htmlFor="profile-country" className="mb-1 block text-xs text-[var(--color-muted)]">
                     Country
                   </label>
-                  <input
+                  <Input
                     id="profile-country"
                     value={form.country}
                     onChange={(e) => setForm((p) => ({ ...p, country: e.target.value }))}
                     aria-invalid={!!error}
                     aria-describedby={error ? "profile-form-error" : undefined}
-                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                    className="h-10"
                   />
                 </div>
                 <div>
                   <label htmlFor="profile-pincode" className="mb-1 block text-xs text-[var(--color-muted)]">
                     Pincode
                   </label>
-                  <input
+                  <Input
                     id="profile-pincode"
                     value={form.postalCode}
                     onChange={(e) => setForm((p) => ({ ...p, postalCode: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
                     inputMode="numeric"
                     aria-invalid={!!error}
                     aria-describedby={error ? "profile-form-error" : undefined}
-                    className="h-10 w-full rounded-md border border-[var(--color-line)] bg-white px-3 text-sm"
+                    className="h-10"
                   />
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <Button
                   type="button"
                   onClick={() => {
                     if (editingAddressId) {
@@ -1552,13 +1614,13 @@ export function ProfileAuthenticatedContent({
                     void addAddress();
                   }}
                   disabled={!canSaveAddress || adding}
-                  className="rounded-full bg-[var(--color-accent-gold)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-50"
                 >
                   {adding ? "Saving..." : editingAddressId ? "Update Address" : "Save Address"}
-                </button>
+                </Button>
                 {editingAddressId ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => {
                       setEditingAddressId(null);
                       setForm({
@@ -1572,88 +1634,68 @@ export function ProfileAuthenticatedContent({
                         apartmentNoOrName: "",
                       });
                     }}
-                    className="rounded-full border border-[var(--color-line)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]"
                   >
                     Cancel Edit
-                  </button>
+                  </Button>
                 ) : null}
               </div>
-            </div>
+            </AccountCard>
           </div>
         )}
 
         {activeNav === "settings" && (
           <div className="space-y-8">
-            <header className="border-b border-[#0F3D2E]/8 pb-8">
-              <SectionBadge>Settings</SectionBadge>
-              <h1 className="mt-4 font-[family-name:var(--font-display)] text-6xl text-[#0F3D2E]">Account Settings</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#615A50]">Session and sign-in for your account.</p>
-            </header>
-            <div className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-7 shadow-[0_4px_24px_rgba(10,42,32,0.04)] sm:p-8">
+            <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
+              <HeroHeading inverse size="sm">Account Settings</HeroHeading>
+            </section>
+            <AccountCard>
               <p className="text-sm text-[var(--color-muted)]">
                 Signed in as <span className="font-medium text-[var(--color-ink)]">{displayEmail}</span> via {loginMethodLabel}.
               </p>
-              <button
-                type="button"
-                onClick={onSignOut}
-                className="mt-6 rounded-full bg-[var(--color-accent-gold)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white"
-              >
+              <Button type="button" onClick={onSignOut} className="mt-6">
                 Sign out everywhere on this device
-              </button>
-            </div>
+              </Button>
+            </AccountCard>
           </div>
         )}
 
         {activeNav === "support" && (
           <div className="space-y-8">
-            <header className="border-b border-[#0F3D2E]/8 pb-8">
-              <SectionBadge>Support</SectionBadge>
-              <h1 className="mt-4 font-[family-name:var(--font-display)] text-6xl text-[#0F3D2E]">Support</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#615A50]">We are here for order and account questions.</p>
-            </header>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Order help</p>
+            <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
+              <HeroHeading inverse size="sm">Support</HeroHeading>
+            </section>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-subtle)]">
+                <Kicker>Order help</Kicker>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveNav("orders")}
-                    className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#A37D34]"
-                  >
+                  <Button type="button" variant="outline" size="sm" onClick={() => setActiveNav("orders")} className="rounded-full">
                     Track shipment
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveNav("orders")}
-                    className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#A37D34]"
-                  >
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setActiveNav("orders")} className="rounded-full">
                     Track refund
-                  </button>
-                  <Link
-                    href="/returns-exchanges"
-                    className="rounded-full border border-[#C9A646]/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#A37D34]"
-                  >
-                    Return policy
-                  </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="rounded-full">
+                    <Link href="/returns-exchanges">Return policy</Link>
+                  </Button>
                 </div>
-                <p className="mt-4 text-xs leading-6 text-[#615A50]">
+                <p className="mt-4 text-xs leading-6 text-[var(--color-muted)]">
                   Cancellation is available only within the configured cancellation window after order creation. After the window closes, you can refuse delivery and support will assist with return/refund updates.
                 </p>
               </section>
 
-              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Contact options</p>
-                <ul className="mt-3 space-y-2 text-sm text-[#615A50]">
+              <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-subtle)]">
+                <Kicker>Contact options</Kicker>
+                <ul className="mt-3 space-y-2 text-sm text-[var(--color-muted)]">
                   <li>
                     Email:{" "}
-                    <a href="mailto:support@sudattas.com" className="font-semibold text-[#0F3D2E] underline-offset-2 hover:underline">
-                      support@sudattas.com
+                    <a href="mailto:sudattasdesignerboutique@gmail.com" className="font-semibold text-[var(--color-ink)] underline-offset-2 hover:underline">
+                      sudattasdesignerboutique@gmail.com
                     </a>
                   </li>
                   <li>
                     Phone/WhatsApp:{" "}
-                    <a href="tel:+919739097329" className="font-semibold text-[#0F3D2E] underline-offset-2 hover:underline">
-                      +91 97390 97329
+                    <a href="tel:+919073764577" className="font-semibold text-[var(--color-ink)] underline-offset-2 hover:underline">
+                      +91 90737 64577
                     </a>
                   </li>
                   <li>Hours: Mon-Sat, 10:00 AM - 7:00 PM IST</li>
@@ -1662,80 +1704,80 @@ export function ProfileAuthenticatedContent({
               </section>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">My recent issues</p>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-subtle)]">
+                <Kicker>My recent issues</Kicker>
                 {supportIssues.length === 0 ? (
-                  <p className="mt-3 text-sm text-[#615A50]">No active support issues right now.</p>
+                  <p className="mt-3 text-sm text-[var(--color-muted)]">No active support issues right now.</p>
                 ) : (
                   <ul className="mt-3 space-y-2">
                     {supportIssues.map((i) => (
-                      <li key={`${i.orderId}-${i.type}`} className="flex items-center justify-between rounded-xl border border-[#E6E0D5] bg-white px-3 py-2">
-                        <span className="text-sm text-[#0F3D2E]">
+                      <li key={`${i.orderId}-${i.type}`} className="flex items-center justify-between rounded-xl border border-[var(--color-line)] bg-white px-3 py-2">
+                        <span className="text-sm text-[var(--color-ink)]">
                           {i.type} issue - Order #{i.orderId}
                         </span>
-                        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8B816D]">{i.state}</span>
+                        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">{i.state}</span>
                       </li>
                     ))}
                   </ul>
                 )}
               </section>
 
-              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Shipping info</p>
+              <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-subtle)]">
+                <Kicker>Shipping info</Kicker>
                 {supportLatestShipment ? (
-                  <div className="mt-3 space-y-2 text-sm text-[#615A50]">
+                  <div className="mt-3 space-y-2 text-sm text-[var(--color-muted)]">
                     <p>
-                      Latest shipment order: <span className="font-semibold text-[#0F3D2E]">#{supportLatestShipment.orderId}</span>
+                      Latest shipment order: <span className="font-semibold text-[var(--color-ink)]">#{supportLatestShipment.orderId}</span>
                     </p>
                     <p>
                       Courier:{" "}
-                      <span className="font-semibold text-[#0F3D2E]">{supportLatestShipment.ship.carrier || "Pending assignment"}</span>
+                      <span className="font-semibold text-[var(--color-ink)]">{supportLatestShipment.ship.carrier || "Pending assignment"}</span>
                     </p>
                     <p>
-                      AWB: <span className="font-mono text-[#0F3D2E]">{supportLatestShipment.ship.awbCode || "Not assigned"}</span>
+                      AWB: <span className="font-mono text-[var(--color-ink)]">{supportLatestShipment.ship.awbCode || "Not assigned"}</span>
                     </p>
                     <p>
                       Status:{" "}
-                      <span className="font-semibold text-[#0F3D2E]">
+                      <span className="font-semibold text-[var(--color-ink)]">
                         {supportLatestShipment.ship.shiprocketStatusLabel || supportLatestShipment.ship.status}
                       </span>
                     </p>
                     <p>Updated: {formatOrderDateShort(supportLatestShipment.ship.createdAt)}</p>
                   </div>
                 ) : (
-                  <p className="mt-3 text-sm text-[#615A50]">No shipment records yet.</p>
+                  <p className="mt-3 text-sm text-[var(--color-muted)]">No shipment records yet.</p>
                 )}
               </section>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Payment and refund info</p>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-subtle)]">
+                <Kicker>Payment and refund info</Kicker>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-xl border border-[#E6E0D5] bg-white px-3 py-2 text-[#615A50]">
-                    Paid: <span className="font-semibold text-[#0F3D2E]">{supportPaymentSummary.paid}</span>
+                  <div className="rounded-xl border border-[var(--color-line)] bg-white px-3 py-2 text-[var(--color-muted)]">
+                    Paid: <span className="font-semibold text-[var(--color-ink)]">{supportPaymentSummary.paid}</span>
                   </div>
-                  <div className="rounded-xl border border-[#E6E0D5] bg-white px-3 py-2 text-[#615A50]">
-                    Pending: <span className="font-semibold text-[#0F3D2E]">{supportPaymentSummary.pending}</span>
+                  <div className="rounded-xl border border-[var(--color-line)] bg-white px-3 py-2 text-[var(--color-muted)]">
+                    Pending: <span className="font-semibold text-[var(--color-ink)]">{supportPaymentSummary.pending}</span>
                   </div>
-                  <div className="rounded-xl border border-[#E6E0D5] bg-white px-3 py-2 text-[#615A50]">
-                    Refunded: <span className="font-semibold text-[#0F3D2E]">{supportPaymentSummary.refunded}</span>
+                  <div className="rounded-xl border border-[var(--color-line)] bg-white px-3 py-2 text-[var(--color-muted)]">
+                    Refunded: <span className="font-semibold text-[var(--color-ink)]">{supportPaymentSummary.refunded}</span>
                   </div>
-                  <div className="rounded-xl border border-[#E6E0D5] bg-white px-3 py-2 text-[#615A50]">
-                    Failed: <span className="font-semibold text-[#0F3D2E]">{supportPaymentSummary.failed}</span>
+                  <div className="rounded-xl border border-[var(--color-line)] bg-white px-3 py-2 text-[var(--color-muted)]">
+                    Failed: <span className="font-semibold text-[var(--color-ink)]">{supportPaymentSummary.failed}</span>
                   </div>
                 </div>
-                <p className="mt-3 text-xs leading-6 text-[#615A50]">Razorpay reference IDs and refund state are visible in your order details timeline.</p>
+                <p className="mt-3 text-xs leading-6 text-[var(--color-muted)]">Razorpay reference IDs and refund state are visible in your order details timeline.</p>
               </section>
 
-              <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">Raise a request</p>
+              <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-subtle)]">
+                <Kicker>Raise a request</Kicker>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <select
                     value={supportCategory}
                     onChange={(e) => setSupportCategory(e.target.value as SupportCategory)}
-                    className="h-10 rounded-md border border-[#DDD4C7] bg-white px-3 text-sm text-[#0F3D2E]"
+                    className="h-10 rounded-md border border-[var(--color-line)] bg-white px-3 text-sm text-[var(--color-ink)]"
                   >
                     <option value="order">Order</option>
                     <option value="payment">Payment</option>
@@ -1746,7 +1788,7 @@ export function ProfileAuthenticatedContent({
                   <select
                     value={supportOrderId}
                     onChange={(e) => setSupportOrderId(e.target.value)}
-                    className="h-10 rounded-md border border-[#DDD4C7] bg-white px-3 text-sm text-[#0F3D2E]"
+                    className="h-10 rounded-md border border-[var(--color-line)] bg-white px-3 text-sm text-[var(--color-ink)]"
                   >
                     <option value="">Select order (optional)</option>
                     {sortedOrders.map((o) => (
@@ -1760,29 +1802,29 @@ export function ProfileAuthenticatedContent({
                   value={supportMessage}
                   onChange={(e) => setSupportMessage(e.target.value)}
                   placeholder="Tell us what happened..."
-                  className="mt-2 min-h-[92px] w-full rounded-md border border-[#DDD4C7] bg-white px-3 py-2 text-sm text-[#0F3D2E]"
+                  className="mt-2 min-h-[92px] w-full rounded-md border border-[var(--color-line)] bg-white px-3 py-2 text-sm text-[var(--color-ink)]"
                 />
                 <input
                   type="file"
                   multiple
                   accept="image/*"
                   onChange={(e) => setSupportFiles(Array.from(e.target.files ?? []))}
-                  className="mt-2 block w-full text-xs text-[#615A50]"
+                  className="mt-2 block w-full text-xs text-[var(--color-muted)]"
                 />
                 {supportFiles.length > 0 ? (
-                  <p className="mt-1 text-xs text-[#615A50]">{supportFiles.length} file(s) selected</p>
+                  <p className="mt-1 text-xs text-[var(--color-muted)]">{supportFiles.length} file(s) selected</p>
                 ) : null}
-                <a
-                  href={supportEmailHref}
-                  className="mt-3 inline-flex rounded-full bg-[#C9A646] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white"
+                <Button
+                  asChild
+                  className="mt-3 rounded-full border-[var(--color-gold)] bg-[var(--color-gold)] text-[var(--color-deep)] hover:border-[var(--color-gold-soft)] hover:bg-[var(--color-gold-soft)]"
                 >
-                  Create support email draft
-                </a>
+                  <a href={supportEmailHref}>Create support email draft</a>
+                </Button>
               </section>
             </div>
 
-            <section className="rounded-2xl border border-[#E8E0D4] bg-[#FFFCF8] p-6 text-sm text-[#615A50] shadow-[0_4px_24px_rgba(10,42,32,0.04)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8B816D]">FAQ</p>
+            <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-muted)] shadow-[var(--shadow-subtle)]">
+              <Kicker>FAQ</Kicker>
               <ul className="mt-3 space-y-2">
                 <li>Where is my order? Use Orders &gt; Refresh tracking for latest courier scan.</li>
                 <li>When will refund arrive? Usually 3-7 business days after refund is processed.</li>
@@ -1790,7 +1832,7 @@ export function ProfileAuthenticatedContent({
                 <li>How to contact quickly? Use WhatsApp/phone during support hours for urgent issues.</li>
               </ul>
               {defaultAddress ? (
-                <p className="mt-3 text-xs text-[#8B816D]">Default delivery address on file: {formatAddress(defaultAddress)}</p>
+                <p className="mt-3 text-xs text-[var(--color-muted)]">Default delivery address on file: {formatAddress(defaultAddress)}</p>
               ) : null}
             </section>
           </div>
@@ -1816,35 +1858,36 @@ export function ProfileAuthenticatedContent({
       >
         <DialogContent
           title=""
-          className="max-w-lg border border-[#E4DDD4] bg-[#FAF7F2] shadow-[0_28px_64px_-16px_rgba(40,32,28,0.18)] [&>div:first-of-type]:border-0 [&>div:first-of-type]:p-4 [&>div:first-of-type]:pb-0"
+          className="max-w-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)] [&>div:first-of-type]:border-0 [&>div:first-of-type]:p-4 [&>div:first-of-type]:pb-0"
           contentClassName="space-y-6 px-6 pb-8 pt-2 sm:px-8"
         >
-          <h2 className="text-center font-[family-name:var(--font-display)] text-2xl font-semibold leading-tight tracking-tight text-[#1C1917] sm:text-[1.65rem]">
+          <h2 className="text-center font-display text-2xl font-semibold leading-tight tracking-tight text-[var(--color-ink)] sm:text-[1.65rem]">
             Wait! We&apos;re sad to see you go.
           </h2>
-          <p className="text-center text-sm leading-[1.7] text-[#5C5650] sm:text-[0.9375rem]">
+          <p className="text-center text-sm leading-[1.7] text-[var(--color-muted)] sm:text-[0.9375rem]">
             {cancelDialogItem
               ? "Only this item will be cancelled. Shipping will not be refunded unless all items in this order are cancelled."
               : `Each piece at Sudatta's is carefully prepared to ensure it reaches you in perfect condition. If there's a specific reason for your cancellation\u2014like a change in size or a delivery timing concern\u2014please let us know. We'd love the chance to make it right before we halt the process.`}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
-            <button
+            <Button
               type="button"
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#4A2F2C] px-4 py-3.5 text-sm font-semibold text-[#FAF4EB] shadow-[0_6px_20px_rgba(74,47,44,0.25)] transition hover:bg-[#3E2826]"
+              className="flex-1"
               onClick={() => setCancelDialogOrderId(null)}
             >
-              <Check className="h-5 w-5 shrink-0 text-[#E7CF82]" strokeWidth={2.25} aria-hidden />
+              <Check className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />
               Keep My Selection
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#2C2620]/18 bg-[#F0E8DE] px-4 py-3.5 text-sm font-semibold text-[#2C2620] transition hover:bg-[#E8DFD2]"
+              variant="outline"
+              className="flex-1"
               onClick={() => void confirmCancelOrder()}
               disabled={!cancelDialogOrderId && !cancelDialogItem}
             >
               <X className="h-5 w-5 shrink-0 opacity-80" strokeWidth={2} aria-hidden />
               Continue with Cancellation
-            </button>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

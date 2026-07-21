@@ -81,6 +81,10 @@ async fn get_user_pii_export_returns_pii_no_password() {
         full_name: Some("Full Name".to_string()),
         address: Some("123 St".to_string()),
         phone: Some("+123".to_string()),
+        first_name: Some("Full".to_string()),
+        last_name: Some("Name".to_string()),
+        gender: Some(core_db_entities::entity::sea_orm_active_enums::Gender::Female),
+        date_of_birth: chrono::NaiveDate::from_ymd_opt(1994, 7, 5),
         user_status_id: None,
         role_id: None,
         last_login_at: None,
@@ -101,6 +105,10 @@ async fn get_user_pii_export_returns_pii_no_password() {
     assert_eq!(res.full_name.as_deref(), Some("Full Name"));
     assert_eq!(res.address.as_deref(), Some("123 St"));
     assert_eq!(res.phone.as_deref(), Some("+123"));
+    assert_eq!(res.first_name.as_deref(), Some("Full"));
+    assert_eq!(res.last_name.as_deref(), Some("Name"));
+    assert_eq!(res.gender.as_deref(), Some("female"));
+    assert_eq!(res.date_of_birth.as_deref(), Some("1994-07-05"));
     assert!(!res.create_date.is_empty());
 }
 

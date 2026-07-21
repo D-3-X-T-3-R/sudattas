@@ -7,6 +7,18 @@ import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
 import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
 import { serverEnv, serverGraphqlUrl } from "@/lib/env/server";
 
+/**
+ * The backend serializes `extensions: {code, grpc_code}` on every GraphQL error (see
+ * backend/graphql/src/resolvers/error.rs IntoFieldError) — this was already present on the wire
+ * but untyped here, so callers couldn't read it without an unsafe cast. `code` mirrors gRPC status
+ * names (e.g. "FailedPrecondition", "NotFound") and should be preferred over substring-matching
+ * the human-readable `message`.
+ */
+export type GraphqlErrorEntry = {
+  message?: string;
+  extensions?: { code?: string; grpc_code?: number };
+};
+
 export function graphQlUrl(): string {
   return serverGraphqlUrl();
 }
@@ -84,7 +96,7 @@ async function callGraphqlRaw<T = unknown>(
   query: string,
   variables: Record<string, unknown> = {},
   extraHeaders: Record<string, string> = {}
-): Promise<{ data?: T; errors?: Array<{ message?: string }> }> {
+): Promise<{ data?: T; errors?: Array<GraphqlErrorEntry> }> {
   try {
     const forwardingHeaders = await inboundForwardingHeaders();
     const res = await fetchWithResilience(
@@ -106,7 +118,7 @@ async function callGraphqlRaw<T = unknown>(
     if (!res.ok) {
       return { errors: [{ message: text || `HTTP ${res.status}` }] };
     }
-    return JSON.parse(text) as { data?: T; errors?: Array<{ message?: string }> };
+    return JSON.parse(text) as { data?: T; errors?: Array<GraphqlErrorEntry> };
   } catch (error) {
     return {
       errors: [
@@ -123,7 +135,7 @@ export async function callGraphql<T = unknown>(
   query: string,
   variables: Record<string, unknown> = {},
   extraHeaders: Record<string, string> = {}
-): Promise<{ data?: T; errors?: Array<{ message?: string }> }> {
+): Promise<{ data?: T; errors?: Array<GraphqlErrorEntry> }> {
   return callGraphqlRaw<T>(
     {
       Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}`,
@@ -139,7 +151,7 @@ export async function callGraphqlAsCustomer<T = unknown>(
   query: string,
   variables: Record<string, unknown> = {},
   extraHeaders: Record<string, string> = {}
-): Promise<{ data?: T; errors?: Array<{ message?: string }> }> {
+): Promise<{ data?: T; errors?: Array<GraphqlErrorEntry> }> {
   const internalSecret = serverEnv.INTERNAL_API_SECRET?.trim();
   if (!internalSecret) {
     return {
@@ -162,7 +174,7 @@ export async function callGraphqlAsInternalService<T = unknown>(
   query: string,
   variables: Record<string, unknown> = {},
   extraHeaders: Record<string, string> = {}
-): Promise<{ data?: T; errors?: Array<{ message?: string }> }> {
+): Promise<{ data?: T; errors?: Array<GraphqlErrorEntry> }> {
   const internalSecret = serverEnv.INTERNAL_API_SECRET?.trim();
   if (!internalSecret) {
     return {

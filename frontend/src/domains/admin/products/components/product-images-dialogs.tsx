@@ -92,8 +92,8 @@ function ReviewImagesDialog(props: ProductImagesDialogsProps) {
   return (
     <Dialog open={imageDialogOpen} onOpenChange={setImageDialogOpen}>
       <DialogContent title="Review images" showClose onEscapeKeyDown={() => setImageDialogOpen(false)} onPointerDownOutside={() => setImageDialogOpen(false)}>
-        <div className="space-y-4 text-sm text-[var(--color-muted)]">
-          <p className="font-medium text-[var(--color-ink)]">{editingProductId ? "All product images - drag to reorder. First is the thumbnail." : "Add your product images"}</p>
+        <div className="space-y-4 text-[15px] text-[var(--color-muted)]">
+          <p className="font-medium text-[var(--color-ink)]">{editingProductId ? "All product photos — drag to reorder. First is the thumbnail." : "Add your product photos"}</p>
           {editingProductId && (existingProductImages.length > 0 || imagePreviews.length > 0) ? (
             <div className="grid max-h-[60vh] grid-cols-3 gap-2 overflow-y-auto">
               {reviewList.map((item, idx) => (
@@ -200,7 +200,7 @@ function ReorderImagesDialog(props: ProductImagesDialogsProps) {
   return (
     <Dialog open={reorderImagesOpen} onOpenChange={setReorderImagesOpen}>
       <DialogContent title="Reorder product images" showClose onEscapeKeyDown={() => setReorderImagesOpen(false)} onPointerDownOutside={() => setReorderImagesOpen(false)}>
-        <p className="mb-3 text-xs text-[var(--color-muted)]">Drag to change order. First image is the thumbnail.</p>
+        <p className="mb-3 text-sm text-[var(--color-muted)]">Drag to change order. First image is the thumbnail.</p>
         <div className="grid max-h-[60vh] grid-cols-3 gap-2 overflow-y-auto">
           {reorderableImages.map((item, idx) => (
             <div

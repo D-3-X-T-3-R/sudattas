@@ -9,7 +9,6 @@ export type Toast = {
   title?: string;
   description: string;
   variant?: ToastVariant;
-  /** When set, any existing toast with the same group is removed before showing this one (e.g. "wishlist" = only one wishlist toast at a time). */
   group?: string;
 };
 
@@ -65,11 +64,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           {toasts.map((toast) => (
             <div key={toast.id} className="toast-item pointer-events-auto">
               <div className="toast-body">
-                <div className="toast-icon" aria-hidden>✓</div>
+                <div className="toast-icon" aria-hidden>
+                  {toast.variant === "error" ? "!" : "?"}
+                </div>
                 <div className="toast-content">
-                  {toast.title && (
-                    <div className="toast-title">{toast.title}</div>
-                  )}
+                  {toast.title && <div className="toast-title">{toast.title}</div>}
                   <div className="toast-description">{toast.description}</div>
                 </div>
                 <button
@@ -78,7 +77,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   className="toast-close"
                   aria-label="Dismiss notification"
                 >
-                  ×
+                  x
                 </button>
               </div>
             </div>
@@ -96,4 +95,3 @@ export function useToast() {
   }
   return ctx;
 }
-

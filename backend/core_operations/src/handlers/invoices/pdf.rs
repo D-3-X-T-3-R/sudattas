@@ -18,6 +18,7 @@ const INTER_REGULAR: &[u8] = include_bytes!("assets/fonts/Inter-Regular.ttf");
 const IST_OFFSET_SECONDS: i32 = 5 * 3600 + 30 * 60;
 const DEFAULT_SELLER_NAME: &str = "Sudatta's";
 const DEFAULT_SUPPORT_EMAIL: &str = "sudattasdesignerboutique@gmail.com";
+const DEFAULT_SUPPORT_PHONE: &str = "+91 90737 64577";
 
 #[derive(Clone)]
 struct SellerInfo {
@@ -274,7 +275,7 @@ fn seller_info() -> SellerInfo {
         .ok()
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| "Not available".to_string());
+        .unwrap_or_else(|| DEFAULT_SUPPORT_PHONE.to_string());
 
     SellerInfo {
         name,

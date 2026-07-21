@@ -656,6 +656,10 @@ async fn seed_checkout_user(txn: &sea_orm::DatabaseTransaction, tag: i64) -> (i6
         full_name: ActiveValue::Set(None),
         address: ActiveValue::Set(None),
         phone: ActiveValue::Set(Some(phone.clone())),
+        first_name: ActiveValue::NotSet,
+        last_name: ActiveValue::NotSet,
+        gender: ActiveValue::NotSet,
+        date_of_birth: ActiveValue::NotSet,
         create_date: ActiveValue::Set(Utc::now()),
         role_id: ActiveValue::Set(Some(role.role_id)),
         email_verified: ActiveValue::NotSet,
@@ -1146,6 +1150,7 @@ async fn ingest_shiprocket_webhook_once(
             payload_json: payload.to_string(),
             signature_verified,
             provider_event_id: Some(provider_event_id.to_string()),
+            raw_signature: None,
         }),
     )
     .await

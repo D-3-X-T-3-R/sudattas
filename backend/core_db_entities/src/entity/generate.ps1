@@ -26,8 +26,18 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Generate entities from local Docker MySQL (SUDATTAS schema).
+$EnvFile = Join-Path $PSScriptRoot "..\..\..\.env"
+if (-not (Test-Path $EnvFile)) {
+    throw "ERROR: .env not found at $EnvFile. Cannot resolve DATABASE_URL."
+}
+$databaseLine = Get-Content $EnvFile | Where-Object { $_ -match '^\s*DATABASE_URL=' } | Select-Object -First 1
+if (-not $databaseLine) {
+    throw "ERROR: DATABASE_URL not found in $EnvFile."
+}
+$DatabaseUrl = $databaseLine.Split('=', 2)[1].Trim()
+
 sea-orm-cli generate entity `
-  -u "mysql://root:12345678@127.0.0.1:3306/SUDATTAS" `
+  -u $DatabaseUrl `
   -o "." `
   --with-serde both `
   --date-time-crate chrono `

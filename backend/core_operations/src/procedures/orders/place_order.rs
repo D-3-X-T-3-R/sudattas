@@ -15,7 +15,7 @@ use crate::order_state_machine;
 
 use core_db_entities::entity::prelude::IdempotencyKeys;
 use core_db_entities::entity::{
-    cart, idempotency_keys, orders, product_variants,
+    cart, idempotency_keys, orders, product_variants, sea_orm_active_enums::PaymentStatus,
     sea_orm_active_enums::Status as IdempotencyStatus, shipping_addresses,
 };
 use proto::proto::core::{
@@ -302,9 +302,71 @@ async fn place_order_in_txn(
         ],
     );
 
+    // Cart/variant/product lookups happen up front so a single, consistently-shaped
+    // payload (including the cart snapshot) can be hashed once and reused both for
+    // replay-detection below and for the hash persisted on the idempotency row further
+    // down. Previously these were computed separately with different payload shapes
+    // (one omitted the cart), so a legitimate retry's hash never matched the persisted
+    // hash and every replay was misclassified as a payload conflict.
+    let cart_items = get_cart_items(
+        txn,
+        Request::new(GetCartItemsRequest {
+            user_id: Some(req.user_id),
+            session_id: None,
+        }),
+    )
+    .await?
+    .into_inner()
+    .items;
+
+    let cart_items = pick_selected_cart_items(cart_items, &selected_cart_ids)?;
+
+    let (variant_quantity_map, variant_ids): (HashMap<i64, i64>, Vec<i64>) = cart_items
+        .iter()
+        .map(|item| ((item.variant_id, item.quantity), item.variant_id))
+        .unzip();
+
+    let variants = product_variants::Entity::find()
+        .filter(product_variants::Column::VariantId.is_in(variant_ids.clone()))
+        .all(txn)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+    let product_ids: Vec<i64> = variants.iter().map(|v| v.product_id).collect();
+    let order_products =
+        get_products_by_id(txn, Request::new(GetProductsByIdRequest { product_ids }))
+            .await?
+            .into_inner()
+            .items;
+    let variants_by_id: HashMap<i64, product_variants::Model> =
+        variants.into_iter().map(|v| (v.variant_id, v)).collect();
+    let products_by_id: HashMap<i64, proto::proto::core::ProductResponse> = order_products
+        .iter()
+        .map(|p| (p.product_id, p.clone()))
+        .collect();
+
+    // Build a stable representation of the logical request payload for idempotency hashing.
+    let cart_snapshot: Vec<_> = cart_items
+        .iter()
+        .map(|item| {
+            json!({
+                "variant_id": item.variant_id,
+                "quantity": item.quantity,
+            })
+        })
+        .collect();
+    let payload_json = json!({
+        "user_id": req.user_id,
+        "shipping_address_id": req.shipping_address_id,
+        "coupon_code": req.coupon_code,
+        "selected_cart_ids": selected_cart_ids,
+        "payment_mode": normalized_payment_mode.as_str(),
+        "cart": cart_snapshot,
+    });
+    let request_hash = compute_request_hash(&payload_json.to_string());
+
     // If an idempotency key is present, check for an existing Processed/Pending result.
     // For Processed we must distinguish replay (same payload) from conflict (different payload):
-    // load cart and compare request_hash when cart is non-empty; if different, return AlreadyExists.
+    // compare request_hash (which includes the cart snapshot); if different, return AlreadyExists.
     const IDEMPOTENCY_SCOPE: &str = "place_order";
     if let Some(ref key) = idempotency_key {
         if let Some(existing) = IdempotencyKeys::find()
@@ -316,15 +378,7 @@ async fn place_order_in_txn(
         {
             match existing.status {
                 IdempotencyStatus::Processed => {
-                    let payload_json = json!({
-                        "user_id": req.user_id,
-                        "shipping_address_id": req.shipping_address_id,
-                        "coupon_code": req.coupon_code,
-                        "selected_cart_ids": selected_cart_ids,
-                        "payment_mode": normalized_payment_mode.as_str(),
-                    });
-                    let incoming_hash = compute_request_hash(&payload_json.to_string());
-                    if existing.request_hash != incoming_hash {
+                    if existing.request_hash != request_hash {
                         return Err(Status::already_exists(
                             "Idempotency key reuse with different payload",
                         ));
@@ -385,62 +439,6 @@ async fn place_order_in_txn(
             }
         }
     }
-
-    let cart_items = get_cart_items(
-        txn,
-        Request::new(GetCartItemsRequest {
-            user_id: Some(req.user_id),
-            session_id: None,
-        }),
-    )
-    .await?
-    .into_inner()
-    .items;
-
-    let cart_items = pick_selected_cart_items(cart_items, &selected_cart_ids)?;
-
-    let (variant_quantity_map, variant_ids): (HashMap<i64, i64>, Vec<i64>) = cart_items
-        .iter()
-        .map(|item| ((item.variant_id, item.quantity), item.variant_id))
-        .unzip();
-
-    let variants = product_variants::Entity::find()
-        .filter(product_variants::Column::VariantId.is_in(variant_ids.clone()))
-        .all(txn)
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
-    let product_ids: Vec<i64> = variants.iter().map(|v| v.product_id).collect();
-    let order_products =
-        get_products_by_id(txn, Request::new(GetProductsByIdRequest { product_ids }))
-            .await?
-            .into_inner()
-            .items;
-    let variants_by_id: HashMap<i64, product_variants::Model> =
-        variants.into_iter().map(|v| (v.variant_id, v)).collect();
-    let products_by_id: HashMap<i64, proto::proto::core::ProductResponse> = order_products
-        .iter()
-        .map(|p| (p.product_id, p.clone()))
-        .collect();
-
-    // Build a stable representation of the logical request payload for idempotency hashing.
-    let cart_snapshot: Vec<_> = cart_items
-        .iter()
-        .map(|item| {
-            json!({
-                "variant_id": item.variant_id,
-                "quantity": item.quantity,
-            })
-        })
-        .collect();
-    let payload_json = json!({
-        "user_id": req.user_id,
-        "shipping_address_id": req.shipping_address_id,
-        "coupon_code": req.coupon_code,
-        "selected_cart_ids": selected_cart_ids,
-        "payment_mode": normalized_payment_mode.as_str(),
-        "cart": cart_snapshot,
-    });
-    let request_hash = compute_request_hash(&payload_json.to_string());
 
     // If an idempotency key is provided, enforce payload consistency and insert Pending row if new.
     // (Processed/Pending replay already returned above.)
@@ -637,6 +635,27 @@ async fn place_order_in_txn(
     let grand_total_paise = paise_checked_add(items_total_minor_after_discount, shipping_minor)
         .map_err(|e| Status::internal(format!("Overflow computing grand total in paise: {}", e)))?;
 
+    // Create the Razorpay gateway order before any DB writes for this checkout (COD
+    // skips this entirely). This keeps the external call out of the inventory
+    // FOR UPDATE lock window below: if Razorpay fails, nothing has been written yet
+    // and the whole nested transaction simply rolls back — no order, no inventory
+    // decrement, cart untouched. If Razorpay succeeds but a later step in this
+    // transaction fails (e.g. a stock race), the Razorpay order is just never used;
+    // it's never paid and expires on Razorpay's side, which is harmless.
+    let prepaid_razorpay_order_id: Option<String> = if is_cod_checkout {
+        None
+    } else {
+        let mut receipt = format!("chk_{}_{}", req.user_id, Utc::now().timestamp_millis());
+        receipt.truncate(40);
+        Some(
+            crate::razorpay::create_order(grand_total_paise, "INR", &receipt)
+                .await
+                .map_err(|e| {
+                    Status::unavailable(format!("Unable to create Razorpay order: {e}"))
+                })?,
+        )
+    };
+
     let pending_status_id = order_state_machine::get_status_id(txn, "active_sale")
         .await
         .map_err(|e| Status::internal(e.to_string()))?
@@ -828,8 +847,10 @@ async fn place_order_in_txn(
     }
 
     if !is_cod_checkout {
-        // Create a pending payment intent with a real gateway order id before
-        // returning checkout data to the frontend.
+        // Persist the payment intent using the Razorpay order id obtained above
+        // (before any DB writes) — this is a DB-only write here, no network call,
+        // so it doesn't reintroduce holding the inventory locks during a Razorpay
+        // round-trip.
         let amount_paise = grand_total_paise;
         let _payment_intent = create_payment_intent(
             txn,
@@ -838,7 +859,7 @@ async fn place_order_in_txn(
                 user_id: req.user_id,
                 amount_paise,
                 currency: Some("INR".to_string()),
-                razorpay_order_id: None,
+                razorpay_order_id: prepaid_razorpay_order_id,
             }),
         )
         .await?
@@ -849,32 +870,20 @@ async fn place_order_in_txn(
         .ok_or_else(|| Status::internal("create_payment_intent returned no payment intent"))?;
     } else {
         // COD orders are accepted immediately without creating a Razorpay payment intent.
-        let confirmed_status_id = order_state_machine::get_status_id(txn, "confirmed")
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .ok_or_else(|| Status::internal("OrderStatus 'confirmed' not found"))?;
-        txn.execute(Statement::from_sql_and_values(
-            DbBackend::MySql,
-            r#"UPDATE Orders
-               SET StatusID = ?,
-                   updated_at = UTC_TIMESTAMP()
-               WHERE OrderID = ?"#,
-            [confirmed_status_id.into(), create_order.order_id.into()],
-        ))
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
-        let _ = create_order_event(
+        // Route through the order state machine (rather than a raw StatusID UPDATE) so
+        // COD orders get the same validation, order_event, and PAYMENT_CAPTURED outbox
+        // dispatch as online payments — the outbox event is what drives the confirmation
+        // email; a raw UPDATE bypassed it, so COD customers never received one.
+        order_state_machine::transition_order_status(
             txn,
-            tonic::Request::new(CreateOrderEventRequest {
-                order_id: create_order.order_id,
-                event_type: "cod_order_confirmed".to_string(),
-                from_status: Some("active_sale".to_string()),
-                to_status: Some("confirmed".to_string()),
-                actor_type: "customer".to_string(),
-                message: Some("COD order accepted and awaiting fulfillment".to_string()),
-            }),
+            create_order.order_id,
+            order_state_machine::OrderState::Paid,
+            "cod_order_confirmed",
+            "customer",
+            Some("COD order accepted and awaiting fulfillment"),
+            Some(PaymentStatus::Captured),
         )
-        .await;
+        .await?;
 
         let _ = crate::handlers::invoices::ensure_invoice_for_order(
             txn,

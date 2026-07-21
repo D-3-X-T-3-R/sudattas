@@ -5,14 +5,6 @@ import {
 } from "@/lib/server-session-auth";
 import { canonicalOrderStatusName, statusNameFromId } from "@/lib/order-state";
 
-function flowLog(message: string, meta?: Record<string, unknown>) {
-  if (meta) {
-    console.info(`[orders-flow][customer-api] ${message}`, meta);
-    return;
-  }
-  console.info(`[orders-flow][customer-api] ${message}`);
-}
-
 type OrderRow = {
   orderId: string;
   userId: string;
@@ -45,13 +37,10 @@ const ORDER_STATUS_QUERY = `query AccountOrderStatuses {
 }`;
 
 export async function GET() {
-  flowLog("orders list request received");
   const userId = await requireAuthenticatedCustomerUserId();
   if (!userId) {
-    flowLog("orders list rejected: unauthenticated");
     return apiError("Unable to resolve customer identity", 401, "UNAUTHORIZED");
   }
-  flowLog("loading orders list", { userId });
 
   const cancelWindowHours = Number.parseInt(
     (process.env.CANCEL_WINDOW_HOURS ?? "12").trim(),
@@ -80,10 +69,6 @@ export async function GET() {
   ]);
 
   if (ordersResult.errors?.length) {
-    flowLog("orders list graphql error", {
-      userId,
-      error: ordersResult.errors[0]?.message ?? "Failed to load orders",
-    });
     return apiError(
       ordersResult.errors[0]?.message ?? "Failed to load orders",
       400,
@@ -91,10 +76,6 @@ export async function GET() {
     );
   }
   if (statusesResult.errors?.length) {
-    flowLog("order status lookup graphql error", {
-      userId,
-      error: statusesResult.errors[0]?.message ?? "Failed to load order statuses",
-    });
     return apiError(
       statusesResult.errors[0]?.message ?? "Failed to load order statuses",
       400,
@@ -117,23 +98,12 @@ export async function GET() {
   }));
   const mismatchedOrder = orders.find((order) => order.userId !== userId);
   if (mismatchedOrder) {
-    flowLog("orders list identity mismatch", {
-      userId,
-      orderId: mismatchedOrder.orderId,
-      ownerUserId: mismatchedOrder.userId,
-    });
     return apiError(
       "Order identity mismatch for authenticated customer",
       403,
       "FORBIDDEN"
     );
   }
-  flowLog("orders list loaded", {
-    userId,
-    totalOrders: orders.length,
-    latestOrderId: orders[0]?.orderId ?? null,
-    statuses: orders.map((o) => o.statusName ?? o.statusId),
-  });
 
   return Response.json({
     ok: true,

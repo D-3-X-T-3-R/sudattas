@@ -39,6 +39,15 @@ impl GqlError {
     }
 }
 
+/// Message returned to clients in place of the raw text on opaque/unexpected gRPC statuses.
+/// core_operations puts driver/internal detail straight onto `Internal`/`Unknown`/`DataLoss`
+/// statuses (e.g. `map_db_error_to_status` embeds raw SQL driver error text); those codes mean
+/// "something we didn't anticipate", so the message is never something a client should act on
+/// and may otherwise leak schema/query details. Every other code (NotFound, InvalidArgument,
+/// FailedPrecondition, etc.) carries a message handlers deliberately wrote for the caller, so
+/// those pass through unchanged.
+const SANITIZED_INTERNAL_MESSAGE: &str = "Internal server error";
+
 pub fn map_err(status: Status) -> GqlError {
     let code: Code = match status.code() {
         StatusCode::Ok => Code::Ok,
@@ -61,10 +70,20 @@ pub fn map_err(status: Status) -> GqlError {
         #[allow(unreachable_patterns)]
         _ => Code::Unknown,
     };
-    GqlError {
-        code,
-        message: status.message().to_string(),
-    }
+
+    let message = match code {
+        Code::Internal | Code::Unknown | Code::DataLoss => {
+            tracing::error!(
+                grpc_code = ?status.code(),
+                detail = %status.message(),
+                "core_operations returned an opaque error; sanitizing message before returning to client"
+            );
+            SANITIZED_INTERNAL_MESSAGE.to_string()
+        }
+        _ => status.message().to_string(),
+    };
+
+    GqlError { code, message }
 }
 
 impl std::fmt::Display for GqlError {

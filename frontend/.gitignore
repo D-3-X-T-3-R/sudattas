@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# runtime-generated telemetry log — not source, must not be committed
+/.telemetry/
+
 # dependencies
 /node_modules
 /.pnp

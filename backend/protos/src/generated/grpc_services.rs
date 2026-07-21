@@ -69,6 +69,19 @@ pub struct CartItemsResponse {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<CartItemResponse>,
 }
+/// Merges a guest (session-scoped) cart into an authenticated user's cart, e.g.
+/// right after login. Rows for a variant already in the user's cart have their
+/// quantities summed; rows for a new variant are reassigned to the user.
+/// Returns the user's cart after merging.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MergeCartRequest {
+    #[prost(int64, tag = "1")]
+    pub user_id: i64,
+    #[prost(string, tag = "2")]
+    pub session_id: ::prost::alloc::string::String,
+}
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -392,6 +405,16 @@ pub struct UpdateUserRequest {
     pub phone: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "9")]
     pub role_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "10")]
+    pub first_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "11")]
+    pub last_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// "male" | "female" | "other"
+    #[prost(string, optional, tag = "12")]
+    pub gender: ::core::option::Option<::prost::alloc::string::String>,
+    /// ISO yyyy-mm-dd
+    #[prost(string, optional, tag = "13")]
+    pub date_of_birth: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -428,6 +451,16 @@ pub struct UserResponse {
     pub role_id: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "11")]
     pub user_status_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "12")]
+    pub first_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "13")]
+    pub last_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// "male" | "female" | "other"
+    #[prost(string, optional, tag = "14")]
+    pub gender: ::core::option::Option<::prost::alloc::string::String>,
+    /// ISO yyyy-mm-dd
+    #[prost(string, optional, tag = "15")]
+    pub date_of_birth: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -478,6 +511,16 @@ pub struct GetUserPiiExportResponse {
     pub phone: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, tag = "6")]
     pub create_date: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "7")]
+    pub first_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "8")]
+    pub last_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// "male" | "female" | "other"
+    #[prost(string, optional, tag = "9")]
+    pub gender: ::core::option::Option<::prost::alloc::string::String>,
+    /// ISO yyyy-mm-dd
+    #[prost(string, optional, tag = "10")]
+    pub date_of_birth: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2011,6 +2054,9 @@ pub struct CreateProductVariantRequest {
 pub struct SearchProductVariantRequest {
     #[prost(int64, tag = "1")]
     pub variant_id: i64,
+    /// when set, filters server-side instead of the caller fetching every variant and filtering client-side
+    #[prost(int64, optional, tag = "2")]
+    pub product_id: ::core::option::Option<i64>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2581,6 +2627,11 @@ pub struct IngestWebhookRequest {
     /// e.g. x-razorpay-event-id for replay protection
     #[prost(string, optional, tag = "6")]
     pub provider_event_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Raw provider signature/token header (e.g. X-Razorpay-Signature, X-Shiprocket-Token), forwarded so
+    /// core_operations can independently re-verify rather than trusting signature_verified from the caller.
+    /// Absent for internally-triggered replays, which fall back to signature_verified.
+    #[prost(string, optional, tag = "7")]
+    pub raw_signature: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2752,6 +2803,64 @@ pub struct ResolveNeedsReviewResponse {
     /// e.g. "Order marked as paid"
     #[prost(string, tag = "2")]
     pub message: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResolveRefundAttemptNeedsReviewRequest {
+    #[prost(int64, tag = "1")]
+    pub attempt_id: i64,
+    /// "retry" | "mark_settled"
+    #[prost(string, tag = "2")]
+    pub resolution: ::prost::alloc::string::String,
+    /// admin identifier for audit (e.g. user_id or "admin")
+    #[prost(string, tag = "3")]
+    pub actor_id: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResolveRefundAttemptNeedsReviewResponse {
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+    /// e.g. "Refund attempt reset to pending_external for retry"
+    #[prost(string, tag = "2")]
+    pub message: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetOrderStatsRequest {
+    /// unix seconds; omit for all-time
+    #[prost(int64, optional, tag = "1")]
+    pub order_date_start: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "2")]
+    pub order_date_end: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OrderStatusCount {
+    #[prost(int64, tag = "1")]
+    pub status_id: i64,
+    #[prost(string, tag = "2")]
+    pub status_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "3")]
+    pub count: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetOrderStatsResponse {
+    #[prost(int64, tag = "1")]
+    pub total_orders: i64,
+    #[prost(int64, tag = "2")]
+    pub total_revenue_paise: i64,
+    #[prost(message, repeated, tag = "3")]
+    pub by_status: ::prost::alloc::vec::Vec<OrderStatusCount>,
+    /// not date-filtered — current total registered users
+    #[prost(int64, tag = "4")]
+    pub customer_count: i64,
 }
 /// Readiness (health) check — used by orchestrators to verify DB and optional deps.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -3097,6 +3206,31 @@ pub mod grpc_services_client {
                 .insert(
                     GrpcMethod::new("grpc_services.GRPCServices", "EnqueueAbandonedCart"),
                 );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn merge_cart(
+            &mut self,
+            request: impl tonic::IntoRequest<super::MergeCartRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::CartItemsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/MergeCart",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "MergeCart"));
             self.inner.unary(req, path, codec).await
         }
         /// Product
@@ -6511,6 +6645,63 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn resolve_refund_attempt_needs_review(
+            &mut self,
+            request: impl tonic::IntoRequest<
+                super::ResolveRefundAttemptNeedsReviewRequest,
+            >,
+        ) -> std::result::Result<
+            tonic::Response<super::ResolveRefundAttemptNeedsReviewResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/ResolveRefundAttemptNeedsReview",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "ResolveRefundAttemptNeedsReview",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_order_stats(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetOrderStatsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetOrderStatsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/GetOrderStats",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "GetOrderStats"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Shipments
         pub async fn create_shipment(
             &mut self,
@@ -6718,6 +6909,13 @@ pub mod grpc_services_server {
             request: tonic::Request<super::EnqueueAbandonedCartRequest>,
         ) -> std::result::Result<
             tonic::Response<super::EnqueueAbandonedCartResponse>,
+            tonic::Status,
+        >;
+        async fn merge_cart(
+            &self,
+            request: tonic::Request<super::MergeCartRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::CartItemsResponse>,
             tonic::Status,
         >;
         /// Product
@@ -7557,6 +7755,20 @@ pub mod grpc_services_server {
             tonic::Response<super::ResolveNeedsReviewResponse>,
             tonic::Status,
         >;
+        async fn resolve_refund_attempt_needs_review(
+            &self,
+            request: tonic::Request<super::ResolveRefundAttemptNeedsReviewRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ResolveRefundAttemptNeedsReviewResponse>,
+            tonic::Status,
+        >;
+        async fn get_order_stats(
+            &self,
+            request: tonic::Request<super::GetOrderStatsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetOrderStatsResponse>,
+            tonic::Status,
+        >;
         /// Shipments
         async fn create_shipment(
             &self,
@@ -8088,6 +8300,52 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = EnqueueAbandonedCartSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/MergeCart" => {
+                    #[allow(non_camel_case_types)]
+                    struct MergeCartSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::MergeCartRequest>
+                    for MergeCartSvc<T> {
+                        type Response = super::CartItemsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::MergeCartRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::merge_cart(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = MergeCartSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -14223,6 +14481,107 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ResolveNeedsReviewSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/ResolveRefundAttemptNeedsReview" => {
+                    #[allow(non_camel_case_types)]
+                    struct ResolveRefundAttemptNeedsReviewSvc<T: GrpcServices>(
+                        pub Arc<T>,
+                    );
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<
+                        super::ResolveRefundAttemptNeedsReviewRequest,
+                    > for ResolveRefundAttemptNeedsReviewSvc<T> {
+                        type Response = super::ResolveRefundAttemptNeedsReviewResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::ResolveRefundAttemptNeedsReviewRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::resolve_refund_attempt_needs_review(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = ResolveRefundAttemptNeedsReviewSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/GetOrderStats" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetOrderStatsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::GetOrderStatsRequest>
+                    for GetOrderStatsSvc<T> {
+                        type Response = super::GetOrderStatsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetOrderStatsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::get_order_stats(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetOrderStatsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

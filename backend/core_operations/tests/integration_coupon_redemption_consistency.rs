@@ -396,6 +396,7 @@ async fn integration_coupon_redemption_recorded_once_on_webhook_capture_and_repl
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: Some(format!("evt:first:{}", payment_id)),
+            raw_signature: None,
         }),
     )
     .await;
@@ -415,6 +416,7 @@ async fn integration_coupon_redemption_recorded_once_on_webhook_capture_and_repl
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: Some(format!("evt:second:{}", payment_id)),
+            raw_signature: None,
         }),
     )
     .await;
@@ -506,6 +508,7 @@ async fn integration_coupon_redemption_stays_exactly_once_across_verify_retry_an
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: Some(format!("evt:reconcile:{}", setup.order_id)),
+            raw_signature: None,
         }),
     )
     .await;

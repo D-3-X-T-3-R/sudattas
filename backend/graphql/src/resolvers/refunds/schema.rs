@@ -70,6 +70,16 @@ pub struct ResolveNeedsReviewInput {
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Resolve a RefundAttempt stuck in needs_review")]
+pub struct ResolveRefundAttemptNeedsReviewInput {
+    pub attempt_id: String,
+    /// "retry" | "mark_settled"
+    pub resolution: String,
+    /// admin identifier (e.g. user_id or "admin")
+    pub actor_id: String,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
 #[graphql(description = "Get refunds")]
 pub struct GetRefund {
     pub refund_id: Option<String>,

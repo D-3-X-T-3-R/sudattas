@@ -3,7 +3,10 @@ use core_db_entities::entity::inventory;
 use proto::proto::core::{
     InventoryItemResponse, InventoryItemsResponse, UpdateInventoryItemRequest,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait};
+use sea_orm::{
+    sea_query::LockType, ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait,
+    QuerySelect,
+};
 use tonic::{Request, Response, Status};
 
 pub async fn update_inventory_item(
@@ -12,7 +15,11 @@ pub async fn update_inventory_item(
 ) -> Result<Response<InventoryItemsResponse>, Status> {
     let req = request.into_inner();
 
+    // Lock the row for the duration of this transaction so a concurrent checkout decrement
+    // (which also locks the row FOR UPDATE before writing) can't be read-modify-write clobbered
+    // by this admin update computing its new values from a stale snapshot.
     let existing = inventory::Entity::find_by_id(req.inventory_id)
+        .lock(LockType::Update)
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?

@@ -1,52 +1,97 @@
 @import "tailwindcss";
 
-/* Hide main document scrollbar; scrolling still works (wheel, touch, keys). */
 html {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 html::-webkit-scrollbar {
   display: none;
 }
 
 :root {
-  /* Base palette shared by storefront + admin */
-  --color-ivory: #F5EFE6;
-  --color-ink: #1a1814;
-  --color-muted: #6b6560;
-  --color-line: #e0d9d0;
-  --color-accent-green: #8bc34a;
-  --color-accent-brown: #6b3f1a;
-  --color-accent-gold: #a68b5b;
-  --color-warm-white: #faf8f5;
+  --color-bg-ivory: #F6F3EA;
+  --color-bg-parchment: #F3EEE4;
+  --color-bg-muted: #EFE8DC;
+  --color-surface: #FBF9F4;
+  --color-surface-soft: #F8F5EE;
+  --color-line: #DED7C8;
+  --color-line-strong: #CFC6B4;
+  --color-ink: #2D2A26;
+  --color-muted: #6B6257;
+  --color-green: #0F3D2E;
+  --color-green-2: #1E5B43;
+  --color-gold: #C9A646;
+  --color-gold-soft: #E7CF82;
+  --color-focus: rgba(15, 61, 46, 0.32);
 
-  /* Default (storefront) theme */
-  --background: var(--color-ivory);
+  --color-ivory: var(--color-bg-ivory);
+  --color-warm-white: var(--color-surface);
+  --color-accent-green: var(--color-green-2);
+  --color-accent-brown: #715A36;
+  --color-accent-gold: var(--color-gold);
+  --color-surface-muted: var(--color-surface-soft);
+  --color-paper: var(--color-surface);
+
+  /* Tonal layering for alternating section rhythm */
+  --color-section-alt: #F1E9D8;
+  --color-deep: var(--color-green);
+  --color-deep-2: #143F30;
+  --color-on-deep: #F3EFE3;
+  --color-on-deep-muted: rgba(243, 239, 227, 0.68);
+
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  --shadow-soft: 0 8px 24px rgba(45, 42, 38, 0.06);
+  --shadow-subtle: 0 2px 10px rgba(45, 42, 38, 0.05);
+  --shadow-action: 0 10px 24px rgba(15, 61, 46, 0.12);
+  --shadow-lift: 0 22px 48px rgba(15, 61, 46, 0.14);
+
+  --container-max: 2560px;
+  --gutter-mobile: 16px;
+  --gutter-tablet: 16px;
+
+  --background: var(--color-bg-ivory);
   --foreground: var(--color-ink);
 
-  /* Admin dashboard palette tokens (overridden inside .admin-root) */
-  --admin-sidebar-bg: #ffffff;
-  --admin-sidebar-text: #1f2933;
-  --admin-sidebar-text-muted: #6b7280;
-  --admin-sidebar-hover: #f3f4f6;
-  --admin-sidebar-active: #e5e7eb;
-  --admin-sidebar-accent: #a68b5b;
-  --admin-surface: #f9fafb;
-  --admin-surface-muted: #ffffff;
-  --admin-border-subtle: rgba(148, 163, 184, 0.4);
-  --admin-card-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --admin-sidebar-bg: #F8F4EC;
+  --admin-sidebar-text: #2D2A26;
+  --admin-sidebar-text-muted: #6B6257;
+  --admin-sidebar-hover: #F0E9DD;
+  --admin-sidebar-active: #ECE3D4;
+  --admin-sidebar-accent: #0F3D2E;
+  --admin-surface: #F6F1E7;
+  --admin-surface-muted: #FBF8F2;
+  --admin-border-subtle: rgba(110, 96, 74, 0.22);
+  --admin-card-shadow: 0 10px 26px rgba(45, 42, 38, 0.08);
 }
 
-/* Storefront skin (keeps current light look) */
 .storefront-root {
-  --background: var(--color-ivory);
+  --background: var(--color-bg-ivory);
   --foreground: var(--color-ink);
 }
 
-/* Admin skin (light shell, slightly more neutral than storefront) */
+html.storefront-mobile-utilities nextjs-portal {
+  display: none !important;
+}
+
+@media (max-width: 1023px) {
+  html.storefront-mobile-utilities {
+    scroll-padding-top: calc(3.5rem + env(safe-area-inset-top));
+  }
+
+  html.storefront-mobile-utilities .storefront-root {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+}
+
 .admin-root {
-  --background: #f3f4f6;
-  --foreground: #111827;
+  --background: var(--admin-surface);
+  --foreground: var(--color-ink);
 }
 
 @theme inline {
@@ -58,55 +103,146 @@ html::-webkit-scrollbar {
 
 body {
   min-height: 100vh;
+  margin: 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  background-color: var(--background);
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.6;
 }
+
 body::-webkit-scrollbar {
   display: none;
 }
 
-/* Subtle grain for warmth (optional; reduce opacity if too strong) */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 9999;
-  opacity: 0.03;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.012;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
-/* Smooth transitions on all interactive elements */
 button,
 a,
 input,
 select,
 textarea {
   transition-property: color, background-color, border-color, box-shadow, opacity, transform;
-  transition-duration: 200ms;
+  transition-duration: 180ms;
   transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Image zoom containers — clip overflow */
+.storefront-range-input {
+  appearance: none;
+  pointer-events: none;
+}
+
+.storefront-range-input:focus {
+  outline: none;
+}
+
+.storefront-range-input::-webkit-slider-runnable-track {
+  height: 0.25rem;
+  appearance: none;
+  background: transparent;
+}
+
+.storefront-range-input::-webkit-slider-thumb {
+  appearance: none;
+  pointer-events: auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-top: -0.42rem;
+  border: 2px solid var(--color-surface);
+  border-radius: 999px;
+  background: var(--color-green);
+  box-shadow: 0 0 0 1px var(--color-line-strong), 0 3px 8px rgba(15, 61, 46, 0.2);
+  cursor: pointer;
+}
+
+.storefront-range-input::-moz-range-track {
+  height: 0.25rem;
+  background: transparent;
+}
+
+.storefront-range-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 2px solid var(--color-surface);
+  border-radius: 999px;
+  background: var(--color-green);
+  box-shadow: 0 0 0 1px var(--color-line-strong), 0 3px 8px rgba(15, 61, 46, 0.2);
+  cursor: pointer;
+}
+
+.storefront-range-input:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--color-focus), 0 3px 8px rgba(15, 61, 46, 0.2);
+}
+
+.storefront-range-input:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px var(--color-focus), 0 3px 8px rgba(15, 61, 46, 0.2);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 .img-zoom-wrap {
   overflow: hidden;
 }
+
 .img-zoom-wrap img {
-  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.img-zoom-wrap:hover img {
-  transform: scale(1.04);
+  transition: transform 460ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Scroll reveal: same DOM on server and client; class toggled after hydration */
+.img-zoom-wrap:hover img {
+  transform: scale(1.03);
+}
+
+/* Deep tonal band for feature/CTA sections — woven canvas texture echoes the brand mark */
+.bg-deep-feature {
+  background-color: var(--color-deep);
+  background-image:
+    radial-gradient(ellipse at 18% 20%, rgba(201, 166, 70, 0.08) 0%, transparent 55%),
+    url('/hero/logo_weave_pattern.png');
+  background-repeat: repeat;
+  background-size: auto, 180px;
+  color: var(--color-on-deep);
+}
+
+/* Thin ornamental rule used to separate or bracket editorial sections */
+.ornament-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.ornament-rule::before,
+.ornament-rule::after {
+  content: "";
+  height: 1px;
+  flex: 1 1 auto;
+  background: var(--color-line-strong);
+}
+
+.ornament-rule--inverse::before,
+.ornament-rule--inverse::after {
+  background: rgba(243, 239, 227, 0.22);
+}
+
 .scroll-reveal {
   opacity: 0;
   transform: translateY(24px);
@@ -115,13 +251,24 @@ textarea {
     transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   transition-delay: var(--scroll-reveal-delay, 0s);
 }
-.scroll-reveal--down { transform: translateY(-24px); }
-.scroll-reveal--left { transform: translateX(24px); }
-.scroll-reveal--right { transform: translateX(-24px); }
+
+.scroll-reveal--down {
+  transform: translateY(-24px);
+}
+
+.scroll-reveal--left {
+  transform: translateX(24px);
+}
+
+.scroll-reveal--right {
+  transform: translateX(-24px);
+}
+
 .scroll-reveal-in-view {
   opacity: 1;
   transform: translate(0);
 }
+
 @media (prefers-reduced-motion: reduce) {
   .scroll-reveal {
     opacity: 1;
@@ -130,16 +277,16 @@ textarea {
   }
 }
 
-/* Toasts: slide in from right, pill + progress bar (CodePen-style) */
 .toast-item {
-  animation: toast-slide-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: toast-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes toast-slide-in {
   from {
     opacity: 0;
-    transform: translateX(40px);
+    transform: translateX(24px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -150,18 +297,12 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 0.9rem;
-  border-radius: 999px;
-  background: var(--color-ink);
-  background-image: radial-gradient(
-    circle at top left,
-    color-mix(in srgb, var(--color-warm-white) 10%, transparent),
-    transparent 55%
-  );
-  color: var(--color-warm-white);
-  box-shadow:
-    0 14px 30px rgba(26, 24, 20, 0.45),
-    0 2px 6px rgba(26, 24, 20, 0.4);
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-soft);
 }
 
 .toast-icon {
@@ -171,10 +312,10 @@ textarea {
   width: 1.6rem;
   height: 1.6rem;
   flex-shrink: 0;
-  border-radius: 999px;
-  background: var(--color-accent-gold);
-  color: var(--color-ink);
-  font-size: 0.9rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-green);
+  color: #ffffff;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
@@ -187,13 +328,13 @@ textarea {
 
 .toast-title {
   font-size: 0.62rem;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  opacity: 0.7;
+  color: var(--color-muted);
 }
 
 .toast-description {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   line-height: 1.35;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -204,8 +345,8 @@ textarea {
   margin-left: 0.25rem;
   border: none;
   background: transparent;
-  color: color-mix(in srgb, var(--color-warm-white) 75%, transparent);
-  font-size: 1.1rem;
+  color: var(--color-muted);
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   padding: 0.25rem;
@@ -213,12 +354,32 @@ textarea {
 }
 
 .toast-close:hover {
-  color: var(--color-warm-white);
+  color: var(--color-ink);
 }
-
 
 @media (prefers-reduced-motion: reduce) {
   .toast-item {
     animation: none;
   }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter-mobile: var(--gutter-tablet);
+  }
+}
+
+@keyframes announcement-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.announcement-marquee {
+  width: max-content;
+  animation: announcement-marquee 40s linear infinite;
+  will-change: transform;
+}
+
+.announcement-marquee:hover {
+  animation-play-state: paused;
 }

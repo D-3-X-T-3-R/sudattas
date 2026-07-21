@@ -4,8 +4,8 @@ const SHIPMENT_ROOTS = [
   "searchShipment",
   "createShipment",
   "updateShipment",
-  "markOrderShipped",
-  "markOrderDelivered",
+  "adminMarkOrderShipped",
+  "adminMarkOrderDelivered",
   "updateOrderStatus",
 ];
 

@@ -12,8 +12,8 @@ use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use core_db_entities::entity::{order_status, orders};
 use proto::proto::core::CreateOrderEventRequest;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, IntoActiveModel,
-    QueryFilter,
+    sea_query::LockType, ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction,
+    EntityTrait, IntoActiveModel, QueryFilter, QuerySelect,
 };
 use serde_json::json;
 use std::collections::HashSet;
@@ -195,6 +195,7 @@ pub async fn transition_order_status(
     set_payment_status: Option<PaymentStatus>,
 ) -> Result<(), tonic::Status> {
     let order = orders::Entity::find_by_id(order_id)
+        .lock(LockType::Update)
         .one(txn)
         .await
         .map_err(|e| tonic::Status::internal(e.to_string()))?
@@ -286,7 +287,16 @@ pub async fn transition_order_status(
     };
     if let Some(evt) = outbox_type {
         let payload = json!({ "order_id": order_id, "user_id": user_id });
-        let _ = enqueue_outbox_event(txn, evt, "order", &order_id.to_string(), payload).await;
+        if let Err(e) =
+            enqueue_outbox_event(txn, evt, "order", &order_id.to_string(), payload).await
+        {
+            tracing::error!(
+                order_id,
+                event = evt,
+                error = %e,
+                "order_state_machine: failed to enqueue customer notification outbox event"
+            );
+        }
     }
 
     Ok(())

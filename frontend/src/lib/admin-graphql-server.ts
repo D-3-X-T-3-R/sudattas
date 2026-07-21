@@ -63,12 +63,22 @@ function errorStatusToCode(status: number): string {
   return "REQUEST_FAILED";
 }
 
+function firstOperationField(query: string): string | null {
+  const normalized = query.replace(/\s+/g, " ").trim();
+  const match = normalized.match(
+    /^(?:query|mutation)(?:\s+[A-Za-z_]\w*)?(?:\s*\([^)]*\))?\s*\{\s*([A-Za-z_]\w*)/
+  );
+  return match ? match[1] : null;
+}
+
+// Checks that the query's first top-level selection is an allowed root, rather than that some
+// allowed root name appears anywhere in the query text. This is a minimal, regex-based tightening
+// — it does not defend against a single document with an allowed field followed by additional,
+// unrelated top-level fields/mutations (that needs real GraphQL parsing). It closes the "root name
+// appears in an unrelated place in the string" gap the previous substring check had.
 function hasAllowedRoot(query: string, allowedRoots: string[]): boolean {
-  const normalized = query.replace(/\s+/g, " ");
-  return allowedRoots.some((root) => {
-    const pattern = new RegExp(`\\b${root}\\b`);
-    return pattern.test(normalized);
-  });
+  const field = firstOperationField(query);
+  return field !== null && allowedRoots.includes(field);
 }
 
 export async function forwardAdminGraphql(

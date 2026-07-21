@@ -85,23 +85,6 @@ describe("GET /api/account/orders/[orderId]", () => {
       })
       .mockResolvedValueOnce({
         data: {
-          getShipment: [
-            {
-              shipmentId: "99",
-              status: "failed",
-              carrier: "Test",
-              awbCode: "AWB123",
-              createdAt: "2026-04-10T00:00:00Z",
-              deliveredAt: null,
-              trackingEventsJson: null,
-              shiprocketStatusId: "8",
-              shiprocketStatusLabel: "CANCELLED",
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
           getOrderEvents: [
             {
               eventId: "e1",
@@ -123,6 +106,23 @@ describe("GET /api/account/orders/[orderId]", () => {
       .mockResolvedValueOnce({
         data: {
           searchReturnRequests: [],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          getShipment: [
+            {
+              shipmentId: "99",
+              status: "failed",
+              carrier: "Test",
+              awbCode: "AWB123",
+              createdAt: "2026-04-10T00:00:00Z",
+              deliveredAt: null,
+              trackingEventsJson: null,
+              shiprocketStatusId: "8",
+              shiprocketStatusLabel: "CANCELLED",
+            },
+          ],
         },
       });
 

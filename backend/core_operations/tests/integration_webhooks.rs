@@ -84,6 +84,7 @@ async fn integration_webhook_triggers_capture_payment() {
         payload_json: payload.to_string(),
         signature_verified: true,
         provider_event_id: None,
+        raw_signature: None,
     });
 
     let result = core_operations::handlers::webhooks::ingest_webhook(&txn, req).await;
@@ -183,6 +184,7 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
         payload_json: payload.to_string(),
         signature_verified: true,
         provider_event_id: None,
+        raw_signature: None,
     });
 
     let r1 = core_operations::handlers::webhooks::ingest_webhook(&txn, req).await;
@@ -203,6 +205,7 @@ async fn integration_webhook_duplicate_same_webhook_id_idempotent() {
         payload_json: payload.to_string(),
         signature_verified: true,
         provider_event_id: None,
+        raw_signature: None,
     });
     let r2 = core_operations::handlers::webhooks::ingest_webhook(&txn, req2).await;
     assert!(
@@ -307,6 +310,7 @@ async fn integration_webhook_out_of_order_same_payment_second_idempotent() {
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await;
@@ -321,6 +325,7 @@ async fn integration_webhook_out_of_order_same_payment_second_idempotent() {
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await;
@@ -414,6 +419,7 @@ async fn integration_webhook_amount_mismatch_marked_needs_review_not_paid() {
             payload_json: payload_wrong_amount.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await;
@@ -525,6 +531,7 @@ async fn integration_webhook_currency_mismatch_marked_needs_review_not_paid() {
             payload_json: payload_wrong_currency.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await;
@@ -592,6 +599,7 @@ async fn integration_webhook_duplicate_provider_event_id_processed_noop() {
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: Some(provider_event_id.clone()),
+            raw_signature: None,
         }),
     )
     .await;
@@ -613,6 +621,7 @@ async fn integration_webhook_duplicate_provider_event_id_processed_noop() {
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: Some(provider_event_id.clone()),
+            raw_signature: None,
         }),
     )
     .await;
@@ -704,6 +713,7 @@ async fn integration_webhook_failed_same_webhook_id_can_replay_to_success() {
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -742,6 +752,7 @@ async fn integration_webhook_failed_same_webhook_id_can_replay_to_success() {
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -817,6 +828,7 @@ async fn integration_webhook_fresh_in_progress_not_reclaimed() {
             payload_json: serde_json::json!({"event":"noop.event"}).to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -885,6 +897,7 @@ async fn integration_webhook_stale_in_progress_reclaimed() {
             payload_json: serde_json::json!({"event":"noop.event"}).to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -961,6 +974,7 @@ async fn integration_webhook_duplicate_provider_event_id_failed_can_retry() {
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: Some(provider_event_id.clone()),
+            raw_signature: None,
         }),
     )
     .await
@@ -999,6 +1013,7 @@ async fn integration_webhook_duplicate_provider_event_id_failed_can_retry() {
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: Some(provider_event_id.clone()),
+            raw_signature: None,
         }),
     )
     .await
@@ -1088,6 +1103,7 @@ async fn integration_webhook_internal_replay_by_id_reprocesses_failed() {
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await

@@ -1,78 +1,36 @@
 import { Section } from "@/components/ui/section";
-import { SectionHeading, Kicker } from "@/components/ui/typography";
+import { HeroHeading, Kicker } from "@/components/ui/typography";
 import { ScrollReveal } from "@/components/scroll-reveal";
 
 export function StorySection() {
   return (
-    <Section id="story" className="pb-24 md:pb-32">
+    <Section id="story" fullWidth className="bg-deep-feature py-16 md:py-24">
       <ScrollReveal>
-        <div className="grid gap-16 md:grid-cols-2">
-          <div className="relative border-t border-[var(--color-line)] pt-14">
-            <span
-              className="absolute right-0 top-4 select-none font-display text-[8rem] font-medium leading-none text-[var(--color-line)] md:top-6 md:text-[10rem]"
-              aria-hidden
+        <div className="mx-auto max-w-2xl px-[var(--gutter-mobile)] text-center md:px-[var(--gutter-tablet)]">
+          <Kicker tone="inverse">Stay in the loop</Kicker>
+          <HeroHeading inverse size="sm" className="mt-4">
+            Get the next drop first.
+          </HeroHeading>
+          <p className="mt-6 text-sm leading-relaxed text-[var(--color-on-deep-muted)] sm:text-base">
+            Weekly releases. No spam. Unsubscribe anytime.
+          </p>
+          <div className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row">
+            <label htmlFor="newsletter-email" className="sr-only">
+              Email address
+            </label>
+            <input
+              id="newsletter-email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              className="flex-1 rounded-full border border-white/20 bg-white/10 px-5 py-3.5 text-sm text-[var(--color-on-deep)] placeholder:text-[var(--color-on-deep-muted)] outline-none focus:border-[var(--color-gold)] focus:ring-1 focus:ring-[var(--color-gold)]"
+            />
+            <button
+              type="submit"
+              className="rounded-full bg-[var(--color-gold)] px-8 py-3.5 text-sm font-semibold text-[var(--color-deep)] transition-colors hover:bg-[var(--color-gold-soft)]"
             >
-              01
-            </span>
-            <div className="flex items-center gap-2">
-              <Kicker className="text-[var(--color-muted)]">
-                Our point of view
-              </Kicker>
-            </div>
-            <SectionHeading size="lg" className="mt-4">
-              Premium is calm.
-            </SectionHeading>
-            <p className="mt-6 max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
-              If your website feels busy, the product feels cheaper. We keep the
-              layout clean, the typography deliberate, and the interactions
-              subtle—so your sarees feel expensive before a user even scrolls.
-            </p>
-            <div className="mt-10 grid gap-4">
-              {[
-                "Clarity over clutter",
-                "Editorial imagery",
-                "Details that feel intentional",
-              ].map((x) => (
-                <div key={x} className="flex items-center gap-4">
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent-brown)]" />
-                  <span className="text-sm font-medium text-[var(--color-ink)]">
-                    {x}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="border-t border-[var(--color-line)] pt-14">
-            <div className="flex items-center gap-2">
-              <Kicker className="text-[var(--color-muted)]">
-                Stay in the loop
-              </Kicker>
-            </div>
-            <SectionHeading size="lg" className="mt-4">
-              Get the next drop first.
-            </SectionHeading>
-            <p className="mt-6 text-sm leading-relaxed text-[var(--color-muted)]">
-              Weekly releases. No spam. Unsubscribe anytime.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <label htmlFor="newsletter-email" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="newsletter-email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                className="flex-1 rounded-full border border-[var(--color-line)] bg-white/70 px-5 py-3.5 text-sm outline-none focus:border-[var(--color-accent-gold)] focus:bg-white focus:ring-1 focus:ring-[var(--color-accent-gold)]"
-              />
-              <button
-                type="submit"
-                className="rounded-full bg-[var(--color-ink)] px-8 py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-              >
-                Notify me
-              </button>
-            </div>
+              Notify me
+            </button>
           </div>
         </div>
       </ScrollReveal>

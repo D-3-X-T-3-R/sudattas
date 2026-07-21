@@ -4,8 +4,9 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
 import { useSession } from "next-auth/react";
-import { SiteHeader } from "@/components/site-header";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { SectionHeader } from "@/components/ui/page-shell";
+import { cn } from "@/lib/utils";
 import { useStorefront } from "@/context/storefront-context";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { getGuestSessionId } from "@/lib/session";
@@ -14,6 +15,7 @@ import { addressInputSchema } from "@/lib/validation-schemas";
 import { BagEmptyState } from "@/domains/bag/components/bag-empty-state";
 import { BagContent } from "@/domains/bag/components/bag-content";
 import { BagMobileCheckoutBar } from "@/domains/bag/components/bag-mobile-checkout-bar";
+import { OrderSummaryPanel } from "@/domains/bag/components/order-summary-panel";
 import { useRazorpayCheckout } from "@/hooks/use-razorpay-checkout";
 
 type CatalogSize = { sizeId: string; sizeName: string };
@@ -52,18 +54,38 @@ type AddressFormState = {
   apartmentNoOrName: string;
 };
 
-function formatAddress(a: ShippingAddressRow | null): string {
-  if (!a) return "Select a delivery address";
-  const parts = [
-    a.recipientName,
-    a.phoneNumber,
-    [a.apartmentNoOrName, a.road].filter(Boolean).join(", "),
-    a.city,
-    a.stateRegion,
-    a.postalCode,
-    a.country,
-  ].filter((v) => v && String(v).trim());
-  return parts.join(" | ");
+function AddressBlock({ address, className }: { address: ShippingAddressRow | null; className?: string }) {
+  if (!address) {
+    return <p className={cn("text-sm text-[var(--color-ink)]", className)}>Select a delivery address</p>;
+  }
+  const street = [address.apartmentNoOrName, address.road].filter((v) => v && v.trim()).join(", ");
+  const region = [address.city, address.stateRegion, address.postalCode].filter((v) => v && v.trim()).join(", ");
+
+  return (
+    <div className={className}>
+      <p className="text-sm font-semibold text-[var(--color-ink)]">
+        {address.recipientName}
+        {address.phoneNumber ? (
+          <span className="ml-2 font-normal text-[var(--color-muted)]">{address.phoneNumber}</span>
+        ) : null}
+      </p>
+      {street ? <p className="mt-1 text-sm leading-relaxed text-[var(--color-ink)]">{street}</p> : null}
+      {region || address.country ? (
+        <p className="mt-1 text-xs leading-relaxed text-[var(--color-muted)]">
+          {[region, address.country].filter((v) => v && v.trim()).join(" · ")}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function formatCompactDeliveryAddress(a: ShippingAddressRow | null): string {
+  if (!a) return "Select delivery address";
+  const recipient = a.recipientName?.trim() || "Selected Address";
+  const pincode = a.postalCode?.trim();
+  if (pincode) return `${recipient}, ${pincode}`;
+  const parts = [recipient, a.city?.trim(), a.stateRegion?.trim()].filter(Boolean);
+  return parts.join(", ") || "Selected Address";
 }
 
 // eslint-disable-next-line max-lines-per-function
@@ -88,6 +110,7 @@ export default function BagPage() {
   const addressErrorId = useId();
   const addAddressTriggerRef = useRef<HTMLElement | null>(null);
   const addAddressFirstInputRef = useRef<HTMLInputElement | null>(null);
+  const orderSummaryRef = useRef<HTMLDivElement | null>(null);
   const [newAddress, setNewAddress] = useState<AddressFormState>({
     recipientName: "",
     phoneNumber: "",
@@ -103,21 +126,43 @@ export default function BagPage() {
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingNote, setShippingNote] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<"prepaid" | "cod">("prepaid");
+  const [orderSummaryInView, setOrderSummaryInView] = useState(false);
   const cartSignature = useMemo(
     () => cartLines.map((line) => `${line.id}:${line.qty}`).join("|"),
     [cartLines]
   );
 
+  const previousLineIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     const currentIds = new Set(cartLines.map((line) => line.id));
-    setSelectedLineIds((prev) => new Set([...prev].filter((id) => currentIds.has(id))));
+    const previousIds = previousLineIdsRef.current;
+    setSelectedLineIds((prev) => {
+      const next = new Set([...prev].filter((id) => currentIds.has(id)));
+      for (const line of cartLines) {
+        if (!previousIds.has(line.id)) next.add(line.id);
+      }
+      return next;
+    });
+    previousLineIdsRef.current = currentIds;
   }, [cartLines]);
 
   useEffect(() => {
-    if (cartLines.length > 0 && selectedLineIds.size === 0) {
-      setSelectedLineIds(new Set(cartLines.map((line) => line.id)));
-    }
-  }, [cartLines.length, cartLines, selectedLineIds.size]);
+    const summaryNode = orderSummaryRef.current;
+    if (!summaryNode || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setOrderSummaryInView(entry.isIntersecting),
+      {
+        root: null,
+        rootMargin: "0px 0px -28% 0px",
+        threshold: 0.12,
+      },
+    );
+
+    observer.observe(summaryNode);
+    return () => observer.disconnect();
+  }, [cartLines.length]);
 
   useEffect(() => {
     const sessionId = getGuestSessionId();
@@ -352,110 +397,151 @@ export default function BagPage() {
   };
 
   return (
-    <div className="min-h-screen w-full min-w-0 bg-[linear-gradient(135deg,#EFE9DE_0%,#F7F3EB_45%,#EEE6D8_100%)] text-[var(--foreground)]">
-      <SiteHeader />
-      <div className="mx-auto w-full max-w-7xl rounded-[36px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(255,255,255,0.72))] p-4 shadow-[0_30px_90px_rgba(15,61,46,0.10)] backdrop-blur-xl sm:p-6 lg:h-[calc(100vh-100px)] lg:overflow-hidden lg:p-8">
+    <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
+      <main className="mx-auto w-full max-w-[1600px] px-[var(--gutter-mobile)] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-3 md:px-[var(--gutter-tablet)] md:pt-4 lg:pb-14">
         {cartLines.length === 0 ? (
           <BagEmptyState />
         ) : (
           <>
-            <div className="mb-5 rounded-2xl border border-[#0F3D2E]/10 bg-white/70 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8B816D]">Delivery address</p>
-              <p className="mt-2 text-sm text-[#162019]">{status === "authenticated" ? formatAddress(selectedAddress) : "Sign in to choose address"}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8B816D]">Payment mode</p>
-                <button
-                  type="button"
-                  disabled={paymentLoading}
-                  onClick={() => setPaymentMode("prepaid")}
-                  className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                    paymentMode === "prepaid"
-                      ? "border-[#0F3D2E] bg-[#0F3D2E]/10 text-[#0F3D2E]"
-                      : "border-[#0F3D2E]/20 text-[#6B6560]"
-                  } disabled:opacity-50`}
-                >
-                  Prepaid
-                </button>
-                <button
-                  type="button"
-                  disabled={paymentLoading}
-                  onClick={() => setPaymentMode("cod")}
-                  className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                    paymentMode === "cod"
-                      ? "border-[#0F3D2E] bg-[#0F3D2E]/10 text-[#0F3D2E]"
-                      : "border-[#0F3D2E]/20 text-[#6B6560]"
-                  } disabled:opacity-50`}
-                >
-                  Cash on Delivery
-                </button>
+            <SectionHeader title="Review Your Selection" className="pb-4 md:pb-5" />
+
+            <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+              <div className="space-y-4">
+                <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)] md:p-6">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
+                    Delivery & Payment
+                  </p>
+
+                  <div className="mt-3 flex flex-col gap-3 border-b border-[var(--color-line)] pb-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm leading-relaxed text-[var(--color-ink)] lg:hidden">
+                        {status === "authenticated"
+                          ? formatCompactDeliveryAddress(selectedAddress)
+                          : "Sign in to choose a delivery address"}
+                      </p>
+                      <div className="hidden lg:block">
+                        {status === "authenticated" ? (
+                          <AddressBlock address={selectedAddress} />
+                        ) : (
+                          <p className="text-sm text-[var(--color-ink)]">Sign in to choose a delivery address</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.14em]">
+                      {status === "authenticated" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setAddressPickerOpen(true)}
+                            className="text-[var(--color-green)] underline decoration-[var(--color-gold)] decoration-1 underline-offset-4 hover:text-[var(--color-green-2)]"
+                          >
+                            Change
+                          </button>
+                          <span className="text-[var(--color-line-strong)]" aria-hidden="true">
+                            |
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(event) => openAddAddressDialog(event.currentTarget)}
+                            className="text-[var(--color-green)] underline decoration-[var(--color-gold)] decoration-1 underline-offset-4 hover:text-[var(--color-green-2)]"
+                          >
+                            Add New
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openLogin("/bag")}
+                          className="text-[var(--color-green)] underline decoration-[var(--color-gold)] decoration-1 underline-offset-4 hover:text-[var(--color-green-2)]"
+                        >
+                          Sign In
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
+                      Payment Mode
+                    </p>
+                    <div className="mt-2 inline-flex w-full gap-1 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-soft)] p-1 sm:w-auto">
+                      <button
+                        type="button"
+                        disabled={paymentLoading}
+                        onClick={() => setPaymentMode("prepaid")}
+                        aria-pressed={paymentMode === "prepaid"}
+                        className={cn(
+                          "flex-1 rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors disabled:opacity-50 sm:flex-none",
+                          paymentMode === "prepaid"
+                            ? "bg-[var(--color-green)] text-white shadow-[var(--shadow-subtle)]"
+                            : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                        )}
+                      >
+                        Prepaid
+                      </button>
+                      <button
+                        type="button"
+                        disabled={paymentLoading}
+                        onClick={() => setPaymentMode("cod")}
+                        aria-pressed={paymentMode === "cod"}
+                        className={cn(
+                          "flex-1 rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors disabled:opacity-50 sm:flex-none",
+                          paymentMode === "cod"
+                            ? "bg-[var(--color-green)] text-white shadow-[var(--shadow-subtle)]"
+                            : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                        )}
+                      >
+                        Cash on Delivery
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <BagContent
+                  cartLines={cartLines}
+                  selectedLineIds={selectedLineIds}
+                  allSelected={allSelected}
+                  catalogSizes={catalogSizes}
+                  openSizeForId={openSizeForId}
+                  reduceMotion={reduceMotion}
+                  wishlist={wishlist}
+                  onToggleAll={() =>
+                    setSelectedLineIds(allSelected ? new Set() : new Set(cartLines.map((line) => line.id)))
+                  }
+                  onToggleOne={(id) =>
+                    setSelectedLineIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                  onSetOpenSizeForId={setOpenSizeForId}
+                  onDecCart={decCart}
+                  onIncCart={incCart}
+                  onRemoveCart={removeCart}
+                  onToggleWish={toggleWish}
+                  onAddToCart={addToCart}
+                />
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {status === "authenticated" ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setAddressPickerOpen(true)}
-                      className="rounded-full border border-[#0F3D2E]/20 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#0F3D2E]"
-                    >
-                      Change address
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => openAddAddressDialog(event.currentTarget)}
-                      className="rounded-full border border-[#C9A646]/30 bg-[#FFF9EF] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#A37D34]"
-                    >
-                      Add new address
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => openLogin("/bag")}
-                    className="rounded-full border border-[#C9A646]/30 bg-[#FFF9EF] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#A37D34]"
-                  >
-                    Sign in
-                  </button>
-                )}
+
+              <div ref={orderSummaryRef}>
+                <OrderSummaryPanel
+                  cartLines={selectedLines}
+                  cartSubtotal={selectedSubtotal}
+                  cartCount={selectedCount}
+                  shippingAmount={shippingAmount}
+                  shippingLoading={shippingLoading}
+                  shippingNote={shippingNote || paymentMessage}
+                  checkoutLoading={paymentLoading}
+                  showMobileCheckoutCta={orderSummaryInView}
+                  onCheckout={handleCheckout}
+                />
               </div>
             </div>
-
-            <BagContent
-              cartLines={cartLines}
-              selectedLineIds={selectedLineIds}
-              selectedLines={selectedLines}
-              selectedSubtotal={selectedSubtotal}
-              selectedCount={selectedCount}
-              shippingAmount={shippingAmount}
-              shippingLoading={shippingLoading}
-              shippingNote={shippingNote || paymentMessage}
-              checkoutLoading={paymentLoading}
-              allSelected={allSelected}
-              catalogSizes={catalogSizes}
-              openSizeForId={openSizeForId}
-              reduceMotion={reduceMotion}
-              wishlist={wishlist}
-              onToggleAll={() =>
-                setSelectedLineIds(allSelected ? new Set() : new Set(cartLines.map((line) => line.id)))
-              }
-              onToggleOne={(id) =>
-                setSelectedLineIds((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                })
-              }
-              onSetOpenSizeForId={setOpenSizeForId}
-              onDecCart={decCart}
-              onIncCart={incCart}
-              onRemoveCart={removeCart}
-              onToggleWish={toggleWish}
-              onAddToCart={addToCart}
-              onCheckout={handleCheckout}
-            />
           </>
         )}
-      </div>
+      </main>
 
       {cartLines.length > 0 && (
         <BagMobileCheckoutBar
@@ -463,6 +549,7 @@ export default function BagPage() {
           shippingAmount={shippingAmount}
           selectedCount={selectedCount}
           checkoutLoading={paymentLoading}
+          visible={!orderSummaryInView}
           onCheckout={handleCheckout}
         />
       )}
@@ -490,7 +577,7 @@ export default function BagPage() {
                     selectedAddressId === a.shippingAddressId ? "border-[#0F3D2E] bg-[#0F3D2E]/[0.06]" : "border-[#0F3D2E]/10 bg-white"
                   }`}
                 >
-                  <p className="text-sm text-[#162019]">{formatAddress(a)}</p>
+                  <AddressBlock address={a} />
                 </button>
               ))
             )}
@@ -500,7 +587,7 @@ export default function BagPage() {
                 setAddressPickerOpen(false);
                 openAddAddressDialog(event.currentTarget);
               }}
-              className="mt-2 rounded-full border border-[#C9A646]/30 bg-[#FFF9EF] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#A37D34]"
+              className="mt-2 rounded-md border border-[var(--color-gold)] bg-[var(--color-surface-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-green)]"
             >
               Add new address
             </button>
@@ -667,14 +754,14 @@ export default function BagPage() {
               <button
                 type="submit"
                 disabled={savingAddress}
-                className="rounded-full bg-[#0F3D2E] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-50"
+                className="rounded-md border border-[var(--color-green)] bg-[var(--color-green)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-50"
               >
                 {savingAddress ? "Saving..." : "Save address"}
               </button>
               <button
                 type="button"
                 onClick={closeAddAddressDialog}
-                className="rounded-full border border-[#0F3D2E]/20 px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#0F3D2E]"
+                className="rounded-md border border-[var(--color-line)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-ink)]"
               >
                 Cancel
               </button>

@@ -155,6 +155,12 @@ async function syncGoogleUserToBackend(input: {
   });
 }
 
+// How often to re-probe admin status for an already-established session, instead of trusting the
+// sign-in-time isAdmin claim for the full session lifetime. Matches the backend's own
+// ADMIN_ROLE_CACHE_TTL_SEC default (admin_roles.rs) so the page-navigation gate (middleware.ts)
+// doesn't stay open much longer than the backend's own admin-role cache would.
+const ADMIN_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
+
 async function probeAdminAccessByToken(token: string): Promise<boolean> {
   const query = `query AdminProbeCanSearchUsers {
     searchUser(input: { limit: "1", offset: "0" }) {
@@ -346,6 +352,26 @@ export const authOptions: NextAuthOptions = {
       const userIsAdmin = (user as { isAdmin?: boolean } | undefined)?.isAdmin;
       if (typeof userIsAdmin === "boolean") {
         (token as { isAdmin?: boolean }).isAdmin = userIsAdmin;
+        (token as { isAdminCheckedAt?: number }).isAdminCheckedAt = Date.now();
+      } else if (
+        (token as { isAdmin?: boolean }).isAdmin === true &&
+        typeof token.idToken === "string"
+      ) {
+        // Re-probe periodically instead of trusting the sign-in-time isAdmin claim for the full
+        // session lifetime, so a revoked admin's page-navigation gate (middleware.ts) closes
+        // within roughly the same window the backend itself uses for admin role resolution.
+        const checkedAt = (token as { isAdminCheckedAt?: number }).isAdminCheckedAt ?? 0;
+        if (Date.now() - checkedAt > ADMIN_RECHECK_INTERVAL_MS) {
+          // probeAdminAccessByToken already catches internally and resolves `false` on any
+          // network/HTTP failure (never rejects) — so a transient backend hiccup during this
+          // recheck window demotes the admin (fail-closed), not the fail-open behavior a wrapping
+          // .catch() would visually suggest. This is intentionally the safer default; if fail-open
+          // is actually wanted, probeAdminAccessByToken needs to distinguish "confirmed not admin"
+          // from "couldn't check" (e.g. return `boolean | null`) rather than collapsing both to `false`.
+          const stillAdmin = await probeAdminAccessByToken(token.idToken);
+          (token as { isAdmin?: boolean }).isAdmin = stillAdmin;
+          (token as { isAdminCheckedAt?: number }).isAdminCheckedAt = Date.now();
+        }
       }
       // Persist so we have it on session refresh
       return token;

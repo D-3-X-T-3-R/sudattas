@@ -82,13 +82,15 @@ export async function POST(
     }
   );
 
-  const gqlMessage = result.errors?.[0]?.message;
+  const firstError = result.errors?.[0];
+  const gqlMessage = firstError?.message;
   if (gqlMessage) {
+    const code = firstError?.extensions?.code;
     const lower = gqlMessage.toLowerCase();
     const status =
-      lower.includes("not found") || lower.includes("order not found")
+      code === "NotFound" || lower.includes("not found") || lower.includes("order not found")
         ? 404
-        : lower.includes("failed_precondition")
+        : code === "FailedPrecondition" || lower.includes("failed_precondition")
           ? 409
           : 400;
     return apiError(gqlMessage, status, "GRAPHQL_ERROR");

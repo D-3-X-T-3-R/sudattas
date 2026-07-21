@@ -56,6 +56,12 @@ pub fn webhook_reclaim_timeout_minutes() -> i64 {
     )
 }
 
+/// Number of times the refund worker will retry a gateway-failing refund attempt before
+/// giving up and marking it `needs_review` for manual handling, instead of retrying forever.
+pub fn refund_max_attempts() -> i64 {
+    parse_positive_i64_env("REFUND_MAX_ATTEMPTS", 10)
+}
+
 pub fn cancel_window_deadline(order_created_at: DateTime<Utc>) -> DateTime<Utc> {
     order_created_at + Duration::hours(cancel_window_hours())
 }

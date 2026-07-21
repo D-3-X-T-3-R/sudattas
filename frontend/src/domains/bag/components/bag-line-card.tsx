@@ -4,13 +4,7 @@ import type { CartLine, Product } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 import { formatInrFromPaise } from "@/lib/money";
 import { BagSizeDropdown } from "@/domains/bag/components/bag-size-dropdown";
-import {
-  CheckIcon,
-  GoldDivider,
-  HeartIcon,
-  TrashIcon,
-  buildSizeOptions,
-} from "@/domains/bag/components/bag-shared";
+import { CheckIcon, HeartIcon, TrashIcon, buildSizeOptions } from "@/domains/bag/components/bag-shared";
 
 type CatalogSize = { sizeId: string; sizeName: string };
 
@@ -46,142 +40,123 @@ export function BagLineCard({
   const { id, product, qty, sizeName } = line;
   const options = buildSizeOptions(product as Product, catalogSizes);
   const hasCurrent = !!sizeName && options.some((option) => option.sizeName === sizeName);
+  const descriptor = [product.collection, product.fabric]
+    .map((value) => value?.trim())
+    .filter(Boolean)
+    .join(" | ");
 
   return (
-    <motion.div
+    <motion.article
       layout
       initial={reduceMotion ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={
-        reduceMotion
-          ? { opacity: 0, transition: { duration: 0.15 } }
-          : {
-              opacity: 0,
-              x: -48,
-              scale: 0.96,
-              filter: "blur(3px)",
-              transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
-            }
-      }
-      transition={{
-        layout: { duration: 0.35, ease: [0.22, 1, 0.36, 1] },
-        opacity: { duration: 0.25 },
-        y: { duration: 0.3 },
-      }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        "group relative overflow-hidden rounded-[22px] border border-[#0F3D2E]/10 bg-[linear-gradient(180deg,#FFFDF9_0%,#FAF6EF_100%)] shadow-[0_2px_8px_rgba(15,61,46,0.06)] will-change-transform transition duration-500",
-        isSizeMenuOpen ? "z-30" : "z-0"
+        "relative rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2.5 shadow-[var(--shadow-subtle)] md:p-4",
+        isSizeMenuOpen ? "z-20 overflow-visible" : "z-0 overflow-hidden"
       )}
     >
-      <div className="grid grid-cols-[minmax(0,100px)_minmax(0,1fr)] gap-0 sm:grid-cols-[minmax(0,118px)_minmax(0,1fr)] lg:grid-cols-[188px_minmax(0,1fr)]">
-        <div className="relative flex flex-col justify-center border-r border-[#0F3D2E]/6 bg-[radial-gradient(circle_at_top_left,rgba(201,166,70,0.10),transparent_40%),linear-gradient(180deg,#F6F0E7_0%,#EFE6D9_100%)] p-2 sm:p-3 lg:p-4">
-          <Link
-            href={`/product/${product.id}`}
-            className="mx-auto block h-[132px] w-[88px] overflow-hidden rounded-[14px] border border-white/55 bg-white shadow-[0_12px_28px_rgba(15,61,46,0.10)] sm:h-[156px] sm:w-[102px] sm:rounded-[16px] lg:h-[182px] lg:w-[128px] lg:rounded-[18px]"
-          >
-            {product.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={product.image}
-                alt={product.name}
-                className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.035]"
-              />
-            ) : (
-              <div className="h-full w-full" />
-            )}
-          </Link>
-        </div>
+      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 md:grid-cols-[140px_minmax(0,1fr)] md:gap-4 md:pr-8">
+        <Link
+          href={`/product/${product.id}`}
+          className="block aspect-[4/5] w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]"
+        >
+          {product.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="aspect-[4/5] w-full" />
+          )}
+        </Link>
 
-        <div className="min-w-0 p-3 sm:p-4 lg:p-5">
-          <div>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1">
-                <Link href={`/product/${product.id}`}>
-                  <p className="font-display text-[1.4rem] leading-tight text-[#0F3D2E] sm:text-[1.6rem]">
-                    {product.name}
-                  </p>
-                </Link>
-                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-[#8B816D]">
-                  {product.collection}
+        <div className="min-w-0">
+          <div className="md:flex md:items-start md:justify-between md:gap-3">
+            <div className="min-w-0">
+              <Link href={`/product/${product.id}`}>
+                <p className="line-clamp-2 font-display text-[1.08rem] leading-[1.12] text-[var(--color-ink)] md:text-2xl">
+                  {product.name}
                 </p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="font-display text-[1.4rem] leading-none text-[#0F3D2E] sm:text-[1.6rem]">
-                  {formatInrFromPaise(qty * (product.pricePaise ?? Math.round(product.price * 100)))}
+              </Link>
+              {descriptor ? (
+                <p className="mt-1 line-clamp-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)] md:tracking-[0.18em]">
+                  {descriptor}
                 </p>
-                <p className="mt-1 text-[10px] tracking-[0.04em] text-[#807769]">MRP incl. of all taxes</p>
-              </div>
+              ) : null}
             </div>
-            <div className="my-3">
-              <GoldDivider />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {options.length > 0 && (
-                <BagSizeDropdown
-                  options={options}
-                  sizeName={sizeName}
-                  hasCurrent={hasCurrent}
-                  onOpenChange={onOpenSizeChange}
-                  onSelectSize={(newSize) => onReplaceSize(line, newSize)}
-                />
-              )}
-              <div className="inline-flex h-9 items-center rounded-full border border-[#0F3D2E]/10 bg-[#FFFDF8] px-1.5 shadow-[0_8px_16px_rgba(15,61,46,0.05)]">
-                <button
-                  type="button"
-                  onClick={() => onDec(id)}
-                  aria-label={`Decrease quantity for ${product.name}`}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-[#0F3D2E] transition duration-300 hover:scale-105 hover:bg-[#0F3D2E]/6"
-                >
-                  -
-                </button>
-                <span className="min-w-[2rem] text-center text-sm font-semibold text-[#162019]">{qty}</span>
-                <button
-                  type="button"
-                  onClick={() => onInc(id)}
-                  aria-label={`Increase quantity for ${product.name}`}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-[#0F3D2E] transition duration-300 hover:scale-105 hover:bg-[#0F3D2E]/6"
-                >
-                  +
-                </button>
-              </div>
-            </div>
+            <p className="mt-2 font-sans text-base font-semibold leading-tight text-[var(--color-ink)] md:mt-0 md:shrink-0 md:text-xl">
+              {formatInrFromPaise(qty * (product.pricePaise ?? Math.round(product.price * 100)))}
+            </p>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-5 border-t border-[#0F3D2E]/8 pt-4">
-            <button
-              type="button"
-              onClick={() => onRemove(id)}
-              aria-label={`Remove ${product.name} from bag`}
-              className="group inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9B6A62] transition duration-300 hover:text-[#7B3F38]"
-            >
-              <TrashIcon className="h-4 w-4 transition duration-300 group-hover:-translate-y-0.5" />
-              Remove
-            </button>
-            <button
-              type="button"
-              onClick={() => onMoveToWishlist(line)}
-              aria-label={`Move ${product.name} to wishlist`}
-              className="group inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7C7367] transition duration-300 hover:text-[#0F3D2E]"
-            >
-              <HeartIcon className="h-4 w-4 transition duration-300 group-hover:-translate-y-0.5" />
-              Move to Wishlist
-            </button>
+          <div className="mt-2 flex flex-wrap items-center gap-2 md:mt-4">
+            {options.length > 0 ? (
+              <BagSizeDropdown
+                options={options}
+                sizeName={sizeName}
+                hasCurrent={hasCurrent}
+                onOpenChange={onOpenSizeChange}
+                onSelectSize={(newSize) => onReplaceSize(line, newSize)}
+              />
+            ) : null}
+
+            <div className="inline-flex h-9 items-center rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface)] p-1">
+              <button
+                type="button"
+                onClick={() => onDec(id)}
+                aria-label={`Decrease quantity for ${product.name}`}
+                className="h-7 w-7 rounded-sm text-base text-[var(--color-ink)] md:h-8 md:w-8 md:text-lg"
+              >
+                -
+              </button>
+              <span className="min-w-[2rem] text-center text-sm font-semibold text-[var(--color-ink)]">{qty}</span>
+              <button
+                type="button"
+                onClick={() => onInc(id)}
+                aria-label={`Increase quantity for ${product.name}`}
+                className="h-7 w-7 rounded-sm text-base text-[var(--color-ink)] md:h-8 md:w-8 md:text-lg"
+              >
+                +
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      <div className="mt-3 grid grid-cols-2 divide-x divide-[var(--color-line)] border-t border-[var(--color-line)] pt-2 md:ml-[156px] md:flex md:items-center md:gap-4 md:divide-x-0 md:pt-3">
+        <button
+          type="button"
+          onClick={() => onRemove(id)}
+          aria-label={`Remove ${product.name} from bag`}
+          className="inline-flex min-h-9 items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8A5D52] hover:text-[#73493f] md:min-h-0 md:justify-start md:text-[11px]"
+        >
+          <TrashIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+          Remove
+        </button>
+        <button
+          type="button"
+          onClick={() => onMoveToWishlist(line)}
+          aria-label={`Move ${product.name} to wishlist`}
+          className="inline-flex min-h-9 items-center justify-center gap-1.5 pl-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:text-[var(--color-green-2)] md:min-h-0 md:justify-start md:pl-0 md:text-[11px]"
+        >
+          <HeartIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+          Move To Wishlist
+        </button>
+      </div>
+
       <button
         type="button"
         onClick={onSelect}
         aria-label={`Select ${product.name}`}
         className={cn(
-          "absolute bottom-4 right-4 flex h-7 w-7 items-center justify-center rounded-full border-2 shadow-[0_4px_12px_rgba(15,61,46,0.20)] transition-colors duration-200",
+          "absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] border shadow-[0_2px_8px_rgba(45,42,38,0.08)] md:left-auto md:right-4 md:top-4",
           isSelected
-            ? "border-[#0F3D2E] bg-[#0F3D2E] text-white"
-            : "border-[#0F3D2E]/20 bg-white/60 text-transparent backdrop-blur-sm"
+            ? "border-[var(--color-green)] bg-[var(--color-green)] text-white"
+            : "border-[var(--color-line-strong)] bg-[var(--color-surface)] text-transparent"
         )}
       >
         <CheckIcon className="h-3.5 w-3.5" />
       </button>
-    </motion.div>
+    </motion.article>
   );
 }

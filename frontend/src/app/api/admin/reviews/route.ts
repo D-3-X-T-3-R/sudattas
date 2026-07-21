@@ -2,11 +2,9 @@ import { forwardAdminGraphql } from "@/lib/admin-graphql-server";
 
 const REVIEW_ROOTS = [
   "searchReview",
-  "searchProductReview",
   "updateReview",
   "deleteReview",
-  "approveReview",
-  "rejectReview",
+  "adminUpdateReviewStatus",
 ];
 
 export async function POST(request: Request) {

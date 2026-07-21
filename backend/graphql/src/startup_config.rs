@@ -69,12 +69,30 @@ impl StartupConfig {
     }
 }
 
+/// Names treated as safe-to-relax (permissive CORS/webhook-secret defaults). Anything
+/// else that APP_ENV/RUST_ENV/NODE_ENV is explicitly set to — including a typo like
+/// "prod" or "stage", or an unrecognized value — is treated as production so a
+/// misconfigured env var fails closed instead of silently disabling CORS allowlist
+/// enforcement, webhook secret enforcement, and strict startup validation. Only
+/// leaving these vars entirely unset (the local-dev convention in this repo's
+/// .env.example) is treated as safe-to-relax.
+const KNOWN_NON_PRODUCTION_ENV_VALUES: &[&str] = &["development", "dev", "local", "test"];
+
 fn is_production_env() -> bool {
-    ["APP_ENV", "RUST_ENV", "NODE_ENV"]
+    let values: Vec<String> = ["APP_ENV", "RUST_ENV", "NODE_ENV"]
         .into_iter()
         .filter_map(|key| std::env::var(key).ok())
         .map(|value| value.trim().to_ascii_lowercase())
-        .any(|value| value == "production")
+        .filter(|value| !value.is_empty())
+        .collect();
+
+    if values.is_empty() {
+        return false;
+    }
+
+    values
+        .iter()
+        .any(|value| !KNOWN_NON_PRODUCTION_ENV_VALUES.contains(&value.as_str()))
 }
 
 fn require_non_empty_env(key: &str) -> Result<(), String> {
@@ -261,6 +279,40 @@ mod tests {
         env.set("GOOGLE_CLIENT_ID", "client-id.apps.googleusercontent.com");
         env.set("GOOGLE_CLIENT_SECRET", "test-google-secret");
         env.set("REQUIRE_WEBHOOK_SECRETS", "false");
+    }
+
+    #[test]
+    fn is_production_env_treats_unrecognized_value_as_production() {
+        let env = EnvGuard::new();
+        env.remove("RUST_ENV");
+        env.remove("NODE_ENV");
+        for typo in ["staging", "prod", "Production", "garbage"] {
+            env.set("APP_ENV", typo);
+            assert!(
+                is_production_env(),
+                "APP_ENV={typo} should be treated as production-like (fail closed)"
+            );
+        }
+    }
+
+    #[test]
+    fn is_production_env_allows_known_development_aliases_and_unset() {
+        let env = EnvGuard::new();
+        env.remove("APP_ENV");
+        env.remove("RUST_ENV");
+        env.remove("NODE_ENV");
+        assert!(
+            !is_production_env(),
+            "unset env vars should not be production"
+        );
+
+        for safe_value in ["development", "dev", "local", "test", "Development"] {
+            env.set("APP_ENV", safe_value);
+            assert!(
+                !is_production_env(),
+                "APP_ENV={safe_value} should be treated as non-production"
+            );
+        }
     }
 
     #[test]

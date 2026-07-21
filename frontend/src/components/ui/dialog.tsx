@@ -18,7 +18,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-40 bg-black/40",
+      "fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px]",
       className
     )}
     {...props}
@@ -42,17 +42,17 @@ const DialogContent = React.forwardRef<
       ref={ref}
       aria-describedby={undefined}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl bg-[var(--color-ivory)] shadow-[0_20px_50px_-12px_rgba(26,24,20,0.18),0_8px_28px_-8px_rgba(26,24,20,0.1)] focus:outline-none",
+        "fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)] focus:outline-none",
         className
       )}
       {...props}
     >
       {(title || showClose) ? (
-        <div className="flex items-center justify-between border-b border-[var(--color-line)] p-4">
+        <div className="flex items-center justify-between border-b border-[var(--color-line)] px-4 py-3">
           {title ? (
             <DialogPrimitive.Title
               className={cn(
-                "text-xs font-semibold tracking-[0.18em] text-[var(--color-ink)]",
+                "text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]",
                 titleClassName
               )}
             >
@@ -72,7 +72,7 @@ const DialogContent = React.forwardRef<
       ) : (
         <DialogPrimitive.Title className="sr-only">Dialog</DialogPrimitive.Title>
       )}
-      <div className={cn("p-5", contentClassName)}>{children}</div>
+      <div className={cn("p-4 sm:p-5", contentClassName)}>{children}</div>
     </DialogPrimitive.Content>
   </DialogPortal>
 ));

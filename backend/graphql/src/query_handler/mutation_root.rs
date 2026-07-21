@@ -98,7 +98,9 @@ use crate::resolvers::{
     },
     refunds::{
         self,
-        schema::{NewRefund, Refund, ResolveNeedsReviewInput},
+        schema::{
+            NewRefund, Refund, ResolveNeedsReviewInput, ResolveRefundAttemptNeedsReviewInput,
+        },
     },
     returns::{
         self,
@@ -245,6 +247,33 @@ async fn ensure_customer_owns_shipping_address(
     }
 }
 
+async fn ensure_customer_owns_review(
+    context: &Context,
+    review_id: &str,
+) -> Result<(), juniper::FieldError> {
+    if context.is_admin() {
+        return Ok(());
+    }
+    let uid = require_jwt(context)?.to_string();
+    let rows = reviews::handlers::search_review(crate::resolvers::reviews::schema::SearchReview {
+        review_id: Some(review_id.to_string()),
+        ..Default::default()
+    })
+    .await
+    .map_err(|e| e.into_field_error())?;
+    let owns = rows
+        .iter()
+        .any(|r| r.review_id == review_id && r.user_id == uid);
+    if owns {
+        Ok(())
+    } else {
+        Err(juniper::FieldError::new(
+            "Review not found for current user",
+            juniper::Value::null(),
+        ))
+    }
+}
+
 fn bind_cart_scope(
     context: &Context,
     requested_user_id: &str,
@@ -288,6 +317,18 @@ impl MutationRoot {
         )
         .await
         .map_err(|e| e.into_field_error())
+    }
+
+    /// Merges the caller's guest (session-scoped) cart into their now-authenticated
+    /// account — call right after login, passing the guest session id that was in
+    /// use beforehand. Requires login; `user_id` is always taken from the JWT, not
+    /// from client input.
+    #[instrument(err, ret)]
+    async fn merge_cart(context: &Context, session_id: String) -> FieldResult<Vec<Cart>> {
+        let uid = require_jwt(context)?.to_string();
+        cart::handlers::merge_cart(uid, session_id)
+            .await
+            .map_err(|e| e.into_field_error())
     }
 
     /// P2 Abandoned cart: enqueue abandoned-cart events (typically from a cron/scheduler).
@@ -334,7 +375,13 @@ impl MutationRoot {
                 ));
             }
             input.user_id = uid;
+            // Least-privilege: a self-service profile update must never smuggle in
+            // account/security fields — only name/address/phone/gender/DOB are customer-editable.
             input.role_id = None;
+            input.username = None;
+            input.email = None;
+            input.password_plain = None;
+            input.google_sub = None;
         }
         users::handlers::update_user(input)
             .await
@@ -1404,16 +1451,33 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Resolve a RefundAttempt stuck in needs_review (retry / mark_settled).
+    #[instrument(err, ret)]
+    async fn resolve_refund_attempt_needs_review(
+        context: &Context,
+        input: ResolveRefundAttemptNeedsReviewInput,
+    ) -> FieldResult<bool> {
+        require_admin(context)?;
+        refunds::handlers::resolve_refund_attempt_needs_review(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Reviews
     #[instrument(err, ret)]
-    async fn create_review(input: NewReview) -> FieldResult<Vec<Review>> {
+    async fn create_review(context: &Context, mut input: NewReview) -> FieldResult<Vec<Review>> {
+        let uid = require_jwt(context)?.to_string();
+        if !context.is_admin() {
+            input.user_id = uid;
+        }
         reviews::handlers::create_review(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     #[instrument(err, ret)]
-    async fn update_review(input: ReviewMutation) -> FieldResult<Vec<Review>> {
+    async fn update_review(context: &Context, input: ReviewMutation) -> FieldResult<Vec<Review>> {
+        ensure_customer_owns_review(context, &input.review_id).await?;
         reviews::handlers::update_review(input)
             .await
             .map_err(|e| e.into_field_error())

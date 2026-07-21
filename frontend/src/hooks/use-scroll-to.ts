@@ -2,6 +2,8 @@
 
 const PENDING_HOME_SECTION_KEY = "pendingHomeSection";
 const PENDING_HOME_FROM_OTHER_PAGE_KEY = "pendingHomeFromOtherPage";
+const PENDING_HOME_COLLECTION_KEY = "pendingHomeCollection";
+export const PENDING_HOME_COLLECTION_EVENT = "pending-home-collection";
 
 /** Used before `router.push('/')` from bag/wishlist/etc. */
 export function setPendingHomeSection(
@@ -41,6 +43,29 @@ export function clearPendingHomeSection(): void {
     sessionStorage.removeItem(PENDING_HOME_FROM_OTHER_PAGE_KEY);
   } catch {
     /* private mode */
+  }
+}
+
+export function setPendingHomeCollection(collection: string): void {
+  try {
+    sessionStorage.setItem(PENDING_HOME_COLLECTION_KEY, collection);
+  } catch {
+    /* private mode */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(PENDING_HOME_COLLECTION_EVENT, { detail: collection }));
+  } catch {
+    /* browser-only */
+  }
+}
+
+export function consumePendingHomeCollection(): string | null {
+  try {
+    const collection = sessionStorage.getItem(PENDING_HOME_COLLECTION_KEY);
+    sessionStorage.removeItem(PENDING_HOME_COLLECTION_KEY);
+    return collection;
+  } catch {
+    return null;
   }
 }
 

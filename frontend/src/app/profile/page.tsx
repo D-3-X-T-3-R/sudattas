@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { signOut, useSession } from "next-auth/react";
-import { SiteHeader } from "@/components/site-header";
 import { RouteFailureBanner } from "@/components/route-failure-banner";
 import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { fetchApiEnvelope } from "@/lib/api-envelope";
-import { addressInputSchema } from "@/lib/validation-schemas";
+import { addressInputSchema, profileUpdateSchema } from "@/lib/validation-schemas";
 import { toRouteFailureUi, type RouteFailureUi } from "@/lib/route-state";
 import { useLiveAnnouncer } from "@/components/ui/live-announcer";
+import { PageShell } from "@/components/ui/page-shell";
 import { ProfileAuthenticatedContent } from "@/domains/profile/components/profile-authenticated-content";
 import type {
   AccountOrderDetailPayload,
@@ -16,15 +16,7 @@ import type {
   AccountProfileRow,
   ShippingAddressRow,
 } from "@/domains/profile/components/profile-authenticated-content";
-import type { AddressFormState } from "@/domains/profile/types";
-
-function flowLog(message: string, meta?: Record<string, unknown>) {
-  if (meta) {
-    console.info(`[orders-flow][customer-ui] ${message}`, meta);
-    return;
-  }
-  console.info(`[orders-flow][customer-ui] ${message}`);
-}
+import type { AddressFormState, ProfileFormState } from "@/domains/profile/types";
 
 type AuthenticatedSectionProps = {
   routeFailure: RouteFailureUi | null;
@@ -33,7 +25,6 @@ type AuthenticatedSectionProps = {
   displayName: string;
   displayEmail: string;
   loginMethodLabel: string;
-  accountProfile: AccountProfileRow | null;
   error: string | null;
   loadingData: boolean;
   addresses: ShippingAddressRow[];
@@ -47,6 +38,11 @@ type AuthenticatedSectionProps = {
   updateAddress: (shippingAddressId: string) => Promise<void>;
   deleteAddress: (shippingAddressId: string) => Promise<void>;
   setDefaultAddress: (shippingAddressId: string) => Promise<void>;
+  profileForm: ProfileFormState;
+  setProfileForm: Dispatch<SetStateAction<ProfileFormState>>;
+  canSaveProfile: boolean;
+  savingProfile: boolean;
+  updateProfile: () => Promise<void>;
   ensureOrderDetailLoaded: (orderId: string) => Promise<void>;
   refreshOrderDetail: (orderId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
@@ -111,21 +107,18 @@ function useAccountDataLoader({
 
 function UnauthenticatedProfile({ openLogin }: { openLogin: (returnTo?: string) => void }) {
   return (
-    <section className="rounded-[28px] border border-white/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(249,246,240,0.92))] p-8 shadow-[0_28px_80px_rgba(8,32,26,0.12)] backdrop-blur-xl sm:rounded-[32px] sm:p-10">
-      <span
-        className="inline-block rounded-full border px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em]"
-        style={{ borderColor: "#C4A574", color: "#B8956A" }}
-      >
+    <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-8 shadow-[var(--shadow-soft)] sm:p-10">
+      <span className="inline-block rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
         Account
       </span>
-      <h1 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-semibold text-[#0A2A20] sm:text-4xl">Your Profile</h1>
+      <h1 className="mt-4 font-display text-3xl font-semibold text-[var(--color-ink)] sm:text-4xl">Your Profile</h1>
       <p className="mt-3 max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
         Sign in to see your account, saved addresses, and order history in the premium Sudatta&apos;s dashboard.
       </p>
       <button
         type="button"
         onClick={() => openLogin("/profile")}
-        className="mt-6 rounded-full bg-[var(--color-accent-gold)] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white"
+        className="mt-6 inline-flex h-11 items-center justify-center rounded-md border border-[var(--color-green)] bg-[var(--color-green)] px-6 text-[11px] font-semibold uppercase tracking-[0.16em] text-white"
       >
         Sign in
       </button>
@@ -141,7 +134,6 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     displayName,
     displayEmail,
     loginMethodLabel,
-    accountProfile,
     error,
     loadingData,
     addresses,
@@ -155,6 +147,11 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
   updateAddress,
   deleteAddress,
   setDefaultAddress,
+    profileForm,
+    setProfileForm,
+    canSaveProfile,
+    savingProfile,
+    updateProfile,
     ensureOrderDetailLoaded,
     refreshOrderDetail,
     cancelOrder,
@@ -176,7 +173,6 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         displayName={displayName}
         displayEmail={displayEmail}
         loginMethodLabel={loginMethodLabel}
-        accountProfile={accountProfile}
         error={error}
         loadingData={loadingData}
         addresses={addresses}
@@ -190,6 +186,11 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         updateAddress={updateAddress}
         deleteAddress={deleteAddress}
         setDefaultAddress={setDefaultAddress}
+        profileForm={profileForm}
+        setProfileForm={setProfileForm}
+        canSaveProfile={canSaveProfile}
+        savingProfile={savingProfile}
+        updateProfile={updateProfile}
         ensureOrderDetailLoaded={ensureOrderDetailLoaded}
         refreshOrderDetail={refreshOrderDetail}
         cancelOrder={cancelOrder}
@@ -226,6 +227,14 @@ export default function ProfilePage() {
     road: "",
     apartmentNoOrName: "",
   });
+  const [profileForm, setProfileForm] = useState<ProfileFormState>({
+    firstName: "",
+    lastName: "",
+    gender: "",
+    dateOfBirth: "",
+    phoneNumber: "",
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
   const authenticated = status === "authenticated", loadingSession = status === "loading";
   const displayName = accountProfile?.fullName?.trim() || session?.user?.name?.trim() || "Member";
   const displayEmail = accountProfile?.email?.trim() || session?.user?.email?.trim() || "No email linked";
@@ -244,6 +253,30 @@ export default function ProfilePage() {
     });
     return parsed.success;
   }, [form]);
+
+  const profileFormSeededRef = useRef(false);
+  useEffect(() => {
+    if (!accountProfile || profileFormSeededRef.current) return;
+    profileFormSeededRef.current = true;
+    setProfileForm({
+      firstName: accountProfile.firstName?.trim() ?? "",
+      lastName: accountProfile.lastName?.trim() ?? "",
+      gender: accountProfile.gender?.trim() ?? "",
+      dateOfBirth: accountProfile.dateOfBirth?.trim() ?? "",
+      phoneNumber: accountProfile.phone?.trim() ?? "",
+    });
+  }, [accountProfile]);
+
+  const canSaveProfile = useMemo(() => {
+    const parsed = profileUpdateSchema.safeParse({
+      firstName: profileForm.firstName,
+      lastName: profileForm.lastName || undefined,
+      gender: profileForm.gender || undefined,
+      dateOfBirth: profileForm.dateOfBirth || undefined,
+      phoneNumber: profileForm.phoneNumber,
+    });
+    return parsed.success;
+  }, [profileForm]);
 
   const loadAccountData = useAccountDataLoader({
     authenticated,
@@ -265,7 +298,6 @@ export default function ProfilePage() {
       if (!forceRefresh && orderDetailsRef.current[orderId]) return;
       if (orderDetailFetchRef.current.has(orderId)) return;
       orderDetailFetchRef.current.add(orderId);
-      flowLog("fetching order detail", { orderId, forceRefresh });
       setRouteFailure(null);
       try {
         const detail = await fetchApiEnvelope<AccountOrderDetailPayload>(
@@ -273,23 +305,9 @@ export default function ProfilePage() {
           { cache: "no-store" }
         );
         if (detail) {
-          const eventTypes = (detail.events ?? []).map((e) => (e.eventType ?? "").trim().toLowerCase());
-          flowLog("order detail received", {
-            orderId,
-            statusName: detail.statusName,
-            paymentState: detail.paymentState,
-            fulfillmentState: detail.fulfillmentState,
-            refundInitiated: eventTypes.includes("refund_initiated"),
-            refundProcessed: eventTypes.includes("refund_recorded"),
-            refundFailed: eventTypes.includes("refund_failed"),
-          });
           setOrderDetailsById((prev) => ({ ...prev, [orderId]: detail }));
         }
       } catch (e) {
-        flowLog("order detail fetch failed", {
-          orderId,
-          error: e instanceof Error ? e.message : String(e),
-        });
         setRouteFailure(toRouteFailureUi("account", e));
       } finally {
         orderDetailFetchRef.current.delete(orderId);
@@ -315,24 +333,14 @@ export default function ProfilePage() {
   const cancelOrder = useCallback(
     async (orderId: string) => {
       setRouteFailure(null);
-      flowLog("cancel order requested by customer", { orderId });
       try {
-        const res = await fetchApiEnvelope<{ orderId: string; statusId: string }>(
+        await fetchApiEnvelope<{ orderId: string; statusId: string }>(
           `/api/account/orders/${encodeURIComponent(orderId)}/cancel`,
           { method: "POST" }
         );
-        flowLog("cancel order API success", {
-          orderId,
-          updatedStatusId: res?.statusId ?? null,
-        });
         await loadAccountData();
-        flowLog("account data refreshed after cancel", { orderId });
         announce("Order cancelled.");
       } catch (e) {
-        flowLog("cancel order failed", {
-          orderId,
-          error: e instanceof Error ? e.message : String(e),
-        });
         const ui = toRouteFailureUi("account", e);
         setRouteFailure(ui);
         announce(ui.message, "assertive");
@@ -345,9 +353,8 @@ export default function ProfilePage() {
     async (orderId: string, orderDetailIds: string[]) => {
       if (!orderDetailIds.length) return;
       setRouteFailure(null);
-      flowLog("cancel order items requested by customer", { orderId, orderDetailIds });
       try {
-        const res = await fetchApiEnvelope<{ orderId: string; statusId: string }>(
+        await fetchApiEnvelope<{ orderId: string; statusId: string }>(
           `/api/account/orders/${encodeURIComponent(orderId)}/cancel-items`,
           {
             method: "POST",
@@ -355,19 +362,9 @@ export default function ProfilePage() {
             body: JSON.stringify({ orderDetailIds }),
           }
         );
-        flowLog("cancel order items API success", {
-          orderId,
-          orderDetailIds,
-          updatedStatusId: res?.statusId ?? null,
-        });
         await loadAccountData();
         announce("Item cancelled.");
       } catch (e) {
-        flowLog("cancel order items failed", {
-          orderId,
-          orderDetailIds,
-          error: e instanceof Error ? e.message : String(e),
-        });
         const ui = toRouteFailureUi("account", e);
         setRouteFailure(ui);
         announce(ui.message, "assertive");
@@ -382,7 +379,6 @@ export default function ProfilePage() {
       const trimmedReason = reason.trim();
       if (!trimmedReason) return;
       setRouteFailure(null);
-      flowLog("return requested by customer", { orderId, orderDetailIds });
       try {
         await fetchApiEnvelope(`/api/account/orders/${encodeURIComponent(orderId)}/returns`, {
           method: "POST",
@@ -392,11 +388,6 @@ export default function ProfilePage() {
         await loadAccountData();
         announce("Return request submitted.");
       } catch (e) {
-        flowLog("return request failed", {
-          orderId,
-          orderDetailIds,
-          error: e instanceof Error ? e.message : String(e),
-        });
         const ui = toRouteFailureUi("account", e);
         setRouteFailure(ui);
         announce(ui.message, "assertive");
@@ -404,6 +395,35 @@ export default function ProfilePage() {
     },
     [announce, loadAccountData]
   );
+
+  const updateProfile = async () => {
+    if (!canSaveProfile || savingProfile) return;
+    setSavingProfile(true);
+    setRouteFailure(null);
+    try {
+      const parsed = profileUpdateSchema.safeParse({
+        firstName: profileForm.firstName,
+        lastName: profileForm.lastName || undefined,
+        gender: profileForm.gender || undefined,
+        dateOfBirth: profileForm.dateOfBirth || undefined,
+        phoneNumber: profileForm.phoneNumber,
+      });
+      if (!parsed.success) return;
+      await fetchApiEnvelope("/api/account/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: parsed.data }),
+      });
+      await loadAccountData();
+      announce("Profile updated successfully.");
+    } catch (e) {
+      const ui = toRouteFailureUi("account", e);
+      setRouteFailure(ui);
+      announce(ui.message, "assertive");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const addAddress = async () => {
     if (!canSaveAddress || adding) return;
@@ -555,9 +575,8 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen w-full min-w-0 bg-[#F4EFE6] text-[var(--foreground)]">
-      <SiteHeader />
-      <main className="mx-auto max-w-7xl px-4 pt-3 pb-8 sm:px-6 sm:pt-4 lg:px-8">
+    <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
+      <PageShell wide containerClassName="pt-4 pb-10 md:pt-6">
         {loadingSession ? (
           <p className="text-sm text-[var(--color-muted)]">Loading profile...</p>
         ) : !authenticated ? (
@@ -570,7 +589,6 @@ export default function ProfilePage() {
             displayName={displayName}
             displayEmail={displayEmail}
             loginMethodLabel={loginMethodLabel}
-            accountProfile={accountProfile}
             error={error}
             loadingData={loadingData}
             addresses={addresses}
@@ -584,6 +602,11 @@ export default function ProfilePage() {
             updateAddress={updateAddress}
             deleteAddress={deleteAddress}
             setDefaultAddress={setDefaultAddress}
+            profileForm={profileForm}
+            setProfileForm={setProfileForm}
+            canSaveProfile={canSaveProfile}
+            savingProfile={savingProfile}
+            updateProfile={updateProfile}
             ensureOrderDetailLoaded={ensureOrderDetailLoaded}
             refreshOrderDetail={refreshOrderDetail}
             cancelOrder={cancelOrder}
@@ -591,7 +614,7 @@ export default function ProfilePage() {
             requestReturn={requestReturn}
           />
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }

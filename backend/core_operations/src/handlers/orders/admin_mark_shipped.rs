@@ -45,33 +45,31 @@ pub async fn admin_mark_order_shipped(
                     Status::internal("Shipment booking completed but no shipment row found")
                 })?
         }
+    } else if let Some(ship) = existing {
+        ship.shipment_id
+    } else if has_tracking {
+        let created = create_shipment(
+            txn,
+            Request::new(CreateShipmentRequest {
+                order_id: req.order_id,
+                shiprocket_order_id: req.shiprocket_order_id.clone(),
+                awb_code: req.awb_code.clone(),
+                carrier: req.carrier.clone(),
+                shiprocket_status_id: req.shiprocket_status_id,
+                shiprocket_status_label: req.shiprocket_status_label.clone(),
+            }),
+        )
+        .await?
+        .into_inner()
+        .items
+        .into_iter()
+        .next()
+        .ok_or_else(|| Status::internal("create_shipment returned no shipment"))?;
+        created.shipment_id
     } else {
-        if let Some(ship) = existing {
-            ship.shipment_id
-        } else if has_tracking {
-            let created = create_shipment(
-                txn,
-                Request::new(CreateShipmentRequest {
-                    order_id: req.order_id,
-                    shiprocket_order_id: req.shiprocket_order_id.clone(),
-                    awb_code: req.awb_code.clone(),
-                    carrier: req.carrier.clone(),
-                    shiprocket_status_id: req.shiprocket_status_id,
-                    shiprocket_status_label: req.shiprocket_status_label.clone(),
-                }),
-            )
-            .await?
-            .into_inner()
-            .items
-            .into_iter()
-            .next()
-            .ok_or_else(|| Status::internal("create_shipment returned no shipment"))?;
-            created.shipment_id
-        } else {
-            return Err(Status::failed_precondition(
-                "Shipment is not booked yet. Use delayed booking flow or shiprocket_book=true after eligibility.",
-            ));
-        }
+        return Err(Status::failed_precondition(
+            "Shipment is not booked yet. Use delayed booking flow or shiprocket_book=true after eligibility.",
+        ));
     };
     if has_tracking {
         let _ = update_shipment(

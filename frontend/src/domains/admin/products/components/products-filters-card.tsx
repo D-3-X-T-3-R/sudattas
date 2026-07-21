@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 import { Filter } from "lucide-react";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { AdminFilterCard } from "@/components/admin/admin-cards";
 
 export interface ProductsFiltersState {
   searchName: string;
@@ -56,13 +56,13 @@ function FilterSelect({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-xs text-[var(--color-muted)]">
+      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
         {label}
       </label>
       <select
         id={id}
         className={cn(
-          "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+          "h-11 w-full rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
           "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
         )}
         value={value}
@@ -91,56 +91,32 @@ function PriceRangeFilter({
   onMax: (value: string) => void;
 }) {
   return (
-    <div className="min-w-[14rem]">
-      <label htmlFor="products-price-min" className="mb-1 block text-xs text-[var(--color-muted)]">
+    <div>
+      <label htmlFor="products-price-min" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
         Price range (INR)
       </label>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <Input
-            id="products-price-min"
-            type="number"
-            min={0}
-            step={0.01}
-            placeholder="Min"
-            value={min}
-            onChange={(e) => onMin(e.target.value)}
-            className="h-9 w-24 rounded-md"
-          />
-          <span className="text-xs text-[var(--color-muted)]">-</span>
-          <Input
-            id="products-price-max"
-            type="number"
-            min={0}
-            step={0.01}
-            placeholder="Max"
-            value={max}
-            onChange={(e) => onMax(e.target.value)}
-            className="h-9 w-24 rounded-md"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="range"
-            min={0}
-            max={50000}
-            step={100}
-            value={Math.min(Number(min) || 0, 50000)}
-            onChange={(e) => onMin(e.target.value)}
-            className="h-2 w-24 flex-1 cursor-pointer appearance-none rounded-lg bg-[var(--color-line)] accent-[var(--color-accent-brown)]"
-            aria-label="Min price (INR)"
-          />
-          <input
-            type="range"
-            min={0}
-            max={50000}
-            step={100}
-            value={max === "" ? 50000 : Math.min(Number(max), 50000)}
-            onChange={(e) => onMax(e.target.value)}
-            className="h-2 w-24 flex-1 cursor-pointer appearance-none rounded-lg bg-[var(--color-line)] accent-[var(--color-accent-brown)]"
-            aria-label="Max price (INR)"
-          />
-        </div>
+      <div className="flex items-center gap-2">
+        <Input
+          id="products-price-min"
+          type="number"
+          min={0}
+          step={0.01}
+          placeholder="Min"
+          value={min}
+          onChange={(e) => onMin(e.target.value)}
+          className="h-11"
+        />
+        <span className="text-[var(--color-muted)]">-</span>
+        <Input
+          id="products-price-max"
+          type="number"
+          min={0}
+          step={0.01}
+          placeholder="Max"
+          value={max}
+          onChange={(e) => onMax(e.target.value)}
+          className="h-11"
+        />
       </div>
     </div>
   );
@@ -161,15 +137,11 @@ export function ProductsFiltersCard({
   const set = (patch: Partial<ProductsFiltersState>) => onFiltersChange({ ...filters, ...patch });
 
   return (
-    <Card className="mt-6 rounded-xl border-[var(--color-line)] border-l-4 border-l-blue-500 bg-white shadow-[var(--admin-card-shadow)]">
-      <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
-        <Filter className="h-4 w-4 text-blue-500" />
-        Filters
-      </CardTitle>
-      <CardContent className="mt-3">
-        <form onSubmit={onApply} className="flex flex-wrap items-end gap-3">
+    <AdminFilterCard title="Filters" icon={<Filter className="h-4 w-4 text-[var(--color-green)]" />} className="mt-6">
+      <form onSubmit={onApply} className="space-y-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <label htmlFor="products-name" className="mb-1 block text-xs text-[var(--color-muted)]">
+            <label htmlFor="products-name" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
               Name
             </label>
             <Input
@@ -178,7 +150,7 @@ export function ProductsFiltersCard({
               value={filters.searchName}
               onChange={(e) => set({ searchName: e.target.value })}
               placeholder="e.g. silk"
-              className="h-9 w-40 rounded-md"
+              className="h-11"
             />
           </div>
 
@@ -192,13 +164,13 @@ export function ProductsFiltersCard({
           />
 
           <div>
-            <label htmlFor="products-status" className="mb-1 block text-xs text-[var(--color-muted)]">
+            <label htmlFor="products-status" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
               Status
             </label>
             <select
               id="products-status"
               className={cn(
-                "h-9 min-w-[10rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                "h-11 w-full rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
               )}
               value={filters.searchProductStatusId}
@@ -219,28 +191,6 @@ export function ProductsFiltersCard({
             options={moods}
             allLabel="All moods"
           />
-
-          <PriceRangeFilter
-            min={filters.searchPriceMinRupees}
-            max={filters.searchPriceMaxRupees}
-            onMin={(value) => set({ searchPriceMinRupees: value })}
-            onMax={(value) => set({ searchPriceMaxRupees: value })}
-          />
-
-          <div>
-            <label htmlFor="products-limit" className="mb-1 block text-xs text-[var(--color-muted)]">
-              Limit
-            </label>
-            <Input
-              id="products-limit"
-              type="number"
-              min={1}
-              max={100}
-              value={filters.searchLimit}
-              onChange={(e) => set({ searchLimit: e.target.value })}
-              className="h-9 w-20 rounded-md"
-            />
-          </div>
 
           <FilterSelect
             id="products-fabric"
@@ -272,13 +222,35 @@ export function ProductsFiltersCard({
             getOptionValue={(o) => o.name}
           />
 
-          <div className="flex gap-2">
-            <Button type="submit" size="sm">Apply</Button>
-            <Button type="button" variant="outline" size="sm" onClick={onClear}>Clear</Button>
-            <Button type="button" variant="outline" size="sm" onClick={onRefresh}>Refresh</Button>
+          <PriceRangeFilter
+            min={filters.searchPriceMinRupees}
+            max={filters.searchPriceMaxRupees}
+            onMin={(value) => set({ searchPriceMinRupees: value })}
+            onMax={(value) => set({ searchPriceMaxRupees: value })}
+          />
+
+          <div>
+            <label htmlFor="products-limit" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
+              Results per page
+            </label>
+            <Input
+              id="products-limit"
+              type="number"
+              min={1}
+              max={100}
+              value={filters.searchLimit}
+              onChange={(e) => set({ searchLimit: e.target.value })}
+              className="h-11"
+            />
           </div>
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+
+        <div className="flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-4">
+          <Button type="submit">Apply filters</Button>
+          <Button type="button" variant="outline" onClick={onClear}>Clear</Button>
+          <Button type="button" variant="outline" onClick={onRefresh}>Refresh</Button>
+        </div>
+      </form>
+    </AdminFilterCard>
   );
 }

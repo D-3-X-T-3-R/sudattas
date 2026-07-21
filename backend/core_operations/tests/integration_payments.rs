@@ -252,6 +252,196 @@ async fn integration_place_order_creates_payment_intent() {
     txn.rollback().await.ok();
 }
 
+/// P1b – If Razorpay order creation fails during a prepaid checkout, place_order
+/// must leave nothing persisted: no Order row, no inventory decrement, and the
+/// cart item stays put for the customer to retry. Forces a deterministic failure
+/// by clearing RAZORPAY_KEY_ID (fails fast on missing config; no live network
+/// call is made, so this test needs no provider-dependent gate).
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL and migrated schema"]
+async fn integration_place_order_prepaid_rolls_back_fully_when_razorpay_fails() {
+    // Trigger the one-time .env load first, then remove the Razorpay vars — if
+    // removed before this, `load_env_once()`'s dotenv load (triggered by
+    // `test_db_url()` below) would just repopulate them from `.env` afterward.
+    core_operations::load_env_once();
+    let original_key_id = std::env::var("RAZORPAY_KEY_ID").ok();
+    let original_secret = std::env::var("RAZORPAY_KEY_SECRET").ok();
+    std::env::remove_var("RAZORPAY_KEY_ID");
+    std::env::remove_var("RAZORPAY_KEY_SECRET");
+
+    let db = Database::connect(&test_db_url())
+        .await
+        .expect("connect to test DB");
+    let txn = db.begin().await.expect("begin transaction");
+
+    let now_tag = Utc::now().timestamp_millis();
+    let cart_total = 150_000_i64;
+
+    let _ = ensure_order_status(&txn, "pending").await;
+    let role = user_roles::ActiveModel {
+        role_id: ActiveValue::NotSet,
+        role_name: ActiveValue::Set(format!("itest_pay_fail_{}", now_tag)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert UserRoles");
+    let user_res = core_operations::handlers::users::create_user(
+        &txn,
+        Request::new(CreateUserRequest {
+            username: format!("itest_pay_fail_{}", now_tag),
+            email: format!("itest_pay_fail+{}@example.com", now_tag),
+            full_name: None,
+            address: None,
+            phone: None,
+            auth_provider: "email".to_string(),
+            password_plain: Some("StrongPass123!".to_string()),
+            google_sub: None,
+            role_id: Some(role.role_id),
+        }),
+    )
+    .await
+    .expect("create_user");
+    let user_id = user_res.into_inner().items[0].user_id;
+
+    let ship = shipping_addresses::ActiveModel {
+        shipping_address_id: ActiveValue::NotSet,
+        user_id: ActiveValue::Set(Some(user_id)),
+        recipient_name: ActiveValue::Set(Some("Test User".to_string())),
+        phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
+        is_default: ActiveValue::Set(0),
+        country: ActiveValue::Set("IN".to_string()),
+        state_region: ActiveValue::Set("KA".to_string()),
+        city: ActiveValue::Set("City".to_string()),
+        postal_code: ActiveValue::Set("100001".to_string()),
+        road: ActiveValue::Set(None),
+        apartment_no_or_name: ActiveValue::Set(None),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert ShippingAddresses");
+    let shipping_id = ship.shipping_address_id;
+
+    let cat = product_categories::ActiveModel {
+        category_id: ActiveValue::NotSet,
+        name: ActiveValue::Set(format!("itest_cat_pay_fail_{}", now_tag)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert ProductCategories");
+    let prod = products::ActiveModel {
+        product_id: ActiveValue::NotSet,
+        sku: ActiveValue::Set(None),
+        name: ActiveValue::Set("Payment Failure Test Product".to_string()),
+        slug: ActiveValue::Set(None),
+        description: ActiveValue::Set(None),
+        price_paise: ActiveValue::Set(cart_total as i32),
+        category_id: ActiveValue::Set(cat.category_id),
+        fabric: ActiveValue::Set(None),
+        weave: ActiveValue::Set(None),
+        occasion: ActiveValue::Set(None),
+        has_blouse_piece: ActiveValue::Set(None),
+        care_instructions: ActiveValue::Set(None),
+        product_status_id: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(Some(Utc::now())),
+        updated_at: ActiveValue::Set(None),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert Products");
+    let variant = product_variants::ActiveModel {
+        variant_id: ActiveValue::NotSet,
+        product_id: ActiveValue::Set(prod.product_id),
+        size_id: ActiveValue::Set(None),
+        color_id: ActiveValue::Set(None),
+        additional_price: ActiveValue::Set(Some(0)),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert ProductVariants");
+    let _ = inventory::ActiveModel {
+        inventory_id: ActiveValue::NotSet,
+        variant_id: ActiveValue::Set(Some(variant.variant_id)),
+        quantity_available: ActiveValue::Set(Some(10)),
+        quantity_reserved: ActiveValue::Set(Some(0)),
+        reorder_level: ActiveValue::Set(None),
+        updated_at: ActiveValue::Set(Some(Utc::now())),
+    }
+    .insert(&txn)
+    .await
+    .expect("insert Inventory");
+
+    let cart_res = core_operations::handlers::cart::create_cart_item(
+        &txn,
+        Request::new(CreateCartItemRequest {
+            user_id: Some(user_id),
+            session_id: None,
+            variant_id: variant.variant_id,
+            quantity: 1,
+        }),
+    )
+    .await
+    .expect("create_cart_item");
+    let cart_id = cart_res.into_inner().items[0].cart_id;
+
+    let place_res = place_order(
+        &txn,
+        Request::new(PlaceOrderRequest {
+            shipping_address_id: shipping_id,
+            user_id,
+            coupon_code: None,
+            selected_cart_ids: vec![cart_id],
+            payment_mode: None, // prepaid
+        }),
+    )
+    .await;
+    assert!(
+        place_res.is_err(),
+        "place_order should fail when Razorpay order creation fails"
+    );
+
+    let orders_for_user = orders::Entity::find()
+        .filter(orders::Column::UserId.eq(user_id))
+        .count(&txn)
+        .await
+        .expect("count orders");
+    assert_eq!(
+        orders_for_user, 0,
+        "no order should be persisted when the Razorpay call fails"
+    );
+
+    let cart_after = core_operations::handlers::cart::get_cart_items(
+        &txn,
+        Request::new(proto::proto::core::GetCartItemsRequest {
+            user_id: Some(user_id),
+            session_id: None,
+        }),
+    )
+    .await
+    .expect("get_cart_items");
+    assert_eq!(
+        cart_after.get_ref().items.len(),
+        1,
+        "cart item should remain after a failed prepaid checkout"
+    );
+    assert_eq!(cart_after.get_ref().items[0].cart_id, cart_id);
+
+    let inv = inventory::Entity::find()
+        .filter(inventory::Column::VariantId.eq(Some(variant.variant_id)))
+        .one(&txn)
+        .await
+        .expect("query inventory")
+        .expect("inventory row exists");
+    assert_eq!(
+        inv.quantity_available,
+        Some(10),
+        "inventory should not be decremented when the Razorpay call fails"
+    );
+
+    restore_env_var("RAZORPAY_KEY_ID", original_key_id);
+    restore_env_var("RAZORPAY_KEY_SECRET", original_secret);
+    txn.rollback().await.ok();
+}
+
 /// P2 – Happy-path verify_razorpay_payment marks intent Processed, sets payment id, moves order to Paid.
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
@@ -707,6 +897,7 @@ async fn integration_late_captured_webhook_after_system_expiry_marks_needs_revie
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await;
@@ -731,6 +922,7 @@ async fn integration_late_captured_webhook_after_system_expiry_marks_needs_revie
             payload_json: payload.to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await

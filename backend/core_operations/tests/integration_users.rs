@@ -143,6 +143,10 @@ async fn integration_user_create_update_search() {
             address: None,
             phone: None,
             role_id: None,
+            first_name: None,
+            last_name: None,
+            gender: None,
+            date_of_birth: None,
         }),
     )
     .await
@@ -574,6 +578,10 @@ async fn integration_user_update_password_invalidates_old_credentials() {
             address: None,
             phone: None,
             role_id: None,
+            first_name: None,
+            last_name: None,
+            gender: None,
+            date_of_birth: None,
         }),
     )
     .await

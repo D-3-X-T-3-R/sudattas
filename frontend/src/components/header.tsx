@@ -1,22 +1,29 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, Menu, Heart, ShoppingBag } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { setPendingHomeSection } from "@/hooks/use-scroll-to";
 
 const NAV_LINKS = [
-  { id: "top", label: "Home" },
-  { id: "collections", label: "Moods" },
-  { id: "category-collections", label: "Collections" },
-  { id: "shop", label: "New Arrivals" },
-  { id: "explore", label: "Explore" },
-  { id: "story", label: "Story" },
+  { type: "section", id: "top", label: "Home" },
+  { type: "section", id: "category-collections", label: "Collections" },
+  { type: "section", id: "shop", label: "New Arrivals" },
+  { type: "section", id: "collections", label: "Moods" },
+  { type: "section", id: "explore", label: "Explore" },
+  { type: "section", id: "journal", label: "Journal" },
+  { type: "route", href: "/about", label: "About Us" },
 ] as const;
+
+const thresholdMinor = parseInt(process.env.NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD_MINOR ?? "100000", 10);
+const thresholdRupees = thresholdMinor / 100;
+const thresholdDisplay = `₹${thresholdRupees.toLocaleString("en-IN")}`;
+const BANNER_TEXT = `FREE SHIPPING ON ALL ORDERS ABOVE ${thresholdDisplay}`;
+const BANNER_SEPARATOR = "                              ★                              ";
 
 export interface HeaderProps {
   query: string;
@@ -25,13 +32,71 @@ export interface HeaderProps {
   wishCount: number;
   setMenuOpen: (open: boolean) => void;
   goTo: (id: string, instant?: boolean) => void;
-  /**
-   * When true (e.g. bag / wishlist / product), nav uses the same `<button>` + underline as the
-   * landing page but navigates with `router.push('/#id')`. `goTo` is unused in that mode.
-   */
+  searchOpen: boolean;
+  setSearchOpen: (open: boolean) => void;
   navUseHashLinks?: boolean;
   authEnabled?: boolean;
   authButtons?: React.ReactNode;
+}
+
+function Logo({ className }: { className?: string }) {
+  return (
+    <Link href="/" aria-label="Sudatta's home" className={className}>
+      <Image
+        src="/hero/sudattas-logo.png"
+        alt="Sudatta's Designer Boutique"
+        width={168}
+        height={100}
+        priority
+        unoptimized
+        className="h-10 w-auto object-contain lg:h-12"
+      />
+    </Link>
+  );
+}
+
+function WishlistLink({ wishCount, desktop = false }: { wishCount: number; desktop?: boolean }) {
+  return (
+    <Link
+      href="/wishlist"
+      className={cn(
+        "relative inline-flex h-10 w-10 items-center justify-center rounded-md text-[var(--color-ink)] transition-colors hover:text-[var(--color-green)]",
+        desktop && "border border-transparent hover:border-[var(--color-line)]",
+        wishCount > 0 && "text-[var(--color-gold)]"
+      )}
+      aria-label="Wishlist"
+    >
+      <Heart size={desktop ? 20 : 18} />
+      {wishCount > 0 && (
+        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] px-1 text-[10px] font-semibold text-white">
+          {wishCount}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function AnnouncementBanner() {
+  const segment = Array(6).fill(`${BANNER_TEXT}${BANNER_SEPARATOR}`).join("");
+
+  return (
+    <div
+      className="overflow-hidden bg-[var(--color-green)] py-2"
+      style={{
+        backgroundImage:
+          "repeating-linear-gradient(135deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 7px)",
+      }}
+    >
+      <div className="announcement-marquee flex whitespace-nowrap">
+        <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-on-deep)]">
+          {segment}
+        </span>
+        <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-on-deep)]" aria-hidden>
+          {segment}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export function Header({
@@ -41,146 +106,148 @@ export function Header({
   wishCount,
   setMenuOpen,
   goTo,
+  searchOpen,
+  setSearchOpen,
   navUseHashLinks = false,
   authEnabled,
   authButtons,
 }: HeaderProps) {
   const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
+    const onScroll = () => setScrolled(window.scrollY > 14);
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const navigate = (id: string) => {
+    if (navUseHashLinks) {
+      setPendingHomeSection(id, { fromOtherPage: true });
+      router.push("/");
+      return;
+    }
+    goTo(id, false);
+  };
+
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 w-full min-w-0 transition-all duration-500",
-        scrolled
-          ? "border-b border-[var(--color-line)]/60 bg-[var(--color-ivory)]/80 backdrop-blur-md shadow-[0_1px_24px_rgba(26,24,20,0.06)]"
-          : "border-b border-transparent bg-[var(--color-ivory)]/40 backdrop-blur-sm"
+        "sticky top-0 z-40 w-full border-b border-[var(--color-line)] bg-[var(--color-surface)]/96 backdrop-blur",
+        scrolled && "shadow-[0_5px_18px_rgba(45,42,38,0.07)]"
       )}
     >
-      <div className="mx-auto grid w-full max-w-[2000px] grid-cols-[1fr_0_auto] items-center gap-4 px-4 py-4 md:grid-cols-[1fr_0_auto]">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
+      <AnnouncementBanner />
+
+      {/* Mobile */}
+      <div className="pt-[env(safe-area-inset-top)] lg:hidden">
+        <div className="relative mx-auto flex h-14 w-full max-w-[var(--container-max)] items-center justify-between px-[var(--gutter-mobile)]">
+          <button
+            type="button"
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
-            className="md:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-[var(--color-line-strong)] bg-[var(--color-surface-soft)] text-[var(--color-green)] shadow-[var(--shadow-subtle)] transition-colors hover:border-[var(--color-gold)] hover:text-[var(--color-green-2)]"
           >
-            <Menu size={28} strokeWidth={2.5} />
-          </Button>
-          <nav className="hidden md:flex md:items-center md:gap-6">
-            {NAV_LINKS.map(({ id, label }) => {
-              const navItemClass =
-                "group relative inline-flex cursor-pointer appearance-none border-0 bg-transparent p-0 text-left font-sans text-base font-medium uppercase tracking-[0.18em] text-[var(--color-ink)] no-underline transition-colors duration-300 ease-out hover:text-[var(--color-accent-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-gold)]/25 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-ivory)]";
-              const underline = (
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute -bottom-0.5 left-0 h-px w-0 bg-[var(--color-accent-gold)] transition-all duration-300 ease-out group-hover:w-full"
-                />
-              );
-              if (navUseHashLinks) {
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => {
-                      setPendingHomeSection(id, { fromOtherPage: true });
-                      router.push("/");
-                    }}
-                    className={navItemClass}
-                  >
-                    {label}
-                    {underline}
-                  </button>
-                );
-              }
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => goTo(id, false)}
-                  className={navItemClass}
-                >
-                  {label}
-                  {underline}
-                </button>
-              );
-            })}
-          </nav>
+            <Menu size={20} strokeWidth={2.2} />
+          </button>
+
+          <Logo className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+
+          <span className="h-11 w-11" aria-hidden />
         </div>
+      </div>
 
-        {/* Center column left empty (logo removed) to keep nav and actions aligned */}
-        <div />
+      {/* Desktop: single row */}
+      <div className="hidden lg:block">
+        <div className="relative mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-tablet)]">
+          <div className="flex items-center gap-6 py-1.5">
+            <Logo />
 
-        <div className="flex items-center justify-end gap-1">
-          {authEnabled && authButtons && (
-            <div className="hidden items-center sm:flex">{authButtons}</div>
-          )}
+            <nav
+              className="flex flex-1 min-w-0 items-center justify-center gap-5 xl:gap-7"
+              aria-label="Primary"
+            >
+              {NAV_LINKS.map((link) =>
+                link.type === "route" ? (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="group relative whitespace-nowrap px-0.5 py-1 text-[15px] font-semibold uppercase tracking-[0.1em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-green)]"
+                  >
+                    {link.label}
+                    <span className="absolute -bottom-1 left-0 h-px w-0 bg-[var(--color-gold)] transition-all group-hover:w-full" />
+                  </Link>
+                ) : (
+                  <button
+                    key={link.id}
+                    type="button"
+                    onClick={() => navigate(link.id)}
+                    className="group relative whitespace-nowrap px-0.5 py-1 text-[15px] font-semibold uppercase tracking-[0.1em] text-[var(--color-ink)] transition-colors hover:text-[var(--color-green)]"
+                  >
+                    {link.label}
+                    <span className="absolute -bottom-1 left-0 h-px w-0 bg-[var(--color-gold)] transition-all group-hover:w-full" />
+                  </button>
+                )
+              )}
+            </nav>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {authEnabled && authButtons ? (
+                <div className="flex items-center">{authButtons}</div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setSearchOpen(!searchOpen)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent text-[var(--color-ink)] transition-colors hover:border-[var(--color-line)] hover:text-[var(--color-green)]"
+                aria-label="Search"
+              >
+                <Search size={20} />
+              </button>
+              <WishlistLink wishCount={wishCount} desktop />
+              <Link
+                href="/bag"
+                className={cn(
+                  "relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent text-[var(--color-ink)] transition-colors hover:border-[var(--color-line)] hover:text-[var(--color-green)]",
+                  cartCount > 0 && "text-[var(--color-gold)]"
+                )}
+                aria-label="Bag"
+              >
+                <ShoppingBag size={20} />
+                {cartCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-sm bg-[var(--color-gold)] px-1 text-[10px] font-semibold text-white">
+                    {cartCount}
+                  </span>
+                )}
+              </Link>
+            </div>
+          </div>
+
           {searchOpen ? (
-            <div className="absolute right-4 top-full mt-2 w-[280px] md:relative md:right-0 md:mt-0 md:block md:w-[240px]">
+            <div className="absolute left-auto right-[var(--gutter-tablet)] top-full z-50 mt-2 w-[420px] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-soft)]">
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search"
-                className="pl-10 py-2.5"
+                placeholder="Search collections, fabrics, styles"
+                className="h-9"
                 autoFocus
-                onBlur={() => setSearchOpen(false)}
               />
-              <Search size={28} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" strokeWidth={2.5} />
             </div>
-          ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSearchOpen(true)}
-              aria-label="Search"
-              className="md:flex"
-            >
-              <Search size={28} strokeWidth={2.5} />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Wishlist"
-            className={cn("relative", wishCount > 0 && "text-[var(--color-accent-gold)]")}
-            asChild
-          >
-            <Link href="/wishlist">
-              <Heart size={28} strokeWidth={2.5} />
-              {wishCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-xs font-semibold text-white">
-                  {wishCount}
-                </span>
-              )}
-            </Link>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Bag"
-            className={cn("relative", cartCount > 0 && "text-[var(--color-accent-gold)]")}
-            asChild
-          >
-            <Link href="/bag">
-              <ShoppingBag size={28} strokeWidth={2.5} />
-              {cartCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent-gold)] font-sans text-xs font-semibold text-white">
-                  {cartCount}
-                </span>
-              )}
-            </Link>
-          </Button>
+          ) : null}
         </div>
       </div>
+
+      {searchOpen ? (
+        <div className="fixed left-[var(--gutter-mobile)] right-[var(--gutter-mobile)] top-[calc(env(safe-area-inset-top)+4.55rem)] z-50 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-soft)] lg:hidden">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search collections, fabrics, styles"
+            className="h-9"
+            autoFocus
+          />
+        </div>
+      ) : null}
     </header>
   );
 }

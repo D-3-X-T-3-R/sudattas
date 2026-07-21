@@ -101,92 +101,84 @@ export function ProductPreviewDialog({
               </div>
             )}
           </div>
-          <div className="space-y-2 text-sm">
-            <h3 className="text-base font-semibold text-[var(--color-ink)]">
-              {product.name}
-            </h3>
-            <p className="text-[var(--color-muted)]">
-              {product.description || "No description"}
-            </p>
-            <div className="rounded-md border border-[var(--color-line)] p-3">
-              <p>
-                <span className="font-medium">Product ID:</span>{" "}
-                <span className="font-mono">{product.productId}</span>
-              </p>
-              <p>
-                <span className="font-medium">Category:</span>{" "}
-                {categoryNameById[product.categoryId ?? ""] ?? product.categoryId ?? "—"}
-              </p>
-              <p>
-                <span className="font-medium">Price:</span>{" "}
-                {product.formatted}
-              </p>
-              <p>
-                <span className="font-medium">Stock:</span>{" "}
-                {product.stockQuantity ?? "—"}
-              </p>
-              <p>
-                <span className="font-medium">SKU:</span>{" "}
-                {product.sku ?? "—"}
-              </p>
-              <p>
-                <span className="font-medium">Slug:</span>{" "}
-                {product.slug ?? "—"}
-              </p>
-              <p>
-                <span className="font-medium">Fabric:</span>{" "}
-                {product.fabric ?? "—"}
-              </p>
-              <p>
-                <span className="font-medium">Weave:</span>{" "}
-                {product.weave ?? "—"}
-              </p>
-              <p>
-                <span className="font-medium">Occasion:</span>{" "}
-                {product.occasion ?? "—"}
-              </p>
-              <p>
-                <span className="font-medium">Has blouse piece:</span>{" "}
-                {product.hasBlousePiece == null
-                  ? "—"
-                  : product.hasBlousePiece
-                    ? "Yes"
-                    : "No"}
-              </p>
-              <p>
-                <span className="font-medium">Care instructions:</span>{" "}
-                {product.careInstructions ?? "—"}
-              </p>
-              <p>
-                <span className="font-medium">Product status:</span>{" "}
-                {getProductStatusLabel(product.productStatusId)}
-              </p>
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-xl font-semibold text-[var(--color-ink)]">
+                {product.name}
+              </h3>
+              <p className="mt-1 text-lg font-medium text-[var(--color-ink)]">{product.formatted}</p>
+            </div>
+            {product.description ? (
+              <p className="text-[15px] text-[var(--color-muted)]">{product.description}</p>
+            ) : null}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 rounded-lg border border-[var(--color-line)] p-4 text-[15px]">
+              <div>
+                <p className="text-sm text-[var(--color-muted)]">Category</p>
+                <p className="text-[var(--color-ink)]">{categoryNameById[product.categoryId ?? ""] ?? product.categoryId ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--color-muted)]">Stock</p>
+                <p className="text-[var(--color-ink)]">{product.stockQuantity ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--color-muted)]">Status</p>
+                <p className="text-[var(--color-ink)]">{getProductStatusLabel(product.productStatusId)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--color-muted)]">Fabric</p>
+                <p className="text-[var(--color-ink)]">{product.fabric ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--color-muted)]">Weave</p>
+                <p className="text-[var(--color-ink)]">{product.weave ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--color-muted)]">Occasion</p>
+                <p className="text-[var(--color-ink)]">{product.occasion ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--color-muted)]">Blouse piece</p>
+                <p className="text-[var(--color-ink)]">
+                  {product.hasBlousePiece == null ? "—" : product.hasBlousePiece ? "Yes" : "No"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--color-muted)]">SKU</p>
+                <p className="text-[var(--color-ink)]">{product.sku ?? "—"}</p>
+              </div>
+              {product.careInstructions ? (
+                <div className="col-span-2">
+                  <p className="text-sm text-[var(--color-muted)]">Care instructions</p>
+                  <p className="text-[var(--color-ink)]">{product.careInstructions}</p>
+                </div>
+              ) : null}
+              <div className="col-span-2 border-t border-[var(--color-line)] pt-2.5 text-sm text-[var(--color-muted)]">
+                Product #{product.productId} &middot; Slug: {product.slug ?? "—"}
+              </div>
             </div>
             {imageUrls.length > 1 && (
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-1">
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
                   onClick={() =>
                     setSelectedImageIndex((prev) =>
                       prev === 0 ? imageUrls.length - 1 : prev - 1
                     )
                   }
                 >
-                  Prev
+                  Previous photo
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
                   onClick={() =>
                     setSelectedImageIndex((prev) =>
                       prev === imageUrls.length - 1 ? 0 : prev + 1
                     )
                   }
                 >
-                  Next
+                  Next photo
                 </Button>
               </div>
             )}

@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   updateAdminOrderStatus,
+  resolveOrderNeedsReview,
   type AdminOrderDetail,
 } from "@/lib/admin-order-detail";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,7 @@ function formatStatusMutationError(err: unknown): string {
     const short = msg.match(/Illegal order state transition[^,}\]]*/);
     if (short) return short[0].trim();
   }
-  return msg.length > 280 ? `${msg.slice(0, 280)}…` : msg;
+  return msg.length > 280 ? `${msg.slice(0, 280)}...` : msg;
 }
 
 type OrderDetailStatusEditorProps = {
@@ -53,90 +54,110 @@ export function OrderDetailStatusEditor({
         shiprocketBook: shouldBookShiprocket,
       });
     },
-    onMutate: (newStatusId) => {
-      console.info("[orders-flow][admin-ui] status mutation started", {
-        orderId: order.orderId,
-        fromStatusId: order.statusId,
-        toStatusId: newStatusId,
-      });
-    },
     onSuccess: () => {
-      console.info("[orders-flow][admin-ui] status mutation success", {
-        orderId: order.orderId,
-        newStatusId: statusDraft,
-      });
       queryClient.invalidateQueries({ queryKey: ["admin", "order", orderIdParam] });
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
     },
-    onError: (err) => {
-      console.error("[orders-flow][admin-ui] status mutation failed", {
-        orderId: order.orderId,
-        attemptedStatusId: statusDraft,
-        error: err instanceof Error ? err.message : String(err),
-      });
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: (resolution: "paid" | "cancelled" | "refunded") =>
+      resolveOrderNeedsReview(order.orderId, resolution),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "order", orderIdParam] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
     },
   });
 
+  const needsReview = currentName === "needs_review";
+
   return (
-    <div className="sm:col-span-2">
-      <dt className="text-[var(--color-muted)]">Status</dt>
-      <dd className="mt-2 space-y-2">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="order-detail-status" className="text-xs text-[var(--color-muted)]">
-              Change status
-            </label>
-            <select
-              id="order-detail-status"
-              className={cn(
-                "h-9 min-w-[12rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
-                "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
-              )}
-              value={statusDraft}
-              onChange={(e) => setStatusDraft(e.target.value)}
-              disabled={statusMutation.isPending}
-            >
-              {selectableStatuses.length === 0 ? (
-                <option value={order.statusId}>
-                  {getStatusLabel(order.statusId, statuses)} (id {order.statusId})
-                </option>
-              ) : (
-                <>
-                  {selectableStatuses.map((s) => (
-                    <option key={s.statusId} value={s.statusId}>
-                      {formatOrderStatusName(s.statusName)}
-                    </option>
-                  ))}
-                  {!selectableStatuses.some((s) => s.statusId === order.statusId) ? (
-                    <option value={order.statusId}>Current (id {order.statusId})</option>
-                  ) : null}
-                </>
-              )}
-            </select>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            disabled={statusMutation.isPending || !statusDraft || statusDraft === order.statusId}
-            onClick={() => statusMutation.mutate(statusDraft)}
-          >
-            {statusMutation.isPending ? "Saving…" : "Save status"}
-          </Button>
-        </div>
-        <p className="text-xs text-[var(--color-muted)]">
-          Current:{" "}
-          <span className="font-medium text-[var(--color-ink)]">
-            {getStatusLabel(order.statusId, statuses)}
-          </span>
-          . Typical flow: pending → confirmed → processing order → shipped → delivered. Only valid next
-          steps are listed.
-        </p>
-        {statusMutation.isError && (
-          <p className="text-xs text-rose-700" role="alert">
-            {formatStatusMutationError(statusMutation.error)}
+    <div>
+      {needsReview ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-900">
+            This order needs manual review (e.g. an ambiguous payment result).
           </p>
-        )}
-      </dd>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={resolveMutation.isPending}
+              onClick={() => resolveMutation.mutate("paid")}
+            >
+              Mark paid
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={resolveMutation.isPending}
+              onClick={() => resolveMutation.mutate("cancelled")}
+            >
+              Cancel order
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={resolveMutation.isPending}
+              onClick={() => resolveMutation.mutate("refunded")}
+            >
+              Mark refunded
+            </Button>
+          </div>
+          {resolveMutation.isError ? (
+            <p className="mt-2 text-sm text-rose-700" role="alert">
+              {formatStatusMutationError(resolveMutation.error)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-end gap-3">
+        <select
+          className={cn(
+            "h-11 min-w-[13rem] rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
+            "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
+          )}
+          value={statusDraft}
+          onChange={(e) => setStatusDraft(e.target.value)}
+          disabled={statusMutation.isPending}
+        >
+          {selectableStatuses.length === 0 ? (
+            <option value={order.statusId}>{getStatusLabel(order.statusId, statuses)} (id {order.statusId})</option>
+          ) : (
+            <>
+              {selectableStatuses.map((s) => (
+                <option key={s.statusId} value={s.statusId}>
+                  {formatOrderStatusName(s.statusName)}
+                </option>
+              ))}
+              {!selectableStatuses.some((s) => s.statusId === order.statusId) ? (
+                <option value={order.statusId}>Current (id {order.statusId})</option>
+              ) : null}
+            </>
+          )}
+        </select>
+
+        <Button
+          type="button"
+          disabled={statusMutation.isPending || !statusDraft || statusDraft === order.statusId}
+          onClick={() => statusMutation.mutate(statusDraft)}
+        >
+          {statusMutation.isPending ? "Saving..." : "Save status"}
+        </Button>
+      </div>
+
+      <p className="mt-3 text-sm text-[var(--color-muted)]">
+        Usual order of things: pending &rarr; confirmed &rarr; processing &rarr; shipped &rarr; delivered.
+      </p>
+
+      {statusMutation.isError ? (
+        <p className="mt-2 text-sm text-rose-700" role="alert">
+          {formatStatusMutationError(statusMutation.error)}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,14 +1,16 @@
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CancelOrderItemsRequest,
-    CreateOrderRequest, DeleteOrderRequest, EstimateCheckoutShippingRequest, PlaceOrderRequest,
-    SearchOrderRequest, SearchOrderStatusRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
+    CreateOrderRequest, DeleteOrderRequest, EstimateCheckoutShippingRequest, GetOrderStatsRequest,
+    OrderStatusCount as ProtoOrderStatusCount, PlaceOrderRequest, SearchOrderRequest,
+    SearchOrderStatusRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
 };
 use tracing::instrument;
 
 use super::schema::{
     AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
-    CheckoutShippingEstimate, CreateOrderInput, EstimateCheckoutShippingInput, NewOrder, Order,
-    OrderMutation, OrderStatus, PickupTargetUpdateResult, SearchOrder, UpdatePickupTargetInput,
+    CheckoutShippingEstimate, CreateOrderInput, EstimateCheckoutShippingInput, GetOrderStatsInput,
+    NewOrder, Order, OrderMutation, OrderStats, OrderStatus, OrderStatusCount,
+    PickupTargetUpdateResult, SearchOrder, UpdatePickupTargetInput,
 };
 use crate::resolvers::{
     convert,
@@ -126,6 +128,32 @@ pub(crate) async fn search_order(search: SearchOrder) -> Result<Vec<Order>, GqlE
         .into_iter()
         .map(convert::order_response_to_gql)
         .collect())
+}
+
+#[instrument]
+pub(crate) async fn get_order_stats(input: GetOrderStatsInput) -> Result<OrderStats, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let resp = client
+        .get_order_stats(GetOrderStatsRequest {
+            order_date_start: to_option_i64(input.order_date_start),
+            order_date_end: to_option_i64(input.order_date_end),
+        })
+        .await?
+        .into_inner();
+    Ok(OrderStats {
+        total_orders: resp.total_orders.to_string(),
+        total_revenue_paise: resp.total_revenue_paise.to_string(),
+        by_status: resp
+            .by_status
+            .into_iter()
+            .map(|s: ProtoOrderStatusCount| OrderStatusCount {
+                status_id: s.status_id.to_string(),
+                status_name: s.status_name,
+                count: s.count.to_string(),
+            })
+            .collect(),
+        customer_count: resp.customer_count.to_string(),
+    })
 }
 
 #[instrument]

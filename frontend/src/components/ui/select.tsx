@@ -15,8 +15,8 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between rounded-md border border-[var(--color-line)] bg-white px-3 py-2 text-sm",
-      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-50",
+      "flex h-11 w-full items-center justify-between rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)]",
+      "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)] focus:border-[var(--color-green)] disabled:cursor-not-allowed disabled:opacity-50",
       className
     )}
     {...props}
@@ -37,7 +37,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-md border border-[var(--color-line)] bg-white text-[var(--color-ink)] shadow-md",
+        "z-50 min-w-[8rem] overflow-hidden rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-soft)]",
         "max-h-[min(22rem,var(--radix-select-content-available-height))]",
         position === "popper" && "translate-y-1",
         className
@@ -59,11 +59,11 @@ const SelectItem = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
-    className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-2 pl-8 pr-2 text-sm outline-none",
-      "focus:bg-[var(--color-line)]/30 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      className
-    )}
+      className={cn(
+        "relative flex w-full cursor-default select-none items-center rounded-sm py-2 pl-8 pr-2 text-sm outline-none",
+        "focus:bg-[var(--color-surface-soft)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        className
+      )}
     {...props}
   >
     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">

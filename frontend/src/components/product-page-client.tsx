@@ -3,28 +3,25 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SiteHeader } from "@/components/site-header";
 import { ProductDetailView } from "@/components/product-detail-view";
 import { useStorefront } from "@/context/storefront-context";
-import type { Product } from "@/lib/schemas";
 
 interface ProductPageClientProps {
-  product: Product;
+  product: import("@/lib/schemas").Product;
   sizes: { sizeId: string; sizeName: string }[];
+  relatedProducts: import("@/lib/schemas").Product[];
 }
 
-export function ProductPageClient({ product, sizes }: ProductPageClientProps) {
+export function ProductPageClient({ product, sizes, relatedProducts }: ProductPageClientProps) {
   const { wishlist, toggleWish, addToCart } = useStorefront();
 
   return (
-    <div className="min-h-screen bg-[var(--color-ivory)] text-[var(--color-ink)]">
-      <SiteHeader />
-
-      <div className="mx-auto min-w-0 max-w-[2000px] px-4 py-4">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--color-ink)]">
+      <div className="mx-auto min-w-0 max-w-[var(--container-max)] px-[var(--gutter-mobile)] py-6 md:px-[var(--gutter-tablet)] md:py-8">
         <Button
           variant="ghost"
           size="sm"
-          className="mb-4 -ml-2 text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+          className="mb-4 -ml-1 text-[var(--color-muted)] hover:text-[var(--color-green)]"
           asChild
         >
           <Link href="/" className="flex items-center gap-2">
@@ -40,6 +37,8 @@ export function ProductPageClient({ product, sizes }: ProductPageClientProps) {
           wished={!!wishlist[product.id]}
           onToggleWish={toggleWish}
           onAddToCart={addToCart}
+          relatedProducts={relatedProducts}
+          relatedWishlist={wishlist}
         />
       </div>
     </div>

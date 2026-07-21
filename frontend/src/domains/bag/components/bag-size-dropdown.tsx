@@ -19,7 +19,13 @@ export function BagSizeDropdown({
   onOpenChange,
 }: BagSizeDropdownProps) {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const onOpenChangeRef = useRef(onOpenChange);
+
+  useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  });
 
   useEffect(() => {
     const onDoc = (event: MouseEvent) => {
@@ -39,11 +45,27 @@ export function BagSizeDropdown({
   }, []);
 
   useEffect(() => {
-    onOpenChange?.(open);
-    return () => onOpenChange?.(false);
-  }, [open, onOpenChange]);
+    onOpenChangeRef.current?.(open);
+    if (!open) return undefined;
+    return () => onOpenChangeRef.current?.(false);
+  }, [open]);
 
   const display = hasCurrent && sizeName ? sizeName : "Choose";
+
+  const handleToggle = () => {
+    if (!open) {
+      // Flip the menu above the trigger when there isn't enough room below — otherwise it
+      // can get clipped at the bottom of the viewport on cards lower down the page.
+      const root = rootRef.current;
+      if (root) {
+        const rect = root.getBoundingClientRect();
+        const estimatedMenuHeight = Math.min(288, options.length * 44 + 16);
+        const spaceBelow = window.innerHeight - rect.bottom;
+        setOpenUpward(spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight);
+      }
+    }
+    setOpen((value) => !value);
+  };
 
   return (
     <div ref={rootRef} className="relative inline-flex w-fit max-w-full">
@@ -51,8 +73,8 @@ export function BagSizeDropdown({
         type="button"
         aria-expanded={open}
         aria-haspopup="listbox"
-        onClick={() => setOpen((value) => !value)}
-        className="relative inline-flex h-9 w-fit max-w-full items-center gap-1.5 rounded-full border border-[var(--color-line)] bg-[#F9F5F0] pl-3 pr-8 text-left transition-shadow hover:shadow-sm"
+        onClick={handleToggle}
+        className="relative inline-flex h-9 w-fit max-w-full items-center gap-1.5 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] pl-3 pr-8 text-left transition-shadow hover:shadow-sm"
       >
         <span className="shrink-0 text-[10px] font-medium uppercase leading-none tracking-[0.14em] text-[var(--color-muted)]">
           Size:
@@ -80,7 +102,10 @@ export function BagSizeDropdown({
       {open && (
         <ul
           role="listbox"
-          className="absolute left-0 top-[calc(100%+6px)] z-50 max-h-52 w-full overflow-y-auto rounded-xl border border-[var(--color-line)] bg-[#F9F5F0] py-1.5 shadow-[0_12px_40px_rgba(26,24,20,0.12)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className={cn(
+            "absolute left-0 z-50 max-h-72 w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] py-1.5 shadow-[var(--shadow-soft)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+            openUpward ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"
+          )}
         >
           {!hasCurrent && (
             <li className="px-4 py-2 text-xs uppercase tracking-[0.12em] text-[var(--color-muted)]">
@@ -96,8 +121,8 @@ export function BagSizeDropdown({
                   className={cn(
                     "flex w-full items-center px-4 py-3 text-left text-base font-semibold tracking-wide text-[var(--color-ink)] transition-colors",
                     selected
-                      ? "bg-[var(--color-accent-gold)]/15 text-[var(--color-accent-gold)]"
-                      : "hover:bg-white/70"
+                      ? "bg-[var(--color-surface-soft)] text-[var(--color-green)]"
+                      : "hover:bg-[var(--color-surface-soft)]"
                   )}
                   onClick={() => {
                     setOpen(false);

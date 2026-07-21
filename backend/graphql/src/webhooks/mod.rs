@@ -191,6 +191,12 @@ pub async fn handle_webhook(
         }
     };
 
+    let raw_signature = if provider == "shiprocket" {
+        shiprocket_token
+    } else {
+        signature_header
+    };
+
     match client
         .ingest_webhook(IngestWebhookRequest {
             provider,
@@ -199,6 +205,7 @@ pub async fn handle_webhook(
             payload_json: body_str,
             signature_verified,
             provider_event_id: provider_event_id_resolved,
+            raw_signature,
         })
         .await
     {

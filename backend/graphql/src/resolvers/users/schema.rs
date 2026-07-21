@@ -10,6 +10,12 @@ pub struct User {
     pub address: Option<String>,
     pub phone: Option<String>,
     pub create_date: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    /// "male" | "female" | "other"
+    pub gender: Option<String>,
+    /// ISO yyyy-mm-dd
+    pub date_of_birth: Option<String>,
 }
 
 #[graphql_object]
@@ -47,6 +53,24 @@ impl User {
     async fn create_date(&self) -> &String {
         &self.create_date
     }
+
+    async fn first_name(&self) -> &Option<String> {
+        &self.first_name
+    }
+
+    async fn last_name(&self) -> &Option<String> {
+        &self.last_name
+    }
+
+    /// \"male\" | \"female\" | \"other\"
+    async fn gender(&self) -> &Option<String> {
+        &self.gender
+    }
+
+    /// ISO yyyy-mm-dd
+    async fn date_of_birth(&self) -> &Option<String> {
+        &self.date_of_birth
+    }
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -78,6 +102,12 @@ pub struct UpdateUserInput {
     pub address: Option<String>,
     pub phone: Option<String>,
     pub role_id: Option<String>,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    /// "male" | "female" | "other"
+    pub gender: Option<String>,
+    /// ISO yyyy-mm-dd
+    pub date_of_birth: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

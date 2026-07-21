@@ -1,9 +1,15 @@
+use sha2::{Digest, Sha256};
+
 /// Compute a stable hash for the request payload we care about.
 pub fn compute_request_hash(payload: &str) -> String {
-    // For this use case we don't need cryptographic properties — only a stable
-    // identifier that distinguishes different payloads. Using the payload
-    // string itself keeps things simple and avoids extra dependencies.
-    payload.to_owned()
+    // A real hash (not the raw payload) is required here because request_hash is stored in a
+    // VARCHAR(255) column: for carts large enough to serialize past 255 chars, storing the raw
+    // JSON either fails the insert or silently truncates — and truncated values from two
+    // different large payloads sharing the same first-255-char prefix would incorrectly compare
+    // equal, defeating the idempotency check. SHA-256 hex (64 chars) always fits and is stable.
+    let mut hasher = Sha256::new();
+    hasher.update(payload.as_bytes());
+    hex::encode(hasher.finalize())
 }
 
 #[cfg(test)]

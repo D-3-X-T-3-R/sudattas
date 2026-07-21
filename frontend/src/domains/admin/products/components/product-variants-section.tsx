@@ -21,22 +21,22 @@ export function ProductVariantsSection({
   colors,
 }: ProductVariantsSectionProps) {
   return (
-    <div className="mt-8 border-t border-[var(--color-line)] pt-4">
-      <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-        Variants *
+    <div className="mt-8 border-t border-[var(--color-line)] pt-5">
+      <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">
+        Sizes &amp; colors *
       </h3>
-      <p className="mt-2 text-xs text-[var(--color-muted)]">
-        Add size/color combinations. Each variant can have an extra price (paise) and initial stock.
+      <p className="mt-1.5 text-sm text-[var(--color-muted)]">
+        Add size/color combinations. Each one can have an extra price and starting stock.
       </p>
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 space-y-2.5">
         {variants.map((v, idx) => (
           <div
             key={idx}
-            className="flex flex-wrap items-end gap-2 rounded-lg border border-[var(--color-line)] bg-white/40 p-3"
+            className="flex flex-wrap items-end gap-2.5 rounded-xl border border-[var(--color-line)] bg-white/40 p-3.5"
           >
             <select
               className={cn(
-                "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                "h-11 min-w-[7rem] rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
               )}
               value={v.sizeId}
@@ -58,7 +58,7 @@ export function ProductVariantsSection({
             </select>
             <select
               className={cn(
-                "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+                "h-11 min-w-[7rem] rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
               )}
               value={v.colorId}
@@ -89,7 +89,7 @@ export function ProductVariantsSection({
                   return next;
                 })
               }
-              className="h-9 w-28 rounded-md"
+              className="h-11 w-32 rounded-lg text-[15px]"
               aria-label={`Variant ${idx + 1} extra price in paise`}
             />
             <Input
@@ -103,7 +103,7 @@ export function ProductVariantsSection({
                   return next;
                 })
               }
-              className="h-9 w-20 rounded-md"
+              className="h-11 w-24 rounded-lg text-[15px]"
               aria-label={`Variant ${idx + 1} quantity`}
             />
             <Input
@@ -117,14 +117,13 @@ export function ProductVariantsSection({
                   return next;
                 })
               }
-              className="h-9 w-20 rounded-md"
+              className="h-11 w-24 rounded-lg text-[15px]"
               aria-label={`Variant ${idx + 1} reorder level`}
             />
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="h-9 text-red-600"
+              className="text-red-600"
               onClick={() => setVariants((prev) => prev.filter((_, i) => i !== idx))}
             >
               Remove
@@ -134,7 +133,6 @@ export function ProductVariantsSection({
         <Button
           type="button"
           variant="outline"
-          size="sm"
           className="rounded-lg border-[var(--color-line)]"
           onClick={() =>
             setVariants((prev) => [

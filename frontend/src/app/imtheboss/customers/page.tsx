@@ -1,8 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { SectionHeading } from "@/components/ui/typography";
 import {
   fetchAllCustomersList,
   fetchAllOrdersList,
@@ -15,6 +14,7 @@ import { CustomersFiltersCard } from "@/domains/admin/customers/components/custo
 import { CustomersTableCard } from "@/domains/admin/customers/components/customers-table-card";
 import { CustomerProfileDialog } from "@/domains/admin/customers/components/customer-profile-dialog";
 import { aggregateOrderStats, downloadCustomersCsv } from "@/domains/admin/customers/utils";
+import { AdminPageShell } from "@/components/admin/admin-page-shell";
 
 type SortKey = "name" | "email" | "created" | "orders" | "spent";
 type SortDir = "asc" | "desc";
@@ -110,24 +110,17 @@ export default function AdminCustomersPage() {
     );
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-8">
-        <p className="text-sm text-[var(--color-muted)]">Customers</p>
-        <SectionHeading size="default" className="mt-1">
-          Customer list
-        </SectionHeading>
-        <p className="mt-1 text-sm leading-relaxed text-[var(--color-muted)]">
-          Search, filter, and export. Click a row to see details and orders.
-        </p>
-      </div>
-
-      <div className="mb-6 flex flex-wrap gap-3">
-        <span className="inline-flex items-center gap-2 rounded-full bg-teal-500/12 px-4 py-2 text-sm font-medium text-teal-700">
+    <AdminPageShell
+      label="Customers"
+      title="Customer directory"
+      description="Search, filter, and inspect customer history with fast order context."
+      action={
+        <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-4 py-2 text-sm font-semibold text-[var(--color-ink)]">
           <Users className="h-4 w-4" />
-          {filteredAndSorted.length} customer{filteredAndSorted.length !== 1 ? "s" : ""}
+          {filteredAndSorted.length} customers
         </span>
-      </div>
-
+      }
+    >
       <CustomersFiltersCard
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -167,6 +160,6 @@ export default function AdminCustomersPage() {
         setSelectedCustomer={setSelectedCustomer}
         orderStats={orderStats}
       />
-    </div>
+    </AdminPageShell>
   );
 }

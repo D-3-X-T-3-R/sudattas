@@ -558,7 +558,7 @@ test("critical commerce browser journey", async ({ page }) => {
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
-  await expect(page.locator('button[aria-label^="Quick view "]').first()).toBeVisible();
+  await expect(page.locator('button[aria-label^="View "]').first()).toBeVisible();
 
   await expect.poll(async () =>
     page.evaluate(() => window.localStorage.getItem("sudattas_guest_session"))
@@ -650,7 +650,7 @@ test("checkout CTA double-click sends one place-order request", async ({ page })
   const mocks = await installCommerceMocks(page, { placeOrderDelayMs: 450 });
   await prepareAuthenticatedBag(page, mocks);
 
-  const checkoutButton = page.getByRole("button", { name: /^Checkout$/i }).first();
+  const checkoutButton = page.getByRole("button", { name: /^Proceed To Checkout$/i }).first();
   await expect(checkoutButton).toBeVisible();
   await checkoutButton.dblclick();
 
@@ -678,7 +678,7 @@ test("pending payment state routes to pending copy without verified language", a
   });
   await prepareAuthenticatedBag(page, mocks);
 
-  await page.getByRole("button", { name: /^Checkout$/i }).first().click();
+  await page.getByRole("button", { name: /^Proceed To Checkout$/i }).first().click();
 
   await expect(page).toHaveURL(/payment=pending/);
   await expect(page.locator("body")).toContainText("We're confirming your payment. Please don't place another order yet.");
@@ -693,7 +693,7 @@ test("needs_review payment state routes to review copy without verified language
   });
   await prepareAuthenticatedBag(page, mocks);
 
-  await page.getByRole("button", { name: /^Checkout$/i }).first().click();
+  await page.getByRole("button", { name: /^Proceed To Checkout$/i }).first().click();
 
   await expect(page).toHaveURL(/payment=needs_review/);
   await expect(page.locator("body")).toContainText(
@@ -707,7 +707,7 @@ test("bag address modal keeps focus and exposes explicit form labels", async ({ 
   const mocks = await installCommerceMocks(page);
   await prepareAuthenticatedBag(page, mocks);
 
-  const addAddressButton = page.getByRole("button", { name: "Add new address" }).first();
+  const addAddressButton = page.getByRole("button", { name: "Add New" }).first();
   await addAddressButton.focus();
   await addAddressButton.click();
 

@@ -1,10 +1,10 @@
 "use client";
 
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Download, Filter } from "lucide-react";
+import { AdminFilterCard } from "@/components/admin/admin-cards";
 
 type CustomersFiltersCardProps = {
   searchQuery: string;
@@ -32,36 +32,33 @@ export function CustomersFiltersCard({
   exportDisabled,
 }: CustomersFiltersCardProps) {
   return (
-    <Card className="rounded-xl border-[var(--color-line)] border-l-4 border-l-teal-500 bg-white shadow-[var(--admin-card-shadow)]">
-      <CardTitle className="flex items-center gap-2 text-[var(--color-muted)]">
-        <Filter className="h-4 w-4 text-teal-500" />
-        Filters
-      </CardTitle>
-      <CardContent className="mt-3 flex flex-wrap items-end gap-3">
+    <AdminFilterCard title="Filters" icon={<Filter className="h-4 w-4 text-[var(--color-green)]" />}>
+      <div className="flex flex-wrap items-end gap-4">
         <div>
-          <label htmlFor="customers-search" className="mb-1 block text-xs text-[var(--color-muted)]">
+          <label htmlFor="customers-search" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
             Search
           </label>
           <Input
             id="customers-search"
             type="text"
-            placeholder="Email, name, or user ID"
+            placeholder="Name, email, or ID"
             value={searchQuery}
             onChange={(e) => {
               setPage(1);
               setSearchQuery(e.target.value);
             }}
-            className="h-9 w-56 rounded-md"
+            className="h-11 w-64 text-[15px]"
           />
         </div>
+
         <div>
-          <label htmlFor="customers-auth" className="mb-1 block text-xs text-[var(--color-muted)]">
-            Auth
+          <label htmlFor="customers-auth" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
+            Signed in with
           </label>
           <select
             id="customers-auth"
             className={cn(
-              "h-9 min-w-[8rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+              "h-11 min-w-[9rem] rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
               "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
             )}
             value={filterAuth}
@@ -75,14 +72,15 @@ export function CustomersFiltersCard({
             <option value="google">Google</option>
           </select>
         </div>
+
         <div>
-          <label htmlFor="customers-page-size" className="mb-1 block text-xs text-[var(--color-muted)]">
+          <label htmlFor="customers-page-size" className="mb-1.5 block text-sm font-medium text-[var(--color-muted)]">
             Per page
           </label>
           <select
             id="customers-page-size"
             className={cn(
-              "h-9 min-w-[6rem] rounded-md border border-[var(--color-line)] bg-white px-2 text-sm",
+              "h-11 min-w-[6.5rem] rounded-lg border border-[var(--color-line)] bg-white px-3 text-[15px]",
               "focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]"
             )}
             value={String(pageSize)}
@@ -96,20 +94,21 @@ export function CustomersFiltersCard({
             <option value="100">100</option>
           </select>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
+
+        <Button type="button" variant="outline" onClick={onRefresh}>
           Refresh
         </Button>
+
         <Button
           type="button"
           variant="outline"
-          size="sm"
           onClick={onExportCsv}
           disabled={exportDisabled}
         >
           <Download className="mr-1.5 h-4 w-4" />
           Export CSV
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </AdminFilterCard>
   );
 }

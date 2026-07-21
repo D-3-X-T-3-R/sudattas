@@ -25,6 +25,7 @@ use sea_orm::{
     DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, Statement, TransactionTrait,
 };
 use tonic::{Code, Request};
+use warp::Filter;
 
 #[derive(Debug, Clone)]
 struct OrderFixture {
@@ -120,12 +121,40 @@ async fn make_order_booking_eligible(txn: &sea_orm::DatabaseTransaction, order_i
     .expect("make order booking eligible");
 }
 
+/// `place_order_fixture` always defaults to prepaid (payment_mode: None -> "prepaid" inside
+/// place_order), so it always calls Razorpay's create_order. Without real creds (e.g. in CI),
+/// that fails before the fixture can finish. Mirrors the mock pattern already established in
+/// integration_place_order_atomicity.rs and razorpay_connectivity.rs.
+async fn ensure_razorpay_mock() {
+    // `payment_intents.razorpay_order_id` is unique, and every place_order call generates a
+    // fresh receipt (chk_{user_id}_{timestamp_millis}); echoing it back keeps the mocked id
+    // unique per call so concurrent/sequential fixtures across this shared dev DB never collide.
+    let orders = warp::path!("v1" / "orders")
+        .and(warp::post())
+        .and(warp::body::json())
+        .map(|body: serde_json::Value| {
+            let receipt = body
+                .get("receipt")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            warp::reply::json(
+                &serde_json::json!({ "id": format!("order_itest_returns_{receipt}") }),
+            )
+        });
+    let (addr, server) = warp::serve(orders).bind_ephemeral(([127, 0, 0, 1], 0));
+    tokio::task::spawn(server);
+    std::env::set_var("RAZORPAY_KEY_ID", "rzp_test_itest_returns");
+    std::env::set_var("RAZORPAY_KEY_SECRET", "itest_returns_secret");
+    std::env::set_var("RAZORPAY_API_BASE", format!("http://{}/v1", addr));
+}
+
 async fn place_order_fixture(
     txn: &sea_orm::DatabaseTransaction,
     tag: i64,
     payment_mode: Option<&str>,
     quantity: i64,
 ) -> OrderFixture {
+    ensure_razorpay_mock().await;
     let _ = ensure_order_status(txn, "pending").await;
 
     let role = user_roles::ActiveModel {

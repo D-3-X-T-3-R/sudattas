@@ -10,6 +10,7 @@ use chrono::{DateTime, Duration, Utc};
 use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status};
 use core_db_entities::entity::webhook_events;
 use core_db_entities::entity::{orders, payment_intents, refunds};
+use hmac::{Hmac, Mac};
 use proto::proto::core::{
     CapturePaymentRequest, CreateOrderEventRequest, CreateRefundRequest, IngestWebhookRequest,
     WebhookEventResponse, WebhookEventsResponse,
@@ -18,9 +19,13 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend,
     EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, Statement,
 };
+use sha2::Sha256;
 use std::time::Instant;
+use subtle::ConstantTimeEq;
 use tonic::{Request, Response, Status as TonicStatus};
 use tracing::{info, warn};
+
+type HmacSha256 = Hmac<Sha256>;
 
 use crate::handlers::shipments::apply_shiprocket_scan::{
     apply_shiprocket_scan_to_shipment, extract_scan_from_webhook_item,
@@ -86,6 +91,80 @@ fn is_replayable_failure(status: Option<&Status>) -> bool {
     )
 }
 
+fn verify_razorpay_signature(payload_json: &str, signature: &str) -> bool {
+    let secret = match std::env::var("RAZORPAY_WEBHOOK_SECRET") {
+        Ok(s) if !s.trim().is_empty() => s,
+        _ => return false,
+    };
+    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    mac.update(payload_json.as_bytes());
+    let computed = hex::encode(mac.finalize().into_bytes());
+    let computed_bytes = computed.as_bytes();
+    let signature_bytes = signature.as_bytes();
+    computed_bytes.len() == signature_bytes.len() && computed_bytes.ct_eq(signature_bytes).into()
+}
+
+fn verify_shiprocket_token(token: &str) -> bool {
+    match std::env::var("SHIPROCKET_WEBHOOK_SECRET") {
+        Ok(secret) if !secret.trim().is_empty() => {
+            let expected = secret.trim().as_bytes();
+            let provided = token.as_bytes();
+            expected.len() == provided.len() && expected.ct_eq(provided).into()
+        }
+        _ => false,
+    }
+}
+
+/// Independently re-derives signature validity from the raw signature/token material forwarded by
+/// the HTTP layer, instead of trusting the caller-supplied `signature_verified` flag. Closes the
+/// defense-in-depth gap where a misconfigured/bypassed gRPC auth layer could otherwise forge
+/// "verified" webhooks. Returns `None` when no raw signature material was forwarded (e.g. internal
+/// admin-triggered replay of an already-ingested event), in which case the caller-supplied flag is
+/// used as-is.
+fn independently_verify_signature(req: &IngestWebhookRequest) -> Option<bool> {
+    let raw_signature = req
+        .raw_signature
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
+    match req.provider.as_str() {
+        "razorpay" => Some(verify_razorpay_signature(&req.payload_json, raw_signature)),
+        "shiprocket" => Some(verify_shiprocket_token(raw_signature)),
+        _ => None,
+    }
+}
+
+/// `trust_flag_if_no_raw_signature`: true only for internal replay of an already-verified,
+/// already-ingested event (replay_webhook_by_id, which constructs its own request and
+/// intentionally omits raw_signature). `ingest_webhook` must pass false: its real caller (the
+/// HTTP webhook layer) always forwards raw_signature now, so a request that somehow lacks it
+/// should be treated as unverified rather than trusted.
+fn resolve_effective_verified(
+    req: &IngestWebhookRequest,
+    trust_flag_if_no_raw_signature: bool,
+) -> bool {
+    match independently_verify_signature(req) {
+        Some(verified) => {
+            if verified != req.signature_verified {
+                warn!(
+                    provider = %req.provider,
+                    event_type = %req.event_type,
+                    webhook_id = %req.webhook_id,
+                    caller_claimed = req.signature_verified,
+                    independently_verified = verified,
+                    "ingest_webhook: caller-supplied signature_verified disagreed with server-side re-verification"
+                );
+            }
+            verified
+        }
+        None if trust_flag_if_no_raw_signature => req.signature_verified,
+        None => false,
+    }
+}
+
 fn event_identity_matches(existing: &webhook_events::Model, req: &IngestWebhookRequest) -> bool {
     existing.provider.eq_ignore_ascii_case(&req.provider)
         && existing.event_type.eq_ignore_ascii_case(&req.event_type)
@@ -135,8 +214,9 @@ async fn process_webhook_payload(
     txn: &DatabaseTransaction,
     req: &IngestWebhookRequest,
     payload_json: &serde_json::Value,
+    verified: bool,
 ) -> Status {
-    if req.event_type == "payment.captured" && req.signature_verified {
+    if req.event_type == "payment.captured" && verified {
         match process_payment_captured(txn, payload_json).await {
             Ok(_) => Status::Processed,
             Err(e) => {
@@ -145,7 +225,7 @@ async fn process_webhook_payload(
                 Status::Failed
             }
         }
-    } else if req.provider == "shiprocket" && req.signature_verified {
+    } else if req.provider == "shiprocket" && verified {
         match process_shiprocket_shipment_updates(txn, payload_json, &req.event_type).await {
             Ok(_) => Status::Processed,
             Err(e) => {
@@ -155,7 +235,7 @@ async fn process_webhook_payload(
             }
         }
     } else if req.provider == "razorpay"
-        && req.signature_verified
+        && verified
         && razorpay_event_is_refund_like(&req.event_type)
     {
         match process_razorpay_refund_updates(txn, payload_json, &req.event_type).await {
@@ -166,7 +246,7 @@ async fn process_webhook_payload(
                 Status::Failed
             }
         }
-    } else if req.signature_verified {
+    } else if verified {
         Status::Processed
     } else {
         Status::Failed
@@ -185,14 +265,24 @@ async fn finalize_webhook_row(
     active.update(txn).await.map_err(map_db_error_to_status)
 }
 
+/// Window controlling how long an in-progress webhook row is treated as "still being worked on"
+/// before it's eligible for reclaim/replay. `reclaim_timeout_minutes` and `stale_before` are
+/// always computed together (`stale_before = now - reclaim_timeout_minutes`) and passed together
+/// at every call site, so they're grouped here to keep `handle_existing_webhook`'s argument count
+/// under clippy's `too_many_arguments` threshold.
+struct ReplayWindow {
+    reclaim_timeout_minutes: i64,
+    stale_before: DateTime<Utc>,
+}
+
 async fn handle_existing_webhook(
     txn: &DatabaseTransaction,
     req: &IngestWebhookRequest,
     existing: webhook_events::Model,
     incoming_payload: &serde_json::Value,
-    reclaim_timeout_minutes: i64,
-    stale_before: DateTime<Utc>,
+    window: ReplayWindow,
     dedupe_key: &str,
+    verified: bool,
 ) -> Result<webhook_events::Model, TonicStatus> {
     if matches!(existing.status, Some(Status::Processed)) {
         info!(
@@ -204,7 +294,11 @@ async fn handle_existing_webhook(
         return Ok(existing);
     }
 
-    if is_fresh_in_progress(existing.status.as_ref(), existing.received_at, stale_before) {
+    if is_fresh_in_progress(
+        existing.status.as_ref(),
+        existing.received_at,
+        window.stale_before,
+    ) {
         info!(
             webhook_id = %existing.webhook_id,
             provider_event_id = ?existing.provider_event_id,
@@ -221,7 +315,11 @@ async fn handle_existing_webhook(
         )));
     }
 
-    if is_stale_in_progress(existing.status.as_ref(), existing.received_at, stale_before) {
+    if is_stale_in_progress(
+        existing.status.as_ref(),
+        existing.received_at,
+        window.stale_before,
+    ) {
         let age_seconds = existing
             .received_at
             .map(|ts| (Utc::now() - ts).num_seconds())
@@ -230,7 +328,7 @@ async fn handle_existing_webhook(
             webhook_id = %existing.webhook_id,
             provider_event_id = ?existing.provider_event_id,
             dedupe_key,
-            reclaim_timeout_minutes,
+            reclaim_timeout_minutes = window.reclaim_timeout_minutes,
             age_seconds,
             status = ?existing.status.as_ref(),
             "webhook stale in-progress row reclaimed for replay"
@@ -248,7 +346,8 @@ async fn handle_existing_webhook(
     }
 
     let claimed =
-        claim_existing_webhook_for_replay(txn, existing.event_id, reclaim_timeout_minutes).await?;
+        claim_existing_webhook_for_replay(txn, existing.event_id, window.reclaim_timeout_minutes)
+            .await?;
     if !claimed {
         let latest = webhook_events::Entity::find_by_id(existing.event_id)
             .one(txn)
@@ -264,7 +363,7 @@ async fn handle_existing_webhook(
     }
 
     let replay_payload = choose_replay_payload(&existing, incoming_payload);
-    let replay_status = process_webhook_payload(txn, req, &replay_payload).await;
+    let replay_status = process_webhook_payload(txn, req, &replay_payload, verified).await;
     finalize_webhook_row(txn, existing, &replay_payload, replay_status).await
 }
 
@@ -291,17 +390,22 @@ pub async fn replay_webhook_by_id(
         payload_json: existing.payload.to_string(),
         signature_verified: true,
         provider_event_id: existing.provider_event_id.clone(),
+        raw_signature: None,
     };
     let reclaim_timeout_minutes = crate::order_policy::webhook_reclaim_timeout_minutes();
     let stale_before = Utc::now() - Duration::minutes(reclaim_timeout_minutes);
+    let verified = resolve_effective_verified(&req, true);
     let updated = handle_existing_webhook(
         txn,
         &req,
         existing,
         &parse_payload_or_null(&req.payload_json),
-        reclaim_timeout_minutes,
-        stale_before,
+        ReplayWindow {
+            reclaim_timeout_minutes,
+            stale_before,
+        },
         "webhook_id",
+        verified,
     )
     .await?;
     Ok(Response::new(WebhookEventsResponse {
@@ -327,6 +431,7 @@ pub async fn ingest_webhook(
     let reclaim_timeout_minutes = crate::order_policy::webhook_reclaim_timeout_minutes();
     let stale_before = Utc::now() - Duration::minutes(reclaim_timeout_minutes);
     let payload_json = parse_payload_or_null(&req.payload_json);
+    let verified = resolve_effective_verified(&req, false);
 
     // Idempotency + replay by webhook_id.
     if let Some(existing) = webhook_events::Entity::find()
@@ -341,9 +446,12 @@ pub async fn ingest_webhook(
             &req,
             existing,
             &payload_json,
-            reclaim_timeout_minutes,
-            stale_before,
+            ReplayWindow {
+                reclaim_timeout_minutes,
+                stale_before,
+            },
             "webhook_id",
+            verified,
         )
         .await?;
         let duration_sec = started.elapsed().as_secs_f64();
@@ -369,9 +477,12 @@ pub async fn ingest_webhook(
                 &req,
                 existing,
                 &payload_json,
-                reclaim_timeout_minutes,
-                stale_before,
+                ReplayWindow {
+                    reclaim_timeout_minutes,
+                    stale_before,
+                },
                 "provider_event_id",
+                verified,
             )
             .await?;
             let duration_sec = started.elapsed().as_secs_f64();
@@ -401,7 +512,7 @@ pub async fn ingest_webhook(
 
     let inserted = event.insert(txn).await.map_err(map_db_error_to_status)?;
 
-    let new_status = process_webhook_payload(txn, &req, &payload_json).await;
+    let new_status = process_webhook_payload(txn, &req, &payload_json, verified).await;
     let updated = finalize_webhook_row(txn, inserted, &payload_json, new_status).await?;
 
     let duration_sec = started.elapsed().as_secs_f64();

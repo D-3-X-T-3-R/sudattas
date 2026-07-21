@@ -36,6 +36,7 @@ async fn create_cart_item_with_user_id_succeeds() {
     use core_operations::handlers::cart::create_cart_item;
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<cart::Model>::new()]) // find_existing: no match
         .append_exec_results(vec![MockExecResult {
             last_insert_id: 1,
             rows_affected: 1,
@@ -80,6 +81,7 @@ async fn create_cart_item_with_session_only_succeeds_and_sets_user_id_zero() {
     use core_operations::handlers::cart::create_cart_item;
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<cart::Model>::new()]) // find_existing: no match
         .append_exec_results(vec![MockExecResult {
             last_insert_id: 2,
             rows_affected: 1,

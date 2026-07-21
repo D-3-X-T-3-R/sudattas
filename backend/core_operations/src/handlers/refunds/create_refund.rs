@@ -9,7 +9,10 @@ use core_db_entities::entity::{order_status, orders, refunds};
 use proto::proto::core::{
     CreateOrderEventRequest, CreateRefundRequest, RefundResponse, RefundsResponse,
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
+use sea_orm::{
+    sea_query::LockType, ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait,
+    QueryFilter, QuerySelect,
+};
 use tonic::{Request, Response, Status};
 
 pub async fn create_refund(
@@ -26,6 +29,7 @@ pub async fn create_refund(
     }
 
     let order = orders::Entity::find_by_id(req.order_id)
+        .lock(LockType::Update)
         .one(txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?
@@ -59,6 +63,29 @@ pub async fn create_refund(
         return Ok(Response::new(RefundsResponse {
             items: vec![model_to_response(&ex)],
         }));
+    }
+
+    // Server-side backstop against over-refunding: callers (cancellation_saga, returns) already cap
+    // their requested amount to the order total, but the webhook-driven caller forwards whatever
+    // amount the gateway reports. Reject rather than silently recording a refund that would push
+    // cumulative refunds past what the customer actually paid.
+    let grand_total = order.grand_total_minor;
+    if grand_total > 0 {
+        let already_refunded: i64 = refunds::Entity::find()
+            .filter(refunds::Column::OrderId.eq(req.order_id))
+            .filter(refunds::Column::Status.eq(RefundStatus::Processed))
+            .all(txn)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .iter()
+            .map(|r| r.amount_paise as i64)
+            .sum();
+        if already_refunded + req.amount_paise > grand_total {
+            return Err(Status::failed_precondition(format!(
+                "Refund would exceed order total: already refunded {} paise, requested {} paise, order grand total {} paise",
+                already_refunded, req.amount_paise, grand_total
+            )));
+        }
     }
 
     let currency = req.currency.unwrap_or_else(|| "INR".to_string());

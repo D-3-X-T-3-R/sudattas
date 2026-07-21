@@ -15,12 +15,14 @@ CREATE TABLE IF NOT EXISTS Invoices (
     UNIQUE KEY uq_invoices_order_id (order_id),
     KEY idx_invoices_user_id (user_id),
     KEY idx_invoices_generated_at (generated_at),
+    -- RESTRICT, not CASCADE: invoices are immutable audit/tax records (see header comment) and
+    -- must not be silently destroyed by deleting the order or user they belong to.
     CONSTRAINT fk_invoices_order
         FOREIGN KEY (order_id) REFERENCES Orders (OrderID)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_invoices_user
         FOREIGN KEY (user_id) REFERENCES Users (UserID)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 SET @orders_invoice_id_col_exists := (

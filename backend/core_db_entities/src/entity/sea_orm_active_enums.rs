@@ -54,6 +54,16 @@ pub enum FulfillmentStatus {
     Rto,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "gender")]
+pub enum Gender {
+    #[sea_orm(string_value = "male")]
+    Male,
+    #[sea_orm(string_value = "female")]
+    Female,
+    #[sea_orm(string_value = "other")]
+    Other,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "payment_status")]
 pub enum PaymentStatus {
     #[sea_orm(string_value = "pending")]

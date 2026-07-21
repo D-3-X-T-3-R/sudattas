@@ -42,5 +42,11 @@ Cargo.lock
 .secret
 nul
 .env
+mcp.json
+*.info
+vps_info.info
+
 # Project todo/scratch files
 **/.todo*
+
+.claude/

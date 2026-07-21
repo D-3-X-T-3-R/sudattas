@@ -367,6 +367,10 @@ async fn seed_checkout_user(txn: &sea_orm::DatabaseTransaction, tag: i64) -> (i6
         full_name: ActiveValue::Set(None),
         address: ActiveValue::Set(None),
         phone: ActiveValue::Set(Some(phone.clone())),
+        first_name: ActiveValue::NotSet,
+        last_name: ActiveValue::NotSet,
+        gender: ActiveValue::NotSet,
+        date_of_birth: ActiveValue::NotSet,
         create_date: ActiveValue::Set(Utc::now()),
         role_id: ActiveValue::Set(Some(role.role_id)),
         email_verified: ActiveValue::NotSet,
@@ -472,8 +476,9 @@ fn configure_mock_provider_env(port: u16) {
     load_test_env_from_repo();
     std::env::set_var("SHIPROCKET_EMAIL", "test@example.com");
     std::env::set_var("SHIPROCKET_PASSWORD", "test-password");
-    let _ = std::env::var("SHIPROCKET_PICKUP_LOCATION")
-        .expect("SHIPROCKET_PICKUP_LOCATION must be set in env/.env for logistics tests");
+    if std::env::var("SHIPROCKET_PICKUP_LOCATION").is_err() {
+        std::env::set_var("SHIPROCKET_PICKUP_LOCATION", "Test Pickup");
+    }
     std::env::set_var("SHIPROCKET_PICKUP_POSTCODE", "560001");
     std::env::set_var(
         "SHIPROCKET_API_BASE",
@@ -1926,6 +1931,7 @@ END"#
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -1998,6 +2004,7 @@ END"#
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -2074,6 +2081,7 @@ END"#
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -2279,6 +2287,7 @@ async fn integration_customer_cancel_and_webhook_cancel_race_refunds_once() {
                 .to_string(),
                 signature_verified: true,
                 provider_event_id: None,
+                raw_signature: None,
             }),
         )
         .await;
@@ -2481,6 +2490,7 @@ async fn integration_pickup_completed_disables_customer_cancellation() {
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -2545,6 +2555,7 @@ async fn integration_rto_terminal_webhook_refunds_once() {
                 .to_string(),
                 signature_verified: true,
                 provider_event_id: None,
+                raw_signature: None,
             }),
         )
         .await
@@ -2673,6 +2684,7 @@ async fn integration_refund_retry_reuses_same_idempotency_key() {
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await
@@ -2747,6 +2759,7 @@ async fn integration_refund_retry_reuses_same_idempotency_key() {
             .to_string(),
             signature_verified: true,
             provider_event_id: None,
+            raw_signature: None,
         }),
     )
     .await

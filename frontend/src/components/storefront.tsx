@@ -1,41 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useReducedMotion } from "framer-motion";
-import { User } from "lucide-react";
-import { useSession } from "next-auth/react";
 import { useStorefront } from "@/context/storefront-context";
-import { useStorefrontLogin } from "@/context/storefront-login-context";
 import { useStorefrontCatalog } from "@/domains/storefront/hooks/use-storefront-catalog";
 import { useStorefrontNavigationEffects } from "@/domains/storefront/hooks/use-storefront-navigation-effects";
-import { useActiveSection } from "@/hooks/use-active-section";
-import { useLockBodyScroll } from "@/hooks/use-lock-body-scroll";
 import { ensureGuestSession } from "@/lib/session";
-import { goTo } from "@/hooks/use-scroll-to";
-import { Header } from "@/components/header";
+import { consumePendingHomeCollection, goTo, PENDING_HOME_COLLECTION_EVENT } from "@/hooks/use-scroll-to";
 import { HeroSection } from "@/components/hero-section";
 import { CollectionsSection } from "@/components/collections-section";
 import { CategoriesSection } from "@/components/categories-section";
 import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
-import { MenuDrawer } from "@/components/menu-drawer";
-import { MobileBottomBar } from "@/components/mobile-bottom-bar";
+import { FullBleedVideoSection } from "@/components/full-bleed-video-section";
+import { JournalTeaserSection } from "@/components/journal-teaser-section";
 import { Section } from "@/components/ui/section";
+import { TrustStrip } from "@/components/trust-strip";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
-
-const EditorialBlock = dynamic(() => import("@/components/editorial-block").then((m) => m.EditorialBlock), {
-  loading: () => (
-    <Section>
-      <div className="flex justify-center py-16">
-        <Spinner />
-      </div>
-    </Section>
-  ),
-});
 
 const StorySection = dynamic(() => import("@/components/story-section").then((m) => m.StorySection), {
   loading: () => (
@@ -49,9 +33,9 @@ const StorySection = dynamic(() => import("@/components/story-section").then((m)
 
 const Footer = dynamic(() => import("@/components/footer").then((m) => m.Footer), {
   loading: () => (
-    <footer className="border-t border-[var(--color-line)] py-10">
-      <div className="mx-auto max-w-[2000px] px-4">
-        <div className="h-16 animate-pulse rounded bg-[var(--color-line)]/40" />
+    <footer className="bg-deep-feature py-14 md:py-20">
+      <div className="mx-auto max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
+        <div className="h-16 animate-pulse rounded bg-white/10" />
       </div>
     </footer>
   ),
@@ -60,92 +44,64 @@ const Footer = dynamic(() => import("@/components/footer").then((m) => m.Footer)
 export function Storefront() {
   const pathname = usePathname();
   const router = useRouter();
-  const { status, data: session } = useSession();
-  const { openLogin } = useStorefrontLogin();
   const reduceMotion = !!useReducedMotion();
   const { showToast } = useToast();
-  const { wishlist, toggleWish, cartCount, wishCount } = useStorefront();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { wishlist, toggleWish } = useStorefront();
 
+  const catalog = useStorefrontCatalog({ showToast });
   const {
-    query,
-    setQuery,
-    collection,
     setCollection,
-    occasion,
-    setOccasion,
-    sort,
-    setSort,
     products,
     productsError,
     productsBannerDismissed,
     setProductsBannerDismissed,
     categories,
     moods,
-    shopMoodId,
     loadingProducts,
-    filtered,
     collectionOptions,
-    occasionOptions,
     applyShopMoodFilter,
-  } = useStorefrontCatalog({ showToast });
+  } = catalog;
 
-  const activeSection = useActiveSection(["top", "collections", "shop", "story"]);
-  useLockBodyScroll(menuOpen);
   useStorefrontNavigationEffects({ pathname, reduceMotion, loadingProducts });
 
   useEffect(() => {
     void ensureGuestSession();
   }, []);
 
+  useEffect(() => {
+    const applyPendingCollection = () => {
+      const pendingCollection = consumePendingHomeCollection();
+      if (pendingCollection) setCollection(pendingCollection);
+    };
+
+    applyPendingCollection();
+
+    const onPendingCollection = (event: Event) => {
+      if (event instanceof CustomEvent && typeof event.detail === "string") {
+        consumePendingHomeCollection();
+        setCollection(event.detail);
+        return;
+      }
+      applyPendingCollection();
+    };
+
+    window.addEventListener(PENDING_HOME_COLLECTION_EVENT, onPendingCollection);
+    return () => window.removeEventListener(PENDING_HOME_COLLECTION_EVENT, onPendingCollection);
+  }, [setCollection]);
+
   const goToProduct = (id: string) => router.push(`/product/${id}`);
   const goToWithMotion = (id: string, instant?: boolean) => goTo(id, instant ?? reduceMotion);
 
-  const firstName = useMemo(() => {
-    const rawName = session?.user?.name?.trim() ?? "";
-    const looksLikePhone = /^\+?\d{10,15}$/.test(rawName);
-    return !rawName || looksLikePhone ? "Profile" : rawName.split(/\s+/)[0];
-  }, [session?.user?.name]);
-
   return (
-    <div id="top" className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <Header
-        query={query}
-        setQuery={setQuery}
-        cartCount={cartCount}
-        wishCount={wishCount}
-        setMenuOpen={setMenuOpen}
-        goTo={goToWithMotion}
-        authEnabled
-        authButtons={
-          status === "authenticated" ? (
-            <Link
-              href="/profile"
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-line)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-accent-gold)] hover:text-[var(--color-accent-gold)]"
-              aria-label="Open profile"
-            >
-              <User size={14} />
-              {firstName}
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={() => openLogin()}
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-line)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-ink)] transition-colors hover:border-[var(--color-accent-gold)] hover:text-[var(--color-accent-gold)]"
-              aria-label="Sign in"
-            >
-              <User size={14} />
-              Sign In
-            </button>
-          )
-        }
-      />
-
+    <div id="top" className="min-h-screen text-[var(--foreground)]">
       <HeroSection />
+      <Section compact className="pt-5">
+        <TrustStrip />
+      </Section>
 
       {productsError && !productsBannerDismissed && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <div className="mx-auto flex max-w-[2000px] items-start justify-between gap-3">
+          <div className="mx-auto flex max-w-[var(--container-max)] items-start justify-between gap-3 px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
             <p className="min-w-0">
               <strong>Catalog temporarily unavailable.</strong> We could not load products right now. {productsError}
             </p>
@@ -161,6 +117,49 @@ export function Storefront() {
         </div>
       )}
 
+      <CategoriesSection
+        categories={categories.filter((category) => collectionOptions.includes(category.name))}
+        onPickCategory={(name) => setCollection(name)}
+        reduceMotion={reduceMotion}
+      />
+
+      <FullBleedVideoSection
+        id="block-print-story"
+        src="/videos/block_print_story_new.mp4"
+        mobileSrc="/videos/block_print_story_original.MP4"
+        kicker="The Block Print Story"
+        heading="Print, stitch, rhythm, and patience."
+        body="Every print begins with touch, pressure, rhythm, and care — chosen for textile character, quiet irregularities, and boutique finish."
+        align="right"
+      />
+
+      {loadingProducts ? (
+        <Section id="shop" className="relative z-0 bg-[var(--background)]">
+          <div className="flex justify-center py-16">
+            <Spinner />
+          </div>
+        </Section>
+      ) : (
+        <ShopSection
+          products={products}
+          wishlist={wishlist}
+          onToggleWish={toggleWish}
+          onQuickView={(product) => goToProduct(product.id)}
+          onViewAll={() => {
+            catalog.setSort("Featured");
+            goTo("explore", reduceMotion);
+          }}
+        />
+      )}
+
+      <FullBleedVideoSection
+        src="/videos/Woman_posing_in_saree_202606140847.mp4"
+        mobilePlaylist={["/videos/IMG_6700.MP4", "/videos/IMG_6701.MP4", "/videos/IMG_6704.MP4"]}
+        kicker="Sudatta's Atelier"
+        heading="Made to be worn, kept, and passed on."
+        body="From loom to wardrobe — every piece is finished by hand, in small batches, with time-honoured techniques."
+      />
+
       <CollectionsSection
         setCollection={setCollection}
         moods={moods}
@@ -170,80 +169,25 @@ export function Storefront() {
         reduceMotion={reduceMotion}
       />
 
-      <CategoriesSection
-        categories={categories.filter((category) => collectionOptions.includes(category.name))}
-        onPickCategory={(name) => setCollection(name)}
-        reduceMotion={reduceMotion}
-      />
-
       {loadingProducts ? (
-        <>
-          <Section id="shop">
-            <div className="flex justify-center py-16">
-              <Spinner />
-            </div>
-          </Section>
-          <Section id="explore">
-            <div className="flex justify-center py-16">
-              <Spinner />
-            </div>
-          </Section>
-        </>
+        <Section id="explore">
+          <div className="flex justify-center py-16">
+            <Spinner />
+          </div>
+        </Section>
       ) : (
-        <>
-          <ShopSection
-            products={products}
-            wishlist={wishlist}
-            onToggleWish={toggleWish}
-            onQuickView={(product) => goToProduct(product.id)}
-            onViewAll={() => {
-              setSort("Latest");
-              goTo("explore", reduceMotion);
-            }}
-          />
-
-          <ExploreSection
-            filtered={filtered}
-            collection={collection}
-            occasion={occasion}
-            sort={sort}
-            setCollection={setCollection}
-            setOccasion={setOccasion}
-            setSort={setSort}
-            occasions={occasionOptions}
-            collections={collectionOptions}
-            moods={moods}
-            shopMoodId={shopMoodId}
-            onMoodChange={(id) => {
-              void applyShopMoodFilter(id);
-            }}
-            wishlist={wishlist}
-            onToggleWish={toggleWish}
-            onQuickView={(product) => goToProduct(product.id)}
-          />
-        </>
+        <ExploreSection
+          catalog={catalog}
+          wishlist={wishlist}
+          onToggleWish={toggleWish}
+          onQuickView={(product) => goToProduct(product.id)}
+        />
       )}
 
-      <EditorialBlock />
+      <JournalTeaserSection />
       <StorySection />
       <Footer goTo={goToWithMotion} />
 
-      <MenuDrawer
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        setCollection={setCollection}
-        reduceMotion={reduceMotion}
-      />
-
-      <MobileBottomBar
-        activeSection={activeSection}
-        wishCount={wishCount}
-        cartCount={cartCount}
-        onCartOpen={() => router.push("/bag")}
-        reduceMotion={reduceMotion}
-      />
-
-      <div className="h-16 md:hidden" />
     </div>
   );
 }

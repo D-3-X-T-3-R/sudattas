@@ -11,4 +11,10 @@ pub struct UserPiiExport {
     pub address: Option<String>,
     pub phone: Option<String>,
     pub create_date: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    /// "male" | "female" | "other"
+    pub gender: Option<String>,
+    /// ISO yyyy-mm-dd
+    pub date_of_birth: Option<String>,
 }

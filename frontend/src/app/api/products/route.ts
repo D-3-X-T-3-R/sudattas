@@ -20,6 +20,7 @@ const CATALOG_CACHE_HEADERS = { "Cache-Control": "public, s-maxage=60, stale-whi
 const CACHE_TTL_MS = 60_000; // 60 s — products don't change per-request
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<ProductsApiPayload>>();
+const CACHE_VERSION = "filters-v2";
 
 /** Map backend product list row + category names to storefront Product shape. */
 function mapToStorefrontProduct(
@@ -58,7 +59,10 @@ function mapToStorefrontProduct(
     rating: 4.5,
     reviews: 0,
     fabric: row.fabric ?? "",
+    weave: row.weave ?? "",
     occasion: row.occasion ?? "",
+    hasBlousePiece: row.hasBlousePiece ?? null,
+    stockQuantity: row.stockQuantity ?? null,
     description: row.description ?? "",
     image: imageUrl,
     hoverImage: hoverUrl || undefined,
@@ -79,7 +83,7 @@ export async function GET(request: Request) {
     new URL(request.url).searchParams.get("moodId")?.trim() || undefined;
   // Catalog data is identical for every session — key on request shape only,
   // not on sessionId. This makes the cache effective across all concurrent users.
-  const cacheKey = `${moodId ?? "all"}::200`;
+  const cacheKey = `${CACHE_VERSION}::${moodId ?? "all"}::200`;
 
   const now = Date.now();
   const cached = cache.get(cacheKey);

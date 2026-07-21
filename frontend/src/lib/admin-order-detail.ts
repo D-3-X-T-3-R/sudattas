@@ -1,13 +1,5 @@
 import { gqlAdmin } from "./graphql-client";
 
-function flowLog(message: string, meta?: Record<string, unknown>) {
-  if (meta) {
-    console.info(`[orders-flow][admin-ui] ${message}`, meta);
-    return;
-  }
-  console.info(`[orders-flow][admin-ui] ${message}`);
-}
-
 /** One line item on an admin order detail view. */
 export interface AdminOrderDetailLine {
   orderDetailId: string;
@@ -81,7 +73,6 @@ function deriveRefundTrackingState(
 export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDetail | null> {
   const id = orderId.trim();
   if (!id) return null;
-  flowLog("fetching admin order detail", { orderId: id });
   const [data, eventsData] = await Promise.all([
     gqlAdmin<{
       searchOrder?: Array<{
@@ -113,7 +104,6 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
   ]);
   const row = data?.searchOrder?.[0];
   if (!row) {
-    flowLog("admin order detail not found", { orderId: id });
     return null;
   }
   const lines: AdminOrderDetailLine[] = (row.orderDetails ?? []).map((d) => {
@@ -143,13 +133,6 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
     lines,
     refundTrackingState,
   };
-  flowLog("admin order detail loaded", {
-    orderId: result.orderId,
-    userId: result.userId,
-    statusId: result.statusId,
-    lineCount: result.lines.length,
-    refundTrackingState,
-  });
   return result;
 }
 
@@ -162,6 +145,10 @@ const UPDATE_ORDER_MUTATION = `mutation UpdateAdminOrder($order: OrderMutation!)
 
 const ADMIN_MARK_ORDER_SHIPPED_MUTATION = `mutation AdminMarkOrderShipped($input: AdminMarkOrderShippedInput!) {
   adminMarkOrderShipped(input: $input)
+}`;
+
+const RESOLVE_NEEDS_REVIEW_MUTATION = `mutation AdminResolveNeedsReview($input: ResolveNeedsReviewInput!) {
+  resolveNeedsReview(input: $input)
 }`;
 
 const UPDATE_PICKUP_TARGET_MUTATION = `mutation UpdatePickupTarget($input: UpdatePickupTargetInput!) {
@@ -184,22 +171,12 @@ export async function updateAdminOrderStatus(
   newStatusId: string,
   options?: { shiprocketBook?: boolean }
 ): Promise<void> {
-  flowLog("admin status update requested", {
-    orderId: order.orderId,
-    currentStatusId: order.statusId,
-    targetStatusId: newStatusId.trim(),
-    shiprocketBook: Boolean(options?.shiprocketBook),
-  });
   if (options?.shiprocketBook) {
     await gqlAdmin(ADMIN_MARK_ORDER_SHIPPED_MUTATION, {
       input: {
         orderId: order.orderId,
         shiprocketBook: true,
       },
-    });
-    flowLog("admin shipped mutation completed", {
-      orderId: order.orderId,
-      targetStatusId: newStatusId.trim(),
     });
     return;
   }
@@ -214,9 +191,25 @@ export async function updateAdminOrderStatus(
       statusId: newStatusId.trim(),
     },
   });
-  flowLog("admin updateOrder mutation completed", {
-    orderId: order.orderId,
-    targetStatusId: newStatusId.trim(),
+}
+
+/**
+ * Admin: resolve an order stuck in `needs_review` (e.g. an ambiguous payment-webhook outcome) by
+ * marking it paid, cancelled, or refunded. Unlike the generic status dropdown (updateOrder), this
+ * goes through the backend's dedicated resolution path, which also sets payment_status correctly
+ * per outcome (core_operations::handlers::orders::resolve_needs_review) — a plain updateOrder call
+ * would change status_id without touching payment_status, leaving it stale.
+ */
+export async function resolveOrderNeedsReview(
+  orderId: string,
+  resolution: "paid" | "cancelled" | "refunded"
+): Promise<void> {
+  await gqlAdmin(RESOLVE_NEEDS_REVIEW_MUTATION, {
+    input: {
+      orderId,
+      resolution,
+      actorId: "admin",
+    },
   });
 }
 

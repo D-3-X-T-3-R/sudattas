@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 const PLACEHOLDER_IMAGE =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='500' viewBox='0 0 400 500'%3E%3Crect fill='%23f0ede8' width='400' height='500'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle'%3ENo image%3C/text%3E%3C/svg%3E";
 
-/** True if URL is from a host not in Next.js remotePatterns (e.g. your R2/CDN). Use unoptimized so the image still loads. */
 function isExternalProductImage(src: string | undefined): boolean {
   if (!src || src.startsWith("/") || src.startsWith("data:")) return false;
   try {
@@ -36,36 +35,44 @@ export function ProductCard({
   onQuickView,
   featured = false,
 }: ProductCardProps) {
+  const hasHoverImage = !!product.hoverImage && product.hoverImage !== product.image;
+
   return (
-    <div className={cn("group", featured && "flex h-full flex-col")}>
-      <div
-        className={cn(
-          "relative overflow-hidden rounded-sm bg-[var(--background)]",
-          featured && "flex flex-1 flex-col"
-        )}
-      >
+    <article className={cn("group flex flex-col", featured && "h-full")}>
+      <div className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]">
         <button
           type="button"
           onClick={() => onQuickView(product)}
-          className={cn(
-            "relative w-full cursor-pointer text-left rounded-sm overflow-hidden transition-[box-shadow,border-color] duration-300 group-hover:shadow-[0_0_0_1px_var(--color-accent-gold)]",
-            featured ? "min-h-[280px] flex-1 basis-0 aspect-[4/5]" : "aspect-[4/5]"
-          )}
-          aria-label={`Quick view ${product.name}`}
+          className="relative block w-full text-left aspect-[4/5]"
+          aria-label={`View ${product.name}`}
         >
           <Image
             src={product.image || PLACEHOLDER_IMAGE}
             alt={product.imageAlt || product.name}
             fill
-            className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className={cn(
+              "object-cover transition-[transform,opacity] duration-500 ease-out",
+              hasHoverImage ? "group-hover:opacity-0" : "group-hover:scale-[1.04]"
+            )}
+            sizes="(max-width: 768px) 50vw, 25vw"
             unoptimized={isExternalProductImage(product.image)}
           />
-          {/* Hover overlay */}
-          <div className="absolute inset-0 bg-[var(--color-ink)]/0 transition-colors duration-300 group-hover:bg-[var(--color-ink)]/10" />
+          {hasHoverImage ? (
+            <Image
+              src={product.hoverImage!}
+              alt={product.imageAlt || product.name}
+              fill
+              className="object-cover opacity-0 transition-opacity duration-500 ease-out group-hover:opacity-100"
+              sizes="(max-width: 768px) 50vw, 25vw"
+              unoptimized={isExternalProductImage(product.hoverImage)}
+            />
+          ) : null}
         </button>
 
-        {/* Hover-only: wishlist */}
+        <span className="pointer-events-none absolute left-3 top-3 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)]/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-green)] backdrop-blur-sm">
+          New
+        </span>
+
         <Button
           variant="outline"
           size="icon"
@@ -74,28 +81,27 @@ export function ProductCard({
             e.stopPropagation();
             onToggleWish(product);
           }}
-          className="absolute right-3 top-3 z-10 h-10 w-10 rounded-full border-[var(--color-line)] bg-white/90 backdrop-blur opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0 translate-y-1 md:opacity-0 md:group-hover:opacity-100"
+          className="absolute right-3 top-3 h-9 w-9 rounded-full border-white/50 bg-[var(--color-surface)]/85 backdrop-blur-sm hover:border-[var(--color-gold)]"
           aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
         >
           <Heart
-            className={cn("h-5 w-5", wished && "fill-[var(--color-accent-gold)] text-[var(--color-accent-gold)]")}
+            className={cn(
+              "h-4 w-4",
+              wished && "fill-[var(--color-gold)] text-[var(--color-gold)]"
+            )}
           />
         </Button>
+
       </div>
 
-      <div className={cn("mt-4", featured && "mt-6 flex-none")}>
-        <div
-          className={cn(
-            "line-clamp-2 font-display font-medium tracking-tight text-[var(--color-ink)]",
-            featured ? "text-xl md:text-2xl" : "text-lg"
-          )}
-        >
+      <div className="mt-3 flex items-start justify-between gap-3 sm:mt-4">
+        <h3 className="line-clamp-2 break-words font-display text-[1.05rem] leading-snug text-[var(--color-ink)] sm:text-xl">
           {product.name}
-        </div>
-        <div className="mt-2 font-sans font-semibold text-[var(--color-accent-gold)]">
+        </h3>
+        <p className="whitespace-nowrap pt-0.5 font-sans text-sm font-semibold text-[var(--color-ink)] sm:text-base">
           {product.priceFormatted ?? INR.format(product.price)}
-        </div>
+        </p>
       </div>
-    </div>
+    </article>
   );
 }
