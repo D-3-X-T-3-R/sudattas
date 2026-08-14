@@ -23,8 +23,8 @@ use proto::proto::core::{
     SearchOrderRequest, UpdateCartItemRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
-    TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DatabaseConnection,
+    DbBackend, EntityTrait, QueryFilter, Statement, TransactionTrait,
 };
 use tonic::{Code, Request};
 
@@ -41,6 +41,129 @@ async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> 
     .await
     .expect("insert OrderStatus");
     m.status_id
+}
+
+/// Best-effort cleanup of fixtures committed by these tests. Setup used to live inside the same
+/// uncommitted transaction as the place_order call under test and simply never got committed on
+/// rollback; now that setup must be committed for place_order's own (separately-opened)
+/// transactions to see it (see the `txn.commit()` calls below), it needs explicit cleanup
+/// instead. Deletes in FK-safe order (children before parents), mirroring
+/// `cleanup_scenario_rows` in integration_place_order_atomicity.rs. Errors are logged, not
+/// fatal — they must never mask the actual test assertions.
+#[allow(clippy::too_many_arguments)]
+async fn cleanup_checkout_rows(
+    db: &DatabaseConnection,
+    order_ids: &[i64],
+    user_ids: &[i64],
+    role_ids: &[i64],
+    category_ids: &[i64],
+    variant_ids: &[i64],
+    shipping_address_ids: &[i64],
+) {
+    for order_id in order_ids {
+        for (table, column) in [
+            ("PaymentIntents", "order_id"),
+            ("Shipments", "order_id"),
+            ("OrderDetails", "OrderID"),
+            ("OrderEvents", "OrderID"),
+            ("Orders", "OrderID"),
+        ] {
+            if let Err(e) = db
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+                    [(*order_id).into()],
+                ))
+                .await
+            {
+                eprintln!(
+                    "warning: cleanup {table} for order_id={order_id} failed (non-fatal): {e}"
+                );
+            }
+        }
+    }
+    for user_id in user_ids {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "DELETE FROM `Cart` WHERE `UserID` = ?",
+                [(*user_id).into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup Cart for user_id={user_id} failed (non-fatal): {e}");
+        }
+    }
+    for variant_id in variant_ids {
+        for table in ["Inventory", "ProductVariants"] {
+            if let Err(e) = db
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    format!("DELETE FROM `{table}` WHERE `VariantID` = ?"),
+                    [(*variant_id).into()],
+                ))
+                .await
+            {
+                eprintln!(
+                    "warning: cleanup {table} for variant_id={variant_id} failed (non-fatal): {e}"
+                );
+            }
+        }
+    }
+    for category_id in category_ids {
+        for table in ["Products", "ProductCategories"] {
+            if let Err(e) = db
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    format!("DELETE FROM `{table}` WHERE `CategoryID` = ?"),
+                    [(*category_id).into()],
+                ))
+                .await
+            {
+                eprintln!(
+                    "warning: cleanup {table} for category_id={category_id} failed (non-fatal): {e}"
+                );
+            }
+        }
+    }
+    for shipping_address_id in shipping_address_ids {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+                [(*shipping_address_id).into()],
+            ))
+            .await
+        {
+            eprintln!(
+                "warning: cleanup ShippingAddresses id={shipping_address_id} failed (non-fatal): {e}"
+            );
+        }
+    }
+    for user_id in user_ids {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "DELETE FROM `Users` WHERE `UserID` = ?",
+                [(*user_id).into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup Users for user_id={user_id} failed (non-fatal): {e}");
+        }
+    }
+    for role_id in role_ids {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+                [(*role_id).into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup UserRoles for role_id={role_id} failed (non-fatal): {e}");
+        }
+    }
 }
 
 #[tokio::test]
@@ -199,9 +322,14 @@ async fn integration_place_order_happy_path_removes_only_selected_items_after_cr
     .expect("create_cart_item should succeed");
     let selected_cart_id = cart_res.into_inner().items[0].cart_id;
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // place_order no longer runs as a nested savepoint inside our transaction; see
+    // integration_place_order_atomicity.rs for the full rationale.
+    txn.commit().await.expect("commit setup txn");
+
     // Place order – integrates users, cart, products, orders, inventory, and order_events/outbox.
     let result = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -225,56 +353,69 @@ async fn integration_place_order_happy_path_removes_only_selected_items_after_cr
         order.total_amount_paise, 120_000,
         "2 items * 60000 paise each"
     );
+    let order_id = order.order_id;
 
     // Order persisted with matching totals.
     let db_order = orders::Entity::find()
-        .filter(orders::Column::OrderId.eq(order.order_id))
-        .one(&txn)
+        .filter(orders::Column::OrderId.eq(order_id))
+        .one(&db)
         .await
         .expect("query Orders")
         .expect("order row should exist");
+
+    // OrderDetails created for the cart item.
+    let details = order_details::Entity::find()
+        .filter(order_details::Column::OrderId.eq(order_id))
+        .all(&db)
+        .await
+        .expect("query OrderDetails");
+
+    // Inventory decremented atomically.
+    let inv = inventory_entity::Entity::find()
+        .filter(inventory_entity::Column::VariantId.eq(Some(variant.variant_id)))
+        .one(&db)
+        .await
+        .expect("query Inventory")
+        .expect("inventory row should exist");
+
+    // Purchased selected rows are removed immediately after successful order creation.
+    let remaining_cart = cart::Entity::find()
+        .filter(cart::Column::UserId.eq(user_id))
+        .all(&db)
+        .await
+        .expect("query Cart for user");
+
+    cleanup_checkout_rows(
+        &db,
+        &[order_id],
+        &[user_id],
+        &[role.role_id],
+        &[category.category_id],
+        &[variant.variant_id],
+        &[shipping.shipping_address_id],
+    )
+    .await;
+
     assert_eq!(db_order.user_id, user_id);
     assert_eq!(
         db_order.grand_total_minor, 120_000,
         "grand_total_minor should match computed total"
     );
 
-    // OrderDetails created for the cart item.
-    let details = order_details::Entity::find()
-        .filter(order_details::Column::OrderId.eq(order.order_id))
-        .all(&txn)
-        .await
-        .expect("query OrderDetails");
     assert_eq!(details.len(), 1, "one order detail row expected");
     assert_eq!(details[0].variant_id, variant.variant_id);
     assert_eq!(details[0].quantity, 2);
 
-    // Inventory decremented atomically.
-    let inv = inventory_entity::Entity::find()
-        .filter(inventory_entity::Column::VariantId.eq(Some(variant.variant_id)))
-        .one(&txn)
-        .await
-        .expect("query Inventory")
-        .expect("inventory row should exist");
     assert_eq!(
         inv.quantity_available,
         Some(8),
         "quantity_available should be decremented by ordered quantity"
     );
 
-    // Purchased selected rows are removed immediately after successful order creation.
-    let remaining_cart = cart::Entity::find()
-        .filter(cart::Column::UserId.eq(user_id))
-        .all(&txn)
-        .await
-        .expect("query Cart for user");
     assert!(
         remaining_cart.is_empty(),
         "selected cart rows should be removed after successful order creation"
     );
-
-    // Roll back to keep test non-destructive.
-    txn.rollback().await.ok();
 }
 
 #[tokio::test]
@@ -429,8 +570,11 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     .expect("create_cart_item should succeed");
     let selected_cart_id = cart_res.into_inner().items[0].cart_id;
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions.
+    txn.commit().await.expect("commit setup txn");
+
     let result = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -452,20 +596,35 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     // No order should be created for the user.
     let orders_for_user = orders::Entity::find()
         .filter(orders::Column::UserId.eq(user_id))
-        .all(&txn)
+        .all(&db)
         .await
         .expect("query Orders for user");
+
+    // Cart should remain intact so the user can retry later.
+    let cart_rows = cart::Entity::find()
+        .filter(cart::Column::UserId.eq(user_id))
+        .all(&db)
+        .await
+        .expect("query Cart for user");
+
+    // No order is created (place_order failed on the stock check), so cleanup only needs to
+    // remove the setup fixtures.
+    cleanup_checkout_rows(
+        &db,
+        &[],
+        &[user_id],
+        &[role.role_id],
+        &[category.category_id],
+        &[variant.variant_id],
+        &[shipping.shipping_address_id],
+    )
+    .await;
+
     assert!(
         orders_for_user.is_empty(),
         "no orders should be created on insufficient stock"
     );
 
-    // Cart should remain intact so the user can retry later.
-    let cart_rows = cart::Entity::find()
-        .filter(cart::Column::UserId.eq(user_id))
-        .all(&txn)
-        .await
-        .expect("query Cart for user");
     assert_eq!(
         cart_rows.len(),
         1,
@@ -473,8 +632,6 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
     );
     assert_eq!(cart_rows[0].variant_id, variant.variant_id);
     assert_eq!(cart_rows[0].quantity, 2);
-
-    txn.rollback().await.ok();
 }
 
 #[tokio::test]
@@ -546,9 +703,13 @@ async fn integration_place_order_empty_cart_fails() {
     .await
     .expect("insert ShippingAddresses");
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions. No
+    // cart items are ever created here, so place_order is expected to fail regardless.
+    txn.commit().await.expect("commit setup txn");
+
     // No cart items; place_order should fail.
     let result = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -560,14 +721,26 @@ async fn integration_place_order_empty_cart_fails() {
     .await;
 
     let err = result.expect_err("place_order should fail when nothing is selected");
+
+    // No order/category/variant fixtures were created in this test; cleanup only needs the
+    // user/shipping/role rows.
+    cleanup_checkout_rows(
+        &db,
+        &[],
+        &[user_id],
+        &[role.role_id],
+        &[],
+        &[],
+        &[shipping.shipping_address_id],
+    )
+    .await;
+
     assert_eq!(err.code(), Code::FailedPrecondition);
     assert!(
         err.message().to_lowercase().contains("selected"),
         "error should mention missing selected cart items, got: {}",
         err.message()
     );
-
-    txn.rollback().await.ok();
 }
 
 #[tokio::test]
@@ -749,8 +922,13 @@ async fn integration_cart_add_get_update_then_place_order() {
     assert_eq!(get_after.get_ref().items.len(), 1);
     assert_eq!(get_after.get_ref().items[0].quantity, 3);
 
+    // Commit setup (including the cart add/get/update dance above, which all still use handlers
+    // pinned to `&DatabaseTransaction`) so it's visible to place_order's own (separately-opened)
+    // transactions.
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -762,24 +940,35 @@ async fn integration_cart_add_get_update_then_place_order() {
     .await
     .expect("place_order should succeed");
     let order = &place_res.into_inner().items[0];
+    let order_id = order.order_id;
     assert_eq!(order.total_amount_paise, 150_000, "3 * 50000 paise");
 
-    let db_order = orders::Entity::find_by_id(order.order_id)
-        .one(&txn)
+    let db_order = orders::Entity::find_by_id(order_id)
+        .one(&db)
         .await
         .expect("query order")
         .expect("order exists");
-    assert_eq!(db_order.grand_total_minor, 150_000);
 
     let inv_after = inventory_entity::Entity::find()
         .filter(inventory_entity::Column::VariantId.eq(Some(variant.variant_id)))
-        .one(&txn)
+        .one(&db)
         .await
         .expect("query inventory")
         .expect("inventory exists");
-    assert_eq!(inv_after.quantity_available, Some(7));
 
-    txn.rollback().await.ok();
+    cleanup_checkout_rows(
+        &db,
+        &[order_id],
+        &[user_id],
+        &[role.role_id],
+        &[category.category_id],
+        &[variant.variant_id],
+        &[shipping.shipping_address_id],
+    )
+    .await;
+
+    assert_eq!(db_order.grand_total_minor, 150_000);
+    assert_eq!(inv_after.quantity_available, Some(7));
 }
 
 #[tokio::test]
@@ -979,8 +1168,11 @@ async fn integration_place_order_multiple_items_two_variants() {
         cart_b.into_inner().items[0].cart_id,
     ];
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions.
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -992,42 +1184,53 @@ async fn integration_place_order_multiple_items_two_variants() {
     .await
     .expect("place_order should succeed");
     let order = &place_res.into_inner().items[0];
+    let order_id = order.order_id;
     let expected_total = 2 * 60_000 + 40_000;
     assert_eq!(
         order.total_amount_paise, expected_total,
         "2*A + 1*B = 160000"
     );
 
-    let db_order = orders::Entity::find_by_id(order.order_id)
-        .one(&txn)
+    let db_order = orders::Entity::find_by_id(order_id)
+        .one(&db)
         .await
         .expect("query order")
         .expect("order exists");
-    assert_eq!(db_order.grand_total_minor, expected_total);
 
     let details = order_details::Entity::find()
-        .filter(order_details::Column::OrderId.eq(order.order_id))
-        .all(&txn)
+        .filter(order_details::Column::OrderId.eq(order_id))
+        .all(&db)
         .await
         .expect("query OrderDetails");
-    assert_eq!(details.len(), 2, "two line items");
 
     let inv_a = inventory_entity::Entity::find()
         .filter(inventory_entity::Column::VariantId.eq(Some(variant_a.variant_id)))
-        .one(&txn)
+        .one(&db)
         .await
         .expect("query inventory A")
         .expect("exists");
-    assert_eq!(inv_a.quantity_available, Some(3));
     let inv_b = inventory_entity::Entity::find()
         .filter(inventory_entity::Column::VariantId.eq(Some(variant_b.variant_id)))
-        .one(&txn)
+        .one(&db)
         .await
         .expect("query inventory B")
         .expect("exists");
-    assert_eq!(inv_b.quantity_available, Some(4));
 
-    txn.rollback().await.ok();
+    cleanup_checkout_rows(
+        &db,
+        &[order_id],
+        &[user_id],
+        &[role.role_id],
+        &[category.category_id],
+        &[variant_a.variant_id, variant_b.variant_id],
+        &[shipping.shipping_address_id],
+    )
+    .await;
+
+    assert_eq!(db_order.grand_total_minor, expected_total);
+    assert_eq!(details.len(), 2, "two line items");
+    assert_eq!(inv_a.quantity_available, Some(3));
+    assert_eq!(inv_b.quantity_available, Some(4));
 }
 
 #[tokio::test]
@@ -1170,8 +1373,11 @@ async fn integration_place_order_then_search_order() {
     .expect("create_cart_item should succeed");
     let selected_cart_id = cart_res.into_inner().items[0].cart_id;
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions.
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -1184,8 +1390,12 @@ async fn integration_place_order_then_search_order() {
     .expect("place_order should succeed");
     let order_id = place_res.into_inner().items[0].order_id;
 
+    // search_order is an unrelated handler whose own signature didn't change (only place_order's
+    // did) — it still takes a caller-supplied `&DatabaseTransaction`, so we open a fresh
+    // (read-only) transaction here to drive it against the now-committed order.
+    let search_txn = db.begin().await.expect("begin search transaction");
     let search_res = core_operations::handlers::orders::search_order(
-        &txn,
+        &search_txn,
         Request::new(SearchOrderRequest {
             order_id: Some(order_id),
             user_id: Some(user_id),
@@ -1199,9 +1409,21 @@ async fn integration_place_order_then_search_order() {
     .await
     .expect("search_order should succeed");
     let orders = search_res.into_inner().items;
+    // Read-only lookup; nothing to commit.
+    search_txn.rollback().await.ok();
+
+    cleanup_checkout_rows(
+        &db,
+        &[order_id],
+        &[user_id],
+        &[role.role_id],
+        &[category.category_id],
+        &[variant.variant_id],
+        &[shipping.shipping_address_id],
+    )
+    .await;
+
     assert_eq!(orders.len(), 1);
     assert_eq!(orders[0].order_id, order_id);
     assert_eq!(orders[0].user_id, user_id);
-
-    txn.rollback().await.ok();
 }

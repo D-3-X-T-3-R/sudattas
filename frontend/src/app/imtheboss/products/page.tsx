@@ -643,29 +643,37 @@ export default function AdminProductsPage() {
                 const item = orderedProductImages[i];
                 if (item.type !== "new") continue;
                 const file = item.file;
-                const presigned = await gqlAdmin<{
-                  getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
-                }>(
-                  `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
-                    getPresignedUploadUrl(input: $input) { uploadUrl key }
-                  }`,
-                  {
-                    input: {
-                      productId,
-                      filename: file.name,
-                      contentType: file.type || "application/octet-stream",
-                      displayOrder: i,
-                    },
-                  }
-                );
-                const info = presigned.getPresignedUploadUrl?.[0];
-                if (!info) throw new Error("Did not receive upload URL.");
-                await fetch(info.uploadUrl, {
-                  method: "PUT",
-                  headers: { "Content-Type": file.type || "application/octet-stream" },
-                  body: file,
-                });
-                newKeys.push(info.key);
+                try {
+                  const presigned = await gqlAdmin<{
+                    getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
+                  }>(
+                    `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
+                      getPresignedUploadUrl(input: $input) { uploadUrl key }
+                    }`,
+                    {
+                      input: {
+                        productId,
+                        filename: file.name,
+                        contentType: file.type || "application/octet-stream",
+                        displayOrder: i,
+                      },
+                    }
+                  );
+                  const info = presigned.getPresignedUploadUrl?.[0];
+                  if (!info) throw new Error("Did not receive upload URL.");
+                  await fetch(info.uploadUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type || "application/octet-stream" },
+                    body: file,
+                  });
+                  newKeys.push(info.key);
+                } catch (uploadErr) {
+                  const reason =
+                    uploadErr instanceof Error ? uploadErr.message : "upload failed";
+                  throw new Error(
+                    `Image "${file.name}" (${newKeys.length + 1} of the new images) failed to upload: ${reason}. Product images were not changed — remove or replace this file and try again.`
+                  );
+                }
               }
               let newIndex = 0;
               items = orderedProductImages.map((item) =>
@@ -678,29 +686,37 @@ export default function AdminProductsPage() {
               const newKeys: string[] = [];
               for (let i = 0; i < imageFiles.length; i++) {
                 const file = imageFiles[i];
-                const presigned = await gqlAdmin<{
-                  getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
-                }>(
-                  `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
-                    getPresignedUploadUrl(input: $input) { uploadUrl key }
-                  }`,
-                  {
-                    input: {
-                      productId,
-                      filename: file.name,
-                      contentType: file.type || "application/octet-stream",
-                      displayOrder: i,
-                    },
-                  }
-                );
-                const info = presigned.getPresignedUploadUrl?.[0];
-                if (!info) throw new Error("Did not receive upload URL.");
-                await fetch(info.uploadUrl, {
-                  method: "PUT",
-                  headers: { "Content-Type": file.type || "application/octet-stream" },
-                  body: file,
-                });
-                newKeys.push(info.key);
+                try {
+                  const presigned = await gqlAdmin<{
+                    getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
+                  }>(
+                    `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
+                      getPresignedUploadUrl(input: $input) { uploadUrl key }
+                    }`,
+                    {
+                      input: {
+                        productId,
+                        filename: file.name,
+                        contentType: file.type || "application/octet-stream",
+                        displayOrder: i,
+                      },
+                    }
+                  );
+                  const info = presigned.getPresignedUploadUrl?.[0];
+                  if (!info) throw new Error("Did not receive upload URL.");
+                  await fetch(info.uploadUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type || "application/octet-stream" },
+                    body: file,
+                  });
+                  newKeys.push(info.key);
+                } catch (uploadErr) {
+                  const reason =
+                    uploadErr instanceof Error ? uploadErr.message : "upload failed";
+                  throw new Error(
+                    `Image "${file.name}" (${newKeys.length + 1} of ${imageFiles.length} new images) failed to upload: ${reason}. Product images were not changed — remove or replace this file and try again.`
+                  );
+                }
               }
               const existingItems = existingProductImages.map((im) => ({
                 imageId: im.imageId ?? undefined,

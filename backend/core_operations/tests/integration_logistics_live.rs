@@ -777,8 +777,23 @@ async fn place_and_pay_live_order(
     .items[0]
         .clone();
 
+    // Commit setup before calling place_order: place_order now manages its own transactions
+    // internally (a short claim/prep transaction, then the Shiprocket/Razorpay calls with no
+    // DB transaction held, then a write transaction) and can no longer run as a nested
+    // savepoint inside this still-open transaction — its own prep phase needs to see this
+    // committed data. Note this narrows (but doesn't remove) this file's existing tolerance
+    // for leaked fixture rows: previously, if place_order failed, dropping `txn` without a
+    // commit auto-rolled back the seed_checkout_user fixtures along with it; now those
+    // fixtures are committed before place_order runs, so a place_order failure here leaves
+    // them behind. This file already never cleans up seed_checkout_user's role/user/
+    // product/category/variant/inventory rows even on the success path (only
+    // LiveCleanupTracker-registered orders/Shiprocket bookings are cleaned up in
+    // finalize_live_test_with_cleanup), so this is a modest widening of an already-accepted
+    // leak surface, not a new class of problem.
+    txn.commit().await.map_err(|e| e.to_string())?;
+
     let order = place_order(
-        &txn,
+        db,
         Request::new(PlaceOrderRequest {
             shipping_address_id,
             user_id,
@@ -793,13 +808,15 @@ async fn place_and_pay_live_order(
     .items[0]
         .clone();
 
+    // place_order's own write-phase transaction already committed the PaymentIntents row
+    // before returning Ok, so this reads it directly from `db` — no separate transaction (or
+    // commit) is needed here anymore.
     let intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order.order_id))
-        .one(&txn)
+        .one(db)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "missing payment intent".to_string())?;
-    txn.commit().await.map_err(|e| e.to_string())?;
 
     let payment = complete_live_checkout_payment(&intent.razorpay_order_id, tag)?;
     eprintln!(

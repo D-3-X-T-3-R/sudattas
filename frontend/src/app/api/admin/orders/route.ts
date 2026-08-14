@@ -7,6 +7,8 @@ const ORDER_ROOTS = [
   "createOrder",
   "updatePickupTarget",
   "resolveNeedsReview",
+  "orderStats",
+  "getOrderEvents",
 ];
 
 export async function POST(request: Request) {

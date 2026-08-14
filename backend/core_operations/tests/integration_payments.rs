@@ -28,8 +28,8 @@ use proto::proto::core::{
     VerifyRazorpayPaymentRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DatabaseConnection,
+    DbBackend, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Statement, TransactionTrait,
 };
 use sha2::Sha256;
 use tonic::Request;
@@ -66,15 +66,38 @@ fn restore_env_var(name: &str, previous: Option<String>) {
     }
 }
 
+/// Ids of everything `place_order_setup` created, needed both by callers that mutate further
+/// state (against a fresh transaction/connection obtained from `db`) and for the best-effort
+/// cleanup they must now do themselves -- see the comment on `place_order_setup`.
+struct PlaceOrderSetup {
+    user_id: i64,
+    order_id: i64,
+    role_id: i64,
+    category_id: i64,
+    variant_id: i64,
+}
+
+/// Sets up a user + shipping address + product/variant/inventory + cart item, then calls
+/// `place_order` to create a real order and payment intent for the caller to assert against.
+///
+/// Setup runs in its own transaction, committed just before calling `place_order`: place_order
+/// now manages its own transactions internally (a short claim/prep transaction, then the
+/// Shiprocket/Razorpay calls with no DB connection held, then a write transaction), so it can no
+/// longer run as a nested savepoint inside a caller-supplied, still-open transaction -- the whole
+/// point of that restructuring is that place_order's connection isn't held hostage across
+/// external calls, which requires its transactions to be independently committable. Fixtures
+/// must therefore already be committed before place_order's own prep phase reads them.
 async fn place_order_setup(
-    txn: &sea_orm::DatabaseTransaction,
+    db: &DatabaseConnection,
     now_tag: i64,
     cart_total_paise: i64,
     payment_mode: Option<&str>,
-) -> (i64, i64) {
+) -> PlaceOrderSetup {
+    let txn = db.begin().await.expect("begin setup transaction");
+
     let pending = order_status::Entity::find()
         .filter(order_status::Column::StatusName.eq("pending"))
-        .one(txn)
+        .one(&txn)
         .await
         .expect("query OrderStatus");
     if pending.is_none() {
@@ -83,7 +106,7 @@ async fn place_order_setup(
             status_name: ActiveValue::Set("pending".to_string()),
         };
         let _ = status
-            .insert(txn)
+            .insert(&txn)
             .await
             .expect("insert pending OrderStatus");
     }
@@ -92,12 +115,12 @@ async fn place_order_setup(
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(format!("itest_pay_{}", now_tag)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert UserRoles");
 
     let user_res = core_operations::handlers::users::create_user(
-        txn,
+        &txn,
         Request::new(CreateUserRequest {
             username: format!("itest_pay_{}", now_tag),
             email: format!("itest_pay+{}@example.com", now_tag),
@@ -127,7 +150,7 @@ async fn place_order_setup(
         road: ActiveValue::Set(None),
         apartment_no_or_name: ActiveValue::Set(None),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ShippingAddresses");
     let shipping_id = ship.shipping_address_id;
@@ -136,7 +159,7 @@ async fn place_order_setup(
         category_id: ActiveValue::NotSet,
         name: ActiveValue::Set(format!("itest_cat_pay_{}", now_tag)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ProductCategories");
 
@@ -157,7 +180,7 @@ async fn place_order_setup(
         created_at: ActiveValue::Set(Some(Utc::now())),
         updated_at: ActiveValue::Set(None),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert Products");
 
@@ -168,7 +191,7 @@ async fn place_order_setup(
         color_id: ActiveValue::Set(None),
         additional_price: ActiveValue::Set(Some(0)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ProductVariants");
 
@@ -180,12 +203,12 @@ async fn place_order_setup(
         reorder_level: ActiveValue::Set(None),
         updated_at: ActiveValue::Set(Some(Utc::now())),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert Inventory");
 
     let cart_res = core_operations::handlers::cart::create_cart_item(
-        txn,
+        &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
             session_id: None,
@@ -197,8 +220,15 @@ async fn place_order_setup(
     .expect("create_cart_item");
     let cart_id = cart_res.into_inner().items[0].cart_id;
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions --
+    // place_order no longer runs as a nested savepoint inside our transaction, so anything it
+    // needs to read must already be committed.
+    txn.commit()
+        .await
+        .expect("commit place_order_setup fixtures");
+
     let place_res = place_order(
-        txn,
+        db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping_id,
             user_id,
@@ -210,7 +240,96 @@ async fn place_order_setup(
     .await
     .expect("place_order");
     let order_id = place_res.into_inner().items[0].order_id;
-    (user_id, order_id)
+
+    PlaceOrderSetup {
+        user_id,
+        order_id,
+        role_id: role.role_id,
+        category_id: cat.category_id,
+        variant_id: variant.variant_id,
+    }
+}
+
+/// Best-effort teardown of the fixture rows created by `place_order_setup` (and by the manual
+/// inline setup in `integration_place_order_prepaid_rolls_back_fully_when_razorpay_fails`, which
+/// mirrors it). This used to live inside the same uncommitted transaction as the place_order
+/// call under test and simply never got committed on rollback; now that setup -- and
+/// place_order's own transactions -- must commit independently (see `place_order_setup`),
+/// cleanup needs to be explicit. Deletes in FK-safe order (children before parents). `order_id`
+/// is `None` when place_order itself failed and never persisted an order. Errors are logged, not
+/// fatal, so a cleanup failure never masks the actual test assertions.
+async fn cleanup_payment_test_rows(
+    db: &DatabaseConnection,
+    order_id: Option<i64>,
+    user_id: i64,
+    role_id: i64,
+    category_id: i64,
+    variant_id: i64,
+) {
+    if let Some(order_id) = order_id {
+        for (table, column) in [
+            ("PaymentIntents", "order_id"),
+            ("Shipments", "order_id"),
+            ("OrderEvents", "order_id"),
+            ("OrderDetails", "OrderID"),
+            ("Orders", "OrderID"),
+        ] {
+            if let Err(e) = db
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::MySql,
+                    format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+                    [order_id.into()],
+                ))
+                .await
+            {
+                eprintln!(
+                    "warning: cleanup {table} for order_id={order_id} failed (non-fatal): {e}"
+                );
+            }
+        }
+    }
+
+    let deletes: [(&str, &str, i64); 6] = [
+        ("Cart", "UserID", user_id),
+        ("Inventory", "VariantID", variant_id),
+        ("ProductVariants", "VariantID", variant_id),
+        ("Products", "CategoryID", category_id),
+        ("ProductCategories", "CategoryID", category_id),
+        ("ShippingAddresses", "UserID", user_id),
+    ];
+    for (table, column, id) in deletes {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+                [id.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup {table} for id={id} failed (non-fatal): {e}");
+        }
+    }
+    // Users last (ShippingAddresses/Cart above reference it), then UserRoles (Users references it).
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Users` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Users for user_id={user_id} failed (non-fatal): {e}");
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+            [role_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup UserRoles for role_id={role_id} failed (non-fatal): {e}");
+    }
 }
 
 /// P1 – place_order creates a payment_intents row with correct order_id, amount, and pending status.
@@ -226,16 +345,16 @@ async fn integration_place_order_creates_payment_intent() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
     // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR so tests do not depend on live shipping quote.
     let cart_total = 150_000_i64;
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, cart_total, None).await;
+    let fixture = place_order_setup(&db, now_tag, cart_total, None).await;
+    let order_id = fixture.order_id;
 
     let intents = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
-        .all(&txn)
+        .all(&db)
         .await
         .expect("query payment_intents");
     assert_eq!(
@@ -249,7 +368,15 @@ async fn integration_place_order_creates_payment_intent() {
     assert_eq!(intent.status, PaymentIntentStatus::Pending);
     assert!(intent.razorpay_payment_id.is_none());
 
-    txn.rollback().await.ok();
+    cleanup_payment_test_rows(
+        &db,
+        Some(order_id),
+        fixture.user_id,
+        fixture.role_id,
+        fixture.category_id,
+        fixture.variant_id,
+    )
+    .await;
 }
 
 /// P1b – If Razorpay order creation fails during a prepaid checkout, place_order
@@ -272,10 +399,15 @@ async fn integration_place_order_prepaid_rolls_back_fully_when_razorpay_fails() 
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
     let cart_total = 150_000_i64;
+
+    // Setup runs in its own transaction, committed before calling place_order -- place_order
+    // manages its own transactions internally now and can no longer see uncommitted fixtures
+    // from a transaction it doesn't know about (see `place_order_setup` above for the full
+    // rationale; this test builds its fixture inline instead of via that helper).
+    let txn = db.begin().await.expect("begin transaction");
 
     let _ = ensure_order_status(&txn, "pending").await;
     let role = user_roles::ActiveModel {
@@ -383,8 +515,11 @@ async fn integration_place_order_prepaid_rolls_back_fully_when_razorpay_fails() 
     .expect("create_cart_item");
     let cart_id = cart_res.into_inner().items[0].cart_id;
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions.
+    txn.commit().await.expect("commit setup");
+
     let place_res = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping_id,
             user_id,
@@ -399,9 +534,17 @@ async fn integration_place_order_prepaid_rolls_back_fully_when_razorpay_fails() 
         "place_order should fail when Razorpay order creation fails"
     );
 
+    // No manual rollback-and-reverify dance is needed here (unlike before this restructuring):
+    // place_order's write transaction rolls back internally the moment the Razorpay call fails,
+    // so by the time place_order returns Err, that transaction is already gone -- reads below via
+    // a fresh transaction already reflect final, settled state. A fresh transaction (rather than
+    // `&db` directly) is used only because `get_cart_items` requires a `&DatabaseTransaction`;
+    // it's read-only, so it's simply rolled back afterward.
+    let verify_txn = db.begin().await.expect("begin verify transaction");
+
     let orders_for_user = orders::Entity::find()
         .filter(orders::Column::UserId.eq(user_id))
-        .count(&txn)
+        .count(&verify_txn)
         .await
         .expect("count orders");
     assert_eq!(
@@ -410,7 +553,7 @@ async fn integration_place_order_prepaid_rolls_back_fully_when_razorpay_fails() 
     );
 
     let cart_after = core_operations::handlers::cart::get_cart_items(
-        &txn,
+        &verify_txn,
         Request::new(proto::proto::core::GetCartItemsRequest {
             user_id: Some(user_id),
             session_id: None,
@@ -427,7 +570,7 @@ async fn integration_place_order_prepaid_rolls_back_fully_when_razorpay_fails() 
 
     let inv = inventory::Entity::find()
         .filter(inventory::Column::VariantId.eq(Some(variant.variant_id)))
-        .one(&txn)
+        .one(&verify_txn)
         .await
         .expect("query inventory")
         .expect("inventory row exists");
@@ -436,10 +579,22 @@ async fn integration_place_order_prepaid_rolls_back_fully_when_razorpay_fails() 
         Some(10),
         "inventory should not be decremented when the Razorpay call fails"
     );
+    verify_txn.rollback().await.ok();
 
     restore_env_var("RAZORPAY_KEY_ID", original_key_id);
     restore_env_var("RAZORPAY_KEY_SECRET", original_secret);
-    txn.rollback().await.ok();
+
+    // No order was persisted (place_order failed), so cleanup only needs to remove the setup
+    // fixtures that were committed above.
+    cleanup_payment_test_rows(
+        &db,
+        None,
+        user_id,
+        role.role_id,
+        cat.category_id,
+        variant.variant_id,
+    )
+    .await;
 }
 
 /// P2 – Happy-path verify_razorpay_payment marks intent Processed, sets payment id, moves order to Paid.
@@ -458,10 +613,16 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
+    let fixture = place_order_setup(&db, now_tag, 150_000, None).await;
+    let order_id = fixture.order_id;
+
+    // Fresh transaction for the verify_razorpay_payment call and its assertions --
+    // place_order_setup's own setup transaction is already committed and gone by the time it
+    // returns. Read-only from here except for the verify call itself, so it's rolled back at the
+    // end; the order/payment-intent rows it touches are removed by explicit cleanup regardless.
+    let txn = db.begin().await.expect("begin transaction");
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
 
     let intents = payment_intents::Entity::find()
@@ -516,6 +677,16 @@ async fn integration_verify_razorpay_payment_success_updates_intent() {
 
     restore_env_var("RAZORPAY_KEY_SECRET", original_secret);
     txn.rollback().await.ok();
+
+    cleanup_payment_test_rows(
+        &db,
+        Some(order_id),
+        fixture.user_id,
+        fixture.role_id,
+        fixture.category_id,
+        fixture.variant_id,
+    )
+    .await;
 }
 
 /// P3 – verify_razorpay_payment with invalid signature returns verification failure and does not update DB.
@@ -534,10 +705,13 @@ async fn integration_verify_razorpay_payment_invalid_signature_no_update() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
+    let fixture = place_order_setup(&db, now_tag, 150_000, None).await;
+    let order_id = fixture.order_id;
+
+    // Fresh transaction, same reasoning as in the P2 test above.
+    let txn = db.begin().await.expect("begin transaction");
 
     let intents = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
@@ -576,6 +750,16 @@ async fn integration_verify_razorpay_payment_invalid_signature_no_update() {
 
     restore_env_var("RAZORPAY_KEY_SECRET", original_secret);
     txn.rollback().await.ok();
+
+    cleanup_payment_test_rows(
+        &db,
+        Some(order_id),
+        fixture.user_id,
+        fixture.role_id,
+        fixture.category_id,
+        fixture.variant_id,
+    )
+    .await;
 }
 
 /// P4A - stale unpaid prepaid orders expire even after cancel window closes.
@@ -591,10 +775,16 @@ async fn integration_stale_unpaid_order_expiry_restores_inventory() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
+    let fixture = place_order_setup(&db, now_tag, 150_000, None).await;
+    let order_id = fixture.order_id;
+
+    // Fresh transaction for these mutations -- place_order_setup's own setup transaction is
+    // already committed and gone by the time it returns. This one is committed below (not
+    // rolled back) because expire_stale_pending_orders runs against `db` on its own connection
+    // and needs to see these changes, same as before this restructuring.
+    let txn = db.begin().await.expect("begin transaction");
 
     let intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
@@ -671,6 +861,16 @@ async fn integration_stale_unpaid_order_expiry_restores_inventory() {
     assert_eq!(inventory_row.quantity_available, Some(10));
 
     verify_txn.rollback().await.ok();
+
+    cleanup_payment_test_rows(
+        &db,
+        Some(order_id),
+        fixture.user_id,
+        fixture.role_id,
+        fixture.category_id,
+        fixture.variant_id,
+    )
+    .await;
 }
 
 /// P4B - stale unpaid prepaid orders expire before cancel window too (system path ignores customer window).
@@ -686,10 +886,13 @@ async fn integration_stale_unpaid_order_expiry_before_cancel_window_still_succee
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
+    let fixture = place_order_setup(&db, now_tag, 150_000, None).await;
+    let order_id = fixture.order_id;
+
+    // Fresh, committed transaction -- see the comment in P4A above.
+    let txn = db.begin().await.expect("begin transaction");
     let intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
         .one(&txn)
@@ -719,6 +922,16 @@ async fn integration_stale_unpaid_order_expiry_before_cancel_window_still_succee
     assert_eq!(order.status_id, cancelled_id);
     assert_eq!(order.payment_status, Some(PaymentStatus::Failed));
     verify_txn.rollback().await.ok();
+
+    cleanup_payment_test_rows(
+        &db,
+        Some(order_id),
+        fixture.user_id,
+        fixture.role_id,
+        fixture.category_id,
+        fixture.variant_id,
+    )
+    .await;
 }
 
 /// P4C - COD orders are excluded from stale unpaid prepaid expiry path.
@@ -734,11 +947,14 @@ async fn integration_stale_unpaid_order_expiry_skips_cod_orders() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, Some("cod")).await;
+    let fixture = place_order_setup(&db, now_tag, 150_000, Some("cod")).await;
+    let user_id = fixture.user_id;
+    let order_id = fixture.order_id;
 
+    // Fresh, committed transaction -- see the comment in P4A above.
+    let txn = db.begin().await.expect("begin transaction");
     let synthetic_intent = payment_intents::ActiveModel {
         intent_id: ActiveValue::NotSet,
         razorpay_order_id: ActiveValue::Set(format!("order_cod_stale_{now_tag}")),
@@ -780,6 +996,16 @@ async fn integration_stale_unpaid_order_expiry_skips_cod_orders() {
         "COD marker should remain unchanged"
     );
     verify_txn.rollback().await.ok();
+
+    cleanup_payment_test_rows(
+        &db,
+        Some(order_id),
+        fixture.user_id,
+        fixture.role_id,
+        fixture.category_id,
+        fixture.variant_id,
+    )
+    .await;
 }
 
 /// P4D - captured/paid orders are not expired by stale unpaid worker even if a stale pending intent exists.
@@ -795,10 +1021,13 @@ async fn integration_stale_unpaid_order_expiry_skips_captured_orders() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
+    let fixture = place_order_setup(&db, now_tag, 150_000, None).await;
+    let order_id = fixture.order_id;
+
+    // Fresh, committed transaction -- see the comment in P4A above.
+    let txn = db.begin().await.expect("begin transaction");
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
     let mut order_active: orders::ActiveModel = orders::Entity::find_by_id(order_id)
         .one(&txn)
@@ -835,6 +1064,16 @@ async fn integration_stale_unpaid_order_expiry_skips_captured_orders() {
     assert_eq!(order.status_id, confirmed_id);
     assert_eq!(order.payment_status, Some(PaymentStatus::Captured));
     verify_txn.rollback().await.ok();
+
+    cleanup_payment_test_rows(
+        &db,
+        Some(order_id),
+        fixture.user_id,
+        fixture.role_id,
+        fixture.category_id,
+        fixture.variant_id,
+    )
+    .await;
 }
 
 /// P4E - late captured webhook after system expiry is flagged for manual review, not auto-paid.
@@ -850,10 +1089,13 @@ async fn integration_late_captured_webhook_after_system_expiry_marks_needs_revie
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (_user_id, order_id) = place_order_setup(&txn, now_tag, 150_000, None).await;
+    let fixture = place_order_setup(&db, now_tag, 150_000, None).await;
+    let order_id = fixture.order_id;
+
+    // Fresh, committed transaction -- see the comment in P4A above.
+    let txn = db.begin().await.expect("begin transaction");
     let intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(order_id))
         .one(&txn)
@@ -958,4 +1200,14 @@ async fn integration_late_captured_webhook_after_system_expiry_marks_needs_revie
     );
 
     webhook_txn.rollback().await.ok();
+
+    cleanup_payment_test_rows(
+        &db,
+        Some(order_id),
+        fixture.user_id,
+        fixture.role_id,
+        fixture.category_id,
+        fixture.variant_id,
+    )
+    .await;
 }

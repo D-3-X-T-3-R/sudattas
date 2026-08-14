@@ -17,11 +17,13 @@ static DOTENV_LOADED: OnceLock<()> = OnceLock::new();
 static GRPC_AUTH_RELAXED_WARNED: OnceLock<()> = OnceLock::new();
 
 /// How many times to retry a transaction that failed with an InnoDB deadlock before giving up and
-/// returning the error to the caller. Applied only to the two gRPC methods identified as the known
-/// conflicting lock-order pair (see db_errors::is_deadlock_status doc comment) — not applied
+/// returning the error to the caller. Applied to the gRPC methods identified as taking part in a
+/// known conflicting lock-order pair (see db_errors::is_deadlock_status doc comment) — not applied
 /// codebase-wide, since retrofitting retry onto every transition_order_status call site would be a
-/// much larger, unaudited change (tracked separately as ISSUE-007 option A).
-const DEADLOCK_MAX_RETRIES: u32 = 3;
+/// much larger, unaudited change (tracked separately as ISSUE-007 option A). `pub(crate)` so
+/// `procedures::orders::place_order` (which owns its own deadlock-retry loop around its write
+/// phase) can reuse the same policy value instead of duplicating it.
+pub(crate) const DEADLOCK_MAX_RETRIES: u32 = 3;
 
 pub fn load_env_once() {
     DOTENV_LOADED.get_or_init(|| {
@@ -722,13 +724,13 @@ impl GrpcServices for MyGRPCServices {
             .as_ref()
             .ok_or_else(|| Status::unavailable("Database not initialized"))?;
 
-        // Durable idempotency for place_order is implemented at the database
-        // layer via the idempotency_keys table. For now, we expect callers to
-        // handle idempotency at the gateway; core simply executes the request.
-        let txn = db.begin().await.map_err(map_db_error_to_status)?;
-        let res = procedures::orders::place_order(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
+        // Durable idempotency for place_order is implemented at the database layer via the
+        // idempotency_keys table. procedures::orders::place_order manages its own
+        // transactions internally (a short claim/prep transaction, then the Shiprocket and
+        // Razorpay calls with no DB connection held, then a write transaction with its own
+        // deadlock-retry loop around the inventory-locking step) so this checkout flow never
+        // holds a pooled connection open across either external round-trip.
+        procedures::orders::place_order(db, request).await
     }
 
     async fn estimate_checkout_shipping(
@@ -739,10 +741,10 @@ impl GrpcServices for MyGRPCServices {
             .db
             .as_ref()
             .ok_or_else(|| Status::unavailable("Database not initialized"))?;
-        let txn = db.begin().await.map_err(map_db_error_to_status)?;
-        let res = procedures::orders::estimate_checkout_shipping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
+        // procedures::orders::estimate_checkout_shipping manages its own (read-only) transaction
+        // internally so it can commit before its Shiprocket call rather than holding a pooled
+        // connection open across that external round-trip.
+        procedures::orders::estimate_checkout_shipping(db, request).await
     }
 
     async fn search_order(
@@ -781,14 +783,12 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<AdminMarkOrderShippedRequest>,
     ) -> Result<Response<AdminMarkOrderShippedResponse>, Status> {
-        let txn = self
+        let db = self
             .db
             .as_ref()
-            .ok_or_else(|| Status::unavailable("database not initialized"))?
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::orders::admin_mark_order_shipped(&txn, request).await?;
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        let txn = db.begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::orders::admin_mark_order_shipped(&txn, db, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -893,16 +893,35 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CancelOrderItemsRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .ok_or_else(|| Status::unavailable("database not initialized"))?
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::orders::cancel_order_items(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
+        let req = request.into_inner();
+        let mut attempt: u32 = 0;
+        loop {
+            let txn = self
+                .db
+                .as_ref()
+                .ok_or_else(|| Status::unavailable("database not initialized"))?
+                .begin()
+                .await
+                .map_err(map_db_error_to_status)?;
+            let result =
+                match handlers::orders::cancel_order_items(&txn, Request::new(req.clone())).await
+                {
+                    Ok(res) => txn
+                        .commit()
+                        .await
+                        .map_err(map_db_error_to_status)
+                        .map(|_| res),
+                    Err(status) => Err(status),
+                };
+            match result {
+                Err(status) if attempt < DEADLOCK_MAX_RETRIES && is_deadlock_status(&status) => {
+                    attempt += 1;
+                    tracing::warn!(attempt, "cancel_order_items: retrying after InnoDB deadlock");
+                    continue;
+                }
+                other => return other,
+            }
+        }
     }
 
     async fn request_return(
@@ -2273,14 +2292,33 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreatePaymentIntentRequest>,
     ) -> Result<Response<PaymentIntentsResponse>, Status> {
-        let txn = self
+        let db = self
             .db
             .as_ref()
-            .ok_or_else(|| Status::unavailable("database not initialized"))?
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::payment_intents::create_payment_intent(&txn, request).await?;
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+
+        let mut req = request.into_inner();
+        let caller_supplied_order_id = req
+            .razorpay_order_id
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|v| !v.is_empty());
+        if !caller_supplied_order_id {
+            // Resolve the Razorpay order (external HTTP call, up to 15s) before opening the
+            // DB transaction below, so the round-trip doesn't hold a pooled connection idle.
+            let (razorpay_order_id, amount_paise, currency) =
+                handlers::payment_intents::resolve_server_created_razorpay_order(
+                    db,
+                    req.order_id,
+                )
+                .await?;
+            req.razorpay_order_id = Some(razorpay_order_id);
+            req.amount_paise = amount_paise;
+            req.currency = Some(currency);
+        }
+
+        let txn = db.begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::payment_intents::create_payment_intent(&txn, Request::new(req)).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

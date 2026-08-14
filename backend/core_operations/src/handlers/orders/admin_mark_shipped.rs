@@ -7,11 +7,12 @@ use proto::proto::core::{
     AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse, CreateShipmentRequest,
     UpdateShipmentRequest,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn admin_mark_order_shipped(
     txn: &DatabaseTransaction,
+    db: &DatabaseConnection,
     request: Request<AdminMarkOrderShippedRequest>,
 ) -> Result<Response<AdminMarkOrderShippedResponse>, Status> {
     let req = request.into_inner();
@@ -28,16 +29,18 @@ pub async fn admin_mark_order_shipped(
         if let Some(ship) = existing {
             ship.shipment_id
         } else {
-            book_order_after_validation(
-                txn,
-                req.order_id,
-                chrono::Utc::now(),
-                "shipment_booked_admin",
-            )
-            .await?;
+            // book_order_after_validation manages its own short transactions internally (and
+            // makes an outbound Shiprocket call for COD orders with no transaction open) rather
+            // than running inside `txn`, so its writes commit independently of `txn`. `txn`'s
+            // own read snapshot was already fixed by the `existing = ...` query above (MySQL
+            // REPEATABLE READ fixes a transaction's consistent-read view at its first query),
+            // so re-reading the just-created row through `txn` would not see it — read through
+            // `db` instead, which always sees the latest committed state.
+            book_order_after_validation(db, req.order_id, chrono::Utc::now(), "shipment_booked_admin")
+                .await?;
             shipments::Entity::find()
                 .filter(shipments::Column::OrderId.eq(req.order_id))
-                .one(txn)
+                .one(db)
                 .await
                 .map_err(|e| Status::internal(e.to_string()))?
                 .map(|ship| ship.shipment_id)

@@ -8,6 +8,7 @@ import { Search, Menu, Heart, ShoppingBag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { setPendingHomeSection } from "@/hooks/use-scroll-to";
+import { freeShippingThresholdMinor } from "@/lib/env/public";
 
 const NAV_LINKS = [
   { type: "section", id: "top", label: "Home" },
@@ -19,7 +20,7 @@ const NAV_LINKS = [
   { type: "route", href: "/about", label: "About Us" },
 ] as const;
 
-const thresholdMinor = parseInt(process.env.NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD_MINOR ?? "100000", 10);
+const thresholdMinor = freeShippingThresholdMinor();
 const thresholdRupees = thresholdMinor / 100;
 const thresholdDisplay = `₹${thresholdRupees.toLocaleString("en-IN")}`;
 const BANNER_TEXT = `FREE SHIPPING ON ALL ORDERS ABOVE ${thresholdDisplay}`;

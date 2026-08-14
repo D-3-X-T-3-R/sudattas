@@ -1,6 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import CredentialsProvider from "next-auth/providers/credentials";
+// import CredentialsProvider from "next-auth/providers/credentials"; // phone-otp, disabled for now
 import { graphqlBaseUrl, serverEnv } from "@/lib/env/server";
 import { appendTelemetryEvent } from "@/lib/telemetry-store";
 
@@ -36,6 +36,7 @@ async function trackAuthEvent(input: {
   }
 }
 
+/* ── Phone/OTP sign-in — disabled for now, kept for a possible future re-enable ──
 function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, "");
   if (digits.length === 10) return `+91${digits}`;
@@ -60,9 +61,44 @@ async function verifyTwilioOtp(phoneE164: string, otp: string): Promise<boolean>
 function digitsOnly(value: string): string {
   return value.replace(/\D/g, "");
 }
+──────────────────────────────────────────────────────────────────────────── */
 
 function getGraphqlBaseUrl(): string {
   return graphqlBaseUrl();
+}
+
+async function refreshGoogleIdToken(refreshToken: string): Promise<{
+  idToken: string;
+  accessToken: string;
+  idTokenExpiresAt: number;
+} | null> {
+  try {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: serverEnv.GOOGLE_CLIENT_ID ?? "",
+        client_secret: serverEnv.GOOGLE_CLIENT_SECRET ?? "",
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      id_token?: string;
+      access_token?: string;
+      expires_in?: number;
+    };
+    if (!data.id_token || !data.access_token || !data.expires_in) return null;
+    return {
+      idToken: data.id_token,
+      accessToken: data.access_token,
+      idTokenExpiresAt: Date.now() + data.expires_in * 1000,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function extractGoogleSubFromJwt(idToken: string): string | null {
@@ -186,6 +222,7 @@ async function probeAdminAccessByToken(token: string): Promise<boolean> {
   }
 }
 
+/* ── Phone/OTP sign-in — disabled for now, kept for a possible future re-enable ──
 async function syncPhoneOtpUserToBackend(phoneE164: string): Promise<string | null> {
   const digits = digitsOnly(phoneE164);
   if (!digits) return null;
@@ -197,6 +234,7 @@ async function syncPhoneOtpUserToBackend(phoneE164: string): Promise<string | nu
     googleSub: `otp:${digits}`,
   });
 }
+──────────────────────────────────────────────────────────────────────────── */
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -213,9 +251,11 @@ export const authOptions: NextAuthOptions = {
       authorization: {
         params: {
           prompt: "consent",
+          access_type: "offline",
         },
       },
     }),
+    /* ── Phone/OTP sign-in — disabled for now, kept for a possible future re-enable ──
     CredentialsProvider({
       id: "phone-otp",
       name: "Phone OTP",
@@ -239,6 +279,7 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    ──────────────────────────────────────────────────────────────────────────── */
   ],
   secret: serverEnv.AUTH_SECRET ?? serverEnv.NEXTAUTH_SECRET,
   callbacks: {
@@ -248,6 +289,7 @@ export const authOptions: NextAuthOptions = {
         account.callbackUrl.includes("/imtheboss");
       const userMode: "public" | "admin" = isAdminFlow ? "admin" : "public";
 
+      /* ── Phone/OTP sign-in — disabled for now, kept for a possible future re-enable ──
       if (account?.provider === "phone-otp") {
         const customerUserId = (user as { customerUserId?: string } | null)?.customerUserId;
         if (!customerUserId) {
@@ -268,6 +310,7 @@ export const authOptions: NextAuthOptions = {
         });
         return true;
       }
+      ──────────────────────────────────────────────────────────────────────────── */
       const email = user?.email?.toLowerCase();
       if (!email) {
         await trackAuthEvent({
@@ -339,6 +382,12 @@ export const authOptions: NextAuthOptions = {
       if (account?.id_token) {
         token.idToken = account.id_token;
       }
+      if (account?.refresh_token) {
+        (token as { refreshToken?: string }).refreshToken = account.refresh_token;
+      }
+      if (account?.expires_at) {
+        (token as { idTokenExpiresAt?: number }).idTokenExpiresAt = account.expires_at * 1000;
+      }
       const maybeCustomerUserId = (token as { customerUserId?: string }).customerUserId;
       if (!maybeCustomerUserId) {
         const userCustomerId = (user as { customerUserId?: string } | undefined)?.customerUserId;
@@ -371,6 +420,28 @@ export const authOptions: NextAuthOptions = {
           const stillAdmin = await probeAdminAccessByToken(token.idToken);
           (token as { isAdmin?: boolean }).isAdmin = stillAdmin;
           (token as { isAdminCheckedAt?: number }).isAdminCheckedAt = Date.now();
+        }
+      }
+      // The Google id_token backend calls authenticate with has its own short lifetime
+      // (Google-issued, independent of this NextAuth session's 90-day maxAge). Refresh it
+      // proactively before it expires so a long-lived session doesn't silently start
+      // presenting a stale credential to the backend.
+      const expiresAt = (token as { idTokenExpiresAt?: number }).idTokenExpiresAt;
+      const refreshToken = (token as { refreshToken?: string }).refreshToken;
+      if (typeof expiresAt === "number" && Date.now() > expiresAt - 60_000 && refreshToken) {
+        const refreshed = await refreshGoogleIdToken(refreshToken);
+        if (refreshed) {
+          token.idToken = refreshed.idToken;
+          token.accessToken = refreshed.accessToken;
+          (token as { idTokenExpiresAt?: number }).idTokenExpiresAt = refreshed.idTokenExpiresAt;
+        } else {
+          // Refresh failed (revoked/expired refresh token) — drop the stale idToken so
+          // downstream backend calls fail fast with 401 instead of silently using dead creds.
+          // Also drop accessToken: server-session-auth.ts and admin-graphql-server.ts both
+          // fall back to it when idToken is unset (`session?.idToken ?? session?.accessToken`),
+          // which would otherwise silently forward the equally-stale accessToken instead.
+          (token as { idToken?: string }).idToken = undefined;
+          token.accessToken = undefined;
         }
       }
       // Persist so we have it on session refresh

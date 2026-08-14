@@ -23,8 +23,8 @@ use proto::proto::core::{
     PlaceOrderRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
-    TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DbBackend, EntityTrait,
+    QueryFilter, Statement, TransactionTrait,
 };
 use tonic::{Code, Request};
 
@@ -620,8 +620,13 @@ async fn integration_guest_cart_not_used_for_place_order() {
     .await
     .expect("insert ShippingAddresses");
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // place_order no longer runs as a nested savepoint inside our transaction (see
+    // integration_place_order_atomicity.rs for the full rationale).
+    txn.commit().await.expect("commit setup txn");
+
     let result = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -642,7 +647,94 @@ async fn integration_guest_cart_not_used_for_place_order() {
         err.message()
     );
 
-    txn.rollback().await.ok();
+    // Best-effort cleanup of the now-committed setup fixtures (place_order failed before
+    // creating anything of its own here, so only the setup rows above need removing). Errors are
+    // logged, not fatal — the assertions above have already run by this point.
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Cart` WHERE `CartID` = ?",
+            [guest_cart_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Cart cart_id={guest_cart_id} failed (non-fatal): {e}");
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+            [variant.variant_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ProductVariants variant_id={} failed (non-fatal): {e}",
+            variant.variant_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Products` WHERE `CategoryID` = ?",
+            [category.category_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup Products category_id={} failed (non-fatal): {e}",
+            category.category_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+            [category.category_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ProductCategories category_id={} failed (non-fatal): {e}",
+            category.category_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+            [shipping.shipping_address_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ShippingAddresses id={} failed (non-fatal): {e}",
+            shipping.shipping_address_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Users` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Users user_id={user_id} failed (non-fatal): {e}");
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+            [role.role_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup UserRoles role_id={} failed (non-fatal): {e}",
+            role.role_id
+        );
+    }
 }
 
 /// C3 – place_order removes only selected user cart items and leaves unselected rows intact.
@@ -853,8 +945,13 @@ async fn integration_place_order_removes_only_selected_user_cart_items() {
         "three items before place_order"
     );
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // place_order no longer runs as a nested savepoint inside our transaction (see
+    // integration_place_order_atomicity.rs for the full rationale).
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -867,10 +964,15 @@ async fn integration_place_order_removes_only_selected_user_cart_items() {
     .expect("place_order should succeed");
     let place_body = place_res.into_inner();
     assert_eq!(place_body.items.len(), 1);
-    let _order_id = place_body.items[0].order_id;
+    let order_id = place_body.items[0].order_id;
 
+    // get_cart_items (like the other handlers below) still takes a `&DatabaseTransaction`
+    // specifically, not a generic connection — only place_order's own signature changed. A
+    // short, read-only transaction opened against the now-committed state works the same as
+    // before; there's nothing to roll back since these are reads.
+    let verify_txn = db.begin().await.expect("begin verify transaction");
     let get_after_place = core_operations::handlers::cart::get_cart_items(
-        &txn,
+        &verify_txn,
         Request::new(GetCartItemsRequest {
             user_id: Some(user_id),
             session_id: None,
@@ -890,11 +992,128 @@ async fn integration_place_order_removes_only_selected_user_cart_items() {
 
     let cart_rows = cart::Entity::find()
         .filter(cart::Column::UserId.eq(user_id))
-        .all(&txn)
+        .all(&verify_txn)
         .await
         .expect("query Cart");
     assert_eq!(cart_rows.len(), 1, "one unselected cart row should remain");
     assert_eq!(cart_rows[0].cart_id, unselected_cart_id);
+    verify_txn.rollback().await.ok();
 
-    txn.rollback().await.ok();
+    // Best-effort cleanup of the now-committed fixtures (setup, plus the order place_order
+    // created, are committed rather than left inside a transaction we can roll back). Deletes in
+    // FK-safe order (children before parents); errors are logged, not fatal.
+    for (table, column) in [
+        ("PaymentIntents", "order_id"),
+        ("Shipments", "order_id"),
+        ("OrderDetails", "OrderID"),
+        ("OrderEvents", "order_id"),
+        ("Orders", "OrderID"),
+    ] {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+                [order_id.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup {table} order_id={order_id} failed (non-fatal): {e}");
+        }
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Cart` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Cart user_id={user_id} failed (non-fatal): {e}");
+    }
+    for vid in [v1.variant_id, v2.variant_id, v3.variant_id] {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "DELETE FROM `Inventory` WHERE `VariantID` = ?",
+                [vid.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup Inventory variant_id={vid} failed (non-fatal): {e}");
+        }
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+                [vid.into()],
+            ))
+            .await
+        {
+            eprintln!(
+                "warning: cleanup ProductVariants variant_id={vid} failed (non-fatal): {e}"
+            );
+        }
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Products` WHERE `CategoryID` = ?",
+            [category.category_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup Products category_id={} failed (non-fatal): {e}",
+            category.category_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+            [category.category_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ProductCategories category_id={} failed (non-fatal): {e}",
+            category.category_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+            [shipping.shipping_address_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ShippingAddresses id={} failed (non-fatal): {e}",
+            shipping.shipping_address_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Users` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Users user_id={user_id} failed (non-fatal): {e}");
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+            [role.role_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup UserRoles role_id={} failed (non-fatal): {e}",
+            role.role_id
+        );
+    }
 }

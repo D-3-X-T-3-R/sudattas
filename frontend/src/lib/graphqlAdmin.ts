@@ -56,6 +56,9 @@ function resolveAdminRoute(query: string): string {
       "updateOrder",
       "createOrder",
       "resolveNeedsReview",
+      "orderStats",
+      "updatePickupTarget",
+      "getOrderEvents",
     ])
   ) {
     return "/api/admin/orders";

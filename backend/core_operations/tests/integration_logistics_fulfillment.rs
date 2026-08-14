@@ -514,8 +514,15 @@ async fn place_order_without_payment_verification(
     .items[0]
         .clone();
 
+    // Commit setup before calling place_order: place_order now manages its own transactions
+    // internally (a short claim/prep transaction, external Shiprocket/Razorpay calls with no
+    // DB transaction held, then a write transaction) and can no longer run as a nested
+    // savepoint inside this still-open transaction. Setup fixtures must be committed so
+    // place_order's own (separately-opened) transactions can see them.
+    txn.commit().await.expect("commit setup");
+
     let order = place_order(
-        &txn,
+        db,
         Request::new(PlaceOrderRequest {
             shipping_address_id,
             user_id,
@@ -529,7 +536,6 @@ async fn place_order_without_payment_verification(
     .into_inner()
     .items[0]
         .clone();
-    txn.commit().await.expect("commit place");
 
     (order.order_id, user_id, inventory_marker)
 }
@@ -1109,8 +1115,37 @@ async fn integration_place_order_fails_when_inventory_row_is_missing() {
     .await
     .expect("delete inventory row");
 
+    // Capture fixture ids for best-effort cleanup below, while the setup transaction (which
+    // is about to be committed) still has them in scope.
+    let variant_id = cart_item.variant_id;
+    let product_id = product_variants::Entity::find_by_id(variant_id)
+        .one(&txn)
+        .await
+        .expect("query variant for cleanup")
+        .map(|v| v.product_id);
+    let category_id = match product_id {
+        Some(pid) => products::Entity::find_by_id(pid)
+            .one(&txn)
+            .await
+            .expect("query product for cleanup")
+            .map(|p| p.category_id),
+        None => None,
+    };
+    let role_id = users::Entity::find_by_id(user_id)
+        .one(&txn)
+        .await
+        .expect("query user for cleanup")
+        .and_then(|u| u.role_id);
+
+    // Commit setup (including the inventory deletion) before calling place_order: place_order
+    // now manages its own transactions internally and can no longer run as a nested savepoint
+    // inside this still-open transaction — its own write-phase transaction needs to see the
+    // deleted inventory row, which requires it to already be committed rather than shared via
+    // an uncommitted transaction as before.
+    txn.commit().await.expect("commit setup");
+
     let err = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id,
             user_id,
@@ -1128,7 +1163,89 @@ async fn integration_place_order_fails_when_inventory_row_is_missing() {
         err.message()
     );
 
-    txn.rollback().await.ok();
+    // Best-effort cleanup of the committed setup fixtures (setup can no longer rely on an
+    // enclosing rollback for cleanup now that it must be committed for place_order to see it).
+    // The Inventory row was already deleted above; place_order failed before creating an
+    // Order/OrderDetails/cart deletion, so only the seed_checkout_user fixtures remain.
+    // Errors are logged, not fatal — they must never mask the assertions above.
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "DELETE FROM `Cart` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Cart for user_id={user_id} failed (non-fatal): {e}");
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+            [variant_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup ProductVariants for variant_id={variant_id} failed (non-fatal): {e}");
+    }
+    if let Some(pid) = product_id {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DbBackend::MySql,
+                "DELETE FROM `Products` WHERE `ProductID` = ?",
+                [pid.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup Products for product_id={pid} failed (non-fatal): {e}");
+        }
+    }
+    if let Some(cid) = category_id {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DbBackend::MySql,
+                "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+                [cid.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup ProductCategories for category_id={cid} failed (non-fatal): {e}");
+        }
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+            [shipping_address_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ShippingAddresses id={shipping_address_id} failed (non-fatal): {e}"
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "DELETE FROM `Users` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Users for user_id={user_id} failed (non-fatal): {e}");
+    }
+    if let Some(rid) = role_id {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DbBackend::MySql,
+                "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+                [rid.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup UserRoles for role_id={rid} failed (non-fatal): {e}");
+        }
+    }
 }
 
 #[tokio::test]
@@ -1427,12 +1544,18 @@ async fn integration_booking_intent_is_persisted_before_external_call_and_worker
 
     make_order_eligible_for_delayed_booking(&db, order_id).await;
 
-    let txn = db.begin().await.expect("booking intent txn");
-    let _shipment_id =
-        book_order_after_validation(&txn, order_id, Utc::now(), "itest_booking_intent")
-            .await
-            .expect("persist booking intent");
-    let row = txn
+    // book_order_after_validation now manages its own internal transactions (a short
+    // validate/commit, then — with no transaction open — an outbound Shiprocket call for COD
+    // orders, then a short write/commit for the booking intent itself); by the time it returns
+    // Ok, the intent row is already committed and durably visible, so there's no longer a
+    // separate "hold a transaction open, inspect the uncommitted intent, then commit" phase to
+    // exercise here. What this assertion actually verifies — that persisting the intent doesn't
+    // itself trigger the *external* Shiprocket booking call, which only happens later via
+    // `process_booking_intents_batch` — still holds and is checked directly below.
+    let _shipment_id = book_order_after_validation(&db, order_id, Utc::now(), "itest_booking_intent")
+        .await
+        .expect("persist booking intent");
+    let row = db
         .query_one(Statement::from_sql_and_values(
             sea_orm::DbBackend::MySql,
             r#"SELECT logistics_status, shiprocket_order_id, awb_code
@@ -1456,9 +1579,8 @@ async fn integration_booking_intent_is_persisted_before_external_call_and_worker
     assert_eq!(
         state.lock().expect("lock").create_order_calls,
         0,
-        "external booking must not be called before commit"
+        "persisting the booking intent must not itself trigger the external booking call"
     );
-    txn.commit().await.expect("commit booking intent");
 
     let channel_order_id = orders::Entity::find_by_id(order_id)
         .one(&db)
@@ -1507,11 +1629,11 @@ async fn integration_booking_worker_failure_before_external_call_creates_no_ship
     let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18125, tag).await;
     make_order_eligible_for_delayed_booking(&db, order_id).await;
 
-    let claim_txn = db.begin().await.expect("claim txn");
-    book_order_after_validation(&claim_txn, order_id, Utc::now(), "itest_booking_claim")
+    // book_order_after_validation now commits its own writes internally; no wrapping
+    // transaction is needed (or usable) here anymore.
+    book_order_after_validation(&db, order_id, Utc::now(), "itest_booking_claim")
         .await
         .expect("persist booking intent");
-    claim_txn.commit().await.expect("commit claim");
 
     let trigger_name = format!("trg_itest_booking_pre_external_fail_{}", unique_tag(18125));
     create_trigger(
@@ -1636,16 +1758,16 @@ async fn integration_booking_worker_external_success_with_persistence_retry_is_r
     let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18130, tag).await;
     make_order_eligible_for_delayed_booking(&db, order_id).await;
 
-    let claim_txn = db.begin().await.expect("claim txn");
+    // book_order_after_validation now commits its own writes internally; no wrapping
+    // transaction is needed (or usable) here anymore.
     book_order_after_validation(
-        &claim_txn,
+        &db,
         order_id,
         Utc::now(),
         "itest_booking_persist_retry",
     )
     .await
     .expect("persist booking intent");
-    claim_txn.commit().await.expect("commit booking intent");
 
     let trigger_name = format!("trg_itest_booking_persist_fail_{}", unique_tag(18130));
     create_trigger(
@@ -3293,6 +3415,7 @@ async fn integration_manual_shipment_paths_use_shared_booking_validation() {
     let prewindow_admin_txn = db.begin().await.expect("admin shipped prewindow txn");
     let prewindow_admin = admin_mark_order_shipped(
         &prewindow_admin_txn,
+        &db,
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
             awb_code: None,

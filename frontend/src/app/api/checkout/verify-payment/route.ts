@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 import {
@@ -90,11 +91,11 @@ export async function POST(request: Request) {
     { "Idempotency-Key": verifyKey }
   );
   if (verifyResult.errors?.length) {
-    return apiError(
-      verifyResult.errors[0]?.message ?? "Payment verification failed",
-      400,
-      "GRAPHQL_ERROR"
+    const { status, message } = graphqlErrorToApiStatus(
+      verifyResult.errors,
+      "Payment verification failed"
     );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   const verified = verifyResult.data?.verifyRazorpayPayment;
@@ -112,18 +113,18 @@ export async function POST(request: Request) {
     ),
   ]);
   if (orderResult.errors?.length) {
-    return apiError(
-      orderResult.errors[0]?.message ?? "Could not load updated order state",
-      400,
-      "GRAPHQL_ERROR"
+    const { status, message } = graphqlErrorToApiStatus(
+      orderResult.errors,
+      "Could not load updated order state"
     );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   if (statusesResult.errors?.length) {
-    return apiError(
-      statusesResult.errors[0]?.message ?? "Could not resolve order status labels",
-      400,
-      "GRAPHQL_ERROR"
+    const { status, message } = graphqlErrorToApiStatus(
+      statusesResult.errors,
+      "Could not resolve order status labels"
     );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   const order = orderResult.data?.searchOrder?.[0] ?? null;
   const statusNameById = new Map(

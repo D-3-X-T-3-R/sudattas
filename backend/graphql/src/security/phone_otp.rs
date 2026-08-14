@@ -66,6 +66,18 @@ fn normalize_phone(raw: &str) -> Option<String> {
     None
 }
 
+/// Phone/OTP sign-in is disabled for now (Google is the only sign-in method while this is
+/// off) — this is the backend-authoritative gate. Disabling only the frontend NextAuth
+/// provider isn't enough on its own: these two routes are registered in `main.rs` as public,
+/// unauthenticated helper routes reachable directly against this service's own port,
+/// independent of anything the frontend does or doesn't call. Defaults to disabled; set
+/// `PHONE_OTP_LOGIN_ENABLED=true` to bring it back.
+fn phone_otp_login_enabled() -> bool {
+    std::env::var("PHONE_OTP_LOGIN_ENABLED")
+        .map(|v| v.trim().eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
 fn twilio_config() -> Result<(String, String, String), String> {
     let sid = std::env::var("TWILIO_ACCOUNT_SID").map_err(|_| "OTP_NOT_CONFIGURED".to_string())?;
     let token = std::env::var("TWILIO_AUTH_TOKEN").map_err(|_| "OTP_NOT_CONFIGURED".to_string())?;
@@ -75,6 +87,9 @@ fn twilio_config() -> Result<(String, String, String), String> {
 }
 
 pub async fn request_sms_otp(phone: &str, channel: Option<&str>) -> Result<(), String> {
+    if !phone_otp_login_enabled() {
+        return Err("OTP_NOT_CONFIGURED".to_string());
+    }
     let phone_e164 = normalize_phone(phone).ok_or_else(|| "INVALID_PHONE".to_string())?;
     let channel = match channel.unwrap_or("sms").trim().to_lowercase().as_str() {
         "sms" => "sms",
@@ -104,6 +119,9 @@ pub async fn request_sms_otp(phone: &str, channel: Option<&str>) -> Result<(), S
 }
 
 pub async fn verify_sms_otp(phone: &str, code: &str) -> Result<bool, String> {
+    if !phone_otp_login_enabled() {
+        return Err("OTP_NOT_CONFIGURED".to_string());
+    }
     let phone_e164 = normalize_phone(phone).ok_or_else(|| "INVALID_PHONE".to_string())?;
     if !code.chars().all(|c| c.is_ascii_digit()) || code.len() < 4 || code.len() > 8 {
         return Err("INVALID_OTP".to_string());

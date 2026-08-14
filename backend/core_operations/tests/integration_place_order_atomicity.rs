@@ -99,8 +99,17 @@ async fn drop_trigger(db: &DatabaseConnection, trigger_name: &str) -> Result<(),
     Ok(())
 }
 
-async fn count_orders_by_order_id(txn: &DatabaseTransaction, order_id: i64) -> Result<i64, String> {
-    let row = txn
+// The helpers below take a generic `&impl ConnectionTrait` (rather than the previous
+// `&DatabaseTransaction`) since they're now called both during setup (still inside the setup
+// transaction) and after place_order returns (against the plain `DatabaseConnection`, since
+// place_order's own transactions are no longer nested inside anything this test holds open —
+// see the comment on `run_atomicity_scenario`'s `txn.commit()` call).
+
+async fn count_orders_by_order_id(
+    conn: &impl ConnectionTrait,
+    order_id: i64,
+) -> Result<i64, String> {
+    let row = conn
         .query_one(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"SELECT COUNT(*) AS count FROM Orders WHERE OrderID = ?"#,
@@ -114,10 +123,10 @@ async fn count_orders_by_order_id(txn: &DatabaseTransaction, order_id: i64) -> R
 }
 
 async fn count_order_details_by_order_id(
-    txn: &DatabaseTransaction,
+    conn: &impl ConnectionTrait,
     order_id: i64,
 ) -> Result<i64, String> {
-    let row = txn
+    let row = conn
         .query_one(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"SELECT COUNT(*) AS count FROM OrderDetails WHERE OrderID = ?"#,
@@ -130,8 +139,8 @@ async fn count_order_details_by_order_id(
         .map_err(|e| format!("read OrderDetails count: {e}"))
 }
 
-async fn count_orders_for_user(txn: &DatabaseTransaction, user_id: i64) -> Result<i64, String> {
-    let row = txn
+async fn count_orders_for_user(conn: &impl ConnectionTrait, user_id: i64) -> Result<i64, String> {
+    let row = conn
         .query_one(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"SELECT COUNT(*) AS count FROM Orders WHERE UserID = ?"#,
@@ -145,10 +154,10 @@ async fn count_orders_for_user(txn: &DatabaseTransaction, user_id: i64) -> Resul
 }
 
 async fn latest_order_id_for_user(
-    txn: &DatabaseTransaction,
+    conn: &impl ConnectionTrait,
     user_id: i64,
 ) -> Result<Option<i64>, String> {
-    let row = txn
+    let row = conn
         .query_one(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"SELECT OrderID AS order_id FROM Orders WHERE UserID = ? ORDER BY OrderID DESC LIMIT 1"#,
@@ -161,10 +170,10 @@ async fn latest_order_id_for_user(
 }
 
 async fn count_payment_intents_by_order_id(
-    txn: &DatabaseTransaction,
+    conn: &impl ConnectionTrait,
     order_id: i64,
 ) -> Result<i64, String> {
-    let row = txn
+    let row = conn
         .query_one(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"SELECT COUNT(*) AS count FROM PaymentIntents WHERE order_id = ?"#,
@@ -178,10 +187,10 @@ async fn count_payment_intents_by_order_id(
 }
 
 async fn count_shipments_by_order_id(
-    txn: &DatabaseTransaction,
+    conn: &impl ConnectionTrait,
     order_id: i64,
 ) -> Result<i64, String> {
-    let row = txn
+    let row = conn
         .query_one(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"SELECT COUNT(*) AS count FROM Shipments WHERE order_id = ?"#,
@@ -195,21 +204,21 @@ async fn count_shipments_by_order_id(
 }
 
 async fn count_selected_cart_rows(
-    txn: &DatabaseTransaction,
+    conn: &impl ConnectionTrait,
     cart_ids: &[i64],
 ) -> Result<i64, String> {
     let count = cart::Entity::find()
         .filter(cart::Column::CartId.is_in(cart_ids.iter().copied()))
-        .count(txn)
+        .count(conn)
         .await
         .map_err(|e| format!("count selected cart rows: {e}"))?;
     Ok(count as i64)
 }
 
-async fn inventory_available(txn: &DatabaseTransaction, variant_id: i64) -> Result<i64, String> {
+async fn inventory_available(conn: &impl ConnectionTrait, variant_id: i64) -> Result<i64, String> {
     let row = inventory::Entity::find()
         .filter(inventory::Column::VariantId.eq(Some(variant_id)))
-        .one(txn)
+        .one(conn)
         .await
         .map_err(|e| format!("query inventory for variant_id={variant_id}: {e}"))?
         .ok_or_else(|| format!("missing inventory row for variant_id={variant_id}"))?;
@@ -218,12 +227,12 @@ async fn inventory_available(txn: &DatabaseTransaction, variant_id: i64) -> Resu
 }
 
 async fn inventory_snapshot(
-    txn: &DatabaseTransaction,
+    conn: &impl ConnectionTrait,
     variant_ids: &[i64],
 ) -> Result<Vec<(i64, i64)>, String> {
     let mut out = Vec::with_capacity(variant_ids.len());
     for variant_id in variant_ids {
-        out.push((*variant_id, inventory_available(txn, *variant_id).await?));
+        out.push((*variant_id, inventory_available(conn, *variant_id).await?));
     }
     Ok(out)
 }
@@ -231,6 +240,14 @@ async fn inventory_snapshot(
 async fn run_atomicity_scenario(db: &DatabaseConnection, payment_mode: &str) -> Result<(), String> {
     ensure_razorpay_mock_for_prepaid(payment_mode).await;
 
+    // Setup runs in its own transaction, committed before calling place_order. place_order now
+    // manages its own transactions internally (a short claim/prep transaction, then the
+    // Shiprocket/Razorpay calls with no DB connection held, then a write transaction) so it can
+    // no longer run as a nested savepoint inside a caller-supplied, still-open transaction — the
+    // whole point of that restructuring is that place_order's connection isn't held hostage
+    // across external calls, which requires its transactions to be independently committable.
+    // Setup fixtures must therefore be visible (committed) before place_order's own prep phase
+    // reads them, rather than sharing one uncommitted transaction with it as before.
     let txn = db
         .begin()
         .await
@@ -381,8 +398,15 @@ async fn run_atomicity_scenario(db: &DatabaseConnection, payment_mode: &str) -> 
         ));
     }
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // place_order no longer runs as a nested savepoint inside our transaction, so anything it
+    // needs to read must already be committed.
+    txn.commit()
+        .await
+        .map_err(|e| format!("commit setup txn: {e}"))?;
+
     let place_res = place_order(
-        &txn,
+        db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -397,43 +421,44 @@ async fn run_atomicity_scenario(db: &DatabaseConnection, payment_mode: &str) -> 
         .as_ref()
         .ok()
         .and_then(|resp| resp.get_ref().items.first().map(|o| o.order_id));
-    let order_id_from_db = latest_order_id_for_user(&txn, user_id).await?;
+    let order_id_from_db = latest_order_id_for_user(db, user_id).await?;
     let observed_order_id = order_id_from_response.or(order_id_from_db);
     let count_query_order_id = observed_order_id.unwrap_or(-1);
 
-    // Required explicit DB verification queries by order_id:
-    let orders_count_for_order_id = count_orders_by_order_id(&txn, count_query_order_id).await?;
+    // Required explicit DB verification queries by order_id. No manual rollback-and-reverify
+    // dance is needed here (unlike before this restructuring): place_order's write phase
+    // (`place_order_write`) runs in its own transaction and is rolled back internally by
+    // place_order itself the moment any step inside it fails — including the forced
+    // OrderDetails-insert trigger this test relies on — so by the time place_order returns
+    // `Err`, its write transaction is already gone. These reads see final, settled state.
+    let orders_count_for_order_id = count_orders_by_order_id(db, count_query_order_id).await?;
     let order_details_count_for_order_id =
-        count_order_details_by_order_id(&txn, count_query_order_id).await?;
+        count_order_details_by_order_id(db, count_query_order_id).await?;
 
-    let orders_count_for_user = count_orders_for_user(&txn, user_id).await?;
+    let orders_count_for_user = count_orders_for_user(db, user_id).await?;
     let payment_intents_count =
-        count_payment_intents_by_order_id(&txn, count_query_order_id).await?;
-    let shipments_count = count_shipments_by_order_id(&txn, count_query_order_id).await?;
-    let post_inventory = inventory_snapshot(&txn, &variant_ids).await?;
-    let post_selected_cart_rows = count_selected_cart_rows(&txn, &selected_cart_ids).await?;
+        count_payment_intents_by_order_id(db, count_query_order_id).await?;
+    let shipments_count = count_shipments_by_order_id(db, count_query_order_id).await?;
+    let post_inventory = inventory_snapshot(db, &variant_ids).await?;
+    let post_selected_cart_rows = count_selected_cart_rows(db, &selected_cart_ids).await?;
 
-    // Transaction-boundary validation: explicit rollback must remove Orders + OrderDetails rows.
-    txn.rollback()
-        .await
-        .map_err(|e| format!("rollback checkout txn: {e}"))?;
-
-    if let Some(order_id) = observed_order_id {
-        let verify_txn = db
-            .begin()
-            .await
-            .map_err(|e| format!("begin verify rollback txn: {e}"))?;
-        let orders_after_rollback = count_orders_by_order_id(&verify_txn, order_id).await?;
-        let details_after_rollback = count_order_details_by_order_id(&verify_txn, order_id).await?;
-        verify_txn
-            .rollback()
-            .await
-            .map_err(|e| format!("rollback verify txn: {e}"))?;
-        if orders_after_rollback != 0 || details_after_rollback != 0 {
-            return Err(format!(
-                "rollback boundary failure: order_id={order_id}, Orders after rollback={orders_after_rollback}, OrderDetails after rollback={details_after_rollback}"
-            ));
-        }
+    // Best-effort cleanup of the committed setup fixtures (setup can no longer rely on an
+    // enclosing rollback for cleanup now that it must be committed for place_order to see it).
+    // Run regardless of the assertions below so a failing scenario doesn't leak rows into the
+    // shared test DB any more than a passing one does. Errors here are logged, not fatal — they
+    // must never mask the actual atomicity assertions.
+    if let Err(e) = cleanup_scenario_rows(
+        db,
+        user_id,
+        role.role_id,
+        category.category_id,
+        shipping.shipping_address_id,
+        &variant_ids,
+        observed_order_id,
+    )
+    .await
+    {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
     }
 
     // Case B: bug exists (place_order returns Ok and persists partial details)
@@ -495,6 +520,111 @@ async fn run_atomicity_scenario(db: &DatabaseConnection, payment_mode: &str) -> 
         ));
     }
 
+    Ok(())
+}
+
+/// Best-effort teardown of everything `run_atomicity_scenario` committed. Setup used to live
+/// inside the same uncommitted transaction as the place_order call under test and simply never
+/// got committed on rollback; now that setup must be committed (see the comment above the
+/// `txn.commit()` call in `run_atomicity_scenario`), it needs explicit cleanup instead. Deletes
+/// in FK-safe order (children before parents); an order row only exists here in the Case-B bug
+/// scenario (place_order incorrectly returned Ok), so its dependents are cleaned up too when
+/// `observed_order_id` is `Some`.
+#[allow(clippy::too_many_arguments)]
+async fn cleanup_scenario_rows(
+    db: &DatabaseConnection,
+    user_id: i64,
+    role_id: i64,
+    category_id: i64,
+    shipping_address_id: i64,
+    variant_ids: &[i64],
+    observed_order_id: Option<i64>,
+) -> Result<(), String> {
+    if let Some(order_id) = observed_order_id {
+        for table in [
+            "PaymentIntents",
+            "Shipments",
+            "OrderDetails",
+            "OrderEvents",
+            "Orders",
+        ] {
+            // OrderDetails.order_id and Orders.OrderID both have an explicit PascalCase
+            // `column_name` override in core_db_entities (see order_details.rs/orders.rs);
+            // OrderEvents.order_id does not, so its real column is lowercase `order_id` — verified
+            // directly against core_db_entities/src/entity/order_events.rs, which has no
+            // `column_name` attribute on that field.
+            let column = if table == "OrderDetails" || table == "Orders" {
+                "OrderID"
+            } else {
+                "order_id"
+            };
+            db.execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+                [order_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("cleanup {table} for order_id={order_id}: {e}"))?;
+        }
+    }
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `Cart` WHERE `UserID` = ?",
+        [user_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup Cart for user_id={user_id}: {e}"))?;
+    for variant_id in variant_ids {
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Inventory` WHERE `VariantID` = ?",
+            [(*variant_id).into()],
+        ))
+        .await
+        .map_err(|e| format!("cleanup Inventory for variant_id={variant_id}: {e}"))?;
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+            [(*variant_id).into()],
+        ))
+        .await
+        .map_err(|e| format!("cleanup ProductVariants for variant_id={variant_id}: {e}"))?;
+    }
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `Products` WHERE `CategoryID` = ?",
+        [category_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup Products for category_id={category_id}: {e}"))?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+        [category_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup ProductCategories for category_id={category_id}: {e}"))?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+        [shipping_address_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup ShippingAddresses id={shipping_address_id}: {e}"))?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `Users` WHERE `UserID` = ?",
+        [user_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup Users for user_id={user_id}: {e}"))?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+        [role_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup UserRoles for role_id={role_id}: {e}"))?;
     Ok(())
 }
 

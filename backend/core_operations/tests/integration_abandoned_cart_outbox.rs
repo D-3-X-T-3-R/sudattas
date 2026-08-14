@@ -7,7 +7,13 @@
 //! **Run**
 //! - `cargo test --test integration_abandoned_cart_outbox -- --ignored`
 //!
-//! **Note:** AC1 and AC2 commit data (enqueue_abandoned_cart_events commits); OB1 and OB2 use rollback.
+//! **Note:** AC1 and AC2 commit data (enqueue_abandoned_cart_events commits) and clean up
+//! explicitly. OB1 and OB2 place an order via `place_order_setup`, which now must commit its
+//! setup and the placed order itself (place_order manages its own transactions and can no
+//! longer run as a nested savepoint — see the comment on `place_order_setup`'s `txn.commit()`
+//! call), so both also clean up their place_order fixtures explicitly; OB2's own
+//! update_order/admin_mark_* calls under test still run inside a rollback-able transaction, same
+//! as before.
 
 mod integration_common;
 
@@ -319,26 +325,48 @@ async fn integration_abandoned_cart_opt_out_no_events() {
     );
 }
 
-/// Place order minimal setup; return (order_id, user_id, shipping_id, total_paise).
-async fn place_order_setup(
-    txn: &sea_orm::DatabaseTransaction,
-    now_tag: i64,
-) -> (i64, i64, i64, i64) {
+/// Fixture ids from `place_order_setup`: the placed order plus everything created to place it,
+/// needed both by the OB tests that build on top of it and (now that setup/place_order must be
+/// committed rather than left inside a rollback-able transaction — see the comment on the
+/// `txn.commit()` call below) to clean the rows up afterward.
+struct OutboxOrderFixtures {
+    order_id: i64,
+    user_id: i64,
+    shipping_id: i64,
+    total_paise: i64,
+    role_id: i64,
+    category_id: i64,
+    variant_id: i64,
+}
+
+/// Place order minimal setup.
+///
+/// Setup runs in its own transaction, committed before calling `place_order`: `place_order` now
+/// manages its own transactions internally (a short claim/prep transaction, then external calls
+/// with no DB connection held, then a write transaction) so it can no longer run as a nested
+/// savepoint inside a caller-supplied, still-open transaction. Setup fixtures must therefore be
+/// committed and visible before place_order's own prep phase reads them, rather than sharing one
+/// uncommitted transaction with it as before. OB2 (the only caller with further mutations to
+/// test) opens its own fresh transaction after this returns to wrap the update_order/
+/// admin_mark_* calls it is actually testing (those handlers are unaffected by the place_order
+/// restructuring and still take `&DatabaseTransaction`).
+async fn place_order_setup(db: &sea_orm::DatabaseConnection, now_tag: i64) -> OutboxOrderFixtures {
     // Make checkout deterministic in CI/local by ensuring this test order
     // always qualifies for free shipping and never needs a live quote.
     std::env::set_var("FREE_SHIPPING_THRESHOLD_MINOR", "100000");
 
-    let _ = ensure_order_status(txn, "pending").await;
+    let txn = db.begin().await.expect("begin transaction");
+    let _ = ensure_order_status(&txn, "pending").await;
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(format!("itest_ob_{}", now_tag)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert UserRoles");
 
     let user_res = core_operations::handlers::users::create_user(
-        txn,
+        &txn,
         Request::new(CreateUserRequest {
             username: format!("itest_ob_{}", now_tag),
             email: format!("itest_ob+{}@example.com", now_tag),
@@ -368,7 +396,7 @@ async fn place_order_setup(
         road: ActiveValue::Set(None),
         apartment_no_or_name: ActiveValue::Set(None),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ShippingAddresses");
     let shipping_id = ship.shipping_address_id;
@@ -377,7 +405,7 @@ async fn place_order_setup(
         category_id: ActiveValue::NotSet,
         name: ActiveValue::Set(format!("itest_cat_ob_{}", now_tag)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ProductCategories");
 
@@ -399,7 +427,7 @@ async fn place_order_setup(
         created_at: ActiveValue::Set(Some(Utc::now())),
         updated_at: ActiveValue::Set(None),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert Products");
 
@@ -410,7 +438,7 @@ async fn place_order_setup(
         color_id: ActiveValue::Set(None),
         additional_price: ActiveValue::Set(Some(0)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ProductVariants");
 
@@ -422,12 +450,12 @@ async fn place_order_setup(
         reorder_level: ActiveValue::Set(None),
         updated_at: ActiveValue::Set(Some(Utc::now())),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert Inventory");
 
     let cart_res = core_operations::handlers::cart::create_cart_item(
-        txn,
+        &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
             session_id: None,
@@ -439,8 +467,13 @@ async fn place_order_setup(
     .expect("create_cart_item");
     let cart_id = cart_res.into_inner().items[0].cart_id;
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // place_order no longer runs as a nested savepoint inside our transaction, so anything it
+    // needs to read (user, cart, shipping address) must already be committed.
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        txn,
+        db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping_id,
             user_id,
@@ -452,12 +485,127 @@ async fn place_order_setup(
     .await
     .expect("place_order");
     let order = place_res.into_inner().items[0].clone();
-    (
-        order.order_id,
+
+    OutboxOrderFixtures {
+        order_id: order.order_id,
         user_id,
         shipping_id,
-        order.total_amount_paise,
-    )
+        total_paise: order.total_amount_paise,
+        role_id: role.role_id,
+        category_id: cat.category_id,
+        variant_id: variant.variant_id,
+    }
+}
+
+/// Best-effort teardown of everything `place_order_setup` committed (fixtures + the placed order
+/// and its dependents). Previously this all lived inside the same uncommitted transaction as the
+/// calling test (rolled back at the end); now that place_order_setup's work is committed
+/// independently (see the comment on its `txn.commit()` call), it needs explicit cleanup
+/// instead. Deletes in FK-safe order (children before parents). No `OutboxEvents` cleanup is
+/// needed here: OB1 asserts none exist for this order, and OB2's Shipped/Delivered events are
+/// created inside its own rollback-able transaction, never committed. Errors here are logged,
+/// not fatal — they must never mask the actual test assertions.
+async fn cleanup_outbox_order_fixtures(
+    db: &sea_orm::DatabaseConnection,
+    fixtures: &OutboxOrderFixtures,
+) -> Result<(), String> {
+    for (table, column) in [
+        ("PaymentIntents", "order_id"),
+        ("Shipments", "order_id"),
+        ("OrderDetails", "OrderID"),
+        ("OrderEvents", "OrderID"),
+        ("Orders", "OrderID"),
+    ] {
+        db.execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::MySql,
+            format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+            [fixtures.order_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("cleanup {table} for order_id={}: {e}", fixtures.order_id))?;
+    }
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `Cart` WHERE `UserID` = ?",
+        [fixtures.user_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup Cart for user_id={}: {e}", fixtures.user_id))?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `Inventory` WHERE `VariantID` = ?",
+        [fixtures.variant_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup Inventory for variant_id={}: {e}",
+            fixtures.variant_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+        [fixtures.variant_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup ProductVariants for variant_id={}: {e}",
+            fixtures.variant_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `Products` WHERE `CategoryID` = ?",
+        [fixtures.category_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup Products for category_id={}: {e}",
+            fixtures.category_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+        [fixtures.category_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup ProductCategories for category_id={}: {e}",
+            fixtures.category_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+        [fixtures.shipping_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup ShippingAddresses id={}: {e}",
+            fixtures.shipping_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `Users` WHERE `UserID` = ?",
+        [fixtures.user_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup Users for user_id={}: {e}", fixtures.user_id))?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+        [fixtures.role_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup UserRoles for role_id={}: {e}", fixtures.role_id))?;
+    Ok(())
 }
 
 /// OB1 – place_order does not enqueue OrderPlaced; confirmation email is enqueued on PaymentCaptured (Paid).
@@ -471,15 +619,17 @@ async fn integration_place_order_does_not_enqueue_order_placed_outbox() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, _user_id, _shipping_id, _total_paise) = place_order_setup(&txn, now_tag).await;
+    let fixtures = place_order_setup(&db, now_tag).await;
 
+    // No further mutation is under test here, so read the committed state directly via `db`
+    // rather than opening a transaction — place_order_setup already committed everything (see
+    // the comment on its `txn.commit()` call).
     let events = outbox_events::Entity::find()
         .filter(outbox_events::Column::EventType.eq(ORDER_PLACED))
-        .filter(outbox_events::Column::AggregateId.eq(order_id.to_string()))
-        .all(&txn)
+        .filter(outbox_events::Column::AggregateId.eq(fixtures.order_id.to_string()))
+        .all(&db)
         .await
         .expect("query outbox_events");
     assert!(
@@ -487,7 +637,9 @@ async fn integration_place_order_does_not_enqueue_order_placed_outbox() {
         "OrderPlaced outbox removed; customer email fires on payment success (PaymentCaptured)"
     );
 
-    txn.rollback().await.ok();
+    if let Err(e) = cleanup_outbox_order_fixtures(&db, &fixtures).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// OB2 – admin_mark_order_shipped enqueues Shipped; admin_mark_order_delivered enqueues Delivered.
@@ -501,10 +653,20 @@ async fn integration_shipped_delivered_enqueue_outbox_events() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, shipping_id, total_paise) = place_order_setup(&txn, now_tag).await;
+    let fixtures = place_order_setup(&db, now_tag).await;
+    let (order_id, user_id, shipping_id, total_paise) = (
+        fixtures.order_id,
+        fixtures.user_id,
+        fixtures.shipping_id,
+        fixtures.total_paise,
+    );
+
+    // Fresh transaction for the update_order/admin_mark_* calls under test; place_order_setup
+    // already committed its own work (see the comment on its `txn.commit()` call), so this only
+    // wraps the state-machine mutations and their assertions, same as before.
+    let txn = db.begin().await.expect("begin transaction");
 
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
     let processing_id = ensure_order_status(&txn, "processing").await;
@@ -552,6 +714,7 @@ async fn integration_shipped_delivered_enqueue_outbox_events() {
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
+        &db, // pre-existing signature drift, unrelated to the place_order adaptation — see final report
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
             awb_code: Some("OB2AWB".to_string()),
@@ -603,4 +766,8 @@ async fn integration_shipped_delivered_enqueue_outbox_events() {
     );
 
     txn.rollback().await.ok();
+
+    if let Err(e) = cleanup_outbox_order_fixtures(&db, &fixtures).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }

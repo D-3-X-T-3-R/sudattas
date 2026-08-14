@@ -460,7 +460,7 @@ async fn admin_mark_order_shipped_order_not_found_returns_booking_precondition()
         shiprocket_status_id: None,
         shiprocket_status_label: None,
     });
-    let result = admin_mark_order_shipped(&txn, req).await;
+    let result = admin_mark_order_shipped(&txn, &db, req).await;
     assert!(result.is_err());
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::FailedPrecondition);

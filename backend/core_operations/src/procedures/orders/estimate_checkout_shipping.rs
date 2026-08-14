@@ -11,7 +11,7 @@ use proto::proto::core::{
     EstimateCheckoutShippingRequest, EstimateCheckoutShippingResponse, GetCartItemsRequest,
     GetProductsByIdRequest,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
 use tonic::{Request, Response, Status};
 use tracing::warn;
 
@@ -76,14 +76,22 @@ fn pick_selected_cart_items(
 }
 
 pub async fn estimate_checkout_shipping(
-    txn: &DatabaseTransaction,
+    db: &DatabaseConnection,
     request: Request<EstimateCheckoutShippingRequest>,
 ) -> Result<Response<EstimateCheckoutShippingResponse>, Status> {
     let req = request.into_inner();
     let selected_cart_ids = validate_selected_cart_ids(&req.selected_cart_ids)?;
 
+    // This endpoint is read-only (no writes), so the DB transaction only needs to stay open
+    // for the reads below; it is committed before the Shiprocket call further down so that
+    // call (up to 90s) doesn't hold a pooled connection idle.
+    let txn = db
+        .begin()
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+
     let cart_items = get_cart_items(
-        txn,
+        &txn,
         Request::new(GetCartItemsRequest {
             user_id: Some(req.user_id),
             session_id: None,
@@ -98,11 +106,11 @@ pub async fn estimate_checkout_shipping(
     let variant_ids: Vec<i64> = cart_items.iter().map(|item| item.variant_id).collect();
     let variants = product_variants::Entity::find()
         .filter(product_variants::Column::VariantId.is_in(variant_ids))
-        .all(txn)
+        .all(&txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?;
     let product_ids: Vec<i64> = variants.iter().map(|v| v.product_id).collect();
-    let products = get_products_by_id(txn, Request::new(GetProductsByIdRequest { product_ids }))
+    let products = get_products_by_id(&txn, Request::new(GetProductsByIdRequest { product_ids }))
         .await?
         .into_inner()
         .items;
@@ -136,7 +144,7 @@ pub async fn estimate_checkout_shipping(
     }
 
     let (total_paise, note_coupon) = if let Some(ref code) = req.coupon_code {
-        match check_coupon(txn, code, gross_paise, false).await {
+        match check_coupon(&txn, code, gross_paise, false).await {
             Ok(result) if result.is_valid => {
                 let cart_for_scope: Vec<CartProduct> = cart_items
                     .iter()
@@ -149,10 +157,10 @@ pub async fn estimate_checkout_shipping(
                         })
                     })
                     .collect();
-                let ok_per_customer = check_per_customer_limit(txn, result.coupon_id, req.user_id)
+                let ok_per_customer = check_per_customer_limit(&txn, result.coupon_id, req.user_id)
                     .await
                     .unwrap_or(false);
-                let ok_scope = check_coupon_scope(txn, result.coupon_id, &cart_for_scope)
+                let ok_scope = check_coupon_scope(&txn, result.coupon_id, &cart_for_scope)
                     .await
                     .unwrap_or(false);
                 if ok_per_customer && ok_scope {
@@ -175,7 +183,7 @@ pub async fn estimate_checkout_shipping(
     };
 
     let shipping_address = shipping_addresses::Entity::find_by_id(req.shipping_address_id)
-        .one(txn)
+        .one(&txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?
         .ok_or_else(|| {
@@ -191,6 +199,12 @@ pub async fn estimate_checkout_shipping(
     }
     let delivery_postcode = shipping_address.postal_code.trim().to_string();
     let total_units: i64 = cart_items.iter().map(|item| item.quantity.max(1)).sum();
+
+    // All reads for this estimate are done; release the connection before the Shiprocket
+    // call below (up to 90s) rather than holding it idle for the round-trip.
+    txn.commit()
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
 
     let free_shipping_threshold_minor = crate::order_policy::free_shipping_threshold_minor();
     let qualifies_free_shipping = total_paise >= free_shipping_threshold_minor;

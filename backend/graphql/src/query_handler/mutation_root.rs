@@ -334,7 +334,11 @@ impl MutationRoot {
     /// P2 Abandoned cart: enqueue abandoned-cart events (typically from a cron/scheduler).
     /// Returns the number of events enqueued.
     #[instrument(err, ret)]
-    async fn enqueue_abandoned_cart(delay_hours: Option<String>) -> FieldResult<i32> {
+    async fn enqueue_abandoned_cart(
+        context: &Context,
+        delay_hours: Option<String>,
+    ) -> FieldResult<i32> {
+        require_admin_or_internal_service(context)?;
         let resp = cart::handlers::enqueue_abandoned_cart(delay_hours)
             .await
             .map_err(|e| e.into_field_error())?;
@@ -1106,7 +1110,7 @@ impl MutationRoot {
 
     #[instrument(err, ret)]
     async fn search_size(context: &Context, input: SearchSizeInput) -> FieldResult<Vec<Size>> {
-        let _ = context;
+        require_admin(context)?;
         sizes::handlers::search_size(input)
             .await
             .map_err(|e| e.into_field_error())
@@ -1214,7 +1218,7 @@ impl MutationRoot {
         context: &Context,
         input: SearchOccasionInput,
     ) -> FieldResult<Vec<Occasion>> {
-        let _ = context;
+        require_admin(context)?;
         occasions::handlers::search_occasion(input)
             .await
             .map_err(|e| e.into_field_error())
@@ -1476,8 +1480,15 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn update_review(context: &Context, input: ReviewMutation) -> FieldResult<Vec<Review>> {
+    async fn update_review(
+        context: &Context,
+        mut input: ReviewMutation,
+    ) -> FieldResult<Vec<Review>> {
         ensure_customer_owns_review(context, &input.review_id).await?;
+        if !context.is_admin() {
+            input.user_id = None;
+            input.product_id = None;
+        }
         reviews::handlers::update_review(input)
             .await
             .map_err(|e| e.into_field_error())

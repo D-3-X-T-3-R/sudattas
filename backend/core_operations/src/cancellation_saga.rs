@@ -336,7 +336,12 @@ async fn restore_inventory_for_cancelled_items_impl(
         query = query.filter(order_details::Column::OrderDetailId.is_in(ids.iter().copied()));
     }
 
-    let details = query.all(txn).await.map_err(map_db_error_to_status)?;
+    // Lock Inventory rows in sorted VariantID order (not DB return order, which is
+    // unspecified without an ORDER BY) so two concurrent cancellations/restores whose
+    // affected order details share overlapping variants always acquire the FOR UPDATE
+    // locks in the same order, avoiding an InnoDB deadlock (error 1213) between them.
+    let mut details = query.all(txn).await.map_err(map_db_error_to_status)?;
+    details.sort_by_key(|d| d.variant_id);
     for d in &details {
         let ins = txn
             .execute(Statement::from_sql_and_values(

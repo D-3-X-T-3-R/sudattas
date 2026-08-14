@@ -282,7 +282,7 @@ pub async fn request_return(
         requested_qty_by_detail_id.insert(item.order_detail_id, qty);
     }
 
-    let details = order_details::Entity::find()
+    let mut details = order_details::Entity::find()
         .filter(order_details::Column::OrderId.eq(req.order_id))
         .filter(order_details::Column::OrderDetailId.is_in(requested_ids.iter().copied()))
         .all(txn)
@@ -294,6 +294,11 @@ pub async fn request_return(
             "One or more return items do not belong to the order",
         ));
     }
+
+    // Process (and FOR UPDATE lock ReturnRequestItems via the loop below) in sorted
+    // OrderDetailID order (not DB return order, which is unspecified without an ORDER BY) for
+    // the same deadlock-avoidance reason as the inventory locking in place_order.rs.
+    details.sort_by_key(|d| d.order_detail_id);
 
     let mut validated_items: Vec<(i64, i64, i64)> = Vec::with_capacity(details.len());
     for detail in &details {
@@ -470,6 +475,7 @@ pub async fn admin_mark_return_received(
 
     let item_rows = return_request_items::Entity::find()
         .filter(return_request_items::Column::ReturnId.eq(return_row.return_id))
+        .order_by_asc(return_request_items::Column::OrderDetailId)
         .lock(LockType::Update)
         .all(txn)
         .await

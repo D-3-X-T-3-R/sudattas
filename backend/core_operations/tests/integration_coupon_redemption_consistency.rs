@@ -27,8 +27,8 @@ use proto::proto::core::{
     IngestWebhookRequest, PlaceOrderRequest, VerifyRazorpayPaymentRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
-    TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DatabaseBackend,
+    DatabaseConnection, EntityTrait, QueryFilter, Statement, TransactionTrait,
 };
 use sha2::Sha256;
 use tonic::Request;
@@ -42,6 +42,14 @@ struct CouponOrderSetup {
     payment_intent_id: i64,
     razorpay_order_id: String,
     amount_paise: i64,
+    // Fixture ids kept only for `cleanup_coupon_scenario_rows` — see the doc comment on
+    // `seed_coupon_checkout_order` for why these rows can no longer rely on an enclosing
+    // rollback for cleanup.
+    user_id: i64,
+    role_id: i64,
+    category_id: i64,
+    shipping_address_id: i64,
+    variant_id: i64,
 }
 
 async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
@@ -65,22 +73,33 @@ fn compute_razorpay_signature(order_id: &str, payment_id: &str, secret: &str) ->
     hex::encode(mac.finalize().into_bytes())
 }
 
-async fn seed_coupon_checkout_order(
-    txn: &sea_orm::DatabaseTransaction,
-    now_tag: i64,
-) -> CouponOrderSetup {
-    let _ = ensure_order_status(txn, "pending").await;
+/// Seeds a coupon-eligible order all the way through `place_order` (cod), then seeds a payment
+/// intent for it so verify/webhook flows have something to capture against.
+///
+/// Setup runs in its own transaction, committed right before calling `place_order`: place_order
+/// now manages its own transactions internally (a short claim/prep transaction, then the
+/// Shiprocket/Razorpay calls with no DB connection held, then a write transaction) so it can no
+/// longer run as a nested savepoint inside a caller-supplied, still-open transaction — see
+/// `integration_place_order_atomicity.rs` for the full rationale. This function therefore takes
+/// a plain `&DatabaseConnection` (not a `&DatabaseTransaction`); everything after place_order
+/// (`create_payment_intent` and the id lookups) still needs an actual transaction, so it gets its
+/// own, committed once seeding is done. Callers must begin their own fresh transaction for
+/// whatever they do next (verify/webhook calls, assertions).
+async fn seed_coupon_checkout_order(db: &DatabaseConnection, now_tag: i64) -> CouponOrderSetup {
+    let txn = db.begin().await.expect("begin setup transaction");
+
+    let _ = ensure_order_status(&txn, "pending").await;
 
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(format!("itest_coupon_consistency_role_{}", now_tag)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert UserRoles");
 
     let user = core_operations::handlers::users::create_user(
-        txn,
+        &txn,
         Request::new(CreateUserRequest {
             username: format!("itest_coupon_consistency_{}", now_tag),
             email: format!("itest_coupon_consistency+{}@example.com", now_tag),
@@ -115,7 +134,7 @@ async fn seed_coupon_checkout_order(
         road: ActiveValue::Set(None),
         apartment_no_or_name: ActiveValue::Set(None),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ShippingAddresses");
 
@@ -123,7 +142,7 @@ async fn seed_coupon_checkout_order(
         category_id: ActiveValue::NotSet,
         name: ActiveValue::Set(format!("itest_coupon_consistency_cat_{}", now_tag)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ProductCategories");
 
@@ -145,7 +164,7 @@ async fn seed_coupon_checkout_order(
         created_at: ActiveValue::Set(Some(Utc::now())),
         updated_at: ActiveValue::Set(None),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert Products");
 
@@ -156,7 +175,7 @@ async fn seed_coupon_checkout_order(
         color_id: ActiveValue::Set(None),
         additional_price: ActiveValue::Set(Some(0)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ProductVariants");
 
@@ -168,12 +187,12 @@ async fn seed_coupon_checkout_order(
         reorder_level: ActiveValue::Set(None),
         updated_at: ActiveValue::Set(Some(Utc::now())),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert Inventory");
 
     let cart_id = core_operations::handlers::cart::create_cart_item(
-        txn,
+        &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
             session_id: None,
@@ -192,7 +211,7 @@ async fn seed_coupon_checkout_order(
 
     let coupon_code = format!("CONSIST_{}", now_tag);
     let coupon = core_operations::handlers::coupons::create_coupon(
-        txn,
+        &txn,
         Request::new(CreateCouponRequest {
             code: coupon_code.clone(),
             discount_type: "fixed_amount".to_string(),
@@ -212,8 +231,11 @@ async fn seed_coupon_checkout_order(
     .next()
     .expect("created coupon");
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions.
+    txn.commit().await.expect("commit setup txn");
+
     let placed = place_order(
-        txn,
+        db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -231,14 +253,21 @@ async fn seed_coupon_checkout_order(
     .next()
     .expect("placed order");
 
+    // create_payment_intent (like the other handlers above) still takes a `&DatabaseTransaction`
+    // specifically, not a generic connection — only place_order's own signature changed. The
+    // order it reads here was already committed by place_order itself above, so a fresh
+    // transaction sees it fine; this one is committed too, since seeding the payment intent is
+    // real state the calling test's own transaction (opened after this function returns) needs
+    // to see.
+    let txn2 = db.begin().await.expect("begin post-order transaction");
     let order = orders::Entity::find_by_id(placed.order_id)
-        .one(txn)
+        .one(&txn2)
         .await
         .expect("query order")
         .expect("order exists");
     let seeded_razorpay_order_id = format!("order_coupon_consistency_{}", placed.order_id);
     let _ = create_payment_intent(
-        txn,
+        &txn2,
         Request::new(CreatePaymentIntentRequest {
             order_id: placed.order_id,
             user_id,
@@ -253,10 +282,11 @@ async fn seed_coupon_checkout_order(
     let payment_intent = payment_intents::Entity::find()
         .filter(payment_intents::Column::OrderId.eq(placed.order_id))
         .filter(payment_intents::Column::RazorpayOrderId.eq(&seeded_razorpay_order_id))
-        .one(txn)
+        .one(&txn2)
         .await
         .expect("query payment_intents")
         .expect("payment intent exists");
+    txn2.commit().await.expect("commit post-order txn");
 
     CouponOrderSetup {
         order_id: placed.order_id,
@@ -265,6 +295,160 @@ async fn seed_coupon_checkout_order(
         payment_intent_id: payment_intent.intent_id,
         razorpay_order_id: payment_intent.razorpay_order_id.clone(),
         amount_paise: i64::from(payment_intent.amount_paise),
+        user_id,
+        role_id: role.role_id,
+        category_id: category.category_id,
+        shipping_address_id: shipping.shipping_address_id,
+        variant_id: variant.variant_id,
+    }
+}
+
+/// Best-effort cleanup of everything `seed_coupon_checkout_order` committed. Setup used to live
+/// inside the same uncommitted transaction as the place_order call under test and simply never
+/// got committed on rollback; now that it must be committed (see the doc comment on
+/// `seed_coupon_checkout_order`), it needs explicit cleanup instead. Deletes in FK-safe order
+/// (children before parents). Errors are logged, not fatal — by the time this runs, the caller's
+/// own assertions (against their separately-rolled-back transaction) have already completed, so
+/// a cleanup failure here must never mask them.
+async fn cleanup_coupon_scenario_rows(db: &DatabaseConnection, setup: &CouponOrderSetup) {
+    for (table, column) in [
+        ("CouponRedemptions", "order_id"),
+        ("PaymentIntents", "order_id"),
+        ("Shipments", "order_id"),
+        ("OrderDetails", "OrderID"),
+        ("OrderEvents", "order_id"),
+        ("Orders", "OrderID"),
+    ] {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::MySql,
+                format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+                [setup.order_id.into()],
+            ))
+            .await
+        {
+            eprintln!(
+                "warning: cleanup {table} for order_id={} failed (non-fatal): {e}",
+                setup.order_id
+            );
+        }
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "DELETE FROM `Cart` WHERE `UserID` = ?",
+            [setup.user_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup Cart for user_id={} failed (non-fatal): {e}",
+            setup.user_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "DELETE FROM `Inventory` WHERE `VariantID` = ?",
+            [setup.variant_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup Inventory for variant_id={} failed (non-fatal): {e}",
+            setup.variant_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+            [setup.variant_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ProductVariants for variant_id={} failed (non-fatal): {e}",
+            setup.variant_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "DELETE FROM `Products` WHERE `CategoryID` = ?",
+            [setup.category_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup Products for category_id={} failed (non-fatal): {e}",
+            setup.category_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "DELETE FROM `Coupons` WHERE `coupon_id` = ?",
+            [setup.coupon_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup Coupons for coupon_id={} failed (non-fatal): {e}",
+            setup.coupon_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+            [setup.category_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ProductCategories for category_id={} failed (non-fatal): {e}",
+            setup.category_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+            [setup.shipping_address_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ShippingAddresses id={} failed (non-fatal): {e}",
+            setup.shipping_address_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "DELETE FROM `Users` WHERE `UserID` = ?",
+            [setup.user_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup Users for user_id={} failed (non-fatal): {e}",
+            setup.user_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+            [setup.role_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup UserRoles for role_id={} failed (non-fatal): {e}",
+            setup.role_id
+        );
     }
 }
 
@@ -319,9 +503,14 @@ async fn integration_coupon_redemption_recorded_once_on_client_verify() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
+
+    let setup = seed_coupon_checkout_order(&db, Utc::now().timestamp_millis()).await;
+
+    // Fresh transaction for everything after seeding (which already committed place_order's own
+    // state — see the doc comment on `seed_coupon_checkout_order`); rolled back at the end as
+    // before, covering just the verify/webhook side effects under test here.
     let txn = db.begin().await.expect("begin transaction");
 
-    let setup = seed_coupon_checkout_order(&txn, Utc::now().timestamp_millis()).await;
     let payment_id = "pay_coupon_verify_once";
     let signature = compute_razorpay_signature(&setup.razorpay_order_id, payment_id, TEST_SECRET);
 
@@ -353,6 +542,8 @@ async fn integration_coupon_redemption_recorded_once_on_client_verify() {
     assert_eq!(intent.razorpay_payment_id.as_deref(), Some(payment_id));
 
     txn.rollback().await.ok();
+
+    cleanup_coupon_scenario_rows(&db, &setup).await;
 }
 
 #[tokio::test]
@@ -367,9 +558,14 @@ async fn integration_coupon_redemption_recorded_once_on_webhook_capture_and_repl
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
+
+    let setup = seed_coupon_checkout_order(&db, Utc::now().timestamp_millis()).await;
+
+    // Fresh transaction for everything after seeding (which already committed place_order's own
+    // state — see the doc comment on `seed_coupon_checkout_order`); rolled back at the end as
+    // before, covering just the webhook side effects under test here.
     let txn = db.begin().await.expect("begin transaction");
 
-    let setup = seed_coupon_checkout_order(&txn, Utc::now().timestamp_millis()).await;
     let payment_id = format!("pay_coupon_webhook_{}", Utc::now().timestamp_millis());
     let payload = serde_json::json!({
         "event": "payment.captured",
@@ -428,6 +624,8 @@ async fn integration_coupon_redemption_recorded_once_on_webhook_capture_and_repl
     assert_coupon_side_effects(&txn, &setup, 1, 1).await;
 
     txn.rollback().await.ok();
+
+    cleanup_coupon_scenario_rows(&db, &setup).await;
 }
 
 #[tokio::test]
@@ -445,9 +643,14 @@ async fn integration_coupon_redemption_stays_exactly_once_across_verify_retry_an
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
+
+    let setup = seed_coupon_checkout_order(&db, Utc::now().timestamp_millis()).await;
+
+    // Fresh transaction for everything after seeding (which already committed place_order's own
+    // state — see the doc comment on `seed_coupon_checkout_order`); rolled back at the end as
+    // before, covering just the verify/webhook side effects under test here.
     let txn = db.begin().await.expect("begin transaction");
 
-    let setup = seed_coupon_checkout_order(&txn, Utc::now().timestamp_millis()).await;
     let payment_id = format!("pay_coupon_reconcile_{}", Utc::now().timestamp_millis());
     let signature = compute_razorpay_signature(&setup.razorpay_order_id, &payment_id, TEST_SECRET);
 
@@ -520,4 +723,6 @@ async fn integration_coupon_redemption_stays_exactly_once_across_verify_retry_an
     assert_coupon_side_effects(&txn, &setup, 1, 1).await;
 
     txn.rollback().await.ok();
+
+    cleanup_coupon_scenario_rows(&db, &setup).await;
 }

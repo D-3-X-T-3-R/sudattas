@@ -24,8 +24,8 @@ use proto::proto::core::{
     UpdateShippingAddressRequest,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Database, EntityTrait, QueryFilter,
-    TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DbBackend, EntityTrait,
+    QueryFilter, Statement, TransactionTrait,
 };
 use tonic::Request;
 
@@ -315,8 +315,13 @@ async fn integration_place_order_uses_expected_shipping_address() {
     .expect("create_cart_item should succeed");
     let cart_id = cart_res.into_inner().items[0].cart_id;
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // place_order no longer runs as a nested savepoint inside our transaction (see
+    // integration_place_order_atomicity.rs for the full rationale).
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping_id,
             user_id,
@@ -332,9 +337,10 @@ async fn integration_place_order_uses_expected_shipping_address() {
         order.shipping_address_id, shipping_id,
         "order should reference the created shipping address"
     );
+    let order_id = order.order_id;
 
-    let db_order = orders::Entity::find_by_id(order.order_id)
-        .one(&txn)
+    let db_order = orders::Entity::find_by_id(order_id)
+        .one(&db)
         .await
         .expect("query order")
         .expect("order exists");
@@ -344,14 +350,129 @@ async fn integration_place_order_uses_expected_shipping_address() {
     );
 
     let addr = shipping_addresses::Entity::find_by_id(shipping_id)
-        .one(&txn)
+        .one(&db)
         .await
         .expect("query address")
         .expect("address exists");
     assert_eq!(addr.city, "Chennai");
     assert_eq!(addr.postal_code, "600001");
 
-    txn.rollback().await.ok();
+    // Best-effort cleanup of the now-committed fixtures (setup can no longer rely on an
+    // enclosing rollback for cleanup, since place_order needed it committed to see it).
+    // Deletes in FK-safe order (children before parents); errors are logged, not fatal.
+    for (table, column, value) in [
+        ("PaymentIntents", "order_id", order_id),
+        ("Shipments", "order_id", order_id),
+        ("OrderDetails", "OrderID", order_id),
+        ("OrderEvents", "order_id", order_id),
+        ("Orders", "OrderID", order_id),
+    ] {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+                [value.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup {table} for order_id={order_id} failed (non-fatal): {e}");
+        }
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Cart` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Cart for user_id={user_id} failed (non-fatal): {e}");
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Inventory` WHERE `VariantID` = ?",
+            [variant.variant_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup Inventory for variant_id={} failed (non-fatal): {e}",
+            variant.variant_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+            [variant.variant_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ProductVariants for variant_id={} failed (non-fatal): {e}",
+            variant.variant_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Products` WHERE `CategoryID` = ?",
+            [category.category_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup Products for category_id={} failed (non-fatal): {e}",
+            category.category_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+            [category.category_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ProductCategories for category_id={} failed (non-fatal): {e}",
+            category.category_id
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+            [shipping_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup ShippingAddresses id={shipping_id} failed (non-fatal): {e}");
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Users` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Users for user_id={user_id} failed (non-fatal): {e}");
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+            [role.role_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup UserRoles for role_id={} failed (non-fatal): {e}",
+            role.role_id
+        );
+    }
 }
 
 /// SA3 - default-address uniqueness: exactly one default per user is preserved.
