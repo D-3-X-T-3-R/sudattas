@@ -18,6 +18,9 @@ import {
   searchProductMoods,
   searchProductMoodMappingsByProduct,
   createProductMood,
+  updateProductMood,
+  deleteProductMood,
+  moveProductImageToProduct,
   createProductVariant,
   updateProductVariant,
   deleteProductVariant,
@@ -45,6 +48,9 @@ import { ProductsFiltersCard } from "@/domains/admin/products/components/product
 import { ProductsGridCard } from "@/domains/admin/products/components/products-grid-card";
 import { ProductPreviewDialog } from "@/domains/admin/products/components/product-preview-dialog";
 import { ArchiveProductDialog } from "@/domains/admin/products/components/archive-product-dialog";
+import { DeleteCategoryDialog } from "@/domains/admin/products/components/delete-category-dialog";
+import { MoveImageDialog } from "@/domains/admin/products/components/move-image-dialog";
+import { DeleteEntityDialog } from "@/components/admin/delete-entity-dialog";
 import {
   ProductImagesDialogs,
   type AdminReorderableImage,
@@ -57,7 +63,7 @@ import { AdminPageShell } from "@/components/admin/admin-page-shell";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
-import { Pencil, Package, Plus } from "lucide-react";
+import { Pencil, Package, Plus, Trash2 } from "lucide-react";
 import {
   MAX_MONEY_PAISE,
   optionalRupeesInputToPaise,
@@ -249,6 +255,27 @@ export default function AdminProductsPage() {
     },
     onError: (err: Error) => setMoodCreateError(err.message || "Failed to create mood"),
   });
+  const updateMoodMutation = useMutation({
+    mutationFn: ({ moodId, moodName }: { moodId: string; moodName: string }) =>
+      updateProductMood(moodId, moodName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "productMoods"] });
+      setEditingMoodId(null);
+      setEditingMoodName("");
+      setMoodManageError("");
+    },
+    onError: (err: Error) => setMoodManageError(err.message || "Failed to rename mood."),
+  });
+  const deleteMoodMutation = useMutation({
+    mutationFn: (moodId: string) => deleteProductMood(moodId),
+    onSuccess: (_data, moodId) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "productMoods"] });
+      setSelectedMoodIds((prev) => prev.filter((id) => id !== moodId));
+      setDeleteMoodConfirm(null);
+      setDeleteMoodError("");
+    },
+    onError: (err: Error) => setDeleteMoodError(err.message || "Failed to delete mood."),
+  });
 
   const { data: fabrics = [] } = useQuery<FabricRow[], Error>({
     queryKey: ["admin", "fabrics"],
@@ -279,11 +306,22 @@ export default function AdminProductsPage() {
   const [selectedMoodIds, setSelectedMoodIds] = useState<string[]>([]);
   const [newMoodName, setNewMoodName] = useState("");
   const [moodCreateError, setMoodCreateError] = useState("");
+  const [editingMoodId, setEditingMoodId] = useState<string | null>(null);
+  const [editingMoodName, setEditingMoodName] = useState("");
+  const [moodManageError, setMoodManageError] = useState("");
+  const [deleteMoodConfirm, setDeleteMoodConfirm] = useState<ProductMoodRow | null>(null);
+  const [deleteMoodError, setDeleteMoodError] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryError, setCategoryError] = useState("");
+  const [showManageCategories, setShowManageCategories] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState("");
+  const [categoryManageError, setCategoryManageError] = useState("");
+  const [deleteCategoryConfirm, setDeleteCategoryConfirm] = useState<CategoryRow | null>(null);
+  const [deleteCategoryError, setDeleteCategoryError] = useState("");
   const [activeSection, setActiveSection] = useState<FormSection>("basics");
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProductFormState, string>>>({});
   const [slugTouched, setSlugTouched] = useState(false);
@@ -295,6 +333,25 @@ export default function AdminProductsPage() {
   const [imageError, setImageError] = useState("");
   const [imageMessage, setImageMessage] = useState("");
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [moveImageTarget, setMoveImageTarget] = useState<ProductImageListItem | null>(null);
+  const [moveImageError, setMoveImageError] = useState("");
+  const moveImageMutation = useMutation({
+    mutationFn: (targetProductId: string) => {
+      if (!moveImageTarget?.imageId) throw new Error("No image selected.");
+      return moveProductImageToProduct(moveImageTarget.imageId, targetProductId);
+    },
+    onSuccess: () => {
+      const moved = moveImageTarget;
+      setExistingProductImages((prev) =>
+        prev.filter((im) => im.imageId !== moved?.imageId)
+      );
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      setMoveImageTarget(null);
+      setMoveImageError("");
+      showToast({ title: "Product images", description: "Image moved to the other product." });
+    },
+    onError: (err: Error) => setMoveImageError(err.message || "Failed to move image."),
+  });
   /** When editing, image IDs that were present when we opened edit (so we can delete removed ones on Update). */
   const [initialExistingImageIdsWhenEdit, setInitialExistingImageIdsWhenEdit] = useState<string[]>([]);
   const [initialVariantIdsWhenEdit, setInitialVariantIdsWhenEdit] = useState<string[]>([]);
@@ -360,6 +417,71 @@ export default function AdminProductsPage() {
     },
     onError: (err: Error) => setCategoryError(err.message || "Failed to create category."),
   });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: async ({ categoryId, name }: { categoryId: string; name: string }) => {
+      const data = await gqlAdmin<{ updateCategory?: Array<{ categoryId: string; name: string }> }>(
+        `mutation UpdateCategory($category: CategoryMutation!) {
+          updateCategory(category: $category) { categoryId name }
+        }`,
+        { category: { categoryId, name: name.trim() } }
+      );
+      return data?.updateCategory?.[0];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+      setEditingCategoryId(null);
+      setEditingCategoryName("");
+      setCategoryManageError("");
+      showToast({ title: "Category", description: "Category renamed." });
+    },
+    onError: (err: Error) => setCategoryManageError(err.message || "Failed to rename category."),
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (categoryId: string) => {
+      const data = await gqlAdmin<{ deleteCategory?: Array<{ categoryId: string; name: string }> }>(
+        `mutation DeleteCategory($categoryId: String!) {
+          deleteCategory(categoryId: $categoryId) { categoryId name }
+        }`,
+        { categoryId }
+      );
+      return data?.deleteCategory?.[0];
+    },
+    onSuccess: (deleted) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+      setDeleteCategoryConfirm(null);
+      setDeleteCategoryError("");
+      showToast({
+        title: "Category",
+        description: deleted?.name ? `"${deleted.name}" deleted.` : "Category deleted.",
+      });
+    },
+    onError: (err: Error) =>
+      setDeleteCategoryError(err.message || "Failed to delete category."),
+  });
+
+  const beginEditCategory = (c: CategoryRow) => {
+    setEditingCategoryId(c.categoryId);
+    setEditingCategoryName(c.name);
+    setCategoryManageError("");
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName("");
+    setCategoryManageError("");
+  };
+
+  const handleSaveCategoryRename = () => {
+    if (!editingCategoryId) return;
+    const name = editingCategoryName.trim();
+    if (!name) {
+      setCategoryManageError("Category name is required.");
+      return;
+    }
+    updateCategoryMutation.mutate({ categoryId: editingCategoryId, name });
+  };
 
   const createProductMutation = useMutation({
     mutationFn: async (payload: {
@@ -1370,6 +1492,48 @@ export default function AdminProductsPage() {
             onConfirm={handleArchiveConfirm}
           />
 
+          <DeleteCategoryDialog
+            category={deleteCategoryConfirm}
+            isPending={deleteCategoryMutation.isPending}
+            error={deleteCategoryError}
+            onClose={() => {
+              setDeleteCategoryConfirm(null);
+              setDeleteCategoryError("");
+            }}
+            onConfirm={() => {
+              if (deleteCategoryConfirm) {
+                deleteCategoryMutation.mutate(deleteCategoryConfirm.categoryId);
+              }
+            }}
+          />
+
+          <DeleteEntityDialog
+            entity={deleteMoodConfirm ? { name: deleteMoodConfirm.moodName } : null}
+            label="mood"
+            isPending={deleteMoodMutation.isPending}
+            error={deleteMoodError}
+            warning="Products currently tagged with it will lose the tag."
+            onClose={() => {
+              setDeleteMoodConfirm(null);
+              setDeleteMoodError("");
+            }}
+            onConfirm={() => {
+              if (deleteMoodConfirm) deleteMoodMutation.mutate(deleteMoodConfirm.moodId);
+            }}
+          />
+
+          <MoveImageDialog
+            open={!!moveImageTarget}
+            isPending={moveImageMutation.isPending}
+            error={moveImageError}
+            currentProductId={editingProductId}
+            onClose={() => {
+              setMoveImageTarget(null);
+              setMoveImageError("");
+            }}
+            onConfirm={(targetProductId) => moveImageMutation.mutate(targetProductId)}
+          />
+
           <ProductPreviewDialog
             key={selectedProduct?.productId ?? "preview-none"}
             product={selectedProduct}
@@ -1565,7 +1729,7 @@ export default function AdminProductsPage() {
                     {fieldErrors.categoryId}
                   </p>
                 ) : null}
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -1577,6 +1741,18 @@ export default function AdminProductsPage() {
                   >
                     {showNewCategory ? "Cancel" : "+ Add new category"}
                   </button>
+                  {categories.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowManageCategories((s) => !s);
+                        cancelEditCategory();
+                      }}
+                      className="text-sm font-medium text-[var(--color-accent-brown)] underline focus:outline-none"
+                    >
+                      {showManageCategories ? "Hide categories" : "Manage categories"}
+                    </button>
+                  )}
                 </div>
                 {showNewCategory && (
                   <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-[var(--color-line)] p-3">
@@ -1615,6 +1791,69 @@ export default function AdminProductsPage() {
                     No categories yet. Use &quot;Add new category&quot; above to
                     create one.
                   </p>
+                )}
+                {showManageCategories && (
+                  <div className="mt-3 divide-y divide-[var(--color-line)] rounded-lg border border-[var(--color-line)]">
+                    {categories.map((c) => (
+                      <div key={c.categoryId} className="flex items-center gap-2 p-2.5">
+                        {editingCategoryId === c.categoryId ? (
+                          <>
+                            <Input
+                              value={editingCategoryName}
+                              onChange={(e) => {
+                                setEditingCategoryName(e.target.value);
+                                setCategoryManageError("");
+                              }}
+                              className="min-w-0 flex-1 rounded-lg text-[15px]"
+                              autoFocus
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleSaveCategoryRename}
+                              disabled={updateCategoryMutation.isPending}
+                              className="rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
+                            >
+                              {updateCategoryMutation.isPending ? "Saving…" : "Save"}
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={cancelEditCategory}>
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="min-w-0 flex-1 truncate text-[15px] text-[var(--color-ink)]">
+                              {c.name || `Category ${c.categoryId}`}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => beginEditCategory(c)}
+                              aria-label={`Edit ${c.name}`}
+                              className="rounded-md p-1.5 text-[var(--color-muted)] hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-ink)]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteCategoryError("");
+                                setDeleteCategoryConfirm(c);
+                              }}
+                              aria-label={`Delete ${c.name}`}
+                              className="rounded-md p-1.5 text-[var(--color-muted)] hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                    {categoryManageError && (
+                      <p className="p-2.5 text-sm text-red-600" role="alert">
+                        {categoryManageError}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               </div>
@@ -1778,6 +2017,34 @@ export default function AdminProductsPage() {
                 moodCreateError={moodCreateError}
                 setMoodCreateError={setMoodCreateError}
                 createMoodMutation={createMoodMutation}
+                editingMoodId={editingMoodId}
+                editingMoodName={editingMoodName}
+                setEditingMoodName={setEditingMoodName}
+                moodManageError={moodManageError}
+                updateMoodMutation={updateMoodMutation}
+                onBeginEditMood={(m) => {
+                  setEditingMoodId(m.moodId);
+                  setEditingMoodName(m.moodName);
+                  setMoodManageError("");
+                }}
+                onCancelEditMood={() => {
+                  setEditingMoodId(null);
+                  setEditingMoodName("");
+                  setMoodManageError("");
+                }}
+                onSaveEditMood={() => {
+                  if (!editingMoodId) return;
+                  const name = editingMoodName.trim();
+                  if (!name) {
+                    setMoodManageError("Mood name is required.");
+                    return;
+                  }
+                  updateMoodMutation.mutate({ moodId: editingMoodId, moodName: name });
+                }}
+                onRequestDeleteMood={(m) => {
+                  setDeleteMoodError("");
+                  setDeleteMoodConfirm(m);
+                }}
               />
               </div>
 
@@ -1801,6 +2068,10 @@ export default function AdminProductsPage() {
                 productImagesLoadKey={productImagesLoadKey}
                 getImageUrlWithCacheBuster={getImageUrlWithCacheBuster}
                 setExistingProductImages={setExistingProductImages}
+                onRequestMoveImage={(img) => {
+                  setMoveImageError("");
+                  setMoveImageTarget(img);
+                }}
               />
               </div>
                 </div>

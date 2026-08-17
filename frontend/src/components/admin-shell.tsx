@@ -10,6 +10,7 @@ import {
   Package,
   ShoppingCart,
   Users,
+  Boxes,
   Settings,
   Menu,
   X,
@@ -27,6 +28,7 @@ const NAV = [
   { href: `${ADMIN_BASE}`, icon: LayoutDashboard, label: "Dashboard" },
   { href: `${ADMIN_BASE}/orders`, icon: ShoppingCart, label: "Orders" },
   { href: `${ADMIN_BASE}/products`, icon: Package, label: "Products" },
+  { href: `${ADMIN_BASE}/inventory`, icon: Boxes, label: "Inventory" },
   { href: `${ADMIN_BASE}/customers`, icon: Users, label: "Customers" },
   { href: `${ADMIN_BASE}/settings`, icon: Settings, label: "Settings" },
 ] as const;
@@ -40,6 +42,7 @@ function getTitle(pathname: string): string {
     dashboard: "Dashboard",
     orders: "Orders",
     products: "Products",
+    inventory: "Inventory",
     customers: "Customers",
     settings: "Settings",
   };

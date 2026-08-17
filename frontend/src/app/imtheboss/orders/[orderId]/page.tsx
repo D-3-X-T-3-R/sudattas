@@ -14,6 +14,7 @@ import {
   type AdminOrderDetail,
 } from "@/lib/admin-order-detail";
 import { OrderDetailStatusEditor } from "@/domains/admin/orders/components/order-detail-status-editor";
+import { OrderTimelineCard } from "@/domains/admin/orders/components/order-timeline-card";
 import { toRouteFailureUi } from "@/lib/route-state";
 import { formatOrderDate, getStatusLabel } from "@/domains/admin/orders/utils";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
@@ -230,6 +231,8 @@ export default function AdminOrderDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            <OrderTimelineCard orderId={order.orderId} events={order.events} />
           </div>
 
           <div className="space-y-6">

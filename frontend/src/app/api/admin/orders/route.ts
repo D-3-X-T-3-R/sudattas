@@ -5,10 +5,15 @@ const ORDER_ROOTS = [
   "searchOrderStatus",
   "updateOrder",
   "createOrder",
+  "createOrderAdmin",
+  "createOrderDetails",
   "updatePickupTarget",
   "resolveNeedsReview",
   "orderStats",
   "getOrderEvents",
+  "createOrderEvent",
+  "getShippingAddresses",
+  "createShippingAddress",
 ];
 
 export async function POST(request: Request) {

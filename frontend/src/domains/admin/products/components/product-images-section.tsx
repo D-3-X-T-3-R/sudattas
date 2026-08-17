@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { ProductImageListItem } from "@/lib/admin-queries";
 import type { AdminReorderableImage } from "@/domains/admin/products/components/product-images-dialogs";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { X, UploadCloud } from "lucide-react";
+import { X, UploadCloud, FolderInput } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ProductImagesSectionProps = {
@@ -28,6 +28,7 @@ type ProductImagesSectionProps = {
   productImagesLoadKey: string;
   getImageUrlWithCacheBuster: (img: ProductImageListItem | undefined, loadKey?: string) => string;
   setExistingProductImages: Dispatch<SetStateAction<ProductImageListItem[]>>;
+  onRequestMoveImage: (img: ProductImageListItem) => void;
 };
 
 function ImagesToolbar({
@@ -109,6 +110,7 @@ function ExistingOrNewImageGrid({
   setImageError,
   productImagesLoadKey,
   getImageUrlWithCacheBuster,
+  onRequestMoveImage,
 }: Pick<
   ProductImagesSectionProps,
   | "editingProductId"
@@ -122,6 +124,7 @@ function ExistingOrNewImageGrid({
   | "setImageError"
   | "productImagesLoadKey"
   | "getImageUrlWithCacheBuster"
+  | "onRequestMoveImage"
 >) {
   if (orderedProductImages != null) {
     return (
@@ -186,6 +189,16 @@ function ExistingOrNewImageGrid({
               }}
             >
               <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {editingProductId && img.imageId && (
+            <button
+              type="button"
+              aria-label="Move this image to a different product"
+              className="absolute left-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+              onClick={() => onRequestMoveImage(img)}
+            >
+              <FolderInput className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

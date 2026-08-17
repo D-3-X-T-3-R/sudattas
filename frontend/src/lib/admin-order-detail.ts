@@ -10,6 +10,18 @@ export interface AdminOrderDetailLine {
   productId: string | null;
 }
 
+/** One entry in an order's audit timeline. */
+export interface AdminOrderEvent {
+  eventId: string;
+  eventType: string;
+  fromStatus: string;
+  toStatus: string;
+  /** customer | admin | system */
+  actorType: string;
+  message: string;
+  createdAt: string;
+}
+
 /** Full order + lines for admin detail page. */
 export interface AdminOrderDetail {
   orderId: string;
@@ -25,6 +37,7 @@ export interface AdminOrderDetail {
   statusId: string;
   lines: AdminOrderDetailLine[];
   refundTrackingState: "none" | "initiated" | "processed" | "failed";
+  events: AdminOrderEvent[];
 }
 
 const ADMIN_ORDER_DETAIL_QUERY = `query AdminOrderDetail($search: SearchOrder!) {
@@ -55,7 +68,13 @@ const ADMIN_ORDER_DETAIL_QUERY = `query AdminOrderDetail($search: SearchOrder!) 
 
 const ADMIN_ORDER_EVENTS_QUERY = `query AdminOrderEvents($orderId: String!) {
   getOrderEvents(orderId: $orderId) {
+    eventId
     eventType
+    fromStatus
+    toStatus
+    actorType
+    message
+    createdAt
   }
 }`;
 
@@ -98,7 +117,7 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
     }>(ADMIN_ORDER_DETAIL_QUERY, {
       search: { userId: "", orderId: id, limit: "1" },
     }),
-    gqlAdmin<{ getOrderEvents?: Array<{ eventType: string }> }>(ADMIN_ORDER_EVENTS_QUERY, {
+    gqlAdmin<{ getOrderEvents?: AdminOrderEvent[] }>(ADMIN_ORDER_EVENTS_QUERY, {
       orderId: id,
     }),
   ]);
@@ -118,6 +137,9 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
     };
   });
   const refundTrackingState = deriveRefundTrackingState(eventsData?.getOrderEvents);
+  const events = [...(eventsData?.getOrderEvents ?? [])].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
   const result = {
     orderId: row.orderId,
     userId: row.userId,
@@ -132,6 +154,7 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
     statusId: row.statusId,
     lines,
     refundTrackingState,
+    events,
   };
   return result;
 }
@@ -211,6 +234,41 @@ export async function resolveOrderNeedsReview(
       actorId: "admin",
     },
   });
+}
+
+const CREATE_ORDER_EVENT_MUTATION = `mutation AdminCreateOrderEvent($input: NewOrderEvent!) {
+  createOrderEvent(input: $input) {
+    eventId
+    eventType
+    fromStatus
+    toStatus
+    actorType
+    message
+    createdAt
+  }
+}`;
+
+/** Admin: add a manual note to an order's timeline (event_type "admin_note", actor_type "admin"). */
+export async function createAdminOrderNote(
+  orderId: string,
+  message: string
+): Promise<AdminOrderEvent> {
+  const data = await gqlAdmin<{ createOrderEvent?: AdminOrderEvent[] }>(
+    CREATE_ORDER_EVENT_MUTATION,
+    {
+      input: {
+        orderId,
+        eventType: "admin_note",
+        actorType: "admin",
+        message: message.trim(),
+      },
+    }
+  );
+  const created = data?.createOrderEvent?.[0];
+  if (!created) {
+    throw new Error("createOrderEvent returned empty payload");
+  }
+  return created;
 }
 
 export async function updateAdminPickupTarget(params: {
