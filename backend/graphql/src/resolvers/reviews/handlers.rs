@@ -1,15 +1,19 @@
 use proto::proto::core::{
-    AdminUpdateReviewStatusRequest, CreateReviewRequest, DeleteReviewRequest, ReviewResponse,
-    SearchReviewRequest, UpdateReviewRequest,
+    AdminUpdateReviewStatusRequest, CreateReviewRequest, DeleteReviewRequest,
+    ProductRatingSummaryRequest, ReviewResponse, SearchReviewRequest, UpdateReviewRequest,
 };
 use tracing::instrument;
 
 use super::schema::{
-    AdminUpdateReviewStatusInput, NewReview, Review, ReviewMutation, SearchReview,
+    AdminUpdateReviewStatusInput, NewReview, ProductRatingSummary, Review, ReviewMutation,
+    SearchReview,
 };
-use crate::resolvers::{
-    error::GqlError,
-    utils::{connect_grpc_client, parse_i64, to_option_i64},
+use crate::{
+    resolvers::{
+        error::GqlError,
+        utils::{connect_grpc_client, parse_i64, to_option_i64},
+    },
+    validation,
 };
 
 fn review_response_to_gql(r: ReviewResponse) -> Review {
@@ -24,6 +28,7 @@ fn review_response_to_gql(r: ReviewResponse) -> Review {
 
 #[instrument]
 pub(crate) async fn create_review(input: NewReview) -> Result<Vec<Review>, GqlError> {
+    validation::validate_rating(input.rating)?;
     let mut client = connect_grpc_client().await?;
     let response = client
         .create_review(CreateReviewRequest {
@@ -70,6 +75,9 @@ pub(crate) async fn search_review(input: SearchReview) -> Result<Vec<Review>, Gq
 
 #[instrument]
 pub(crate) async fn update_review(input: ReviewMutation) -> Result<Vec<Review>, GqlError> {
+    if let Some(rating) = input.rating {
+        validation::validate_rating(rating)?;
+    }
     let mut client = connect_grpc_client().await?;
     let response = client
         .update_review(UpdateReviewRequest {
@@ -110,6 +118,24 @@ pub(crate) async fn delete_review(review_id: String) -> Result<Vec<Review>, GqlE
         .into_iter()
         .map(review_response_to_gql)
         .collect())
+}
+
+#[instrument]
+pub(crate) async fn get_product_rating_summary(
+    product_id: String,
+) -> Result<ProductRatingSummary, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .get_product_rating_summary(ProductRatingSummaryRequest {
+            product_id: parse_i64(&product_id, "product id")?,
+        })
+        .await?;
+    let r = response.into_inner();
+    Ok(ProductRatingSummary {
+        product_id: r.product_id.to_string(),
+        average_rating: r.average_rating,
+        rating_count: r.rating_count as i32,
+    })
 }
 
 #[instrument]

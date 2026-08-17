@@ -314,12 +314,7 @@ async fn cleanup_order_state_fixtures(
         [fixtures.shipping_id.into()],
     ))
     .await
-    .map_err(|e| {
-        format!(
-            "cleanup ShippingAddresses id={}: {e}",
-            fixtures.shipping_id
-        )
-    })?;
+    .map_err(|e| format!("cleanup ShippingAddresses id={}: {e}", fixtures.shipping_id))?;
     db.execute(Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::MySql,
         "DELETE FROM `Users` WHERE `UserID` = ?",
@@ -422,7 +417,8 @@ async fn integration_order_cancel_restores_inventory() {
 
     let now_tag = Utc::now().timestamp_millis();
     let fixtures = place_order_minimal(&db, now_tag).await;
-    let (order_id, user_id, variant_id) = (fixtures.order_id, fixtures.user_id, fixtures.variant_id);
+    let (order_id, user_id, variant_id) =
+        (fixtures.order_id, fixtures.user_id, fixtures.variant_id);
 
     // Fresh transaction for the delete_order call under test; see the comment on the equivalent
     // transaction in `integration_order_update_pending_to_confirmed_and_order_event`.

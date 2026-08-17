@@ -667,10 +667,7 @@ async fn integration_selected_subset_coupon_allocation_rounding_is_deterministic
     .into_inner()
     .items[0]
         .cart_id;
-    replay_txn
-        .commit()
-        .await
-        .expect("commit cart replay txn");
+    replay_txn.commit().await.expect("commit cart replay txn");
 
     let second = place_order(
         &db,

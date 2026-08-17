@@ -12,3 +12,6 @@ pub use update_review::*;
 
 pub mod delete_review;
 pub use delete_review::*;
+
+pub mod get_product_rating_summary;
+pub use get_product_rating_summary::*;

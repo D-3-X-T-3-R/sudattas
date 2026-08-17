@@ -1049,9 +1049,7 @@ async fn integration_place_order_removes_only_selected_user_cart_items() {
             ))
             .await
         {
-            eprintln!(
-                "warning: cleanup ProductVariants variant_id={vid} failed (non-fatal): {e}"
-            );
+            eprintln!("warning: cleanup ProductVariants variant_id={vid} failed (non-fatal): {e}");
         }
     }
     if let Err(e) = db

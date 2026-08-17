@@ -49,3 +49,11 @@ export interface ProductListRow {
 export interface ProductListRowWithVariantStock extends ProductListRow {
   variantStock?: ProductVariantStockRow[] | null;
 }
+
+/** Server-computed star rating aggregate for a product (backend's `productRatingSummary` query). */
+export interface ProductRatingSummary {
+  /** CEIL(AVG(Rating)) — a raw average of 3.2 or 3.8 both come back as 4; 0 when unrated. */
+  average: number;
+  /** Total number of ratings included in the average. */
+  count: number;
+}

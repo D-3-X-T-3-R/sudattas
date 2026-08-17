@@ -423,9 +423,10 @@ pub async fn place_order(
     // Phase 3: persist, retrying the whole write transaction on InnoDB deadlock.
     let mut attempt: u32 = 0;
     loop {
-        let write_txn = db.begin().await.map_err(|e| {
-            Status::internal(format!("failed to begin place_order write txn: {e}"))
-        })?;
+        let write_txn = db
+            .begin()
+            .await
+            .map_err(|e| Status::internal(format!("failed to begin place_order write txn: {e}")))?;
         let attempt_result = place_order_write(
             &write_txn,
             &req,
@@ -451,11 +452,12 @@ pub async fn place_order(
             }
         };
         match attempt_result {
-            Err(status)
-                if attempt < crate::DEADLOCK_MAX_RETRIES && is_deadlock_status(&status) =>
-            {
+            Err(status) if attempt < crate::DEADLOCK_MAX_RETRIES && is_deadlock_status(&status) => {
                 attempt += 1;
-                warn!(attempt, "place_order: retrying write phase after InnoDB deadlock");
+                warn!(
+                    attempt,
+                    "place_order: retrying write phase after InnoDB deadlock"
+                );
                 continue;
             }
             Err(status) => {

@@ -232,7 +232,10 @@ async fn place_order_minimal(db: &DatabaseConnection, now_tag: i64) -> PlaceOrde
 /// before parents). Errors are logged, not fatal — by the time this runs, the caller's own
 /// assertions (against their separately-rolled-back transaction) have already completed, so a
 /// cleanup failure here must never mask them.
-async fn cleanup_place_order_minimal_fixture(db: &DatabaseConnection, fixture: &PlaceOrderMinimalFixture) {
+async fn cleanup_place_order_minimal_fixture(
+    db: &DatabaseConnection,
+    fixture: &PlaceOrderMinimalFixture,
+) {
     for (table, column) in [
         ("Refunds", "order_id"),
         ("PaymentIntents", "order_id"),

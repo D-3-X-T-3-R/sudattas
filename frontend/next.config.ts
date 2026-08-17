@@ -20,7 +20,11 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: https://images.unsplash.com https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev https://*.r2.dev https://*.razorpay.com${imageHost ? ` https://${imageHost}` : ""}`,
   "font-src 'self' data:",
-  "connect-src 'self' https://accounts.google.com https://checkout.razorpay.com https://*.razorpay.com",
+  // r2.cloudflarestorage.com (not r2.dev — that's the public *viewing* CDN host, already in
+  // img-src) is the S3-compatible API host the browser PUTs directly to for a presigned image
+  // upload (see uploadImageMutation in imtheboss/products/page.tsx). Without it here, every
+  // image upload fails at the browser's CSP layer before the request is even sent.
+  "connect-src 'self' https://accounts.google.com https://checkout.razorpay.com https://*.razorpay.com https://*.r2.cloudflarestorage.com",
   "frame-src https://accounts.google.com https://checkout.razorpay.com https://*.razorpay.com",
   "frame-ancestors 'self'",
   "object-src 'none'",

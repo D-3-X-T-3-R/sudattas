@@ -52,7 +52,7 @@ use crate::resolvers::{
     },
     reviews::{
         self,
-        schema::{Review, SearchReview},
+        schema::{ProductRatingSummary, Review, SearchReview},
     },
     shipments::{
         self,
@@ -423,6 +423,15 @@ impl QueryRoot {
     #[instrument(err, ret)]
     async fn search_review(input: SearchReview) -> FieldResult<Vec<Review>> {
         reviews::handlers::search_review(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Server-computed star rating aggregate for a product (ceil-rounded average + count).
+    /// Public, same as search_review — no auth required to view a product's rating.
+    #[instrument(err, ret)]
+    async fn product_rating_summary(product_id: String) -> FieldResult<ProductRatingSummary> {
+        reviews::handlers::get_product_rating_summary(product_id)
             .await
             .map_err(|e| e.into_field_error())
     }

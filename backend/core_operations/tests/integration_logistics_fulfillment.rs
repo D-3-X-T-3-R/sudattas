@@ -1186,7 +1186,9 @@ async fn integration_place_order_fails_when_inventory_row_is_missing() {
         ))
         .await
     {
-        eprintln!("warning: cleanup ProductVariants for variant_id={variant_id} failed (non-fatal): {e}");
+        eprintln!(
+            "warning: cleanup ProductVariants for variant_id={variant_id} failed (non-fatal): {e}"
+        );
     }
     if let Some(pid) = product_id {
         if let Err(e) = db
@@ -1209,7 +1211,9 @@ async fn integration_place_order_fails_when_inventory_row_is_missing() {
             ))
             .await
         {
-            eprintln!("warning: cleanup ProductCategories for category_id={cid} failed (non-fatal): {e}");
+            eprintln!(
+                "warning: cleanup ProductCategories for category_id={cid} failed (non-fatal): {e}"
+            );
         }
     }
     if let Err(e) = db
@@ -1552,9 +1556,10 @@ async fn integration_booking_intent_is_persisted_before_external_call_and_worker
     // exercise here. What this assertion actually verifies — that persisting the intent doesn't
     // itself trigger the *external* Shiprocket booking call, which only happens later via
     // `process_booking_intents_batch` — still holds and is checked directly below.
-    let _shipment_id = book_order_after_validation(&db, order_id, Utc::now(), "itest_booking_intent")
-        .await
-        .expect("persist booking intent");
+    let _shipment_id =
+        book_order_after_validation(&db, order_id, Utc::now(), "itest_booking_intent")
+            .await
+            .expect("persist booking intent");
     let row = db
         .query_one(Statement::from_sql_and_values(
             sea_orm::DbBackend::MySql,
@@ -1760,14 +1765,9 @@ async fn integration_booking_worker_external_success_with_persistence_retry_is_r
 
     // book_order_after_validation now commits its own writes internally; no wrapping
     // transaction is needed (or usable) here anymore.
-    book_order_after_validation(
-        &db,
-        order_id,
-        Utc::now(),
-        "itest_booking_persist_retry",
-    )
-    .await
-    .expect("persist booking intent");
+    book_order_after_validation(&db, order_id, Utc::now(), "itest_booking_persist_retry")
+        .await
+        .expect("persist booking intent");
 
     let trigger_name = format!("trg_itest_booking_persist_fail_{}", unique_tag(18130));
     create_trigger(

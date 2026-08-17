@@ -1110,7 +1110,11 @@ impl MutationRoot {
 
     #[instrument(err, ret)]
     async fn search_size(context: &Context, input: SearchSizeInput) -> FieldResult<Vec<Size>> {
-        require_admin(context)?;
+        // Public: unlike its create/update/delete siblings, this is the live storefront's
+        // size-selector/reference-data read (fetchSizesWithSession, guest-session, no admin
+        // creds) — not just an admin-panel dropdown. Locking it to require_admin() broke the
+        // product detail page's size selector and /api/sizes for every signed-out customer.
+        let _ = context;
         sizes::handlers::search_size(input)
             .await
             .map_err(|e| e.into_field_error())
@@ -1218,7 +1222,11 @@ impl MutationRoot {
         context: &Context,
         input: SearchOccasionInput,
     ) -> FieldResult<Vec<Occasion>> {
-        require_admin(context)?;
+        // Public: unlike its create/update/delete siblings, this is the live storefront's
+        // occasion-filter read (fetchOccasionsWithSession, guest-session, no admin creds) — not
+        // just an admin-panel dropdown. Locking it to require_admin() broke /api/storefront-filters
+        // for every signed-out customer.
+        let _ = context;
         occasions::handlers::search_occasion(input)
             .await
             .map_err(|e| e.into_field_error())

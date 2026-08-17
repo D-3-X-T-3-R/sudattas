@@ -36,8 +36,13 @@ pub async fn admin_mark_order_shipped(
             // REPEATABLE READ fixes a transaction's consistent-read view at its first query),
             // so re-reading the just-created row through `txn` would not see it — read through
             // `db` instead, which always sees the latest committed state.
-            book_order_after_validation(db, req.order_id, chrono::Utc::now(), "shipment_booked_admin")
-                .await?;
+            book_order_after_validation(
+                db,
+                req.order_id,
+                chrono::Utc::now(),
+                "shipment_booked_admin",
+            )
+            .await?;
             shipments::Entity::find()
                 .filter(shipments::Column::OrderId.eq(req.order_id))
                 .one(db)

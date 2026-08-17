@@ -8,6 +8,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ status: "unauthenticated", data: null }),
+}));
+
+vi.mock("@/context/storefront-login-context", () => ({
+  useStorefrontLogin: () => ({ openLogin: vi.fn() }),
+}));
+
 vi.mock("next/image", () => ({
   default: (props: Record<string, unknown>) => {
     const { src = "", alt = "", ...rest } = props;

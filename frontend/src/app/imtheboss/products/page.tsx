@@ -411,14 +411,22 @@ export default function AdminProductsPage() {
         description: "Product created.",
       });
       if (created?.productId) {
-        if (imageFiles.length > 0) {
-          imageFiles.forEach((file, index) => {
-            uploadImageMutation.mutate({
-              file,
+        const failures: string[] = [];
+
+        // Upload images — awaited (via mutateAsync, not fire-and-forget mutate) so the grid
+        // refetch below actually happens after they land, and so a failure here is caught
+        // instead of vanishing silently.
+        for (let index = 0; index < imageFiles.length; index += 1) {
+          try {
+            await uploadImageMutation.mutateAsync({
+              file: imageFiles[index],
               productId: created.productId,
               order: index,
             });
-          });
+          } catch (err) {
+            console.error("Failed to upload image:", err);
+            failures.push(`image "${imageFiles[index].name}"`);
+          }
         }
         // Create variants and inventory
         for (const v of variants) {
@@ -441,6 +449,7 @@ export default function AdminProductsPage() {
             }
           } catch (err) {
             console.error("Failed to create variant/inventory:", err);
+            failures.push("a size/stock variant");
           }
         }
         // Link moods
@@ -450,10 +459,23 @@ export default function AdminProductsPage() {
             await createProductMoodMapping(created.productId, moodId.trim());
           } catch (err) {
             console.error("Failed to link mood:", err);
+            failures.push("a mood tag");
           }
         }
         setVariants([]);
         setSelectedMoodIds([]);
+
+        if (failures.length > 0) {
+          showToast({
+            title: "Product created, but incomplete",
+            description: `"${created.name}" was created, but failed to save: ${failures.join(", ")}. Edit the product to retry.`,
+          });
+        }
+
+        // The product row above was created before its images/variants existed, so refetch now
+        // that they're in — otherwise the grid keeps showing the bare row (no image, "Stock: -")
+        // until something else happens to trigger a refetch.
+        await queryClient.refetchQueries({ queryKey: ["admin", "products"] });
       }
       setForm((prev) => ({
         ...prev,

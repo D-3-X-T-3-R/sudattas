@@ -186,6 +186,27 @@ pub fn validate_cart_size(current_count: usize) -> Result<(), GqlError> {
     Ok(())
 }
 
+/// Minimum allowed star rating for a product review.
+pub const MIN_RATING: i32 = 1;
+/// Maximum allowed star rating for a product review.
+pub const MAX_RATING: i32 = 5;
+
+/// Validates a review rating is a whole number of stars between MIN_RATING and MAX_RATING
+/// inclusive. Mirrors the DB-level `CHECK (Rating BETWEEN 1 AND 5)` constraint on `Reviews`, but
+/// rejects out-of-range input with a clean 400 here instead of surfacing a raw DB error.
+pub fn validate_rating(rating: i32) -> Result<(), GqlError> {
+    if !(MIN_RATING..=MAX_RATING).contains(&rating) {
+        return Err(GqlError::new(
+            &format!(
+                "Rating must be between {} and {} stars",
+                MIN_RATING, MAX_RATING
+            ),
+            Code::InvalidArgument,
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,6 +242,16 @@ mod tests {
     fn sku_slug_invalid() {
         assert!(validate_sku_slug("", "sku").is_err());
         assert!(validate_sku_slug("has space", "sku").is_err());
+    }
+
+    #[test]
+    fn rating_bounds() {
+        assert!(validate_rating(1).is_ok());
+        assert!(validate_rating(5).is_ok());
+        assert!(validate_rating(3).is_ok());
+        assert!(validate_rating(0).is_err());
+        assert!(validate_rating(6).is_err());
+        assert!(validate_rating(-1).is_err());
     }
 
     #[test]

@@ -638,6 +638,18 @@ message AdminUpdateReviewStatusResponse {
     bool success = 1;
 }
 
+// Server-side rating aggregate for a product (real SQL AVG/COUNT instead of the caller fetching
+// every review row and averaging client-side). average_rating is CEIL(AVG(Rating)), so e.g. 3.2
+// and 3.8 both come back as 4; 0 when the product has no ratings yet.
+message ProductRatingSummaryRequest {
+    int64 product_id = 1;
+}
+message ProductRatingSummaryResponse {
+    int64 product_id = 1;
+    int32 average_rating = 2;  // ceil(AVG(Rating)), 0-5
+    int64 rating_count = 3;
+}
+
 // P2 Abandoned cart: scheduler enqueues events (call periodically, e.g. every hour)
 message EnqueueAbandonedCartRequest {
     optional int64 delay_hours = 1;  // carts older than this (default 24)

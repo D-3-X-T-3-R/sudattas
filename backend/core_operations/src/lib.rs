@@ -75,9 +75,10 @@ use proto::proto::core::{
     InvoiceResponse, MergeCartRequest, NewsletterSubscribersResponse, OccasionsResponse,
     OrderDetailsResponse, OrderEventsResponse, OrderStatusesResponse, OrdersResponse,
     PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
-    ProductMoodMappingsResponse, ProductMoodsResponse, ProductVariantsResponse, ProductsResponse,
-    ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
-    RefundsResponse, RequestReturnRequest, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
+    ProductMoodMappingsResponse, ProductMoodsResponse, ProductRatingSummaryRequest,
+    ProductRatingSummaryResponse, ProductVariantsResponse, ProductsResponse, ReadinessRequest,
+    ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
+    RequestReturnRequest, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
     ResolveRefundAttemptNeedsReviewRequest, ResolveRefundAttemptNeedsReviewResponse,
     ReturnRequestsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
     SearchEventLogRequest, SearchFabricRequest, SearchInventoryItemRequest,
@@ -904,8 +905,7 @@ impl GrpcServices for MyGRPCServices {
                 .await
                 .map_err(map_db_error_to_status)?;
             let result =
-                match handlers::orders::cancel_order_items(&txn, Request::new(req.clone())).await
-                {
+                match handlers::orders::cancel_order_items(&txn, Request::new(req.clone())).await {
                     Ok(res) => txn
                         .commit()
                         .await
@@ -916,7 +916,10 @@ impl GrpcServices for MyGRPCServices {
             match result {
                 Err(status) if attempt < DEADLOCK_MAX_RETRIES && is_deadlock_status(&status) => {
                     attempt += 1;
-                    tracing::warn!(attempt, "cancel_order_items: retrying after InnoDB deadlock");
+                    tracing::warn!(
+                        attempt,
+                        "cancel_order_items: retrying after InnoDB deadlock"
+                    );
                     continue;
                 }
                 other => return other,
@@ -1139,6 +1142,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::reviews::admin_update_review_status(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_product_rating_summary(
+        &self,
+        request: Request<ProductRatingSummaryRequest>,
+    ) -> Result<Response<ProductRatingSummaryResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::reviews::get_product_rating_summary(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2307,11 +2326,8 @@ impl GrpcServices for MyGRPCServices {
             // Resolve the Razorpay order (external HTTP call, up to 15s) before opening the
             // DB transaction below, so the round-trip doesn't hold a pooled connection idle.
             let (razorpay_order_id, amount_paise, currency) =
-                handlers::payment_intents::resolve_server_created_razorpay_order(
-                    db,
-                    req.order_id,
-                )
-                .await?;
+                handlers::payment_intents::resolve_server_created_razorpay_order(db, req.order_id)
+                    .await?;
             req.razorpay_order_id = Some(razorpay_order_id);
             req.amount_paise = amount_paise;
             req.currency = Some(currency);

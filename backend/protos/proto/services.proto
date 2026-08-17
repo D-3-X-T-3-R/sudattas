@@ -75,6 +75,7 @@ service GRPCServices {
     rpc UpdateReview(UpdateReviewRequest) returns (ReviewsResponse);
     rpc DeleteReview(DeleteReviewRequest) returns (ReviewsResponse);
     rpc AdminUpdateReviewStatus(AdminUpdateReviewStatusRequest) returns (AdminUpdateReviewStatusResponse);
+    rpc GetProductRatingSummary(ProductRatingSummaryRequest) returns (ProductRatingSummaryResponse);
 
     // ProductImages
     // AddProductImage removed — use GetPresignedUploadUrl + ConfirmImageUpload instead

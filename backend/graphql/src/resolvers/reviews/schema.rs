@@ -70,3 +70,26 @@ pub struct AdminUpdateReviewStatusInput {
     /// \"approved\" | \"rejected\"
     pub status: String,
 }
+
+/// Server-computed rating aggregate for a product. `average_rating` is CEIL(AVG(Rating)) — e.g.
+/// a raw average of 3.2 or 3.8 both come back as 4 — and 0 when the product has no ratings yet.
+#[derive(Default, Debug, Clone)]
+pub struct ProductRatingSummary {
+    pub product_id: String,
+    pub average_rating: i32,
+    pub rating_count: i32,
+}
+
+#[graphql_object]
+#[graphql(description = "Server-computed star rating aggregate for a product (ceil-rounded)")]
+impl ProductRatingSummary {
+    async fn product_id(&self) -> &String {
+        &self.product_id
+    }
+    async fn average_rating(&self) -> i32 {
+        self.average_rating
+    }
+    async fn rating_count(&self) -> i32 {
+        self.rating_count
+    }
+}

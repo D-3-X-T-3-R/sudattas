@@ -436,8 +436,7 @@ async fn run_atomicity_scenario(db: &DatabaseConnection, payment_mode: &str) -> 
         count_order_details_by_order_id(db, count_query_order_id).await?;
 
     let orders_count_for_user = count_orders_for_user(db, user_id).await?;
-    let payment_intents_count =
-        count_payment_intents_by_order_id(db, count_query_order_id).await?;
+    let payment_intents_count = count_payment_intents_by_order_id(db, count_query_order_id).await?;
     let shipments_count = count_shipments_by_order_id(db, count_query_order_id).await?;
     let post_inventory = inventory_snapshot(db, &variant_ids).await?;
     let post_selected_cart_rows = count_selected_cart_rows(db, &selected_cart_ids).await?;

@@ -273,12 +273,7 @@ async fn cleanup_coupon_scenario_rows(
         [fixtures.shipping_id.into()],
     ))
     .await
-    .map_err(|e| {
-        format!(
-            "cleanup ShippingAddresses id={}: {e}",
-            fixtures.shipping_id
-        )
-    })?;
+    .map_err(|e| format!("cleanup ShippingAddresses id={}: {e}", fixtures.shipping_id))?;
     if let Some(code) = coupon_code {
         db.execute(Statement::from_sql_and_values(
             DbBackend::MySql,
@@ -712,9 +707,7 @@ async fn integration_free_shipping_threshold_uses_post_discount_total() {
 
     // place_order failed during the external-call phase (no write transaction ever opened), so
     // no Orders/OrderDetails row exists to clean up here — only the setup fixtures themselves.
-    if let Err(e) =
-        cleanup_coupon_scenario_rows(&db, &fixtures, Some(code.as_str()), None).await
-    {
+    if let Err(e) = cleanup_coupon_scenario_rows(&db, &fixtures, Some(code.as_str()), None).await {
         eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
     }
 }

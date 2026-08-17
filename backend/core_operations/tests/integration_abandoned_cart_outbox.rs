@@ -585,12 +585,7 @@ async fn cleanup_outbox_order_fixtures(
         [fixtures.shipping_id.into()],
     ))
     .await
-    .map_err(|e| {
-        format!(
-            "cleanup ShippingAddresses id={}: {e}",
-            fixtures.shipping_id
-        )
-    })?;
+    .map_err(|e| format!("cleanup ShippingAddresses id={}: {e}", fixtures.shipping_id))?;
     db.execute(Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::MySql,
         "DELETE FROM `Users` WHERE `UserID` = ?",

@@ -1182,6 +1182,28 @@ pub struct AdminUpdateReviewStatusResponse {
     #[prost(bool, tag = "1")]
     pub success: bool,
 }
+/// Server-side rating aggregate for a product (real SQL AVG/COUNT instead of the caller fetching
+/// every review row and averaging client-side). average_rating is CEIL(AVG(Rating)), so e.g. 3.2
+/// and 3.8 both come back as 4; 0 when the product has no ratings yet.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProductRatingSummaryRequest {
+    #[prost(int64, tag = "1")]
+    pub product_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProductRatingSummaryResponse {
+    #[prost(int64, tag = "1")]
+    pub product_id: i64,
+    /// ceil(AVG(Rating)), 0-5
+    #[prost(int32, tag = "2")]
+    pub average_rating: i32,
+    #[prost(int64, tag = "3")]
+    pub rating_count: i64,
+}
 /// P2 Abandoned cart: scheduler enqueues events (call periodically, e.g. every hour)
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -4326,6 +4348,36 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_product_rating_summary(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ProductRatingSummaryRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ProductRatingSummaryResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/GetProductRatingSummary",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "GetProductRatingSummary",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         /// ProductImages
         /// AddProductImage removed — use GetPresignedUploadUrl + ConfirmImageUpload instead
         pub async fn search_product_image(
@@ -7171,6 +7223,13 @@ pub mod grpc_services_server {
             request: tonic::Request<super::AdminUpdateReviewStatusRequest>,
         ) -> std::result::Result<
             tonic::Response<super::AdminUpdateReviewStatusResponse>,
+            tonic::Status,
+        >;
+        async fn get_product_rating_summary(
+            &self,
+            request: tonic::Request<super::ProductRatingSummaryRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ProductRatingSummaryResponse>,
             tonic::Status,
         >;
         /// ProductImages
@@ -10337,6 +10396,56 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = AdminUpdateReviewStatusSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/GetProductRatingSummary" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetProductRatingSummarySvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::ProductRatingSummaryRequest>
+                    for GetProductRatingSummarySvc<T> {
+                        type Response = super::ProductRatingSummaryResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ProductRatingSummaryRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::get_product_rating_summary(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetProductRatingSummarySvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

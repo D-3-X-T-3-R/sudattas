@@ -10,6 +10,9 @@ import { Accordion } from "@/components/ui/accordion";
 import { ScrollCarousel } from "@/components/ui/carousel";
 import { Kicker, SectionHeading } from "@/components/ui/typography";
 import { ProductCard } from "@/components/product-card";
+// Reviews/ratings are disabled in the frontend for now (backend + component kept intact —
+// see product-rating-widget.tsx — re-enable by uncommenting this import and its usage below).
+// import { ProductRatingWidget } from "@/components/product-rating-widget";
 import { INR } from "@/lib/constants";
 import type { Product } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
@@ -234,6 +237,14 @@ export function ProductDetailView({
           <p className="mt-4 font-sans text-2xl font-semibold text-[var(--color-ink)] md:text-[1.75rem]">
             {product.priceFormatted ?? INR.format(product.price)}
           </p>
+          {/* Reviews/ratings disabled in the frontend for now — see the import comment above. */}
+          {/* <div className="mt-4">
+            <ProductRatingWidget
+              productId={product.id}
+              initialAverage={product.rating}
+              initialCount={product.reviews ?? 0}
+            />
+          </div> */}
         </div>
 
         <div className="space-y-6 border-b border-[var(--color-line)] py-6">
