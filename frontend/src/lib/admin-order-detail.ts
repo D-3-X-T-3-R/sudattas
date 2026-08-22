@@ -38,6 +38,7 @@ export interface AdminOrderDetail {
   lines: AdminOrderDetailLine[];
   refundTrackingState: "none" | "initiated" | "processed" | "failed";
   events: AdminOrderEvent[];
+  invoiceAvailable: boolean;
 }
 
 const ADMIN_ORDER_DETAIL_QUERY = `query AdminOrderDetail($search: SearchOrder!) {
@@ -53,6 +54,7 @@ const ADMIN_ORDER_DETAIL_QUERY = `query AdminOrderDetail($search: SearchOrder!) 
     totalAmountPaise
     totalAmountFormatted
     statusId
+    invoiceAvailable
     orderDetails {
       orderDetailId
       variantId
@@ -106,6 +108,7 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
         totalAmountPaise: string;
         totalAmountFormatted: string;
         statusId: string;
+        invoiceAvailable: boolean;
         orderDetails: Array<{
           orderDetailId: string;
           variantId: string;
@@ -155,6 +158,7 @@ export async function fetchAdminOrderById(orderId: string): Promise<AdminOrderDe
     lines,
     refundTrackingState,
     events,
+    invoiceAvailable: row.invoiceAvailable,
   };
   return result;
 }

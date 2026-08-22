@@ -432,6 +432,40 @@ export async function fetchAllCustomersList(): Promise<CustomerListRow[]> {
   return out;
 }
 
+/** Admin: edit a customer's non-status profile fields (name/address/phone). Deliberately
+ * excludes email/username/role/status — those are identity- or access-critical and out of scope
+ * for a quick profile edit; use dedicated flows for those if/when built. */
+export async function updateCustomerAdmin(params: {
+  userId: string;
+  fullName?: string;
+  address?: string;
+  phone?: string;
+}): Promise<CustomerListRow | null> {
+  const data = await gqlAdmin<{ updateUser?: CustomerListRow[] }>(
+    `mutation AdminUpdateCustomer($input: UpdateUserInput!) {
+      updateUser(input: $input) {
+        userId
+        username
+        email
+        authProvider
+        fullName
+        address
+        phone
+        createDate
+      }
+    }`,
+    {
+      input: {
+        userId: params.userId,
+        fullName: params.fullName,
+        address: params.address,
+        phone: params.phone,
+      },
+    }
+  );
+  return data?.updateUser?.[0] ?? null;
+}
+
 /** Order counts by status for dashboard (total, pending, delivered, cancelled, in transit). */
 export interface OrderCountsByStatus {
   total: number;

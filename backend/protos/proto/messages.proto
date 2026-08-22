@@ -623,6 +623,9 @@ message ReviewResponse {
     int64 user_id = 3;
     int32 rating = 4;  // 1-5
     string comment = 5;
+    string review_status = 6;  // "pending" | "approved" | "rejected"
+    bool is_verified_purchase = 7;
+    string created_at = 8;  // RFC3339; empty if unset
 }
 
 message ReviewsResponse {
@@ -960,6 +963,8 @@ message SearchNewsletterSubscriberRequest {
 message UpdateNewsletterSubscriberRequest {
     int64 subscriber_id = 1;
     string email = 2;
+    // Set true to unsubscribe (records now()), false to resubscribe (clears it); omit to leave unchanged.
+    optional bool unsubscribed = 3;
 }
 
 message DeleteNewsletterSubscriberRequest {
@@ -970,6 +975,8 @@ message NewsletterSubscriberResponse {
     int64 subscriber_id = 1;
     string email = 2;
     string subscription_date = 3;
+    // RFC3339; empty if still subscribed.
+    string unsubscribed_at = 4;
 }
 
 message NewsletterSubscribersResponse {

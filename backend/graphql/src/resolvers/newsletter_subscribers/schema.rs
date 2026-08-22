@@ -5,6 +5,8 @@ pub struct NewsletterSubscriber {
     pub subscriber_id: String,
     pub email: String,
     pub subscription_date: String,
+    /// RFC3339; empty if still subscribed.
+    pub unsubscribed_at: String,
 }
 
 #[graphql_object]
@@ -20,6 +22,10 @@ impl NewsletterSubscriber {
 
     async fn subscription_date(&self) -> &String {
         &self.subscription_date
+    }
+
+    async fn unsubscribed_at(&self) -> &String {
+        &self.unsubscribed_at
     }
 }
 
@@ -40,6 +46,8 @@ pub struct SearchNewsletterSubscriberInput {
 pub struct NewsletterSubscriberMutation {
     pub subscriber_id: String,
     pub email: String,
+    /// Set true to unsubscribe, false to resubscribe; omit to leave unchanged.
+    pub unsubscribed: Option<bool>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

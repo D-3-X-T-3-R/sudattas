@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Ruler, Palette, Shirt, Waves, PartyPopper, Settings } from "lucide-react";
+import { Ruler, Palette, Shirt, Waves, PartyPopper, Settings, ShieldCheck } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
 import { AdminTableCard } from "@/components/admin/admin-cards";
 import { TaxonomyManagerCard } from "@/components/admin/taxonomy-manager-card";
@@ -27,6 +27,7 @@ import {
   updateOccasion,
   deleteOccasion,
 } from "@/lib/admin-queries";
+import { fetchUserRoles, createUserRole, updateUserRole, deleteUserRole } from "@/lib/admin-roles";
 
 export default function AdminSettingsPage() {
   const sizesQuery = useQuery({ queryKey: ["admin", "sizes"], queryFn: fetchSizes });
@@ -34,12 +35,13 @@ export default function AdminSettingsPage() {
   const fabricsQuery = useQuery({ queryKey: ["admin", "fabrics"], queryFn: fetchFabrics });
   const weavesQuery = useQuery({ queryKey: ["admin", "weaves"], queryFn: fetchWeaves });
   const occasionsQuery = useQuery({ queryKey: ["admin", "occasions"], queryFn: fetchOccasions });
+  const rolesQuery = useQuery({ queryKey: ["admin", "roles"], queryFn: fetchUserRoles });
 
   return (
     <AdminPageShell
       label="Settings"
       title="Store configuration"
-      description="Product taxonomy (sizes, colors, fabrics, weaves, occasions) and, eventually, payment/shipping/tax settings."
+      description="Product taxonomy (sizes, colors, fabrics, weaves, occasions), staff roles, and, eventually, payment/shipping/tax settings."
     >
       <div className="grid gap-6 lg:grid-cols-2">
         <TaxonomyManagerCard
@@ -110,6 +112,20 @@ export default function AdminSettingsPage() {
           onCreate={(name) => createOccasion(name)}
           onUpdate={(id, name) => updateOccasion(id, name)}
           onDelete={(id) => deleteOccasion(id)}
+        />
+
+        <TaxonomyManagerCard
+          title="Staff roles"
+          icon={<ShieldCheck className="h-4 w-4 text-[var(--color-green)]" />}
+          queryKey={["admin", "roles"]}
+          items={rolesQuery.data?.map((r) => ({ id: r.roleId, name: r.roleName })) ?? []}
+          isLoading={rolesQuery.isLoading}
+          isError={rolesQuery.isError}
+          noun="role"
+          namePlaceholder="e.g. Fulfilment Staff"
+          onCreate={(name) => createUserRole(name)}
+          onUpdate={(id, name) => updateUserRole(id, name)}
+          onDelete={(id) => deleteUserRole(id)}
         />
       </div>
 

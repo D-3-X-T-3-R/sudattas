@@ -11,11 +11,16 @@ import {
   ShoppingCart,
   Users,
   Boxes,
+  Truck,
   Settings,
   Menu,
   X,
   LogOut,
   ExternalLink,
+  MessageSquareText,
+  Receipt,
+  ScrollText,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,9 +32,14 @@ const STORE_URL = publicEnv.NEXT_PUBLIC_STORE_URL || "/";
 const NAV = [
   { href: `${ADMIN_BASE}`, icon: LayoutDashboard, label: "Dashboard" },
   { href: `${ADMIN_BASE}/orders`, icon: ShoppingCart, label: "Orders" },
+  { href: `${ADMIN_BASE}/shipments`, icon: Truck, label: "Shipments" },
   { href: `${ADMIN_BASE}/products`, icon: Package, label: "Products" },
   { href: `${ADMIN_BASE}/inventory`, icon: Boxes, label: "Inventory" },
   { href: `${ADMIN_BASE}/customers`, icon: Users, label: "Customers" },
+  { href: `${ADMIN_BASE}/reviews`, icon: MessageSquareText, label: "Reviews" },
+  { href: `${ADMIN_BASE}/transactions`, icon: Receipt, label: "Transactions" },
+  { href: `${ADMIN_BASE}/newsletter`, icon: Mail, label: "Newsletter" },
+  { href: `${ADMIN_BASE}/activity-log`, icon: ScrollText, label: "Activity log" },
   { href: `${ADMIN_BASE}/settings`, icon: Settings, label: "Settings" },
 ] as const;
 
@@ -41,9 +51,14 @@ function getTitle(pathname: string): string {
   const titles: Record<string, string> = {
     dashboard: "Dashboard",
     orders: "Orders",
+    shipments: "Shipments",
     products: "Products",
     inventory: "Inventory",
     customers: "Customers",
+    reviews: "Reviews",
+    transactions: "Transactions",
+    newsletter: "Newsletter",
+    "activity-log": "Activity log",
     settings: "Settings",
   };
   return titles[segment] ?? "Admin";

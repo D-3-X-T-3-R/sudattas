@@ -1,3 +1,4 @@
+use super::{created_at_to_string, is_verified_purchase_to_bool, review_status_to_string};
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::reviews;
 use proto::proto::core::{CreateReviewRequest, ReviewResponse, ReviewsResponse};
@@ -72,6 +73,9 @@ pub async fn create_review(
                 user_id: inserted.user_id.unwrap_or(0),
                 rating: inserted.rating as i32,
                 comment: inserted.comment.unwrap_or_default(),
+                review_status: review_status_to_string(inserted.review_status),
+                is_verified_purchase: is_verified_purchase_to_bool(inserted.is_verified_purchase),
+                created_at: created_at_to_string(inserted.created_at),
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

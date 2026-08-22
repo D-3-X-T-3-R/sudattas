@@ -1156,6 +1156,14 @@ pub struct ReviewResponse {
     pub rating: i32,
     #[prost(string, tag = "5")]
     pub comment: ::prost::alloc::string::String,
+    /// "pending" | "approved" | "rejected"
+    #[prost(string, tag = "6")]
+    pub review_status: ::prost::alloc::string::String,
+    #[prost(bool, tag = "7")]
+    pub is_verified_purchase: bool,
+    /// RFC3339; empty if unset
+    #[prost(string, tag = "8")]
+    pub created_at: ::prost::alloc::string::String,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -1757,6 +1765,9 @@ pub struct UpdateNewsletterSubscriberRequest {
     pub subscriber_id: i64,
     #[prost(string, tag = "2")]
     pub email: ::prost::alloc::string::String,
+    /// Set true to unsubscribe (records now()), false to resubscribe (clears it); omit to leave unchanged.
+    #[prost(bool, optional, tag = "3")]
+    pub unsubscribed: ::core::option::Option<bool>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -1775,6 +1786,9 @@ pub struct NewsletterSubscriberResponse {
     pub email: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub subscription_date: ::prost::alloc::string::String,
+    /// RFC3339; empty if still subscribed.
+    #[prost(string, tag = "4")]
+    pub unsubscribed_at: ::prost::alloc::string::String,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]

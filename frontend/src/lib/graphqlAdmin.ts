@@ -23,12 +23,12 @@ function containsAny(query: string, roots: string[]): boolean {
 function resolveAdminRoute(query: string): string {
   if (
     containsAny(query, [
-      "searchShipment",
+      "getShipment",
       "createShipment",
       "updateShipment",
       "adminMarkOrderShipped",
       "adminMarkOrderDelivered",
-      "updateOrderStatus",
+      "syncOrderShipmentsFromShiprocket",
     ])
   ) {
     return "/api/admin/shipments";
@@ -47,6 +47,52 @@ function resolveAdminRoute(query: string): string {
 
   if (containsAny(query, ["searchUser", "updateUser", "createUser", "deleteUser"])) {
     return "/api/admin/customers";
+  }
+
+  if (
+    containsAny(query, [
+      "createTransaction",
+      "searchTransaction",
+      "updateTransaction",
+      "deleteTransaction",
+    ])
+  ) {
+    return "/api/admin/transactions";
+  }
+
+  if (
+    containsAny(query, [
+      "createUserRole",
+      "searchUserRole",
+      "updateUserRole",
+      "deleteUserRole",
+    ])
+  ) {
+    return "/api/admin/roles";
+  }
+
+  if (
+    containsAny(query, [
+      "searchUserActivity",
+      "searchEventLog",
+      "createUserActivity",
+      "createEventLog",
+      "deleteUserActivity",
+      "deleteEventLog",
+    ])
+  ) {
+    return "/api/admin/activity-log";
+  }
+
+  if (
+    containsAny(query, [
+      "searchNewsletterSubscriber",
+      "createNewsletterSubscriber",
+      "updateNewsletterSubscriber",
+      "deleteNewsletterSubscriber",
+    ])
+  ) {
+    return "/api/admin/newsletter";
   }
 
   if (

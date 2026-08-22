@@ -16,6 +16,7 @@ fn sub_response_to_gql(s: NewsletterSubscriberResponse) -> NewsletterSubscriber 
         subscriber_id: s.subscriber_id.to_string(),
         email: s.email,
         subscription_date: s.subscription_date,
+        unsubscribed_at: s.unsubscribed_at,
     }
 }
 
@@ -56,6 +57,7 @@ pub(crate) async fn update_newsletter_subscriber(
         .update_newsletter_subscriber(UpdateNewsletterSubscriberRequest {
             subscriber_id: crate::resolvers::utils::to_i64(Some(input.subscriber_id)),
             email: input.email,
+            unsubscribed: input.unsubscribed,
         })
         .await?;
     Ok(subs_response_to_vec(resp.into_inner()))

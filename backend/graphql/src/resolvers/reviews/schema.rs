@@ -7,6 +7,11 @@ pub struct Review {
     pub user_id: String,
     pub rating: i32,
     pub comment: String,
+    /// "pending" | "approved" | "rejected"
+    pub review_status: String,
+    pub is_verified_purchase: bool,
+    /// RFC3339; empty if unset.
+    pub created_at: String,
 }
 
 #[graphql_object]
@@ -26,6 +31,15 @@ impl Review {
     }
     async fn comment(&self) -> &String {
         &self.comment
+    }
+    async fn review_status(&self) -> &String {
+        &self.review_status
+    }
+    async fn is_verified_purchase(&self) -> bool {
+        self.is_verified_purchase
+    }
+    async fn created_at(&self) -> &String {
+        &self.created_at
     }
 }
 
@@ -61,6 +75,8 @@ pub struct SearchReview {
     pub limit: Option<String>,
     /// Number of results to skip for pagination
     pub offset: Option<String>,
+    /// "pending" | "approved" | "rejected"; omit for all statuses
+    pub status_filter: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

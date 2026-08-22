@@ -23,6 +23,9 @@ fn review_response_to_gql(r: ReviewResponse) -> Review {
         user_id: r.user_id.to_string(),
         rating: r.rating,
         comment: r.comment,
+        review_status: r.review_status,
+        is_verified_purchase: r.is_verified_purchase,
+        created_at: r.created_at,
     }
 }
 
@@ -62,7 +65,7 @@ pub(crate) async fn search_review(input: SearchReview) -> Result<Vec<Review>, Gq
             user_id: to_option_i64(input.user_id),
             limit: crate::graphql_limits::cap_page_size(to_option_i64(input.limit)),
             offset: to_option_i64(input.offset),
-            status_filter: None,
+            status_filter: input.status_filter,
         })
         .await?;
     Ok(response

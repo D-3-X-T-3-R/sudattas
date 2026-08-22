@@ -1,12 +1,12 @@
 import { forwardAdminGraphql } from "@/lib/admin-graphql-server";
 
 const SHIPMENT_ROOTS = [
-  "searchShipment",
+  "getShipment",
   "createShipment",
   "updateShipment",
   "adminMarkOrderShipped",
   "adminMarkOrderDelivered",
-  "updateOrderStatus",
+  "syncOrderShipmentsFromShiprocket",
 ];
 
 export async function POST(request: Request) {
