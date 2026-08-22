@@ -25,6 +25,7 @@ type AuthenticatedSectionProps = {
   displayName: string;
   displayEmail: string;
   loginMethodLabel: string;
+  accountProfile: AccountProfileRow | null;
   error: string | null;
   loadingData: boolean;
   addresses: ShippingAddressRow[];
@@ -134,6 +135,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     displayName,
     displayEmail,
     loginMethodLabel,
+    accountProfile,
     error,
     loadingData,
     addresses,
@@ -173,6 +175,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         displayName={displayName}
         displayEmail={displayEmail}
         loginMethodLabel={loginMethodLabel}
+        accountProfile={accountProfile}
         error={error}
         loadingData={loadingData}
         addresses={addresses}
@@ -589,6 +592,7 @@ export default function ProfilePage() {
             displayName={displayName}
             displayEmail={displayEmail}
             loginMethodLabel={loginMethodLabel}
+            accountProfile={accountProfile}
             error={error}
             loadingData={loadingData}
             addresses={addresses}

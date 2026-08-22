@@ -1323,6 +1323,24 @@ message CouponsResponse {
     repeated CouponResponse items = 1;
 }
 
+message ListActiveCouponsRequest {
+}
+
+// Customer-safe view of a currently-usable coupon — deliberately excludes usage_count/limit
+// internals, only what a customer needs to decide whether to apply it.
+message PublicCouponResponse {
+    int64 coupon_id = 1;
+    string code = 2;
+    string discount_type = 3;   // percentage | fixed_amount
+    int32 discount_value = 4;
+    optional int32 min_order_value_paise = 5;
+    optional string ends_at = 6;  // RFC3339
+}
+
+message PublicCouponsResponse {
+    repeated PublicCouponResponse items = 1;
+}
+
 // P1 Admin coupon management
 message CreateCouponRequest {
     string code = 1;
@@ -1355,6 +1373,14 @@ message CouponAdminResponse {
 }
 message CouponsAdminResponse {
     repeated CouponAdminResponse items = 1;
+}
+
+message SearchCouponAdminRequest {
+    int64 coupon_id = 1;  // 0 = all
+}
+
+message DeleteCouponAdminRequest {
+    int64 coupon_id = 1;
 }
 
 // Shipments

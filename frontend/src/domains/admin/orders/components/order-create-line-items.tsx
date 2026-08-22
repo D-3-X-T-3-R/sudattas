@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AdminTableCard } from "@/components/admin/admin-cards";
 import { fetchProductsList } from "@/lib/admin-queries";
-import { formatInrFromPaise } from "@/lib/money";
+import { formatInrFromPaise, paiseToRupeesInput, rupeesInputToPaise } from "@/lib/money";
 
 export interface OrderLineDraft {
   key: string;
@@ -29,7 +29,8 @@ export function OrderCreateLineItems({ lines, onAdd, onRemove }: OrderCreateLine
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [quantity, setQuantity] = useState("1");
-  const [unitPricePaise, setUnitPricePaise] = useState("");
+  /** What the admin sees/types — rupees. Converted to paise only when the line is added. */
+  const [unitPriceInput, setUnitPriceInput] = useState("");
 
   const searchQuery = useQuery({
     queryKey: ["admin", "order-create-product-search", search],
@@ -45,7 +46,7 @@ export function OrderCreateLineItems({ lines, onAdd, onRemove }: OrderCreateLine
     0
   );
 
-  const canAdd = selectedVariantId && Number(quantity) > 0 && Number(unitPricePaise) >= 0;
+  const canAdd = selectedVariantId && Number(quantity) > 0 && Number(unitPriceInput) >= 0;
 
   return (
     <AdminTableCard title="Line items" icon={<Package className="h-4 w-4 text-[var(--color-green)]" />}>
@@ -76,7 +77,7 @@ export function OrderCreateLineItems({ lines, onAdd, onRemove }: OrderCreateLine
                       onClick={() => {
                         setSelectedProductId(p.productId);
                         setSelectedVariantId("");
-                        setUnitPricePaise(String(Math.round(Number(p.amountPaise) || 0)));
+                        setUnitPriceInput(paiseToRupeesInput(p.amountPaise));
                       }}
                       className={`w-full px-2.5 py-2 text-left text-[15px] hover:bg-[var(--color-surface-soft)] ${
                         selectedProductId === p.productId ? "bg-[var(--color-surface-soft)] font-medium" : ""
@@ -117,10 +118,10 @@ export function OrderCreateLineItems({ lines, onAdd, onRemove }: OrderCreateLine
               />
             </label>
             <label className="text-sm text-[var(--color-muted)]">
-              Unit price (paise)
+              Unit price (₹)
               <Input
-                value={unitPricePaise}
-                onChange={(e) => setUnitPricePaise(e.target.value)}
+                value={unitPriceInput}
+                onChange={(e) => setUnitPriceInput(e.target.value)}
                 className="mt-1 h-10 w-32 rounded-lg text-[15px]"
               />
             </label>
@@ -138,13 +139,13 @@ export function OrderCreateLineItems({ lines, onAdd, onRemove }: OrderCreateLine
                   variantId: selectedVariantId,
                   sizeName: variant?.sizeName || "Free Size",
                   quantity,
-                  unitPricePaise,
+                  unitPricePaise: String(rupeesInputToPaise(unitPriceInput)),
                 });
                 setSearch("");
                 setSelectedProductId("");
                 setSelectedVariantId("");
                 setQuantity("1");
-                setUnitPricePaise("");
+                setUnitPriceInput("");
               }}
             >
               Add line

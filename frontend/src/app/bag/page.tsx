@@ -17,6 +17,8 @@ import { BagContent } from "@/domains/bag/components/bag-content";
 import { BagMobileCheckoutBar } from "@/domains/bag/components/bag-mobile-checkout-bar";
 import { OrderSummaryPanel } from "@/domains/bag/components/order-summary-panel";
 import { useRazorpayCheckout } from "@/hooks/use-razorpay-checkout";
+import { useCouponFlow } from "@/domains/bag/hooks/use-coupon-flow";
+import { useShippingEstimate } from "@/domains/bag/hooks/use-shipping-estimate";
 
 type CatalogSize = { sizeId: string; sizeName: string };
 
@@ -31,16 +33,6 @@ type ShippingAddressRow = {
   postalCode: string;
   road?: string | null;
   apartmentNoOrName?: string | null;
-};
-
-type ShippingEstimate = {
-  shippingAmountPaise: string;
-  courierName?: string | null;
-  estimatedDeliveryDays?: number | null;
-  itemSubtotalPaise: string;
-  orderTotalPaise: string;
-  quoteAvailable: boolean;
-  note?: string | null;
 };
 
 type AddressFormState = {
@@ -122,9 +114,40 @@ export default function BagPage() {
     apartmentNoOrName: "",
   });
 
-  const [shippingAmount, setShippingAmount] = useState(0);
-  const [shippingLoading, setShippingLoading] = useState(false);
-  const [shippingNote, setShippingNote] = useState<string | null>(null);
+  const [checkoutRevalidating, setCheckoutRevalidating] = useState(false);
+
+  const selectedLines = useMemo(
+    () => cartLines.filter((line) => selectedLineIds.has(line.id)),
+    [cartLines, selectedLineIds]
+  );
+  const selectedCount = useMemo(
+    () => selectedLines.reduce((sum, line) => sum + line.qty, 0),
+    [selectedLines]
+  );
+  const selectedSubtotal = useMemo(
+    () =>
+      selectedLines.reduce(
+        (sum, line) => sum + line.qty * ((line.product.pricePaise ?? Math.round(line.product.price * 100)) / 100),
+        0
+      ),
+    [selectedLines]
+  );
+
+  const {
+    couponInput,
+    setCouponInput,
+    appliedCouponCode,
+    couponMessage,
+    setCouponMessage,
+    couponApplying,
+    discountAmount,
+    setDiscountAmount,
+    activeOffers,
+    offersLoading,
+    applyCouponCode,
+    handleApplyCoupon,
+    handleRemoveCoupon,
+  } = useCouponFlow(status, selectedSubtotal * 100);
   const [paymentMode, setPaymentMode] = useState<"prepaid" | "cod">("prepaid");
   const [orderSummaryInView, setOrderSummaryInView] = useState(false);
   const cartSignature = useMemo(
@@ -197,67 +220,19 @@ export default function BagPage() {
     [addresses, selectedAddressId]
   );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const estimate = async () => {
-      if (status !== "authenticated" || !selectedAddressId || cartLines.length === 0) {
-        setShippingAmount(0);
-        setShippingNote(status === "authenticated" ? "Select address to calculate shipping." : "Sign in to calculate shipping.");
-        return;
-      }
-      const selectedCartLineIds = [...selectedLineIds];
-      if (selectedCartLineIds.length === 0) {
-        setShippingAmount(0);
-        setShippingNote("Select at least one bag item to calculate shipping.");
-        return;
-      }
-      setShippingLoading(true);
-      try {
-        const row = await fetchApiEnvelope<ShippingEstimate>("/api/checkout/shipping-estimate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shippingAddressId: selectedAddressId, selectedCartLineIds }),
-          signal: controller.signal,
-        });
-        const paise = Number.parseInt(row.shippingAmountPaise, 10);
-        setShippingAmount(Number.isFinite(paise) ? paise / 100 : 0);
-        setShippingNote(row.note ?? null);
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return;
-        setShippingAmount(0);
-        setShippingNote("Unable to fetch live shipping right now.");
-      } finally {
-        if (!controller.signal.aborted) {
-          setShippingLoading(false);
-        }
-      }
-    };
-    const timer = window.setTimeout(() => {
-      void estimate();
-    }, 180);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [status, selectedAddressId, cartSignature, cartLines.length, selectedLineIds]);
+  const { shippingAmount, shippingLoading, shippingNote, refreshEstimate } = useShippingEstimate({
+    status,
+    selectedAddressId,
+    cartLinesLength: cartLines.length,
+    selectedLineIds,
+    appliedCouponCode,
+    selectedSubtotal,
+    cartSignature,
+    setCouponMessage,
+    setDiscountAmount,
+  });
 
   const allSelected = cartLines.length > 0 && selectedLineIds.size === cartLines.length;
-  const selectedLines = useMemo(
-    () => cartLines.filter((line) => selectedLineIds.has(line.id)),
-    [cartLines, selectedLineIds]
-  );
-  const selectedCount = useMemo(
-    () => selectedLines.reduce((sum, line) => sum + line.qty, 0),
-    [selectedLines]
-  );
-  const selectedSubtotal = useMemo(
-    () =>
-      selectedLines.reduce(
-        (sum, line) => sum + line.qty * ((line.product.pricePaise ?? Math.round(line.product.price * 100)) / 100),
-        0
-      ),
-    [selectedLines]
-  );
 
   const addressValid = useMemo(
     () =>
@@ -355,8 +330,8 @@ export default function BagPage() {
     });
   }, []);
 
-  const handleCheckout = () => {
-    if (paymentLoading) return;
+  const handleCheckout = async () => {
+    if (paymentLoading || checkoutRevalidating) return;
     if (status !== "authenticated") {
       openLogin("/bag");
       return;
@@ -365,9 +340,23 @@ export default function BagPage() {
       setAddressPickerOpen(true);
       return;
     }
+
+    // One final live check right before payment. `couponMessage`/`discountAmount` in state can be
+    // stale (e.g. an admin deactivated the coupon while this tab sat open, or nothing has
+    // re-triggered the debounced effect) — never send the customer into Razorpay with a total
+    // that's about to change under them. Use the just-fetched result directly rather than state,
+    // since setState from refreshEstimate won't be visible in this closure until the next render.
+    setCheckoutRevalidating(true);
+    const freshRow = await refreshEstimate();
+    setCheckoutRevalidating(false);
+    if (appliedCouponCode && freshRow?.note) {
+      return;
+    }
+
     void runCheckout({
       shippingAddressId: selectedAddressId,
       selectedCartLineIds: [...selectedLineIds],
+      couponCode: appliedCouponCode && !freshRow?.note ? appliedCouponCode : undefined,
       paymentMode,
       onSuccess: ({ orderId, checkoutState }) => {
         const params = new URLSearchParams();
@@ -533,7 +522,18 @@ export default function BagPage() {
                   shippingAmount={shippingAmount}
                   shippingLoading={shippingLoading}
                   shippingNote={shippingNote || paymentMessage}
-                  checkoutLoading={paymentLoading}
+                  discountAmount={discountAmount}
+                  couponInput={couponInput}
+                  onCouponInputChange={setCouponInput}
+                  appliedCouponCode={appliedCouponCode}
+                  couponMessage={couponMessage}
+                  couponApplying={couponApplying}
+                  onApplyCoupon={handleApplyCoupon}
+                  onRemoveCoupon={handleRemoveCoupon}
+                  activeOffers={activeOffers}
+                  offersLoading={offersLoading}
+                  onSelectOffer={applyCouponCode}
+                  checkoutLoading={paymentLoading || checkoutRevalidating}
                   showMobileCheckoutCta={orderSummaryInView}
                   onCheckout={handleCheckout}
                 />
@@ -547,8 +547,9 @@ export default function BagPage() {
         <BagMobileCheckoutBar
           selectedSubtotal={selectedSubtotal}
           shippingAmount={shippingAmount}
+          discountAmount={discountAmount}
           selectedCount={selectedCount}
-          checkoutLoading={paymentLoading}
+          checkoutLoading={paymentLoading || checkoutRevalidating}
           visible={!orderSummaryInView}
           onCheckout={handleCheckout}
         />

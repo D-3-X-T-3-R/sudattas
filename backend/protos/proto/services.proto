@@ -198,8 +198,11 @@ service GRPCServices {
     // Coupons
     rpc ValidateCoupon(ValidateCouponRequest) returns (CouponsResponse);
     rpc ApplyCoupon(ApplyCouponRequest) returns (CouponsResponse);
+    rpc ListActiveCoupons(ListActiveCouponsRequest) returns (PublicCouponsResponse);
     rpc CreateCoupon(CreateCouponRequest) returns (CouponsAdminResponse);
     rpc UpdateCoupon(UpdateCouponRequest) returns (CouponsAdminResponse);
+    rpc SearchCouponAdmin(SearchCouponAdminRequest) returns (CouponsAdminResponse);
+    rpc DeleteCouponAdmin(DeleteCouponAdminRequest) returns (CouponsAdminResponse);
 
     // Webhooks
     rpc IngestWebhook(IngestWebhookRequest) returns (WebhookEventsResponse);

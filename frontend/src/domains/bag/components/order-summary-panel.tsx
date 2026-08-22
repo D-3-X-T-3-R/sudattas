@@ -1,8 +1,11 @@
 import { INR } from "@/lib/constants";
 import { formatInrFromPaise } from "@/lib/money";
 import type { CartLine } from "@/lib/schemas";
+import type { ActiveCouponRow } from "@/lib/active-coupons";
 import { SummaryCard } from "@/components/ui/page-shell";
 import { GoldDivider } from "@/domains/bag/components/bag-shared";
+import { CouponCodeField } from "@/domains/bag/components/coupon-code-field";
+import { AvailableOffersList } from "@/domains/bag/components/available-offers-list";
 
 type OrderSummaryPanelProps = {
   cartLines: CartLine[];
@@ -11,6 +14,17 @@ type OrderSummaryPanelProps = {
   shippingAmount: number;
   shippingLoading: boolean;
   shippingNote?: string | null;
+  discountAmount?: number;
+  couponInput: string;
+  onCouponInputChange: (value: string) => void;
+  appliedCouponCode?: string | null;
+  couponMessage?: string | null;
+  couponApplying?: boolean;
+  onApplyCoupon: () => void;
+  onRemoveCoupon: () => void;
+  activeOffers?: ActiveCouponRow[];
+  offersLoading?: boolean;
+  onSelectOffer?: (code: string) => void;
   checkoutLoading?: boolean;
   showMobileCheckoutCta?: boolean;
   onCheckout: () => void;
@@ -23,11 +37,22 @@ export function OrderSummaryPanel({
   shippingAmount,
   shippingLoading,
   shippingNote,
+  discountAmount = 0,
+  couponInput,
+  onCouponInputChange,
+  appliedCouponCode,
+  couponMessage,
+  couponApplying = false,
+  onApplyCoupon,
+  onRemoveCoupon,
+  activeOffers = [],
+  offersLoading = false,
+  onSelectOffer,
   checkoutLoading = false,
   showMobileCheckoutCta = false,
   onCheckout,
 }: OrderSummaryPanelProps) {
-  const totalAmount = cartSubtotal + shippingAmount;
+  const totalAmount = Math.max(0, cartSubtotal - discountAmount + shippingAmount);
 
   return (
     <SummaryCard
@@ -49,11 +74,36 @@ export function OrderSummaryPanel({
         ))}
       </div>
 
+      <CouponCodeField
+        value={couponInput}
+        onChange={onCouponInputChange}
+        appliedCouponCode={appliedCouponCode}
+        message={couponMessage}
+        applying={couponApplying}
+        onApply={onApplyCoupon}
+        onRemove={onRemoveCoupon}
+      />
+
+      {onSelectOffer ? (
+        <AvailableOffersList
+          offers={activeOffers}
+          isLoading={offersLoading}
+          appliedCouponCode={appliedCouponCode}
+          onSelect={onSelectOffer}
+        />
+      ) : null}
+
       <div className="mt-5 space-y-2.5 border-t border-[var(--color-line)] pt-5 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-[var(--color-muted)]">Subtotal</span>
           <span className="font-medium text-[var(--color-ink)]">{INR.format(cartSubtotal)}</span>
         </div>
+        {discountAmount > 0 ? (
+          <div className="flex items-center justify-between">
+            <span className="text-[var(--color-muted)]">Coupon discount</span>
+            <span className="font-medium text-[var(--color-green)]">&minus;{INR.format(discountAmount)}</span>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between">
           <span className="text-[var(--color-muted)]">Shipping</span>
           <span className="font-medium text-[var(--color-ink)]">

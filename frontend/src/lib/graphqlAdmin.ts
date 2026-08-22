@@ -51,6 +51,17 @@ function resolveAdminRoute(query: string): string {
 
   if (
     containsAny(query, [
+      "searchCouponAdmin",
+      "createCouponAdmin",
+      "updateCouponAdmin",
+      "deleteCouponAdmin",
+    ])
+  ) {
+    return "/api/admin/coupons";
+  }
+
+  if (
+    containsAny(query, [
       "createTransaction",
       "searchTransaction",
       "updateTransaction",

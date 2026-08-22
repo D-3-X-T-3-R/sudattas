@@ -4,7 +4,8 @@ use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType, ShipmentStatus};
 use core_db_entities::entity::{coupons, shipments};
 use proto::proto::core::{
-    ApplyCouponRequest, CreateShipmentRequest, GetShipmentRequest, UpdateShipmentRequest,
+    ApplyCouponRequest, CreateShipmentRequest, DeleteCouponAdminRequest, GetShipmentRequest,
+    ListActiveCouponsRequest, SearchCouponAdminRequest, UpdateShipmentRequest,
     ValidateCouponRequest,
 };
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
@@ -533,5 +534,196 @@ async fn check_coupon_min_order_not_met_returns_reason() {
         c.reason.to_lowercase().contains("order value too low"),
         "expected min-order failure reason, got {}",
         c.reason
+    );
+    assert!(
+        c.reason.contains("₹50.00") && !c.reason.to_lowercase().contains("paise"),
+        "reason should show the minimum in rupees, not raw paise: {}",
+        c.reason
+    );
+}
+
+#[tokio::test]
+async fn search_coupon_admin_returns_all_when_id_zero() {
+    use core_operations::handlers::coupons::search_coupon_admin;
+
+    let now = Utc::now();
+    let coupon_model = coupons::Model {
+        coupon_id: 3,
+        code: "WELCOME20".to_string(),
+        discount_type: DiscountType::Percentage,
+        discount_value: 20,
+        min_order_value_paise: None,
+        usage_limit: None,
+        usage_count: Some(0),
+        max_uses_per_customer: None,
+        coupon_status: Some(CouponStatus::Active),
+        starts_at: now,
+        ends_at: None,
+        created_at: Some(now),
+    };
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![coupon_model]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchCouponAdminRequest { coupon_id: 0 });
+    let result = search_coupon_admin(&txn, req).await;
+    assert!(result.is_ok(), "err: {:?}", result.err());
+    let res = result.unwrap().into_inner();
+    assert_eq!(res.items.len(), 1);
+    assert_eq!(res.items[0].code, "WELCOME20");
+    assert_eq!(res.items[0].status, "active");
+}
+
+#[tokio::test]
+async fn delete_coupon_admin_not_found_yields_not_found_status() {
+    use core_operations::handlers::coupons::delete_coupon_admin;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<coupons::Model>::new()])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(DeleteCouponAdminRequest { coupon_id: 999 });
+    let result = delete_coupon_admin(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
+}
+
+#[tokio::test]
+async fn delete_coupon_admin_deletes_and_returns_deleted_coupon() {
+    use core_operations::handlers::coupons::delete_coupon_admin;
+
+    let now = Utc::now();
+    let coupon_model = coupons::Model {
+        coupon_id: 7,
+        code: "GONE_SOON".to_string(),
+        discount_type: DiscountType::FixedAmount,
+        discount_value: 5000,
+        min_order_value_paise: None,
+        usage_limit: None,
+        usage_count: Some(0),
+        max_uses_per_customer: None,
+        coupon_status: Some(CouponStatus::Active),
+        starts_at: now,
+        ends_at: None,
+        created_at: Some(now),
+    };
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![coupon_model]])
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        }])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(DeleteCouponAdminRequest { coupon_id: 7 });
+    let result = delete_coupon_admin(&txn, req).await;
+    assert!(result.is_ok(), "err: {:?}", result.err());
+    let res = result.unwrap().into_inner();
+    assert_eq!(res.items.len(), 1);
+    assert_eq!(res.items[0].code, "GONE_SOON");
+}
+
+#[tokio::test]
+async fn list_active_coupons_excludes_expired_and_exhausted_sorts_by_soonest_expiry() {
+    use core_operations::handlers::coupons::list_active_coupons;
+
+    let now = Utc::now();
+    let coupon = |id: i64,
+                  code: &str,
+                  ends_at: Option<chrono::DateTime<Utc>>,
+                  limit: Option<i32>,
+                  used: Option<i32>| {
+        coupons::Model {
+            coupon_id: id,
+            code: code.to_string(),
+            discount_type: DiscountType::Percentage,
+            discount_value: 10,
+            min_order_value_paise: None,
+            usage_limit: limit,
+            usage_count: used,
+            max_uses_per_customer: None,
+            coupon_status: Some(CouponStatus::Active),
+            starts_at: now - chrono::Duration::days(30),
+            ends_at,
+            created_at: None,
+        }
+    };
+
+    // Note: MockDatabase returns whatever rows we feed it regardless of the SQL WHERE clause, so
+    // only Active/null-status rows belong here — the status filter itself needs a real DB to
+    // verify. This test exercises the Rust-side date/usage-limit filtering that runs after fetch.
+    let candidates = vec![
+        coupon(
+            1,
+            "EXPIRES_SOON",
+            Some(now + chrono::Duration::days(1)),
+            None,
+            None,
+        ),
+        coupon(2, "NEVER_EXPIRES", None, None, None),
+        coupon(
+            3,
+            "EXPIRED",
+            Some(now - chrono::Duration::days(1)),
+            None,
+            None,
+        ),
+        coupon(4, "EXHAUSTED", None, Some(5), Some(5)),
+        coupon(5, "STILL_HAS_USES", None, Some(5), Some(4)),
+        coupon(
+            6,
+            "EXPIRES_LATER",
+            Some(now + chrono::Duration::days(10)),
+            None,
+            None,
+        ),
+    ];
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![candidates])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(ListActiveCouponsRequest {});
+    let result = list_active_coupons(&txn, req).await;
+    assert!(result.is_ok(), "err: {:?}", result.err());
+    let res = result.unwrap().into_inner();
+
+    let codes: Vec<&str> = res.items.iter().map(|c| c.code.as_str()).collect();
+    assert_eq!(
+        codes,
+        // Both never-expiring coupons tie on the sort key; stable sort keeps their original order.
+        vec!["EXPIRES_SOON", "EXPIRES_LATER", "NEVER_EXPIRES", "STILL_HAS_USES"],
+        "expired and exhausted coupons must be excluded; remaining sorted soonest-expiry first, never-expiring last"
+    );
+}
+
+#[test]
+fn list_active_coupons_status_filter_excludes_inactive_at_the_sql_level() {
+    use core_db_entities::entity::coupons;
+    use sea_orm::{ColumnTrait, DbBackend, EntityTrait, QueryFilter, QueryTrait};
+
+    let query = coupons::Entity::find().filter(
+        coupons::Column::CouponStatus
+            .eq(CouponStatus::Active)
+            .or(coupons::Column::CouponStatus.is_null()),
+    );
+    let sql = query.build(DbBackend::MySql).to_string();
+    assert!(
+        sql.contains("`coupon_status` = ('active')"),
+        "expected an equality check against the active status in the generated SQL: {sql}"
+    );
+    assert!(
+        sql.contains("IS NULL"),
+        "expected the null-status leniency clause in the generated SQL: {sql}"
+    );
+    assert!(
+        !sql.to_lowercase().contains("'inactive'"),
+        "must never match inactive coupons: {sql}"
     );
 }

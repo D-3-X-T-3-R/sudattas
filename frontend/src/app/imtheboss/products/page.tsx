@@ -555,7 +555,11 @@ export default function AdminProductsPage() {
           try {
             const sizeId = v.sizeId?.trim() || undefined;
             const colorId = v.colorId?.trim() || undefined;
-            const additionalPricePaise = v.additionalPricePaise?.trim() || undefined;
+            // The field holds what the admin typed in rupees; convert to paise only here, at the
+            // GraphQL boundary — never ask the admin to type or read raw paise.
+            const additionalPricePaise = v.additionalPricePaise?.trim()
+              ? String(rupeesInputToPaise(v.additionalPricePaise.trim()))
+              : undefined;
             const variant = await createProductVariant({
               productId: created.productId,
               sizeId: sizeId || undefined,
@@ -708,7 +712,10 @@ export default function AdminProductsPage() {
         try {
           const sizeId = v.sizeId?.trim() || undefined;
           const colorId = v.colorId?.trim() || undefined;
-          const additionalPricePaise = v.additionalPricePaise?.trim() || undefined;
+          // See the create path above: field holds rupees as typed, converted to paise here only.
+          const additionalPricePaise = v.additionalPricePaise?.trim()
+            ? String(rupeesInputToPaise(v.additionalPricePaise.trim()))
+            : undefined;
           const quantityAvailable = (v.quantityAvailable?.trim() || "0").replace(/^$/, "0");
           const reorderLevel = v.reorderLevel?.trim() || undefined;
 

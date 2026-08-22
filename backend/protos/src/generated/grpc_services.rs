@@ -2376,6 +2376,38 @@ pub struct CouponsResponse {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<CouponResponse>,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListActiveCouponsRequest {}
+/// Customer-safe view of a currently-usable coupon — deliberately excludes usage_count/limit
+/// internals, only what a customer needs to decide whether to apply it.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PublicCouponResponse {
+    #[prost(int64, tag = "1")]
+    pub coupon_id: i64,
+    #[prost(string, tag = "2")]
+    pub code: ::prost::alloc::string::String,
+    /// percentage | fixed_amount
+    #[prost(string, tag = "3")]
+    pub discount_type: ::prost::alloc::string::String,
+    #[prost(int32, tag = "4")]
+    pub discount_value: i32,
+    #[prost(int32, optional, tag = "5")]
+    pub min_order_value_paise: ::core::option::Option<i32>,
+    /// RFC3339
+    #[prost(string, optional, tag = "6")]
+    pub ends_at: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PublicCouponsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<PublicCouponResponse>,
+}
 /// P1 Admin coupon management
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -2448,6 +2480,21 @@ pub struct CouponAdminResponse {
 pub struct CouponsAdminResponse {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<CouponAdminResponse>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SearchCouponAdminRequest {
+    /// 0 = all
+    #[prost(int64, tag = "1")]
+    pub coupon_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeleteCouponAdminRequest {
+    #[prost(int64, tag = "1")]
+    pub coupon_id: i64,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -6476,6 +6523,33 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "ApplyCoupon"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn list_active_coupons(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListActiveCouponsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PublicCouponsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/ListActiveCoupons",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "ListActiveCoupons"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn create_coupon(
             &mut self,
             request: impl tonic::IntoRequest<super::CreateCouponRequest>,
@@ -6524,6 +6598,60 @@ pub mod grpc_services_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "UpdateCoupon"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn search_coupon_admin(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SearchCouponAdminRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::CouponsAdminResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SearchCouponAdmin",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "SearchCouponAdmin"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn delete_coupon_admin(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DeleteCouponAdminRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::CouponsAdminResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/DeleteCouponAdmin",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "DeleteCouponAdmin"),
+                );
             self.inner.unary(req, path, codec).await
         }
         /// Webhooks
@@ -7767,6 +7895,13 @@ pub mod grpc_services_server {
             &self,
             request: tonic::Request<super::ApplyCouponRequest>,
         ) -> std::result::Result<tonic::Response<super::CouponsResponse>, tonic::Status>;
+        async fn list_active_coupons(
+            &self,
+            request: tonic::Request<super::ListActiveCouponsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PublicCouponsResponse>,
+            tonic::Status,
+        >;
         async fn create_coupon(
             &self,
             request: tonic::Request<super::CreateCouponRequest>,
@@ -7777,6 +7912,20 @@ pub mod grpc_services_server {
         async fn update_coupon(
             &self,
             request: tonic::Request<super::UpdateCouponRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::CouponsAdminResponse>,
+            tonic::Status,
+        >;
+        async fn search_coupon_admin(
+            &self,
+            request: tonic::Request<super::SearchCouponAdminRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::CouponsAdminResponse>,
+            tonic::Status,
+        >;
+        async fn delete_coupon_admin(
+            &self,
+            request: tonic::Request<super::DeleteCouponAdminRequest>,
         ) -> std::result::Result<
             tonic::Response<super::CouponsAdminResponse>,
             tonic::Status,
@@ -14202,6 +14351,53 @@ pub mod grpc_services_server {
                     };
                     Box::pin(fut)
                 }
+                "/grpc_services.GRPCServices/ListActiveCoupons" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListActiveCouponsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::ListActiveCouponsRequest>
+                    for ListActiveCouponsSvc<T> {
+                        type Response = super::PublicCouponsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListActiveCouponsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::list_active_coupons(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = ListActiveCouponsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/grpc_services.GRPCServices/CreateCoupon" => {
                     #[allow(non_camel_case_types)]
                     struct CreateCouponSvc<T: GrpcServices>(pub Arc<T>);
@@ -14279,6 +14475,100 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateCouponSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SearchCouponAdmin" => {
+                    #[allow(non_camel_case_types)]
+                    struct SearchCouponAdminSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::SearchCouponAdminRequest>
+                    for SearchCouponAdminSvc<T> {
+                        type Response = super::CouponsAdminResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SearchCouponAdminRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::search_coupon_admin(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SearchCouponAdminSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/DeleteCouponAdmin" => {
+                    #[allow(non_camel_case_types)]
+                    struct DeleteCouponAdminSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::DeleteCouponAdminRequest>
+                    for DeleteCouponAdminSvc<T> {
+                        type Response = super::CouponsAdminResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::DeleteCouponAdminRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::delete_coupon_admin(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = DeleteCouponAdminSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -57,33 +57,34 @@ use proto::proto::core::{
     CreateShippingAddressRequest, CreateShippingMethodRequest, CreateSizeRequest,
     CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest, CreateUserRoleRequest,
     CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest, DeleteColorRequest,
-    DeleteEventLogRequest, DeleteFabricRequest, DeleteInventoryItemRequest,
-    DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOccasionRequest,
-    DeleteOrderRequest, DeleteProductImageRequest, DeleteProductMoodMappingRequest,
-    DeleteProductMoodRequest, DeleteProductRequest, DeleteProductVariantRequest,
-    DeleteReviewRequest, DeleteShippingAddressRequest, DeleteShippingMethodRequest,
-    DeleteSizeRequest, DeleteTransactionRequest, DeleteUserActivityRequest, DeleteUserRequest,
-    DeleteUserRoleRequest, DeleteWeaveRequest, DeleteWishlistItemRequest,
-    EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse, EstimateCheckoutShippingRequest,
-    EstimateCheckoutShippingResponse, EventLogsResponse, FabricsResponse, GetCartItemsRequest,
-    GetOrderEventsRequest, GetOrderInvoiceDownloadRequest, GetOrderInvoiceDownloadResponse,
-    GetOrderInvoiceRequest, GetOrderStatsRequest, GetOrderStatsResponse, GetPaymentIntentRequest,
-    GetPresignedUploadUrlRequest, GetProductsByIdRequest, GetRefundsRequest,
-    GetRelatedProductsRequest, GetShipmentRequest, GetShippingAddressRequest,
-    GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse, GetUserPiiExportRequest,
-    GetUserPiiExportResponse, IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
-    InvoiceResponse, MergeCartRequest, NewsletterSubscribersResponse, OccasionsResponse,
-    OrderDetailsResponse, OrderEventsResponse, OrderStatusesResponse, OrdersResponse,
-    PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
+    DeleteCouponAdminRequest, DeleteEventLogRequest, DeleteFabricRequest,
+    DeleteInventoryItemRequest, DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest,
+    DeleteOccasionRequest, DeleteOrderRequest, DeleteProductImageRequest,
+    DeleteProductMoodMappingRequest, DeleteProductMoodRequest, DeleteProductRequest,
+    DeleteProductVariantRequest, DeleteReviewRequest, DeleteShippingAddressRequest,
+    DeleteShippingMethodRequest, DeleteSizeRequest, DeleteTransactionRequest,
+    DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleRequest, DeleteWeaveRequest,
+    DeleteWishlistItemRequest, EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse,
+    EstimateCheckoutShippingRequest, EstimateCheckoutShippingResponse, EventLogsResponse,
+    FabricsResponse, GetCartItemsRequest, GetOrderEventsRequest, GetOrderInvoiceDownloadRequest,
+    GetOrderInvoiceDownloadResponse, GetOrderInvoiceRequest, GetOrderStatsRequest,
+    GetOrderStatsResponse, GetPaymentIntentRequest, GetPresignedUploadUrlRequest,
+    GetProductsByIdRequest, GetRefundsRequest, GetRelatedProductsRequest, GetShipmentRequest,
+    GetShippingAddressRequest, GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse,
+    GetUserPiiExportRequest, GetUserPiiExportResponse, IngestWebhookRequest,
+    InventoryItemsResponse, InventoryLogsResponse, InvoiceResponse, ListActiveCouponsRequest,
+    MergeCartRequest, NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse,
+    OrderEventsResponse, OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse,
+    PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
     ProductMoodMappingsResponse, ProductMoodsResponse, ProductRatingSummaryRequest,
-    ProductRatingSummaryResponse, ProductVariantsResponse, ProductsResponse, ReadinessRequest,
-    ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse, RefundsResponse,
-    RequestReturnRequest, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
+    ProductRatingSummaryResponse, ProductVariantsResponse, ProductsResponse, PublicCouponsResponse,
+    ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
+    RefundsResponse, RequestReturnRequest, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
     ResolveRefundAttemptNeedsReviewRequest, ResolveRefundAttemptNeedsReviewResponse,
     ReturnRequestsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
-    SearchEventLogRequest, SearchFabricRequest, SearchInventoryItemRequest,
-    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOccasionRequest,
-    SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
+    SearchCouponAdminRequest, SearchEventLogRequest, SearchFabricRequest,
+    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterSubscriberRequest,
+    SearchOccasionRequest, SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
     SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
     SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
     SearchReturnRequestsRequest, SearchReviewRequest, SearchShippingMethodRequest,
@@ -2479,6 +2480,22 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
+    async fn list_active_coupons(
+        &self,
+        request: Request<ListActiveCouponsRequest>,
+    ) -> Result<Response<PublicCouponsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::list_active_coupons(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
     async fn create_coupon(
         &self,
         request: Request<CreateCouponRequest>,
@@ -2507,6 +2524,38 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::coupons::update_coupon(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_coupon_admin(
+        &self,
+        request: Request<SearchCouponAdminRequest>,
+    ) -> Result<Response<CouponsAdminResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::search_coupon_admin(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn delete_coupon_admin(
+        &self,
+        request: Request<DeleteCouponAdminRequest>,
+    ) -> Result<Response<CouponsAdminResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::delete_coupon_admin(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

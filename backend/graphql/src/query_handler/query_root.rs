@@ -7,7 +7,7 @@ use crate::resolvers::{
     },
     coupons::{
         self,
-        schema::{Coupon, ValidateCoupon},
+        schema::{Coupon, CouponAdmin, PublicCoupon, SearchCouponAdminInput, ValidateCoupon},
     },
     inventory::{
         self,
@@ -415,6 +415,28 @@ impl QueryRoot {
     async fn validate_coupon(context: &Context, input: ValidateCoupon) -> FieldResult<Vec<Coupon>> {
         let _ = require_customer_actor(context)?;
         coupons::handlers::validate_coupon(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Currently-usable coupons (active, in date window, not exhausted) for a "available offers"
+    /// list — so customers aren't limited to codes they already know from elsewhere.
+    #[instrument(err, ret)]
+    async fn list_active_coupons(context: &Context) -> FieldResult<Vec<PublicCoupon>> {
+        let _ = require_customer_actor(context)?;
+        coupons::handlers::list_active_coupons()
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: list/search coupons.
+    #[instrument(err, ret)]
+    async fn search_coupon_admin(
+        context: &Context,
+        input: SearchCouponAdminInput,
+    ) -> FieldResult<Vec<CouponAdmin>> {
+        require_admin(context)?;
+        coupons::handlers::search_coupon_admin(input)
             .await
             .map_err(|e| e.into_field_error())
     }

@@ -80,7 +80,7 @@ export function ProductVariantsSection({
             </select>
             <Input
               type="text"
-              placeholder="Extra price (paise)"
+              placeholder="Extra price (₹)"
               value={v.additionalPricePaise}
               onChange={(e) =>
                 setVariants((prev) => {
@@ -90,7 +90,7 @@ export function ProductVariantsSection({
                 })
               }
               className="h-11 w-32 rounded-lg text-[15px]"
-              aria-label={`Variant ${idx + 1} extra price in paise`}
+              aria-label={`Variant ${idx + 1} extra price in rupees`}
             />
             <Input
               type="text"

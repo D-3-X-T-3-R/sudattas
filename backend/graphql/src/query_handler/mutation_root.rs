@@ -15,7 +15,10 @@ use crate::resolvers::{
     },
     coupons::{
         self,
-        schema::{ApplyCoupon, Coupon, CreateCouponInput, UpdateCouponInput},
+        schema::{
+            ApplyCoupon, Coupon, CouponAdmin, CreateCouponInput, DeleteCouponAdminInput,
+            UpdateCouponInput,
+        },
     },
     event_logs::{
         self,
@@ -963,6 +966,18 @@ impl MutationRoot {
     async fn update_coupon_admin(context: &Context, input: UpdateCouponInput) -> FieldResult<bool> {
         require_admin(context)?;
         coupons::handlers::update_coupon_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: delete a coupon.
+    #[instrument(err, ret)]
+    async fn delete_coupon_admin(
+        context: &Context,
+        input: DeleteCouponAdminInput,
+    ) -> FieldResult<Vec<CouponAdmin>> {
+        require_admin(context)?;
+        coupons::handlers::delete_coupon_admin(input)
             .await
             .map_err(|e| e.into_field_error())
     }

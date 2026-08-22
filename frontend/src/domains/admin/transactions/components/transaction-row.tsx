@@ -20,7 +20,8 @@ function formatTxDate(raw: string): string {
 
 interface EditState {
   userId: string;
-  amountPaise: string;
+  /** Rupees, as typed — converted to paise only when the edit is saved. */
+  amountRupees: string;
   type: string;
 }
 
@@ -60,9 +61,9 @@ export function TransactionRow({
         </td>
         <td className="py-2.5 pr-4">
           <Input
-            value={editState.amountPaise}
-            onChange={(e) => setEditState({ ...editState, amountPaise: e.target.value })}
-            placeholder="Amount (paise)"
+            value={editState.amountRupees}
+            onChange={(e) => setEditState({ ...editState, amountRupees: e.target.value })}
+            placeholder="Amount (₹)"
             className="h-9 max-w-[9rem] rounded-lg text-[15px]"
           />
         </td>

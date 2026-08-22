@@ -16,18 +16,20 @@ import {
   updateTransactionAdmin,
   type TransactionRow as TransactionRowData,
 } from "@/lib/admin-transactions";
+import { paiseToRupeesInput, rupeesInputToPaise } from "@/lib/money";
 
 export default function AdminTransactionsPage() {
   const queryClient = useQueryClient();
   const txQuery = useQuery({ queryKey: ["admin", "transactions"], queryFn: fetchTransactions });
 
   const [newUserId, setNewUserId] = useState("");
-  const [newAmount, setNewAmount] = useState("");
+  /** Rupees, as typed — converted to paise only at the mutation call. */
+  const [newAmountRupees, setNewAmountRupees] = useState("");
   const [newType, setNewType] = useState("");
   const [createError, setCreateError] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editState, setEditState] = useState({ userId: "", amountPaise: "", type: "" });
+  const [editState, setEditState] = useState({ userId: "", amountRupees: "", type: "" });
   const [rowError, setRowError] = useState("");
 
   const [deleteConfirm, setDeleteConfirm] = useState<TransactionRowData | null>(null);
@@ -37,11 +39,15 @@ export default function AdminTransactionsPage() {
 
   const createMutation = useMutation({
     mutationFn: () =>
-      createTransactionAdmin({ userId: newUserId.trim(), amountPaise: newAmount.trim(), type: newType.trim() }),
+      createTransactionAdmin({
+        userId: newUserId.trim(),
+        amountPaise: String(rupeesInputToPaise(newAmountRupees.trim())),
+        type: newType.trim(),
+      }),
     onSuccess: () => {
       invalidate();
       setNewUserId("");
-      setNewAmount("");
+      setNewAmountRupees("");
       setNewType("");
       setCreateError("");
     },
@@ -53,7 +59,7 @@ export default function AdminTransactionsPage() {
       updateTransactionAdmin({
         transactionId,
         userId: editState.userId.trim(),
-        amountPaise: editState.amountPaise.trim(),
+        amountPaise: String(rupeesInputToPaise(editState.amountRupees.trim())),
         type: editState.type.trim(),
       }),
     onSuccess: () => {
@@ -117,7 +123,11 @@ export default function AdminTransactionsPage() {
                     isSaving={updateMutation.isPending}
                     onBeginEdit={() => {
                       setEditingId(tx.transactionId);
-                      setEditState({ userId: tx.userId, amountPaise: tx.amountPaise, type: tx.type });
+                      setEditState({
+                        userId: tx.userId,
+                        amountRupees: paiseToRupeesInput(tx.amountPaise),
+                        type: tx.type,
+                      });
                       setRowError("");
                     }}
                     onSave={() => updateMutation.mutate(tx.transactionId)}
@@ -151,9 +161,9 @@ export default function AdminTransactionsPage() {
               className="h-10 max-w-[8rem] rounded-lg text-[15px]"
             />
             <Input
-              value={newAmount}
-              onChange={(e) => setNewAmount(e.target.value)}
-              placeholder="Amount (paise)"
+              value={newAmountRupees}
+              onChange={(e) => setNewAmountRupees(e.target.value)}
+              placeholder="Amount (₹)"
               className="h-10 max-w-[10rem] rounded-lg text-[15px]"
             />
             <Input
@@ -166,7 +176,7 @@ export default function AdminTransactionsPage() {
               type="button"
               variant="outline"
               size="sm"
-              disabled={!newUserId.trim() || !newAmount.trim() || !newType.trim() || createMutation.isPending}
+              disabled={!newUserId.trim() || !newAmountRupees.trim() || !newType.trim() || createMutation.isPending}
               onClick={() => createMutation.mutate()}
             >
               {createMutation.isPending ? "Recording…" : "Record"}
