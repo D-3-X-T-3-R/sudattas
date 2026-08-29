@@ -350,6 +350,35 @@ message CreateOrderRequest {
     optional int64 applied_coupon_id = 10;
     optional string applied_coupon_code = 11;
     optional int32 applied_discount_paise = 12;
+    // "cod" | "prepaid". Required so the order can ever become bookable for shipping (the same
+    // eligibility gate real checkout orders go through checks this). "prepaid" here means payment
+    // was already collected outside this system (cash/UPI/bank transfer) — the caller is
+    // asserting that happened, not triggering a live payment flow; it is recorded as captured
+    // immediately.
+    string payment_method = 13;
+}
+
+// Admin: place a full order on a customer's behalf (phone/in-person sale, etc.) in one atomic
+// call — order + line items + immediate confirmation, mirroring the same order_state_machine
+// transition, invoice generation, and order_event that real COD checkout produces. Unlike real
+// checkout, there is never a live Razorpay step here: both "cod" and "prepaid" are treated as
+// already settled the instant the admin places the order — "prepaid" only records that payment
+// happened outside this system, it does not trigger collecting it.
+message PlaceOrderAdminLineItem {
+    int64 variant_id = 1;
+    int64 quantity = 2;
+    int64 price_paise = 3;  // Line total (unit price x quantity), matching CreateOrderDetailRequest
+}
+
+message PlaceOrderAdminRequest {
+    int64 user_id = 1;
+    int64 shipping_address_id = 2;
+    string payment_method = 3;  // "cod" | "prepaid"
+    repeated PlaceOrderAdminLineItem line_items = 4;
+    optional int64 shipping_minor = 5;
+    optional int64 applied_coupon_id = 6;
+    optional string applied_coupon_code = 7;
+    optional int32 applied_discount_paise = 8;
 }
 
 message SearchOrderRequest {

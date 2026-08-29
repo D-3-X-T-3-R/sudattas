@@ -64,7 +64,7 @@ use crate::resolvers::{
         schema::{
             AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
             CreateOrderInput, NewOrder, Order, OrderMutation, PickupTargetUpdateResult,
-            UpdatePickupTargetInput,
+            PlaceOrderAdminInput, UpdatePickupTargetInput,
         },
     },
     payment_intents::{
@@ -702,6 +702,21 @@ impl MutationRoot {
     ) -> FieldResult<Vec<Order>> {
         require_admin(context)?;
         orders::handlers::create_order_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: place a full order on a customer's behalf (phone/in-person sale, etc.) in one call
+    /// — mirrors real checkout's COD path exactly (order + line items + immediate
+    /// confirm/capture/invoice/order_event). Never triggers a live Razorpay step for either
+    /// payment method.
+    #[instrument(err, ret)]
+    async fn place_order_admin(
+        context: &Context,
+        input: PlaceOrderAdminInput,
+    ) -> FieldResult<Vec<Order>> {
+        require_admin(context)?;
+        orders::handlers::place_order_admin(input)
             .await
             .map_err(|e| e.into_field_error())
     }

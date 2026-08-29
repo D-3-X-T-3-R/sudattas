@@ -56,6 +56,7 @@ service GRPCServices {
     rpc AdminMarkReturnReceived(AdminMarkReturnReceivedRequest) returns (ReturnRequestsResponse);
     rpc AdminUpdateReturnStatus(AdminUpdateReturnStatusRequest) returns (ReturnRequestsResponse);
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
+    rpc PlaceOrderAdmin(PlaceOrderAdminRequest) returns (OrdersResponse);
     rpc EstimateCheckoutShipping(EstimateCheckoutShippingRequest) returns (EstimateCheckoutShippingResponse);
     rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);
     rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);

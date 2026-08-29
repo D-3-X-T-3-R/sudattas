@@ -204,7 +204,7 @@ fn qualifies_for_free_shipping(
 }
 
 #[allow(clippy::result_large_err)]
-async fn lock_inventory_row_and_get_available_quantity(
+pub(crate) async fn lock_inventory_row_and_get_available_quantity(
     txn: &DatabaseTransaction,
     variant_id: i64,
 ) -> Result<i64, Status> {
@@ -850,6 +850,7 @@ async fn place_order_write(
             applied_coupon_id: prep.coupon_snapshot.as_ref().map(|s| s.0),
             applied_coupon_code: prep.coupon_snapshot.as_ref().map(|s| s.1.clone()),
             applied_discount_paise: prep.coupon_snapshot.as_ref().map(|s| s.2 as i32),
+            payment_method: prep.normalized_payment_mode.clone(),
         }),
     )
     .await?

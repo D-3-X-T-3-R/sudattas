@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import {
   updateAdminOrderStatus,
   resolveOrderNeedsReview,
+  cancelOrderAdmin,
   type AdminOrderDetail,
 } from "@/lib/admin-order-detail";
+import { DeleteEntityDialog } from "@/components/admin/delete-entity-dialog";
 import { cn } from "@/lib/utils";
 import { filterStatusesForTransition } from "@/domains/admin/orders/order-status-transitions";
 import { formatOrderStatusName, getStatusLabel } from "@/domains/admin/orders/utils";
@@ -37,10 +39,24 @@ export function OrderDetailStatusEditor({
 }: OrderDetailStatusEditorProps) {
   const queryClient = useQueryClient();
   const [statusDraft, setStatusDraft] = useState(order.statusId);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const currentRow = statuses.find((s) => s.statusId === order.statusId);
   const currentName = currentRow?.statusName ?? "";
   const selectableStatuses = filterStatusesForTransition(statuses, currentName);
+
+  const invalidateOrder = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin", "order", orderIdParam] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+  };
+
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelOrderAdmin(order.orderId),
+    onSuccess: () => {
+      invalidateOrder();
+      setCancelConfirmOpen(false);
+    },
+  });
 
   const statusMutation = useMutation({
     mutationFn: async (newStatusId: string) => {
@@ -70,6 +86,7 @@ export function OrderDetailStatusEditor({
   });
 
   const needsReview = currentName === "needs_review";
+  const canCancel = !needsReview && currentName !== "cancelled" && currentName !== "refunded";
 
   return (
     <div>
@@ -158,6 +175,39 @@ export function OrderDetailStatusEditor({
           {formatStatusMutationError(statusMutation.error)}
         </p>
       ) : null}
+
+      {canCancel ? (
+        <div className="mt-5 border-t border-[var(--color-line)] pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-red-200 text-red-600 hover:bg-red-50"
+            disabled={cancelMutation.isPending}
+            onClick={() => setCancelConfirmOpen(true)}
+          >
+            Cancel order
+          </Button>
+          <p className="mt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+            Only works within the cancellation window and before a shipment is booked — restores
+            inventory and settles any refund owed. Once that window closes, use returns / refuse
+            delivery instead.
+          </p>
+        </div>
+      ) : null}
+
+      <DeleteEntityDialog
+        entity={cancelConfirmOpen ? { name: `order #${order.orderId}` } : null}
+        label="order"
+        isPending={cancelMutation.isPending}
+        error={cancelMutation.isError ? formatStatusMutationError(cancelMutation.error) : ""}
+        warning="Restores inventory for the cancelled lines and settles any refund owed — either queued with the payment gateway, or, if this order has no online payment on file (e.g. a manually created order), recorded as already refunded by you outside the system. If that's the case, make sure you've actually returned the money before confirming. Cannot be undone from here."
+        onClose={() => {
+          setCancelConfirmOpen(false);
+          cancelMutation.reset();
+        }}
+        onConfirm={() => cancelMutation.mutate()}
+      />
     </div>
   );
 }

@@ -85,8 +85,19 @@ function deriveRefundTrackingState(
 ): "none" | "initiated" | "processed" | "failed" {
   const eventTypes = (events ?? []).map((x) => (x.eventType ?? "").trim().toLowerCase());
   if (eventTypes.some((x) => x === "refund_failed")) return "failed";
-  if (eventTypes.some((x) => x === "refund_recorded")) return "processed";
-  if (eventTypes.some((x) => x === "refund_initiated")) return "initiated";
+  // "refund_recorded" covers a completed real-gateway refund; "refund_recorded_admin_settled"
+  // is the same completed state for an order with no online payment on file (e.g. a manually
+  // created order) — cancelling it is treated as the admin having already refunded the
+  // customer directly, so both land in the same "processed" bucket.
+  if (eventTypes.some((x) => x === "refund_recorded" || x === "refund_recorded_admin_settled")) {
+    return "processed";
+  }
+  // "refund_initiated" fires once the gateway confirms the refund; "refund_pending_external"
+  // fires earlier, the moment the attempt is queued for the background worker — both mean a
+  // real-gateway refund is in motion.
+  if (eventTypes.some((x) => x === "refund_initiated" || x === "refund_pending_external")) {
+    return "initiated";
+  }
   return "none";
 }
 
@@ -218,6 +229,25 @@ export async function updateAdminOrderStatus(
       statusId: newStatusId.trim(),
     },
   });
+}
+
+const DELETE_ORDER_MUTATION = `mutation AdminCancelOrder($orderId: String!) {
+  deleteOrder(orderId: $orderId) {
+    orderId
+    statusId
+  }
+}`;
+
+/**
+ * Admin: cancel an order (status → "cancelled"), bypassing the ownership check customers get
+ * (admins may cancel any order). Unlike picking "Cancelled" from the raw status dropdown
+ * (updateOrder), this goes through the same path a customer's own cancellation uses: it checks
+ * the cancel window and fulfillment status, and restores inventory for the cancelled lines.
+ * Rejects with a clear reason once the window has closed or a shipment is already in motion —
+ * at that point, use returns/refuse-delivery instead.
+ */
+export async function cancelOrderAdmin(orderId: string): Promise<void> {
+  await gqlAdmin(DELETE_ORDER_MUTATION, { orderId });
 }
 
 /**

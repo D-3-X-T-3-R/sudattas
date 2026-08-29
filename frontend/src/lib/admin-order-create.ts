@@ -1,11 +1,14 @@
 import { gqlAdmin } from "./graphql-client";
 
 /**
- * Admin: manually create an order record. This is a pure record-creation tool — unlike the
- * customer-facing checkout (place_order), create_order_admin does NOT decrement inventory, does
- * NOT charge payment, and does NOT send any confirmation email/notification. It just persists an
- * Orders row (plus, via a second call, OrderDetails rows) with whatever totals the caller
- * computed. Useful for phone orders, gifts, or backfilling — not a checkout replacement.
+ * Admin: place an order on a customer's behalf. `placeOrderAdmin` (below) mirrors real checkout's
+ * COD path exactly — order creation, immediate order_state_machine transition to "confirmed",
+ * payment capture, invoice generation, and an order_event — which also means it enqueues the same
+ * PAYMENT_CAPTURED outbox event real orders do, so the customer *does* get the usual confirmation
+ * notification. The only things it still doesn't do: decrement inventory, or run a live Razorpay
+ * step (both payment methods are always treated as already settled). The older
+ * createOrderAdmin + createOrderDetailsAdmin two-call flow below is lower-level — it leaves the
+ * order at whatever raw status the caller picks, with none of the above side effects.
  */
 
 export interface AdminShippingAddressRow {
@@ -80,6 +83,10 @@ export interface CreateOrderAdminInput {
   subtotalMinor: string;
   shippingMinor: string;
   grandTotalMinor: string;
+  /** "cod" | "prepaid". "prepaid" asserts payment was already collected outside this system
+   * (cash/UPI/bank transfer) — it's recorded as captured immediately, no live payment flow.
+   * Required: without it, the order can never pass the shipment-booking eligibility check. */
+  paymentMethod: "cod" | "prepaid";
 }
 
 /** Create the bare order shell. Returns the new order's id. */
@@ -119,4 +126,44 @@ export async function createOrderDetailsAdmin(
       },
     }
   );
+}
+
+export interface PlaceOrderAdminLineItem {
+  variantId: string;
+  quantity: string;
+  /** Line total in paise (unit price × quantity), not unit price. */
+  pricePaise: string;
+}
+
+export interface PlaceOrderAdminInput {
+  userId: string;
+  shippingAddressId: string;
+  /** "cod" | "prepaid". Both are treated as already settled — there is never a live Razorpay
+   * step for an admin-placed order. "prepaid" only records that payment happened outside this
+   * system, it does not collect it. */
+  paymentMethod: "cod" | "prepaid";
+  lineItems: PlaceOrderAdminLineItem[];
+  shippingMinor?: string;
+}
+
+/**
+ * Admin: place a full order on a customer's behalf in one atomic call — order, line items, and
+ * immediate confirm/capture/invoice/order_event, mirroring exactly what real COD checkout does
+ * at placement (same order_state_machine transition to "confirmed", same cancel window and
+ * shipment-booking eligibility). Replaces the old createOrderAdmin + createOrderDetailsAdmin
+ * two-step flow, which left the order stuck at an admin-picked raw status with no payment
+ * capture, no invoice, and no order_event — never actually reaching parity with a real order.
+ */
+export async function placeOrderAdmin(input: PlaceOrderAdminInput): Promise<string> {
+  const data = await gqlAdmin<{ placeOrderAdmin?: Array<{ orderId: string }> }>(
+    `mutation AdminPlaceOrder($input: PlaceOrderAdminInput!) {
+      placeOrderAdmin(input: $input) { orderId }
+    }`,
+    { input }
+  );
+  const orderId = data?.placeOrderAdmin?.[0]?.orderId;
+  if (!orderId) {
+    throw new Error("placeOrderAdmin returned no order id");
+  }
+  return orderId;
 }

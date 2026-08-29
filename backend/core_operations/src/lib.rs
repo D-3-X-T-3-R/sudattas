@@ -75,7 +75,7 @@ use proto::proto::core::{
     InventoryItemsResponse, InventoryLogsResponse, InvoiceResponse, ListActiveCouponsRequest,
     MergeCartRequest, NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse,
     OrderEventsResponse, OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse,
-    PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
+    PlaceOrderAdminRequest, PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
     ProductMoodMappingsResponse, ProductMoodsResponse, ProductRatingSummaryRequest,
     ProductRatingSummaryResponse, ProductVariantsResponse, ProductsResponse, PublicCouponsResponse,
     ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
@@ -733,6 +733,17 @@ impl GrpcServices for MyGRPCServices {
         // deadlock-retry loop around the inventory-locking step) so this checkout flow never
         // holds a pooled connection open across either external round-trip.
         procedures::orders::place_order(db, request).await
+    }
+
+    async fn place_order_admin(
+        &self,
+        request: Request<PlaceOrderAdminRequest>,
+    ) -> Result<Response<OrdersResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("Database not initialized"))?;
+        procedures::orders::place_order_admin(db, request).await
     }
 
     async fn estimate_checkout_shipping(

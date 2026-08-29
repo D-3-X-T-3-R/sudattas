@@ -648,6 +648,53 @@ pub struct CreateOrderRequest {
     pub applied_coupon_code: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int32, optional, tag = "12")]
     pub applied_discount_paise: ::core::option::Option<i32>,
+    /// "cod" | "prepaid". Required so the order can ever become bookable for shipping (the same
+    /// eligibility gate real checkout orders go through checks this). "prepaid" here means payment
+    /// was already collected outside this system (cash/UPI/bank transfer) — the caller is
+    /// asserting that happened, not triggering a live payment flow; it is recorded as captured
+    /// immediately.
+    #[prost(string, tag = "13")]
+    pub payment_method: ::prost::alloc::string::String,
+}
+/// Admin: place a full order on a customer's behalf (phone/in-person sale, etc.) in one atomic
+/// call — order + line items + immediate confirmation, mirroring the same order_state_machine
+/// transition, invoice generation, and order_event that real COD checkout produces. Unlike real
+/// checkout, there is never a live Razorpay step here: both "cod" and "prepaid" are treated as
+/// already settled the instant the admin places the order — "prepaid" only records that payment
+/// happened outside this system, it does not trigger collecting it.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PlaceOrderAdminLineItem {
+    #[prost(int64, tag = "1")]
+    pub variant_id: i64,
+    #[prost(int64, tag = "2")]
+    pub quantity: i64,
+    /// Line total (unit price x quantity), matching CreateOrderDetailRequest
+    #[prost(int64, tag = "3")]
+    pub price_paise: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PlaceOrderAdminRequest {
+    #[prost(int64, tag = "1")]
+    pub user_id: i64,
+    #[prost(int64, tag = "2")]
+    pub shipping_address_id: i64,
+    /// "cod" | "prepaid"
+    #[prost(string, tag = "3")]
+    pub payment_method: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "4")]
+    pub line_items: ::prost::alloc::vec::Vec<PlaceOrderAdminLineItem>,
+    #[prost(int64, optional, tag = "5")]
+    pub shipping_minor: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "6")]
+    pub applied_coupon_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "7")]
+    pub applied_coupon_code: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int32, optional, tag = "8")]
+    pub applied_discount_paise: ::core::option::Option<i32>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -3995,6 +4042,30 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "PlaceOrder"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn place_order_admin(
+            &mut self,
+            request: impl tonic::IntoRequest<super::PlaceOrderAdminRequest>,
+        ) -> std::result::Result<tonic::Response<super::OrdersResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/PlaceOrderAdmin",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "PlaceOrderAdmin"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn estimate_checkout_shipping(
             &mut self,
             request: impl tonic::IntoRequest<super::EstimateCheckoutShippingRequest>,
@@ -7275,6 +7346,10 @@ pub mod grpc_services_server {
             &self,
             request: tonic::Request<super::PlaceOrderRequest>,
         ) -> std::result::Result<tonic::Response<super::OrdersResponse>, tonic::Status>;
+        async fn place_order_admin(
+            &self,
+            request: tonic::Request<super::PlaceOrderAdminRequest>,
+        ) -> std::result::Result<tonic::Response<super::OrdersResponse>, tonic::Status>;
         async fn estimate_checkout_shipping(
             &self,
             request: tonic::Request<super::EstimateCheckoutShippingRequest>,
@@ -9835,6 +9910,53 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = PlaceOrderSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/PlaceOrderAdmin" => {
+                    #[allow(non_camel_case_types)]
+                    struct PlaceOrderAdminSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::PlaceOrderAdminRequest>
+                    for PlaceOrderAdminSvc<T> {
+                        type Response = super::OrdersResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::PlaceOrderAdminRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::place_order_admin(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = PlaceOrderAdminSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

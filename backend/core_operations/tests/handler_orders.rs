@@ -82,6 +82,7 @@ async fn create_order_inserts_and_returns_created_model() {
         applied_coupon_id: Some(1),
         applied_coupon_code: Some("SAVE10".to_string()),
         applied_discount_paise: Some(1_000),
+        payment_method: "cod".to_string(),
     });
 
     let result = create_order(&txn, req).await;
@@ -485,4 +486,184 @@ async fn admin_mark_order_delivered_order_not_found_propagates_not_found() {
     assert!(result.is_err());
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::NotFound);
+}
+
+#[tokio::test]
+async fn create_order_invalid_payment_method_returns_invalid_argument() {
+    use core_operations::handlers::orders::create_order;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(CreateOrderRequest {
+        user_id: 7,
+        shipping_address_id: 11,
+        status_id: 2,
+        total_amount_paise: 9_000,
+        subtotal_minor: None,
+        shipping_minor: None,
+        tax_total_minor: None,
+        discount_total_minor: None,
+        grand_total_minor: None,
+        applied_coupon_id: None,
+        applied_coupon_code: None,
+        applied_discount_paise: None,
+        payment_method: "bank_transfer".to_string(),
+    });
+
+    let result = create_order(&txn, req).await;
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument);
+    assert!(status.message().contains("cod") && status.message().contains("prepaid"));
+}
+
+#[tokio::test]
+async fn create_order_prepaid_records_captured_immediately() {
+    use core_operations::handlers::orders::create_order;
+
+    let now = chrono::Utc::now();
+    let model = orders::Model {
+        order_id: 1,
+        order_number: Some("ORD-1".to_string()),
+        public_order_ref: "SUD-20990101-PLACEHOLDER".to_string(),
+        user_id: 7,
+        order_date: now,
+        created_at: now,
+        cancel_window_ends_at: None,
+        earliest_booking_at: None,
+        pickup_target_at: None,
+        pickup_target_reason: None,
+        pickup_target_set_by: None,
+        pickup_target_updated_at: None,
+        shipping_address_id: 11,
+        total_amount: Some(Decimal::new(10_000, 2)),
+        status_id: 2,
+        payment_status: None,
+        payment_method: None,
+        currency: Some("INR".to_string()),
+        updated_at: None,
+        subtotal_minor: 8_000,
+        items_total_minor_before_discount: Some(8_000),
+        shipping_minor: Some(1_000),
+        shipping_charge_minor: Some(1_000),
+        tax_total_minor: Some(500),
+        discount_total_minor: Some(500),
+        items_total_minor_after_discount: Some(7_500),
+        grand_total_minor: 9_000,
+        invoice_id: None,
+        invoice_number: None,
+        invoice_generated_at: None,
+        invoice_storage_path: None,
+        applied_coupon_id: None,
+        applied_coupon_code: None,
+        applied_discount_paise: None,
+        refund_settlement_status: None,
+        fulfillment_status: FulfillmentStatus::NotCreated,
+    };
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_exec_results(vec![
+            MockExecResult {
+                last_insert_id: 1,
+                rows_affected: 1,
+            },
+            MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            },
+        ])
+        .append_query_results(vec![vec![model]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(CreateOrderRequest {
+        user_id: 7,
+        shipping_address_id: 11,
+        status_id: 2,
+        total_amount_paise: 9_000,
+        subtotal_minor: Some(8_000),
+        shipping_minor: Some(1_000),
+        tax_total_minor: Some(500),
+        discount_total_minor: Some(500),
+        grand_total_minor: Some(9_000),
+        applied_coupon_id: None,
+        applied_coupon_code: None,
+        applied_discount_paise: None,
+        payment_method: "PREPAID".to_string(),
+    });
+
+    let result = create_order(&txn, req).await;
+    assert!(result.is_ok(), "err: {:?}", result.err());
+    txn.commit().await.expect("commit");
+
+    let logs = db.into_transaction_log();
+    let inserts: Vec<String> = logs
+        .iter()
+        .flat_map(|t| t.statements().iter().map(|s| format!("{:?}", s)))
+        .filter(|s| s.to_lowercase().contains("insert into"))
+        .collect();
+    assert!(
+        inserts.iter().any(|s| s.contains("prepaid") && s.contains("captured")),
+        "expected the INSERT to bind payment_method='prepaid' and payment_status='captured' (normalized/derived from case-insensitive input), got: {:?}",
+        inserts
+    );
+}
+
+#[tokio::test]
+async fn place_order_admin_invalid_payment_method_returns_invalid_argument() {
+    use core_operations::procedures::orders::place_order_admin;
+    use proto::proto::core::{PlaceOrderAdminLineItem, PlaceOrderAdminRequest};
+
+    let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
+
+    let req = Request::new(PlaceOrderAdminRequest {
+        user_id: 7,
+        shipping_address_id: 11,
+        payment_method: "bank_transfer".to_string(),
+        line_items: vec![PlaceOrderAdminLineItem {
+            variant_id: 1,
+            quantity: 1,
+            price_paise: 1000,
+        }],
+        shipping_minor: None,
+        applied_coupon_id: None,
+        applied_coupon_code: None,
+        applied_discount_paise: None,
+    });
+
+    let result = place_order_admin(&db, req).await;
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument);
+    assert!(status.message().contains("cod") && status.message().contains("prepaid"));
+}
+
+#[tokio::test]
+async fn place_order_admin_no_line_items_returns_invalid_argument() {
+    use core_operations::procedures::orders::place_order_admin;
+    use proto::proto::core::PlaceOrderAdminRequest;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
+
+    let req = Request::new(PlaceOrderAdminRequest {
+        user_id: 7,
+        shipping_address_id: 11,
+        payment_method: "cod".to_string(),
+        line_items: vec![],
+        shipping_minor: None,
+        applied_coupon_id: None,
+        applied_coupon_code: None,
+        applied_discount_paise: None,
+    });
+
+    let result = place_order_admin(&db, req).await;
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument);
+    assert!(
+        status.message().contains("line item"),
+        "unexpected message: {}",
+        status.message()
+    );
 }
