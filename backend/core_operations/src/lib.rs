@@ -73,7 +73,8 @@ use proto::proto::core::{
     GetShippingAddressRequest, GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse,
     GetUserPiiExportRequest, GetUserPiiExportResponse, IngestWebhookRequest,
     InventoryItemsResponse, InventoryLogsResponse, InvoiceResponse, ListActiveCouponsRequest,
-    MergeCartRequest, NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse,
+    MergeCartRequest, NewsletterCampaignsResponse, NewsletterSubscribersResponse,
+    OccasionsResponse, OrderDetailsResponse,
     OrderEventsResponse, OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse,
     PlaceOrderAdminRequest, PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
     ProductMoodMappingsResponse, ProductMoodsResponse, ProductRatingSummaryRequest,
@@ -83,17 +84,20 @@ use proto::proto::core::{
     ResolveRefundAttemptNeedsReviewRequest, ResolveRefundAttemptNeedsReviewResponse,
     ReturnRequestsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
     SearchCouponAdminRequest, SearchEventLogRequest, SearchFabricRequest,
-    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterSubscriberRequest,
+    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterCampaignRequest,
+    SearchNewsletterSubscriberRequest,
     SearchOccasionRequest, SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
     SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
     SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
     SearchReturnRequestsRequest, SearchReviewRequest, SearchShippingMethodRequest,
     SearchSizeRequest, SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
-    SearchUserRoleRequest, SearchWeaveRequest, SearchWishlistItemRequest, ShipmentsResponse,
+    SearchUserRoleRequest, SearchWeaveRequest, SearchWishlistItemRequest,
+    SendNewsletterCampaignRequest, ShipmentsResponse,
     ShippingAddressesResponse, ShippingMethodsResponse, ShopHighlightMoodsRequest,
     ShopHighlightMoodsResponse, SizesResponse, SyncOrderShipmentsFromShiprocketRequest,
     SyncOrderShipmentsFromShiprocketResponse, SyncProductImagesRequest, TransactionsResponse,
-    UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest,
+    UnsubscribeNewsletterByTokenRequest, UpdateCartItemRequest, UpdateCategoryRequest,
+    UpdateColorRequest, UpdateCouponRequest,
     UpdateEventLogRequest, UpdateFabricRequest, UpdateInventoryItemRequest,
     UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOccasionRequest,
     UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
@@ -1680,6 +1684,52 @@ impl GrpcServices for MyGRPCServices {
             handlers::newsletter_subscribers::delete_newsletter_subscriber(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
+    }
+
+    async fn unsubscribe_newsletter_by_token(
+        &self,
+        request: Request<UnsubscribeNewsletterByTokenRequest>,
+    ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::newsletter_subscribers::unsubscribe_newsletter_by_token(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_newsletter_campaign(
+        &self,
+        request: Request<SearchNewsletterCampaignRequest>,
+    ) -> Result<Response<NewsletterCampaignsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::newsletter_campaigns::search_newsletter_campaign(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn send_newsletter_campaign(
+        &self,
+        request: Request<SendNewsletterCampaignRequest>,
+    ) -> Result<Response<NewsletterCampaignsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        // Manages its own (short) transactions around a slow external-call loop — see
+        // procedures::newsletter_campaign's module doc for why this isn't wrapped in one txn.
+        procedures::newsletter_campaign::send_newsletter_campaign(db, request).await
     }
 
     // Sizes Services

@@ -126,6 +126,9 @@ service GRPCServices {
     rpc SearchNewsletterSubscriber(SearchNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
     rpc UpdateNewsletterSubscriber(UpdateNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
     rpc DeleteNewsletterSubscriber(DeleteNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
+    rpc SendNewsletterCampaign(SendNewsletterCampaignRequest) returns (NewsletterCampaignsResponse);
+    rpc SearchNewsletterCampaign(SearchNewsletterCampaignRequest) returns (NewsletterCampaignsResponse);
+    rpc UnsubscribeNewsletterByToken(UnsubscribeNewsletterByTokenRequest) returns (NewsletterSubscribersResponse);
 
     // Sizes
     rpc CreateSize(CreateSizeRequest) returns (SizesResponse);

@@ -101,6 +101,8 @@ function resolveAdminRoute(query: string): string {
       "createNewsletterSubscriber",
       "updateNewsletterSubscriber",
       "deleteNewsletterSubscriber",
+      "sendNewsletterCampaign",
+      "searchNewsletterCampaign",
     ])
   ) {
     return "/api/admin/newsletter";

@@ -1325,3 +1325,223 @@ async fn integration_handler_rejects_high_complexity_with_400_when_limit_set() {
         "high-complexity query should return 400 when GRAPHQL_MAX_QUERY_COMPLEXITY is set"
     );
 }
+
+// =============================================================================
+// subscribeNewsletter (public, unauthenticated storefront footer signup)
+// =============================================================================
+
+#[tokio::test]
+async fn test_subscribe_newsletter_rejects_invalid_email_without_auth() {
+    // No auth context at all — this mutation must be reachable by a fully anonymous visitor,
+    // and the invalid-email guard runs before any gRPC call, so this needs no live backend.
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: None,
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: None,
+        admin_resolution_source: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"mutation { subscribeNewsletter(email: "not-an-email") }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "an email with no '@' should be rejected, got: {:?}",
+        (res, errors)
+    );
+    let err_str = format!("{:?}", errors[0]);
+    assert!(
+        err_str.to_lowercase().contains("valid email"),
+        "error should mention a valid email is required: {}",
+        err_str
+    );
+}
+
+#[tokio::test]
+async fn test_subscribe_newsletter_rejects_blank_email_without_auth() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: None,
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: None,
+        admin_resolution_source: None,
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { subscribeNewsletter(email: "   ") }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(!errors.is_empty(), "a blank email should be rejected");
+}
+
+#[tokio::test]
+async fn test_subscribe_newsletter_with_valid_email_not_rejected_for_auth() {
+    // No auth context — a plausible email must not be turned away for lacking admin/JWT
+    // credentials. It may still fail if the gRPC backend is unreachable in this test run;
+    // what matters is that failure is never an authorization error.
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: None,
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: None,
+        admin_resolution_source: None,
+    };
+
+    let schema = schema();
+    let result = juniper::execute(
+        r#"mutation { subscribeNewsletter(email: "shopper@example.com") }"#,
+        None,
+        &schema,
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await;
+
+    if let Ok((_, errors)) = result {
+        if !errors.is_empty() {
+            let err_str = format!("{:?}", errors[0]).to_lowercase();
+            assert!(
+                !err_str.contains("admin") && !err_str.contains("login"),
+                "a valid email from an anonymous caller should never fail on authorization: {}",
+                err_str
+            );
+        }
+    }
+}
+
+// =============================================================================
+// Newsletter campaigns (admin) + unsubscribeNewsletter (public)
+// =============================================================================
+
+#[tokio::test]
+async fn test_send_newsletter_campaign_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("user_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: None,
+        admin_resolution_source: None,
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { sendNewsletterCampaign(input: { subject: "Hi", bodyText: "Body." }) { campaignId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "a logged-in but non-admin caller must not be able to send a campaign"
+    );
+    let err_str = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err_str.contains("admin"), "error should mention admin: {}", err_str);
+}
+
+#[tokio::test]
+async fn test_search_newsletter_campaign_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: None,
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: None,
+        admin_resolution_source: None,
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { searchNewsletterCampaign(input: {}) { campaignId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "an anonymous caller must not be able to read campaign history"
+    );
+}
+
+#[tokio::test]
+async fn test_unsubscribe_newsletter_not_rejected_for_auth_without_credentials() {
+    // No auth context at all — the unsubscribe link in an email must work for a fully
+    // anonymous click. A bad/expired token should fail for its own reason, never for lacking
+    // admin/login credentials.
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: None,
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: None,
+        admin_resolution_source: None,
+    };
+
+    let schema = schema();
+    let result = juniper::execute(
+        r#"mutation { unsubscribeNewsletter(input: { subscriberId: "1", token: "bogus" }) }"#,
+        None,
+        &schema,
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await;
+
+    if let Ok((_, errors)) = result {
+        if !errors.is_empty() {
+            let err_str = format!("{:?}", errors[0]).to_lowercase();
+            assert!(
+                !err_str.contains("admin") && !err_str.contains("login required"),
+                "an anonymous unsubscribe click should never fail on authorization: {}",
+                err_str
+            );
+        }
+    }
+}

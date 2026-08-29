@@ -5,6 +5,8 @@ const NEWSLETTER_ROOTS = [
   "createNewsletterSubscriber",
   "updateNewsletterSubscriber",
   "deleteNewsletterSubscriber",
+  "sendNewsletterCampaign",
+  "searchNewsletterCampaign",
 ];
 
 export async function POST(request: Request) {

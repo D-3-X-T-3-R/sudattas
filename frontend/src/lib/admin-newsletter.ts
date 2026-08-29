@@ -44,3 +44,64 @@ export async function deleteNewsletterSubscriberAdmin(subscriberId: string): Pro
     { input: { subscriberId } }
   );
 }
+
+/** One past send of a newsletter campaign — immutable once recorded, no draft/edit. */
+export interface NewsletterCampaignRow {
+  campaignId: string;
+  subject: string;
+  bodyText: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  recipientCount: string;
+  successCount: string;
+  failureCount: string;
+  sentAt: string;
+}
+
+const CAMPAIGN_FIELDS = `campaignId subject bodyText ctaLabel ctaUrl recipientCount successCount failureCount sentAt`;
+
+export async function fetchNewsletterCampaigns(): Promise<NewsletterCampaignRow[]> {
+  const data = await gqlAdmin<{ searchNewsletterCampaign?: NewsletterCampaignRow[] }>(
+    `mutation NewsletterCampaigns {
+      searchNewsletterCampaign(input: {}) { ${CAMPAIGN_FIELDS} }
+    }`
+  );
+  return data?.searchNewsletterCampaign ?? [];
+}
+
+export interface SendNewsletterCampaignInput {
+  subject: string;
+  bodyText: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+}
+
+/**
+ * Compose and immediately send a campaign to every subscriber who hasn't unsubscribed.
+ * There is no draft/preview step server-side — this sends for real. Resolves with the
+ * recorded campaign row (including final success/failure counts) once every recipient has
+ * been attempted, which for a large list can take a while (Resend calls are throttled
+ * server-side to stay under its rate limit).
+ */
+export async function sendNewsletterCampaign(
+  input: SendNewsletterCampaignInput
+): Promise<NewsletterCampaignRow> {
+  const data = await gqlAdmin<{ sendNewsletterCampaign?: NewsletterCampaignRow[] }>(
+    `mutation SendNewsletterCampaign($input: SendNewsletterCampaignInput!) {
+      sendNewsletterCampaign(input: $input) { ${CAMPAIGN_FIELDS} }
+    }`,
+    {
+      input: {
+        subject: input.subject,
+        bodyText: input.bodyText,
+        ctaLabel: input.ctaLabel?.trim() || undefined,
+        ctaUrl: input.ctaUrl?.trim() || undefined,
+      },
+    }
+  );
+  const row = data?.sendNewsletterCampaign?.[0];
+  if (!row) {
+    throw new Error("sendNewsletterCampaign returned empty payload");
+  }
+  return row;
+}

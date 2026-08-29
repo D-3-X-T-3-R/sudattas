@@ -1847,6 +1847,68 @@ pub struct NewsletterSubscribersResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SendNewsletterCampaignRequest {
+    #[prost(string, tag = "1")]
+    pub subject: ::prost::alloc::string::String,
+    /// Plain text; blank-line-separated paragraphs. Rendered into the branded HTML template
+    /// server-side, so the caller never supplies HTML directly.
+    #[prost(string, tag = "2")]
+    pub body_text: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub cta_label: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub cta_url: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SearchNewsletterCampaignRequest {
+    #[prost(int64, optional, tag = "1")]
+    pub campaign_id: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NewsletterCampaignResponse {
+    #[prost(int64, tag = "1")]
+    pub campaign_id: i64,
+    #[prost(string, tag = "2")]
+    pub subject: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub body_text: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub cta_label: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub cta_url: ::prost::alloc::string::String,
+    #[prost(int64, tag = "6")]
+    pub recipient_count: i64,
+    #[prost(int64, tag = "7")]
+    pub success_count: i64,
+    #[prost(int64, tag = "8")]
+    pub failure_count: i64,
+    #[prost(string, tag = "9")]
+    pub sent_at: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NewsletterCampaignsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<NewsletterCampaignResponse>,
+}
+/// Public, unauthenticated: the link a subscriber clicks from inside a campaign email.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UnsubscribeNewsletterByTokenRequest {
+    #[prost(int64, tag = "1")]
+    pub subscriber_id: i64,
+    #[prost(string, tag = "2")]
+    pub token: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateSizeRequest {
     #[prost(string, tag = "1")]
     pub size_name: ::prost::alloc::string::String,
@@ -5387,6 +5449,96 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn send_newsletter_campaign(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SendNewsletterCampaignRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::NewsletterCampaignsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SendNewsletterCampaign",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "SendNewsletterCampaign",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn search_newsletter_campaign(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SearchNewsletterCampaignRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::NewsletterCampaignsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SearchNewsletterCampaign",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "SearchNewsletterCampaign",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn unsubscribe_newsletter_by_token(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UnsubscribeNewsletterByTokenRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::NewsletterSubscribersResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/UnsubscribeNewsletterByToken",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "UnsubscribeNewsletterByToken",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         /// Sizes
         pub async fn create_size(
             &mut self,
@@ -7678,6 +7830,27 @@ pub mod grpc_services_server {
         async fn delete_newsletter_subscriber(
             &self,
             request: tonic::Request<super::DeleteNewsletterSubscriberRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::NewsletterSubscribersResponse>,
+            tonic::Status,
+        >;
+        async fn send_newsletter_campaign(
+            &self,
+            request: tonic::Request<super::SendNewsletterCampaignRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::NewsletterCampaignsResponse>,
+            tonic::Status,
+        >;
+        async fn search_newsletter_campaign(
+            &self,
+            request: tonic::Request<super::SearchNewsletterCampaignRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::NewsletterCampaignsResponse>,
+            tonic::Status,
+        >;
+        async fn unsubscribe_newsletter_by_token(
+            &self,
+            request: tonic::Request<super::UnsubscribeNewsletterByTokenRequest>,
         ) -> std::result::Result<
             tonic::Response<super::NewsletterSubscribersResponse>,
             tonic::Status,
@@ -12255,6 +12428,161 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = DeleteNewsletterSubscriberSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SendNewsletterCampaign" => {
+                    #[allow(non_camel_case_types)]
+                    struct SendNewsletterCampaignSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::SendNewsletterCampaignRequest>
+                    for SendNewsletterCampaignSvc<T> {
+                        type Response = super::NewsletterCampaignsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SendNewsletterCampaignRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::send_newsletter_campaign(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SendNewsletterCampaignSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SearchNewsletterCampaign" => {
+                    #[allow(non_camel_case_types)]
+                    struct SearchNewsletterCampaignSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::SearchNewsletterCampaignRequest>
+                    for SearchNewsletterCampaignSvc<T> {
+                        type Response = super::NewsletterCampaignsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::SearchNewsletterCampaignRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::search_newsletter_campaign(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SearchNewsletterCampaignSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/UnsubscribeNewsletterByToken" => {
+                    #[allow(non_camel_case_types)]
+                    struct UnsubscribeNewsletterByTokenSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<
+                        super::UnsubscribeNewsletterByTokenRequest,
+                    > for UnsubscribeNewsletterByTokenSvc<T> {
+                        type Response = super::NewsletterSubscribersResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::UnsubscribeNewsletterByTokenRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::unsubscribe_newsletter_by_token(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = UnsubscribeNewsletterByTokenSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

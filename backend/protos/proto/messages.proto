@@ -1012,6 +1012,46 @@ message NewsletterSubscribersResponse {
     repeated NewsletterSubscriberResponse items = 1;
 }
 
+// NewsletterCampaigns — one row per admin-triggered "send to all subscribers" action.
+// There is no draft/scheduled state: creating one *is* sending it (synchronously, within the
+// RPC call), and the row records the outcome. Kept immutable once written — a permanent log
+// of what was actually sent and when, not an editable document.
+
+message SendNewsletterCampaignRequest {
+    string subject = 1;
+    // Plain text; blank-line-separated paragraphs. Rendered into the branded HTML template
+    // server-side, so the caller never supplies HTML directly.
+    string body_text = 2;
+    optional string cta_label = 3;
+    optional string cta_url = 4;
+}
+
+message SearchNewsletterCampaignRequest {
+    optional int64 campaign_id = 1;
+}
+
+message NewsletterCampaignResponse {
+    int64 campaign_id = 1;
+    string subject = 2;
+    string body_text = 3;
+    string cta_label = 4;
+    string cta_url = 5;
+    int64 recipient_count = 6;
+    int64 success_count = 7;
+    int64 failure_count = 8;
+    string sent_at = 9;
+}
+
+message NewsletterCampaignsResponse {
+    repeated NewsletterCampaignResponse items = 1;
+}
+
+// Public, unauthenticated: the link a subscriber clicks from inside a campaign email.
+message UnsubscribeNewsletterByTokenRequest {
+    int64 subscriber_id = 1;
+    string token = 2;
+}
+
 // Sizes
 
 message CreateSizeRequest {

@@ -41,8 +41,10 @@ use crate::resolvers::{
     newsletter_subscribers::{
         self,
         schema::{
-            DeleteNewsletterSubscriberInput, NewNewsletterSubscriber, NewsletterSubscriber,
-            NewsletterSubscriberMutation, SearchNewsletterSubscriberInput,
+            DeleteNewsletterSubscriberInput, NewNewsletterSubscriber, NewsletterCampaign,
+            NewsletterSubscriber, NewsletterSubscriberMutation, SearchNewsletterCampaignInput,
+            SearchNewsletterSubscriberInput, SendNewsletterCampaignInput,
+            UnsubscribeNewsletterInput,
         },
     },
     occasions::{
@@ -1125,6 +1127,66 @@ impl MutationRoot {
     ) -> FieldResult<Vec<NewsletterSubscriber>> {
         require_admin(context)?;
         newsletter_subscribers::handlers::delete_newsletter_subscriber(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Public: storefront footer signup. Deliberately not `require_admin`/`require_jwt`-gated —
+    /// unlike every other newsletter mutation above, this one exists specifically for an
+    /// anonymous visitor who isn't logged in and has no guest session tied to the address.
+    /// A duplicate email surfaces as the DB's existing unique-constraint error
+    /// (`AlreadyExists`); the frontend maps that to a friendly "already subscribed" message.
+    #[instrument(err, ret)]
+    async fn subscribe_newsletter(_context: &Context, email: String) -> FieldResult<bool> {
+        let trimmed = email.trim();
+        if trimmed.is_empty() || !trimmed.contains('@') {
+            return Err(juniper::FieldError::new(
+                "A valid email address is required",
+                juniper::Value::null(),
+            ));
+        }
+        newsletter_subscribers::handlers::create_newsletter_subscriber(NewNewsletterSubscriber {
+            email: trimmed.to_string(),
+        })
+        .await
+        .map(|_| true)
+        .map_err(|e| e.into_field_error())
+    }
+
+    /// Public: the one-click unsubscribe link embedded in every campaign email. Verified by
+    /// signed token (see core_operations::handlers::newsletter_subscribers::unsubscribe_token),
+    /// not by auth — the whole point is that it works without logging in.
+    #[instrument(err, ret)]
+    async fn unsubscribe_newsletter(
+        _context: &Context,
+        input: UnsubscribeNewsletterInput,
+    ) -> FieldResult<bool> {
+        newsletter_subscribers::handlers::unsubscribe_newsletter(input)
+            .await
+            .map(|_| true)
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: compose and immediately send a campaign to every non-unsubscribed subscriber.
+    #[instrument(err, ret)]
+    async fn send_newsletter_campaign(
+        context: &Context,
+        input: SendNewsletterCampaignInput,
+    ) -> FieldResult<Vec<NewsletterCampaign>> {
+        require_admin(context)?;
+        newsletter_subscribers::handlers::send_newsletter_campaign(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: campaign history — omit campaignId to list every campaign ever sent.
+    #[instrument(err, ret)]
+    async fn search_newsletter_campaign(
+        context: &Context,
+        input: SearchNewsletterCampaignInput,
+    ) -> FieldResult<Vec<NewsletterCampaign>> {
+        require_admin(context)?;
+        newsletter_subscribers::handlers::search_newsletter_campaign(input)
             .await
             .map_err(|e| e.into_field_error())
     }

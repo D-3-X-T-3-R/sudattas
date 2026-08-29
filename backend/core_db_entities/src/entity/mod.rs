@@ -13,6 +13,7 @@ pub mod idempotency_keys;
 pub mod inventory;
 pub mod inventory_log;
 pub mod invoices;
+pub mod newsletter_campaigns;
 pub mod newsletter_subscribers;
 pub mod occasions;
 pub mod order_details;
