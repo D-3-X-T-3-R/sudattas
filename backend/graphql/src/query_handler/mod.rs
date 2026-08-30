@@ -45,6 +45,12 @@ pub struct Context {
     pub admin_authorized: Option<bool>,
     /// Resolution source for observability (`cache`, `db`, `env_fallback`, `none`).
     pub admin_resolution_source: Option<String>,
+    /// Resolved `UserStatuses.code` for the JWT-authenticated user, computed at the same
+    /// auth-gate DB/cache lookup as `admin_authorized` (see `admin_roles::resolve_admin_from_db`).
+    /// `None` for non-JWT auth (guest session, internal service/customer) or when the user has
+    /// never had a status explicitly set (treated as active). Used by `require_jwt` to reject
+    /// deactivated/suspended accounts.
+    pub account_status: Option<String>,
 }
 
 impl Context {
@@ -63,8 +69,16 @@ impl Context {
     }
 
     /// Returns the authenticated customer user ID for JWT/internal-customer requests.
-    /// Returns `None` for guest sessions and internal service calls.
+    /// Returns `None` for guest sessions and internal service calls — and, deliberately, for a
+    /// deactivated/suspended account, even though `self.auth` itself is still `Some`. This is
+    /// the actual enforcement point: several mutations (e.g. `place_order`) check
+    /// `jwt_user_id()` directly instead of going through `require_jwt`/`require_customer_actor`,
+    /// so gating deactivation here — rather than only in those two helpers — is what makes it
+    /// impossible to bypass by hitting one of those call sites instead.
     pub fn jwt_user_id(&self) -> Option<&str> {
+        if self.account_deactivated() {
+            return None;
+        }
         match &self.auth {
             Some(AuthSource::Jwt(id)) | Some(AuthSource::InternalCustomer(id)) => Some(id.as_str()),
             _ => None,
@@ -107,6 +121,12 @@ impl Context {
 
     pub fn admin_resolution_source(&self) -> Option<&str> {
         self.admin_resolution_source.as_deref()
+    }
+
+    /// True when the JWT-authenticated user's account is "inactive" or "suspended" — the
+    /// admin-set states, not just "never had a status set" (which stays `None`/active).
+    pub fn account_deactivated(&self) -> bool {
+        matches!(self.account_status.as_deref(), Some("inactive") | Some("suspended"))
     }
 
     pub fn auth_mode(&self) -> &'static str {

@@ -16,6 +16,9 @@ pub struct User {
     pub gender: Option<String>,
     /// ISO yyyy-mm-dd
     pub date_of_birth: Option<String>,
+    /// "active" | "inactive" | "suspended"; absent means never explicitly set (treated as
+    /// active). Set via the dedicated `setUserStatus` mutation, never via `updateUser`.
+    pub user_status: Option<String>,
 }
 
 #[graphql_object]
@@ -70,6 +73,11 @@ impl User {
     /// ISO yyyy-mm-dd
     async fn date_of_birth(&self) -> &Option<String> {
         &self.date_of_birth
+    }
+
+    /// "active" | "inactive" | "suspended"; absent means never explicitly set (active).
+    async fn user_status(&self) -> &Option<String> {
+        &self.user_status
     }
 }
 
@@ -135,6 +143,14 @@ pub struct SearchUserInput {
 #[graphql(description = "Delete a user account by ID")]
 pub struct DeleteUserInput {
     pub user_id: String,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Activate, deactivate, or suspend a user account")]
+pub struct SetUserStatusInput {
+    pub user_id: String,
+    /// "active" | "inactive" | "suspended"
+    pub status: String,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

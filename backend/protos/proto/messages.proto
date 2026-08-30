@@ -248,10 +248,21 @@ message UserResponse {
     optional string last_name = 13;
     optional string gender = 14;         // "male" | "female" | "other"
     optional string date_of_birth = 15;  // ISO yyyy-mm-dd
+    // Resolved from user_status_id via UserStatuses.code ("active" | "inactive" | "suspended");
+    // absent if user_status_id is unset (treated as active — never explicitly deactivated).
+    optional string user_status = 16;
 }
 
 message UsersResponse {
     repeated UserResponse items = 1;
+}
+
+// Admin: activate/deactivate/suspend a user account. Deliberately a dedicated mutation, not a
+// field on UpdateUserRequest (which excludes it on purpose) — access-restricting actions get
+// their own explicit, auditable entry point rather than being a side effect of a profile edit.
+message SetUserStatusRequest {
+    int64 user_id = 1;
+    string status = 2; // "active" | "inactive" | "suspended"
 }
 
 // P2 Security: audit log for secrets rotation etc.

@@ -45,7 +45,9 @@ function resolveAdminRoute(query: string): string {
     return "/api/admin/reviews";
   }
 
-  if (containsAny(query, ["searchUser", "updateUser", "createUser", "deleteUser"])) {
+  if (
+    containsAny(query, ["searchUser", "updateUser", "createUser", "deleteUser", "setUserStatus"])
+  ) {
     return "/api/admin/customers";
   }
 

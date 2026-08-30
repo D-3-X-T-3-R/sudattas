@@ -156,7 +156,10 @@ use crate::resolvers::{
     },
     users::{
         self,
-        schema::{DeleteUserInput, NewUser, RecordSecurityAuditEventInput, UpdateUserInput, User},
+        schema::{
+            DeleteUserInput, NewUser, RecordSecurityAuditEventInput, SetUserStatusInput,
+            UpdateUserInput, User,
+        },
     },
     utils::parse_i64,
     weaves::{
@@ -174,19 +177,36 @@ use tracing::{info, warn};
 
 pub struct MutationRoot;
 
+/// Deactivated/suspended accounts (`setUserStatus`) are rejected here, ahead of the specific
+/// `jwt_user_id`/`is_admin` check each caller does — this is the one choke point every
+/// JWT-gated mutation goes through, so an admin turning off an account actually blocks it
+/// rather than just labeling it.
+fn require_not_deactivated(context: &Context) -> Result<(), juniper::FieldError> {
+    if context.account_deactivated() {
+        return Err(juniper::FieldError::new(
+            "This account has been deactivated. Contact support if you believe this is a mistake.",
+            juniper::Value::null(),
+        ));
+    }
+    Ok(())
+}
+
 fn require_jwt(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_customer_actor(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
+    require_not_deactivated(context)?;
     if context.is_admin() {
         Ok(())
     } else {
@@ -207,6 +227,7 @@ fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
 }
 
 fn require_admin_or_internal_service(context: &Context) -> Result<(), juniper::FieldError> {
+    require_not_deactivated(context)?;
     if context.is_admin() || matches!(&context.auth, Some(super::AuthSource::InternalService)) {
         Ok(())
     } else {
@@ -409,6 +430,21 @@ impl MutationRoot {
             }
         }
         users::handlers::delete_user(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin-only: activate/deactivate/suspend a user account. A deactivated/suspended
+    /// account's future JWT-authenticated requests are rejected at the auth gate (see
+    /// `admin_roles::resolve_admin_from_db` and `require_jwt` below) — not just a cosmetic
+    /// label. No customer self-service path; account status is an admin action only.
+    #[instrument(err, ret)]
+    async fn set_user_status(
+        context: &Context,
+        input: SetUserStatusInput,
+    ) -> FieldResult<Vec<User>> {
+        require_admin(context)?;
+        users::handlers::set_user_status(input)
             .await
             .map_err(|e| e.into_field_error())
     }

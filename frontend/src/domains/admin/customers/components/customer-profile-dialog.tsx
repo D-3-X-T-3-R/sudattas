@@ -6,9 +6,20 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { updateCustomerAdmin, type CustomerListRow } from "@/lib/admin-queries";
-import { ExternalLink, Pencil, User } from "lucide-react";
+import { setCustomerStatus, updateCustomerAdmin, type CustomerListRow } from "@/lib/admin-queries";
+import { ExternalLink, Pencil, ShieldOff, ShieldCheck, User } from "lucide-react";
 import { formatCreateDate, formatCurrency } from "@/domains/admin/customers/utils";
+
+/** "active" | never-set both render as nothing extra — only a non-active status is called out. */
+function CustomerStatusBadge({ status }: { status: string | null }) {
+  const key = (status ?? "").trim().toLowerCase();
+  if (key !== "inactive" && key !== "suspended") return null;
+  return (
+    <span className="mt-1 inline-flex w-fit items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-medium capitalize text-red-700">
+      {key}
+    </span>
+  );
+}
 
 type CustomerProfileDialogProps = {
   selectedCustomer: CustomerListRow | null;
@@ -57,6 +68,12 @@ function CustomerProfileDialogBody({
   const [address, setAddress] = useState(customer.address ?? "");
   const [phone, setPhone] = useState(customer.phone ?? "");
   const [error, setError] = useState("");
+  const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
+  const [statusError, setStatusError] = useState("");
+
+  const isDeactivated = ["inactive", "suspended"].includes(
+    (customer.userStatus ?? "").trim().toLowerCase()
+  );
 
   const updateMutation = useMutation({
     mutationFn: () => updateCustomerAdmin({ userId: customer.userId, fullName, address, phone }),
@@ -67,6 +84,18 @@ function CustomerProfileDialogBody({
       setError("");
     },
     onError: (err: Error) => setError(err.message || "Failed to save changes."),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: () =>
+      setCustomerStatus(customer.userId, isDeactivated ? "active" : "inactive"),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
+      if (updated) onUpdated(updated);
+      setStatusConfirmOpen(false);
+      setStatusError("");
+    },
+    onError: (err: Error) => setStatusError(err.message || "Failed to update account status."),
   });
 
   return (
@@ -80,6 +109,7 @@ function CustomerProfileDialogBody({
             {customer.fullName ?? customer.username ?? "-"}
           </p>
           <p className="text-[var(--color-muted)]">{customer.email}</p>
+          <CustomerStatusBadge status={customer.userStatus} />
         </div>
       </div>
       <div className="flex gap-4 rounded-xl bg-[var(--color-surface)] p-4">
@@ -174,7 +204,7 @@ function CustomerProfileDialogBody({
       )}
 
       {!editing && (
-        <div className="flex gap-2 pt-2">
+        <div className="flex flex-wrap gap-2 pt-2">
           <Button asChild className="flex-1">
             <Link href={`/imtheboss/orders?userId=${encodeURIComponent(customer.userId)}`}>
               <ExternalLink className="mr-1.5 h-4 w-4" />
@@ -185,11 +215,84 @@ function CustomerProfileDialogBody({
             <Pencil className="mr-1.5 h-4 w-4" />
             Edit
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className={
+              isDeactivated
+                ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                : "border-red-200 text-red-600 hover:bg-red-50"
+            }
+            onClick={() => {
+              setStatusError("");
+              setStatusConfirmOpen(true);
+            }}
+          >
+            {isDeactivated ? (
+              <ShieldCheck className="mr-1.5 h-4 w-4" />
+            ) : (
+              <ShieldOff className="mr-1.5 h-4 w-4" />
+            )}
+            {isDeactivated ? "Reactivate" : "Deactivate"}
+          </Button>
           <Button type="button" variant="outline" onClick={onClose}>
             Close
           </Button>
         </div>
       )}
+
+      <Dialog
+        open={statusConfirmOpen}
+        onOpenChange={(open) => !open && !statusMutation.isPending && setStatusConfirmOpen(false)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <p className="text-[15px] leading-relaxed text-[var(--color-ink)]">
+            {isDeactivated ? (
+              <>
+                Reactivate <strong>{customer.fullName ?? customer.username ?? customer.email}</strong>?
+                They&rsquo;ll be able to log in and use their account again immediately.
+              </>
+            ) : (
+              <>
+                Deactivate <strong>{customer.fullName ?? customer.username ?? customer.email}</strong>?
+                They won&rsquo;t be able to log in, check out, or take any account action until
+                reactivated — existing orders are unaffected. Changes may take up to a few
+                minutes to take effect everywhere.
+              </>
+            )}
+          </p>
+          {statusError && (
+            <p className="mt-2 text-sm text-red-600" role="alert">
+              {statusError}
+            </p>
+          )}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setStatusConfirmOpen(false)}
+              disabled={statusMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              className={
+                isDeactivated
+                  ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  : "border-red-200 text-red-600 hover:bg-red-50"
+              }
+              onClick={() => statusMutation.mutate()}
+              disabled={statusMutation.isPending}
+            >
+              {statusMutation.isPending
+                ? "Saving…"
+                : isDeactivated
+                  ? "Reactivate"
+                  : "Deactivate"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

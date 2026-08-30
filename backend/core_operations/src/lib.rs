@@ -92,7 +92,7 @@ use proto::proto::core::{
     SearchReturnRequestsRequest, SearchReviewRequest, SearchShippingMethodRequest,
     SearchSizeRequest, SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
     SearchUserRoleRequest, SearchWeaveRequest, SearchWishlistItemRequest,
-    SendNewsletterCampaignRequest, ShipmentsResponse,
+    SendNewsletterCampaignRequest, SetUserStatusRequest, ShipmentsResponse,
     ShippingAddressesResponse, ShippingMethodsResponse, ShopHighlightMoodsRequest,
     ShopHighlightMoodsResponse, SizesResponse, SyncOrderShipmentsFromShiprocketRequest,
     SyncOrderShipmentsFromShiprocketResponse, SyncProductImagesRequest, TransactionsResponse,
@@ -603,6 +603,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::users::delete_user(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn set_user_status(
+        &self,
+        request: Request<SetUserStatusRequest>,
+    ) -> Result<Response<UsersResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::users::set_user_status(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

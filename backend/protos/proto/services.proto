@@ -36,6 +36,7 @@ service GRPCServices {
     rpc SearchUser(SearchUserRequest) returns (UsersResponse);
     rpc UpdateUser(UpdateUserRequest) returns (UsersResponse);
     rpc DeleteUser(DeleteUserRequest) returns (UsersResponse);
+    rpc SetUserStatus(SetUserStatusRequest) returns (UsersResponse);
     rpc GetUserPiiExport(GetUserPiiExportRequest) returns (GetUserPiiExportResponse);
     rpc RecordSecurityAuditEvent(RecordSecurityAuditRequest) returns (RecordSecurityAuditResponse);
 

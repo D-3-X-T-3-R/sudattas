@@ -461,6 +461,10 @@ pub struct UserResponse {
     /// ISO yyyy-mm-dd
     #[prost(string, optional, tag = "15")]
     pub date_of_birth: ::core::option::Option<::prost::alloc::string::String>,
+    /// Resolved from user_status_id via UserStatuses.code ("active" | "inactive" | "suspended");
+    /// absent if user_status_id is unset (treated as active — never explicitly deactivated).
+    #[prost(string, optional, tag = "16")]
+    pub user_status: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -468,6 +472,19 @@ pub struct UserResponse {
 pub struct UsersResponse {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<UserResponse>,
+}
+/// Admin: activate/deactivate/suspend a user account. Deliberately a dedicated mutation, not a
+/// field on UpdateUserRequest (which excludes it on purpose) — access-restricting actions get
+/// their own explicit, auditable entry point rather than being a side effect of a profile edit.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetUserStatusRequest {
+    #[prost(int64, tag = "1")]
+    pub user_id: i64,
+    /// "active" | "inactive" | "suspended"
+    #[prost(string, tag = "2")]
+    pub status: ::prost::alloc::string::String,
 }
 /// P2 Security: audit log for secrets rotation etc.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -3697,6 +3714,28 @@ pub mod grpc_services_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "DeleteUser"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_user_status(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetUserStatusRequest>,
+        ) -> std::result::Result<tonic::Response<super::UsersResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SetUserStatus",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "SetUserStatus"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_user_pii_export(
@@ -7402,6 +7441,10 @@ pub mod grpc_services_server {
             &self,
             request: tonic::Request<super::DeleteUserRequest>,
         ) -> std::result::Result<tonic::Response<super::UsersResponse>, tonic::Status>;
+        async fn set_user_status(
+            &self,
+            request: tonic::Request<super::SetUserStatusRequest>,
+        ) -> std::result::Result<tonic::Response<super::UsersResponse>, tonic::Status>;
         async fn get_user_pii_export(
             &self,
             request: tonic::Request<super::GetUserPiiExportRequest>,
@@ -9328,6 +9371,52 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = DeleteUserSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SetUserStatus" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetUserStatusSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::SetUserStatusRequest>
+                    for SetUserStatusSvc<T> {
+                        type Response = super::UsersResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetUserStatusRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::set_user_status(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SetUserStatusSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

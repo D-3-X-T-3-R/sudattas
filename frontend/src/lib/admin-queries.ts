@@ -389,6 +389,8 @@ export interface CustomerListRow {
   address: string | null;
   phone: string | null;
   createDate: string;
+  /** "active" | "inactive" | "suspended"; null means never explicitly set (treated as active). */
+  userStatus: string | null;
 }
 
 /** Fetch one customers page (bounded). */
@@ -409,11 +411,41 @@ export async function fetchCustomersList(params?: {
         address
         phone
         createDate
+        userStatus
       }
     }`,
     { input: { userId: "0", limit, offset } }
   );
   return data?.searchUser ?? [];
+}
+
+/**
+ * Admin: activate/deactivate/suspend a customer account. Not cosmetic — the backend auth gate
+ * rejects every future JWT-authenticated request from a deactivated/suspended account (login,
+ * checkout, everything), subject to a short cache TTL server-side. Deliberately a separate
+ * mutation from updateCustomerAdmin, which intentionally never touches this field.
+ */
+export async function setCustomerStatus(
+  userId: string,
+  status: "active" | "inactive" | "suspended"
+): Promise<CustomerListRow | null> {
+  const data = await gqlAdmin<{ setUserStatus?: CustomerListRow[] }>(
+    `mutation AdminSetCustomerStatus($input: SetUserStatusInput!) {
+      setUserStatus(input: $input) {
+        userId
+        username
+        email
+        authProvider
+        fullName
+        address
+        phone
+        createDate
+        userStatus
+      }
+    }`,
+    { input: { userId, status } }
+  );
+  return data?.setUserStatus?.[0] ?? null;
 }
 
 export async function fetchAllCustomersList(): Promise<CustomerListRow[]> {
@@ -452,6 +484,7 @@ export async function updateCustomerAdmin(params: {
         address
         phone
         createDate
+        userStatus
       }
     }`,
     {

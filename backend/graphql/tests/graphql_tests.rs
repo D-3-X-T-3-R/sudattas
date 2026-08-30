@@ -29,6 +29,7 @@ fn test_api_version_query() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, _errors) = juniper::execute_sync(
@@ -61,6 +62,7 @@ fn test_api_version_format_semver_like() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, _) = juniper::execute_sync(
@@ -99,6 +101,7 @@ fn test_api_version_with_session_context() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -135,6 +138,7 @@ fn test_auth_info_query() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -189,6 +193,7 @@ fn test_auth_info_jwt_context() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -230,6 +235,7 @@ fn test_auth_info_session_disabled_when_no_redis() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -274,6 +280,7 @@ fn test_multiple_root_fields_in_one_query() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -319,6 +326,7 @@ async fn test_place_order_requires_jwt_rejects_session_only() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute(
@@ -358,6 +366,7 @@ async fn test_place_order_with_jwt_accepts_request() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let schema = schema();
@@ -396,6 +405,7 @@ async fn test_admin_mutation_requires_admin_authorization() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute(
@@ -434,6 +444,7 @@ async fn test_capture_payment_requires_privileged_authorization() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("db".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -467,6 +478,7 @@ async fn test_apply_coupon_requires_customer_login() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("none".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -500,6 +512,7 @@ async fn test_validate_coupon_requires_customer_login() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("none".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -533,6 +546,7 @@ async fn test_order_internal_mutations_require_privileged_authorization() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("db".to_string()),
+        account_status: None,
     };
 
     let cases = [
@@ -569,6 +583,7 @@ async fn test_search_inventory_item_requires_admin() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("db".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -602,6 +617,7 @@ async fn test_search_inventory_log_requires_admin_for_customer() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("db".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -635,6 +651,7 @@ async fn test_search_inventory_log_requires_admin_for_guest_session() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("none".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -668,6 +685,7 @@ async fn test_search_inventory_log_allows_admin_context() {
         jwt_subject: Some("google_sub_admin".to_string()),
         admin_authorized: Some(true),
         admin_resolution_source: Some("db".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -703,6 +721,7 @@ async fn test_search_user_requires_admin_authorization() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("db".to_string()),
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute(
@@ -737,6 +756,7 @@ async fn test_record_security_audit_event_rejects_customer_auth() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("db".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -770,6 +790,7 @@ async fn test_record_security_audit_event_rejects_guest_session() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("none".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -803,6 +824,7 @@ async fn test_record_security_audit_event_allows_admin_context() {
         jwt_subject: Some("google_sub_admin".to_string()),
         admin_authorized: Some(true),
         admin_resolution_source: Some("db".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -838,6 +860,7 @@ async fn test_record_security_audit_event_allows_internal_service() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("internal".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -873,6 +896,7 @@ async fn test_search_user_allows_admin_context() {
         jwt_subject: Some("google_sub_admin".to_string()),
         admin_authorized: Some(true),
         admin_resolution_source: Some("db".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -908,6 +932,7 @@ async fn test_search_order_rejects_cross_user_access_for_customer() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute(
@@ -942,6 +967,7 @@ async fn test_update_user_rejects_cross_user_access_for_customer() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("internal".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -974,6 +1000,7 @@ async fn test_update_user_rejects_cross_user_access_with_profile_fields() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("internal".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -1016,6 +1043,7 @@ async fn test_create_user_rejects_session_auth() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("none".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -1046,6 +1074,7 @@ async fn test_get_presigned_upload_url_requires_admin() {
         jwt_subject: None,
         admin_authorized: Some(false),
         admin_resolution_source: Some("internal".to_string()),
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -1078,6 +1107,7 @@ fn test_invalid_query_syntax_returns_errors() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let schema = schema();
@@ -1108,6 +1138,7 @@ fn test_unknown_field_returns_errors() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let schema = schema();
@@ -1142,6 +1173,7 @@ fn test_money_type_in_schema() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute_sync(
@@ -1211,6 +1243,7 @@ async fn integration_handler_rejects_deep_query_with_400() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
     let deep_query = "{ a { b { c { d { e { f { g { h { i { j { x } } } } } } } } } } }";
     let body =
@@ -1251,6 +1284,7 @@ async fn integration_handler_records_graphql_metrics() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
     let body = warp::hyper::body::Bytes::from(
         serde_json::json!({ "query": "{ apiVersion }" }).to_string(),
@@ -1311,6 +1345,7 @@ async fn integration_handler_rejects_high_complexity_with_400_when_limit_set() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
     let body =
         warp::hyper::body::Bytes::from(serde_json::json!({ "query": complex_query }).to_string());
@@ -1345,6 +1380,7 @@ async fn test_subscribe_newsletter_rejects_invalid_email_without_auth() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (res, errors) = juniper::execute(
@@ -1383,6 +1419,7 @@ async fn test_subscribe_newsletter_rejects_blank_email_without_auth() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -1414,6 +1451,7 @@ async fn test_subscribe_newsletter_with_valid_email_not_rejected_for_auth() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let schema = schema();
@@ -1455,6 +1493,7 @@ async fn test_send_newsletter_campaign_requires_admin_authorization() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -1488,6 +1527,7 @@ async fn test_search_newsletter_campaign_requires_admin_authorization() {
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let (_res, errors) = juniper::execute(
@@ -1522,6 +1562,7 @@ async fn test_unsubscribe_newsletter_not_rejected_for_auth_without_credentials()
         jwt_subject: None,
         admin_authorized: None,
         admin_resolution_source: None,
+        account_status: None,
     };
 
     let schema = schema();
@@ -1540,6 +1581,169 @@ async fn test_unsubscribe_newsletter_not_rejected_for_auth_without_credentials()
             assert!(
                 !err_str.contains("admin") && !err_str.contains("login required"),
                 "an anonymous unsubscribe click should never fail on authorization: {}",
+                err_str
+            );
+        }
+    }
+}
+
+// =============================================================================
+// Account deactivation (setUserStatus) enforcement at the auth gate
+// =============================================================================
+
+#[tokio::test]
+async fn test_deactivated_customer_rejected_with_clear_message_via_require_customer_actor() {
+    // applyCoupon goes through require_customer_actor, which gives the specific "deactivated"
+    // message (see the bypass test below for a mutation that doesn't go through it).
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("user_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: Some("inactive".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { applyCoupon(input: { code: "TEST10", orderAmountPaise: "10000" }) { code } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "a deactivated customer must be rejected even with a valid JWT"
+    );
+    let err_str = format!("{:?}", errors[0]).to_lowercase();
+    assert!(
+        err_str.contains("deactivated"),
+        "error should mention deactivation, not just 'login required': {}",
+        err_str
+    );
+}
+
+#[tokio::test]
+async fn test_deactivated_customer_blocked_even_on_a_bypass_path() {
+    // place_order checks context.jwt_user_id() directly instead of going through
+    // require_jwt/require_customer_actor — this is exactly the kind of call site the
+    // enforcement must not depend on being routed through those two helpers. The message here
+    // is place_order's own ("Login required..."), not the nicer "deactivated" one, but the
+    // request must still be blocked — jwt_user_id() itself returns None once deactivated.
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("user_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: Some("inactive".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { placeOrder(order: { shippingAddressId: "1" }) { orderId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "a deactivated customer must be blocked from place_order even though it doesn't call require_jwt/require_customer_actor"
+    );
+    let err_str = format!("{:?}", errors[0]).to_lowercase();
+    assert!(
+        err_str.contains("login required"),
+        "should fail as 'not logged in' (jwt_user_id() returns None), not reach the gRPC call: {}",
+        err_str
+    );
+}
+
+#[tokio::test]
+async fn test_suspended_admin_rejected_from_admin_action() {
+    // Even a user who would otherwise pass is_admin() (admin_authorized: Some(true)) must be
+    // blocked once their own account is suspended — role membership doesn't override this.
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("admin_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(true),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: Some("suspended".to_string()),
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { searchNewsletterCampaign(input: {}) { campaignId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "a suspended admin must be rejected even though is_admin() would say true"
+    );
+    let err_str = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err_str.contains("deactivated"), "error should mention deactivation: {}", err_str);
+}
+
+#[tokio::test]
+async fn test_never_set_status_is_not_treated_as_deactivated() {
+    // account_status: None means "never explicitly set" — must behave exactly like today
+    // (active), not be rejected.
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("user_2".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: None,
+    };
+
+    let schema = schema();
+    let result = juniper::execute(
+        r#"mutation { placeOrder(order: { shippingAddressId: "1" }) { orderId } }"#,
+        None,
+        &schema,
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await;
+
+    if let Ok((_, errors)) = result {
+        if !errors.is_empty() {
+            let err_str = format!("{:?}", errors[0]).to_lowercase();
+            assert!(
+                !err_str.contains("deactivated"),
+                "a never-set status must never be treated as deactivated: {}",
                 err_str
             );
         }

@@ -78,19 +78,35 @@ use juniper::IntoFieldError;
 
 pub struct QueryRoot;
 
+/// Deactivated/suspended accounts (`setUserStatus`) are rejected here, ahead of the specific
+/// `jwt_user_id`/`is_admin` check each caller does — see the identical helper in
+/// `mutation_root.rs` for the full rationale.
+fn require_not_deactivated(context: &Context) -> Result<(), juniper::FieldError> {
+    if context.account_deactivated() {
+        return Err(juniper::FieldError::new(
+            "This account has been deactivated. Contact support if you believe this is a mistake.",
+            juniper::Value::null(),
+        ));
+    }
+    Ok(())
+}
+
 fn require_jwt(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_customer_actor(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
+    require_not_deactivated(context)?;
     if context.is_admin() {
         Ok(())
     } else {
