@@ -110,6 +110,17 @@ function resolveAdminRoute(query: string): string {
 
   if (
     containsAny(query, [
+      "searchShippingMethod",
+      "createShippingMethod",
+      "updateShippingMethod",
+      "deleteShippingMethod",
+    ])
+  ) {
+    return "/api/admin/shipping-methods";
+  }
+
+  if (
+    containsAny(query, [
       "searchOrder",
       "searchOrderStatus",
       "updateOrder",

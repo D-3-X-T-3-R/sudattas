@@ -5,6 +5,7 @@ import { Ruler, Palette, Shirt, Waves, PartyPopper, Settings, ShieldCheck } from
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
 import { AdminTableCard } from "@/components/admin/admin-cards";
 import { TaxonomyManagerCard } from "@/components/admin/taxonomy-manager-card";
+import { ShippingMethodsCard } from "@/components/admin/shipping-methods-card";
 import {
   fetchSizes,
   createSize,
@@ -41,7 +42,7 @@ export default function AdminSettingsPage() {
     <AdminPageShell
       label="Settings"
       title="Store configuration"
-      description="Product taxonomy (sizes, colors, fabrics, weaves, occasions), staff roles, and, eventually, payment/shipping/tax settings."
+      description="Product taxonomy (sizes, colors, fabrics, weaves, occasions), staff roles, shipping methods, and, eventually, payment/tax settings."
     >
       <div className="grid gap-6 lg:grid-cols-2">
         <TaxonomyManagerCard
@@ -129,13 +130,17 @@ export default function AdminSettingsPage() {
         />
       </div>
 
+      <div className="mt-6">
+        <ShippingMethodsCard />
+      </div>
+
       <AdminTableCard
         title="Coming soon"
         icon={<Settings className="h-4 w-4 text-[var(--color-green)]" />}
         className="mt-6 max-w-3xl"
       >
         <div className="space-y-3 text-[15px] leading-relaxed text-[var(--color-muted)]">
-          <p>Payment options, delivery areas, and tax rules will appear here once ready.</p>
+          <p>Payment options and tax rules will appear here once ready.</p>
         </div>
       </AdminTableCard>
     </AdminPageShell>
