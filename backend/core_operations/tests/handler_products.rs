@@ -472,3 +472,90 @@ async fn get_products_by_id_returns_matching_products() {
     assert!(ids.contains(&10));
     assert!(ids.contains(&11));
 }
+
+// =============================================================================
+// permanently_delete_product
+// =============================================================================
+
+#[tokio::test]
+async fn permanently_delete_product_rejects_when_order_history_exists() {
+    use core_db_entities::entity::{order_details, product_variants};
+    use core_operations::procedures::products::permanently_delete_product;
+    use proto::proto::core::PermanentlyDeleteProductRequest;
+
+    let product = products::Model {
+        product_id: 42,
+        sku: Some("SKU-42".to_string()),
+        name: "Kanjivaram Saree".to_string(),
+        slug: Some("kanjivaram-42".to_string()),
+        description: None,
+        price_paise: 179_999,
+        category_id: 1,
+        fabric: None,
+        weave: None,
+        occasion: None,
+        has_blouse_piece: None,
+        care_instructions: None,
+        product_status_id: None,
+        created_at: None,
+        updated_at: None,
+    };
+    let variant = product_variants::Model {
+        variant_id: 100,
+        product_id: 42,
+        size_id: None,
+        color_id: None,
+        additional_price: None,
+    };
+    let order_detail = order_details::Model {
+        order_detail_id: 1,
+        order_id: 500,
+        variant_id: 100,
+        quantity: 1,
+        price: None,
+        line_total_minor: 179_999,
+        unit_price_minor: 179_999,
+        discount_minor: None,
+        tax_minor: None,
+        sku: None,
+        title: None,
+        line_attrs: None,
+        item_status: "active".to_string(),
+        cancelled_at: None,
+    };
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![product]]) // find_by_id(product)
+        .append_query_results(vec![vec![variant]]) // find variants for product
+        .append_query_results(vec![vec![order_detail]]) // order_details for those variants -> Some(...)
+        .into_connection();
+
+    let req = Request::new(PermanentlyDeleteProductRequest { product_id: 42 });
+    let result = permanently_delete_product(&db, req).await;
+
+    assert!(result.is_err(), "must refuse to delete a product with order history");
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::FailedPrecondition);
+    assert!(
+        status.message().to_lowercase().contains("order history"),
+        "unexpected message: {}",
+        status.message()
+    );
+}
+
+#[tokio::test]
+async fn permanently_delete_product_returns_not_found_for_missing_product() {
+    use core_operations::procedures::products::permanently_delete_product;
+    use proto::proto::core::PermanentlyDeleteProductRequest;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<products::Model>::new()])
+        .into_connection();
+
+    let req = Request::new(PermanentlyDeleteProductRequest { product_id: 999 });
+    let result = permanently_delete_product(&db, req).await;
+
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::NotFound);
+}

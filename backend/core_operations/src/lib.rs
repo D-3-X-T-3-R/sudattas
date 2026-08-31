@@ -76,7 +76,8 @@ use proto::proto::core::{
     MergeCartRequest, NewsletterCampaignsResponse, NewsletterSubscribersResponse,
     OccasionsResponse, OrderDetailsResponse,
     OrderEventsResponse, OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse,
-    PlaceOrderAdminRequest, PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
+    PermanentlyDeleteProductRequest, PermanentlyDeleteProductResponse, PlaceOrderAdminRequest,
+    PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
     ProductMoodMappingsResponse, ProductMoodsResponse, ProductRatingSummaryRequest,
     ProductRatingSummaryResponse, ProductVariantsResponse, ProductsResponse, PublicCouponsResponse,
     ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
@@ -503,6 +504,20 @@ impl GrpcServices for MyGRPCServices {
         let res = handlers::products::delete_product(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
+    }
+
+    async fn permanently_delete_product(
+        &self,
+        request: Request<PermanentlyDeleteProductRequest>,
+    ) -> Result<Response<PermanentlyDeleteProductResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        // Manages its own transaction (commits the DB cascade first, then does a best-effort
+        // R2 purge afterward) — see procedures::products::permanently_delete_product's doc
+        // comment for why this isn't wrapped in the usual single begin/commit here.
+        procedures::products::permanently_delete_product(db, request).await
     }
 
     async fn update_product(

@@ -287,6 +287,38 @@ pub struct DeleteProductRequest {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
 }
+/// Permanent, unrecoverable hard delete — distinct from DeleteProductRequest, which is
+/// currently unused and would fail on any product with real data (FK constraints on
+/// ProductVariants/ProductImages/Reviews/Wishlist are all NO ACTION). This orchestrates the
+/// full cascade (cart lines, inventory + its log, variants, reviews, wishlist entries, image
+/// rows) in one transaction, refuses outright if the product has real order history (archive
+/// instead), and purges the product's images from Cloudflare R2 as a best-effort step after
+/// the DB transaction commits.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PermanentlyDeleteProductRequest {
+    #[prost(int64, tag = "1")]
+    pub product_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PermanentlyDeleteProductResponse {
+    #[prost(int64, tag = "1")]
+    pub product_id: i64,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(int32, tag = "3")]
+    pub variants_deleted: i32,
+    #[prost(int32, tag = "4")]
+    pub images_deleted: i32,
+    /// Count of images whose R2 object could not be deleted (e.g. R2 not configured, or the
+    /// stored URL wasn't actually an R2 object) — the product is still fully gone from the DB
+    /// either way; this is purely a storage-hygiene signal for the admin.
+    #[prost(int32, tag = "5")]
+    pub images_purge_failed: i32,
+}
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -3541,6 +3573,36 @@ pub mod grpc_services_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "DeleteProduct"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn permanently_delete_product(
+            &mut self,
+            request: impl tonic::IntoRequest<super::PermanentlyDeleteProductRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PermanentlyDeleteProductResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/PermanentlyDeleteProduct",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "PermanentlyDeleteProduct",
+                    ),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_products_by_id(
@@ -7403,6 +7465,13 @@ pub mod grpc_services_server {
             tonic::Response<super::ProductsResponse>,
             tonic::Status,
         >;
+        async fn permanently_delete_product(
+            &self,
+            request: tonic::Request<super::PermanentlyDeleteProductRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PermanentlyDeleteProductResponse>,
+            tonic::Status,
+        >;
         async fn get_products_by_id(
             &self,
             request: tonic::Request<super::GetProductsByIdRequest>,
@@ -9043,6 +9112,58 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = DeleteProductSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/PermanentlyDeleteProduct" => {
+                    #[allow(non_camel_case_types)]
+                    struct PermanentlyDeleteProductSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::PermanentlyDeleteProductRequest>
+                    for PermanentlyDeleteProductSvc<T> {
+                        type Response = super::PermanentlyDeleteProductResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::PermanentlyDeleteProductRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::permanently_delete_product(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = PermanentlyDeleteProductSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -9,6 +9,7 @@ const PRODUCT_ROOTS = [
   "createProduct",
   "updateProduct",
   "deleteProduct",
+  "permanentlyDeleteProduct",
   "searchProductImage",
   "updateProductImage",
   "deleteProductImage",

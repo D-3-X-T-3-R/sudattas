@@ -214,3 +214,36 @@ pub struct ProductMutation {
     pub care_instructions: Option<String>,
     pub product_status_id: Option<String>,
 }
+
+/// Result of permanentlyDeleteProduct — distinct from the returned `Product` shape of
+/// `deleteProduct` since this reports what was actually purged, not the (now-gone) product.
+#[derive(Default, Debug, Clone)]
+pub struct PermanentlyDeleteProductResult {
+    pub product_id: String,
+    pub name: String,
+    pub variants_deleted: String,
+    pub images_deleted: String,
+    /// Count of images whose R2 object couldn't be deleted — the product is fully gone from
+    /// the DB regardless; this is a storage-hygiene signal only, never a failure indicator.
+    pub images_purge_failed: String,
+}
+
+#[graphql_object]
+#[graphql(description = "Outcome of permanently deleting a product")]
+impl PermanentlyDeleteProductResult {
+    async fn product_id(&self) -> &String {
+        &self.product_id
+    }
+    async fn name(&self) -> &String {
+        &self.name
+    }
+    async fn variants_deleted(&self) -> &String {
+        &self.variants_deleted
+    }
+    async fn images_deleted(&self) -> &String {
+        &self.images_deleted
+    }
+    async fn images_purge_failed(&self) -> &String {
+        &self.images_purge_failed
+    }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Trash2, Package } from "lucide-react";
+import { Pencil, Trash2, Package, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/loading";
 import type { ProductListRow } from "@/lib/admin-queries";
@@ -17,6 +17,7 @@ interface ProductsGridCardProps {
   onOpenProduct: (product: ProductListRow) => void;
   onEditProduct: (product: ProductListRow) => void;
   onArchiveProduct: (product: ProductListRow) => void;
+  onPermanentlyDeleteProduct: (product: ProductListRow) => void;
 }
 
 export function ProductsGridCard({
@@ -30,6 +31,7 @@ export function ProductsGridCard({
   onOpenProduct,
   onEditProduct,
   onArchiveProduct,
+  onPermanentlyDeleteProduct,
 }: ProductsGridCardProps) {
   return (
     <AdminTableCard title="Products" icon={<Package className="h-4 w-4 text-[var(--color-green)]" />} className="mt-6">
@@ -105,6 +107,16 @@ export function ProductsGridCard({
                     >
                       <Trash2 className="h-4 w-4" />
                       Archive
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-center gap-2 border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50"
+                      aria-label={`Permanently delete ${p.name}`}
+                      onClick={() => onPermanentlyDeleteProduct(p)}
+                    >
+                      <Ban className="h-4 w-4" />
+                      Permanently remove
                     </Button>
                   </div>
                 </div>

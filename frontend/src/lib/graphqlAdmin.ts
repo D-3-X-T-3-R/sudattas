@@ -153,6 +153,7 @@ function resolveAdminRoute(query: string): string {
       "createProduct",
       "updateProduct",
       "deleteProduct",
+      "permanentlyDeleteProduct",
       "searchProductImage",
       "updateProductImage",
       "deleteProductImage",

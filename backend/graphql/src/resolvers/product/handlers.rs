@@ -1,13 +1,14 @@
 use proto::proto::core::{
     CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest, GetRelatedProductsRequest,
-    SearchInventoryItemRequest, SearchProductRequest, SearchProductVariantRequest,
-    SearchSizeRequest, UpdateProductRequest,
+    PermanentlyDeleteProductRequest, SearchInventoryItemRequest, SearchProductRequest,
+    SearchProductVariantRequest, SearchSizeRequest, UpdateProductRequest,
 };
 
 use tracing::instrument;
 
 use super::schema::{
-    GetRelatedProducts, NewProduct, Product, ProductMutation, ProductVariantStock, SearchProduct,
+    GetRelatedProducts, NewProduct, PermanentlyDeleteProductResult, Product, ProductMutation,
+    ProductVariantStock, SearchProduct,
 };
 use crate::resolvers::{
     convert,
@@ -135,6 +136,31 @@ pub(crate) async fn delete_product(product_id: String) -> Result<Vec<Product>, G
         .into_iter()
         .map(convert::product_response_to_gql)
         .collect())
+}
+
+/// Irreversible hard delete, distinct from `deleteProduct` above — see the proto/procedure doc
+/// comments for the full cascade and the order-history safety check.
+#[instrument]
+pub(crate) async fn permanently_delete_product(
+    product_id: String,
+) -> Result<PermanentlyDeleteProductResult, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let product_id_i64 = parse_i64(&product_id, "product id")?;
+
+    let response = client
+        .permanently_delete_product(PermanentlyDeleteProductRequest {
+            product_id: product_id_i64,
+        })
+        .await?
+        .into_inner();
+
+    Ok(PermanentlyDeleteProductResult {
+        product_id: response.product_id.to_string(),
+        name: response.name,
+        variants_deleted: response.variants_deleted.to_string(),
+        images_deleted: response.images_deleted.to_string(),
+        images_purge_failed: response.images_purge_failed.to_string(),
+    })
 }
 
 #[instrument]

@@ -78,7 +78,7 @@ use crate::resolvers::{
     },
     product::{
         self,
-        schema::{NewProduct, Product, ProductMutation},
+        schema::{NewProduct, PermanentlyDeleteProductResult, Product, ProductMutation},
     },
     product_images::{
         self,
@@ -512,6 +512,21 @@ impl MutationRoot {
     async fn delete_product(context: &Context, product_id: String) -> FieldResult<Vec<Product>> {
         require_admin(context)?;
         product::handlers::delete_product(product_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin-only: irreversible hard delete — cascades variants/inventory/cart/reviews/
+    /// wishlist/images, purges images from R2, and refuses outright if the product has real
+    /// order history (archive it instead). Distinct from `deleteProduct` above, which is
+    /// unused today and would simply fail on any real product.
+    #[instrument(err, ret)]
+    async fn permanently_delete_product(
+        context: &Context,
+        product_id: String,
+    ) -> FieldResult<PermanentlyDeleteProductResult> {
+        require_admin(context)?;
+        product::handlers::permanently_delete_product(product_id)
             .await
             .map_err(|e| e.into_field_error())
     }

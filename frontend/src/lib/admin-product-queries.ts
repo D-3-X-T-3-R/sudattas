@@ -114,6 +114,42 @@ export async function deleteProduct(productId: string): Promise<void> {
   );
 }
 
+export interface PermanentlyDeleteProductResult {
+  productId: string;
+  name: string;
+  variantsDeleted: string;
+  imagesDeleted: string;
+  /** Images whose R2 object couldn't be purged — the product is fully gone from the DB
+   * regardless; this is a storage-hygiene signal, not a failure indicator. */
+  imagesPurgeFailed: string;
+}
+
+/**
+ * Irreversible hard delete — cascades variants/inventory/cart/reviews/wishlist/images and
+ * purges images from R2. The backend refuses outright (FailedPrecondition) if the product has
+ * real order history; use Archive for that case instead.
+ */
+export async function permanentlyDeleteProduct(
+  productId: string
+): Promise<PermanentlyDeleteProductResult> {
+  const data = await gqlAdmin<{ permanentlyDeleteProduct?: PermanentlyDeleteProductResult }>(
+    `mutation PermanentlyDeleteProduct($productId: String!) {
+      permanentlyDeleteProduct(productId: $productId) {
+        productId
+        name
+        variantsDeleted
+        imagesDeleted
+        imagesPurgeFailed
+      }
+    }`,
+    { productId }
+  );
+  if (!data?.permanentlyDeleteProduct) {
+    throw new Error("permanentlyDeleteProduct returned empty payload");
+  }
+  return data.permanentlyDeleteProduct;
+}
+
 /** Search product images (one row per image). Filter by productId to load images for a product. */
 export async function searchProductImage(params: {
   productId?: string;

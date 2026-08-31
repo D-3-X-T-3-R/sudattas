@@ -20,6 +20,7 @@ import {
   createProductMood,
   updateProductMood,
   deleteProductMood,
+  permanentlyDeleteProduct,
   moveProductImageToProduct,
   createProductVariant,
   updateProductVariant,
@@ -48,6 +49,7 @@ import { ProductsFiltersCard } from "@/domains/admin/products/components/product
 import { ProductsGridCard } from "@/domains/admin/products/components/products-grid-card";
 import { ProductPreviewDialog } from "@/domains/admin/products/components/product-preview-dialog";
 import { ArchiveProductDialog } from "@/domains/admin/products/components/archive-product-dialog";
+import { PermanentlyDeleteProductDialog } from "@/domains/admin/products/components/permanently-delete-product-dialog";
 import { DeleteCategoryDialog } from "@/domains/admin/products/components/delete-category-dialog";
 import { MoveImageDialog } from "@/domains/admin/products/components/move-image-dialog";
 import { DeleteEntityDialog } from "@/components/admin/delete-entity-dialog";
@@ -283,6 +285,8 @@ export default function AdminProductsPage() {
   });
 
   const [archiveConfirm, setArchiveConfirm] = useState<ProductListRow | null>(null);
+  const [permanentDeleteConfirm, setPermanentDeleteConfirm] = useState<ProductListRow | null>(null);
+  const [permanentDeleteError, setPermanentDeleteError] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ProductListRow | null>(null);
 
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -1208,6 +1212,25 @@ export default function AdminProductsPage() {
     );
   };
 
+  const permanentlyDeleteMutation = useMutation({
+    mutationFn: (productId: string) => permanentlyDeleteProduct(productId),
+    onSuccess: (result) => {
+      void refetchProducts();
+      setPermanentDeleteConfirm(null);
+      setPermanentDeleteError("");
+      const imageNote =
+        result.imagesPurgeFailed !== "0"
+          ? ` (${result.imagesPurgeFailed} image(s) could not be purged from storage — safe to ignore, just leftover storage cost)`
+          : "";
+      setMessage(
+        `${result.name} permanently deleted — ${result.variantsDeleted} variant(s) and ${result.imagesDeleted} image(s) removed${imageNote}.`
+      );
+      showToast({ title: "Product permanently deleted", description: result.name });
+    },
+    onError: (err: Error) =>
+      setPermanentDeleteError(err.message || "Failed to permanently delete product."),
+  });
+
   const loadProductEditData = async (productId: string): Promise<string[]> => {
     try {
       const mappings = await searchProductMoodMappingsByProduct(productId);
@@ -1490,6 +1513,10 @@ export default function AdminProductsPage() {
             onOpenProduct={setSelectedProduct}
             onEditProduct={beginEditProduct}
             onArchiveProduct={setArchiveConfirm}
+            onPermanentlyDeleteProduct={(p) => {
+              setPermanentDeleteError("");
+              setPermanentDeleteConfirm(p);
+            }}
           />
 
           <ArchiveProductDialog
@@ -1497,6 +1524,21 @@ export default function AdminProductsPage() {
             isPending={updateProductMutation.isPending}
             onClose={() => setArchiveConfirm(null)}
             onConfirm={handleArchiveConfirm}
+          />
+
+          <PermanentlyDeleteProductDialog
+            product={permanentDeleteConfirm}
+            isPending={permanentlyDeleteMutation.isPending}
+            error={permanentDeleteError}
+            onClose={() => {
+              setPermanentDeleteConfirm(null);
+              setPermanentDeleteError("");
+            }}
+            onConfirm={() => {
+              if (permanentDeleteConfirm) {
+                permanentlyDeleteMutation.mutate(permanentDeleteConfirm.productId);
+              }
+            }}
           />
 
           <DeleteCategoryDialog

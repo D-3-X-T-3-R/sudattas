@@ -1749,3 +1749,37 @@ async fn test_never_set_status_is_not_treated_as_deactivated() {
         }
     }
 }
+
+#[tokio::test]
+async fn test_permanently_delete_product_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("user_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: None,
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"mutation { permanentlyDeleteProduct(productId: "1") { productId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "a logged-in but non-admin caller must not be able to permanently delete a product"
+    );
+    let err_str = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err_str.contains("admin"), "error should mention admin: {}", err_str);
+}

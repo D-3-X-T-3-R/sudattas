@@ -161,6 +161,28 @@ message DeleteProductRequest {
     int64 product_id = 1;
 }
 
+// Permanent, unrecoverable hard delete — distinct from DeleteProductRequest, which is
+// currently unused and would fail on any product with real data (FK constraints on
+// ProductVariants/ProductImages/Reviews/Wishlist are all NO ACTION). This orchestrates the
+// full cascade (cart lines, inventory + its log, variants, reviews, wishlist entries, image
+// rows) in one transaction, refuses outright if the product has real order history (archive
+// instead), and purges the product's images from Cloudflare R2 as a best-effort step after
+// the DB transaction commits.
+message PermanentlyDeleteProductRequest {
+    int64 product_id = 1;
+}
+
+message PermanentlyDeleteProductResponse {
+    int64 product_id = 1;
+    string name = 2;
+    int32 variants_deleted = 3;
+    int32 images_deleted = 4;
+    // Count of images whose R2 object could not be deleted (e.g. R2 not configured, or the
+    // stored URL wasn't actually an R2 object) — the product is still fully gone from the DB
+    // either way; this is purely a storage-hygiene signal for the admin.
+    int32 images_purge_failed = 5;
+}
+
 message ProductResponse {
     string name = 1;
     optional string description = 2;
