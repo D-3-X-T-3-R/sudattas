@@ -991,6 +991,15 @@ pub async fn cancel_order_via_logistics(
         return Ok(None);
     }
 
+    if !shipment_has_provider_booking_reference(&shipment) {
+        // No real logistics-partner booking behind this shipment row at all — e.g. one created
+        // manually via the admin "create shipment" action without a Shiprocket order ID/AWB
+        // (which also hardcodes `can_customer_cancel = 0` regardless). There's nothing to cancel
+        // with a provider, so don't block on either check below; let the caller fall through to
+        // ordinary local cancellation instead.
+        return Ok(None);
+    }
+
     if !shipment.can_customer_cancel {
         return Err(TonicStatus::failed_precondition(
             "Order can no longer be cancelled because pickup/logistics is already in progress",

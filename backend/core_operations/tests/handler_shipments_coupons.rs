@@ -239,6 +239,59 @@ async fn update_shipment_updates_status_and_sets_delivered_at_when_processed() {
 }
 
 #[tokio::test]
+async fn cancel_order_via_logistics_returns_none_when_no_provider_reference() {
+    use core_operations::handlers::shipments::logistics_workflow::cancel_order_via_logistics;
+
+    // A shipment row exists (e.g. created manually via the admin "create shipment" action,
+    // which unconditionally sets fulfillment_status = 'booked' and hardcodes
+    // can_customer_cancel = 0) but has no shiprocket_order_id, shiprocket_external_order_id, or
+    // awb_code at all — there was never a real logistics-partner booking behind it. Cancelling
+    // must not block on `can_customer_cancel` (which would otherwise wrongly read as "pickup
+    // already in progress") since there's nothing to cancel with a provider either way.
+    let mut shipment_row = BTreeMap::new();
+    shipment_row.insert("shipment_id", 7_i64.into());
+    shipment_row.insert("order_id", 200_i64.into());
+    shipment_row.insert("logistics_status", "booked".to_string().into());
+    shipment_row.insert("can_customer_cancel", false.into());
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![shipment_row]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let result = cancel_order_via_logistics(&txn, 200, None).await;
+    assert!(
+        matches!(result, Ok(None)),
+        "expected Ok(None) (nothing to cancel with a provider), got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn cancel_order_via_logistics_blocks_when_pickup_in_progress_for_a_real_booking() {
+    use core_operations::handlers::shipments::logistics_workflow::cancel_order_via_logistics;
+
+    // Same shape as above, except this shipment DOES have a real Shiprocket order behind it —
+    // here `can_customer_cancel = false` correctly means "too late to cancel," not "nothing to
+    // cancel," and must still block.
+    let mut shipment_row = BTreeMap::new();
+    shipment_row.insert("shipment_id", 7_i64.into());
+    shipment_row.insert("order_id", 200_i64.into());
+    shipment_row.insert("shiprocket_order_id", "SR-500".to_string().into());
+    shipment_row.insert("logistics_status", "pickup_completed".to_string().into());
+    shipment_row.insert("can_customer_cancel", false.into());
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![shipment_row]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let result = cancel_order_via_logistics(&txn, 200, None).await;
+    let status = result.expect_err("a real booking past pickup must still block cancellation");
+    assert_eq!(status.code(), tonic::Code::FailedPrecondition);
+    assert!(status.message().contains("pickup/logistics is already in progress"));
+}
+
+#[tokio::test]
 async fn apply_coupon_valid_returns_valid_without_mutating_usage() {
     use core_operations::handlers::coupons::apply_coupon;
 
