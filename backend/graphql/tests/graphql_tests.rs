@@ -223,6 +223,90 @@ fn test_auth_info_jwt_context() {
 }
 
 #[test]
+fn test_auth_info_reports_account_deactivated_ungated() {
+    // This field is deliberately readable even when the account is deactivated — every other
+    // JWT-gated query/mutation would reject this same context outright (require_jwt), so
+    // authInfo is the one place the frontend can actually learn "you're deactivated" in order
+    // to show that message instead of a wall of "Login required"/deactivation errors.
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("jwt_user_789".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: None,
+        admin_resolution_source: None,
+        account_status: Some("suspended".to_string()),
+    };
+
+    let (res, errors) = juniper::execute_sync(
+        r#"{ authInfo { accountDeactivated currentUserId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .unwrap();
+
+    assert!(errors.is_empty());
+    let data = to_json(&res);
+    let info = data
+        .get("authInfo")
+        .and_then(|v| v.as_object())
+        .expect("authInfo");
+    assert_eq!(
+        info.get("accountDeactivated").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    // Still resolves the raw JWT subject even though the account is deactivated — this query
+    // is the ungated exception, not `jwt_user_id()`-based like everything else.
+    assert_eq!(
+        info.get("currentUserId").and_then(|v| v.as_str()),
+        Some("jwt_user_789")
+    );
+}
+
+#[test]
+fn test_auth_info_reports_active_account_as_not_deactivated() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("jwt_user_790".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: None,
+        admin_resolution_source: None,
+        account_status: Some("active".to_string()),
+    };
+
+    let (res, errors) = juniper::execute_sync(
+        r#"{ authInfo { accountDeactivated } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .unwrap();
+
+    assert!(errors.is_empty());
+    let data = to_json(&res);
+    let info = data
+        .get("authInfo")
+        .and_then(|v| v.as_object())
+        .expect("authInfo");
+    assert_eq!(
+        info.get("accountDeactivated").and_then(|v| v.as_bool()),
+        Some(false)
+    );
+}
+
+#[test]
 fn test_auth_info_session_disabled_when_no_redis() {
     let ctx = Context {
         jwks: JWKSet { keys: vec![] },

@@ -195,6 +195,17 @@ async function syncGoogleUserToBackend(input: {
 // sign-in-time isAdmin claim for the full session lifetime. Matches the backend's own
 // ADMIN_ROLE_CACHE_TTL_SEC default (admin_roles.rs) so the page-navigation gate (middleware.ts)
 // doesn't stay open much longer than the backend's own admin-role cache would.
+//
+// Account deactivation is *not* tracked this way (see history: an earlier version cached
+// `accountDeactivated` on the JWT the same way, re-probed on this same interval using the
+// customer's own Google idToken). That was wrong on two counts: (1) middleware's `getToken()`
+// only ever reads whatever is already baked into the session cookie — it never runs this
+// callback itself, so the cached flag could only become fresh again after a separate client-side
+// session round-trip happened to fire, meaning a customer could sail right through a fresh
+// deactivation for the whole interval; and (2) reactivation had the same problem in reverse.
+// Account status is instead checked live on every request that needs it (middleware.ts,
+// api/account/status/route.ts) via internal-service auth keyed on the stable `customerUserId`
+// already in the token, which sidesteps Google-idToken freshness entirely.
 const ADMIN_RECHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 async function probeAdminAccessByToken(token: string): Promise<boolean> {
@@ -388,6 +399,31 @@ export const authOptions: NextAuthOptions = {
       if (account?.expires_at) {
         (token as { idTokenExpiresAt?: number }).idTokenExpiresAt = account.expires_at * 1000;
       }
+      // The Google id_token backend calls authenticate with has its own short lifetime
+      // (Google-issued, independent of this NextAuth session's 90-day maxAge). Refresh it
+      // proactively before it expires — and before the isAdmin probe below, which otherwise
+      // presents an already-expired idToken to the backend and reads the resulting auth failure
+      // as "confirmed not admin" rather than "couldn't check".
+      {
+        const expiresAt = (token as { idTokenExpiresAt?: number }).idTokenExpiresAt;
+        const refreshToken = (token as { refreshToken?: string }).refreshToken;
+        if (typeof expiresAt === "number" && Date.now() > expiresAt - 60_000 && refreshToken) {
+          const refreshed = await refreshGoogleIdToken(refreshToken);
+          if (refreshed) {
+            token.idToken = refreshed.idToken;
+            token.accessToken = refreshed.accessToken;
+            (token as { idTokenExpiresAt?: number }).idTokenExpiresAt = refreshed.idTokenExpiresAt;
+          } else {
+            // Refresh failed (revoked/expired refresh token) — drop the stale idToken so
+            // downstream backend calls fail fast with 401 instead of silently using dead creds.
+            // Also drop accessToken: server-session-auth.ts and admin-graphql-server.ts both
+            // fall back to it when idToken is unset (`session?.idToken ?? session?.accessToken`),
+            // which would otherwise silently forward the equally-stale accessToken instead.
+            (token as { idToken?: string }).idToken = undefined;
+            token.accessToken = undefined;
+          }
+        }
+      }
       const maybeCustomerUserId = (token as { customerUserId?: string }).customerUserId;
       if (!maybeCustomerUserId) {
         const userCustomerId = (user as { customerUserId?: string } | undefined)?.customerUserId;
@@ -420,28 +456,6 @@ export const authOptions: NextAuthOptions = {
           const stillAdmin = await probeAdminAccessByToken(token.idToken);
           (token as { isAdmin?: boolean }).isAdmin = stillAdmin;
           (token as { isAdminCheckedAt?: number }).isAdminCheckedAt = Date.now();
-        }
-      }
-      // The Google id_token backend calls authenticate with has its own short lifetime
-      // (Google-issued, independent of this NextAuth session's 90-day maxAge). Refresh it
-      // proactively before it expires so a long-lived session doesn't silently start
-      // presenting a stale credential to the backend.
-      const expiresAt = (token as { idTokenExpiresAt?: number }).idTokenExpiresAt;
-      const refreshToken = (token as { refreshToken?: string }).refreshToken;
-      if (typeof expiresAt === "number" && Date.now() > expiresAt - 60_000 && refreshToken) {
-        const refreshed = await refreshGoogleIdToken(refreshToken);
-        if (refreshed) {
-          token.idToken = refreshed.idToken;
-          token.accessToken = refreshed.accessToken;
-          (token as { idTokenExpiresAt?: number }).idTokenExpiresAt = refreshed.idTokenExpiresAt;
-        } else {
-          // Refresh failed (revoked/expired refresh token) — drop the stale idToken so
-          // downstream backend calls fail fast with 401 instead of silently using dead creds.
-          // Also drop accessToken: server-session-auth.ts and admin-graphql-server.ts both
-          // fall back to it when idToken is unset (`session?.idToken ?? session?.accessToken`),
-          // which would otherwise silently forward the equally-stale accessToken instead.
-          (token as { idToken?: string }).idToken = undefined;
-          token.accessToken = undefined;
         }
       }
       // Persist so we have it on session refresh

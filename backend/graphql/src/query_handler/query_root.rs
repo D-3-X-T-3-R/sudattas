@@ -169,6 +169,11 @@ struct AuthInfo {
     jwks_key_count: i32,
     /// Current request’s user ID (JWT or session), if any.
     current_user_id: Option<String>,
+    /// True when the current JWT-authenticated identity's account is deactivated/suspended.
+    /// Deliberately readable even for a deactivated account — every other JWT-gated query/mutation
+    /// rejects them via `require_jwt`/`jwt_user_id()`, so the frontend needs one ungated way to
+    /// learn "you're deactivated" in order to show that message instead of a wall of errors.
+    account_deactivated: bool,
 }
 
 #[juniper::graphql_object(Context = Context)]
@@ -191,6 +196,7 @@ impl QueryRoot {
             session_enabled: context.redis_url.is_some(),
             jwks_key_count: context.jwks().keys.len() as i32,
             current_user_id: context.user_id().map(|s| s.to_string()),
+            account_deactivated: context.account_deactivated(),
         }
     }
 
