@@ -6,8 +6,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { setCustomerStatus, updateCustomerAdmin, type CustomerListRow } from "@/lib/admin-queries";
-import { ExternalLink, Pencil, ShieldOff, ShieldCheck, User } from "lucide-react";
+import {
+  fetchCustomerPiiExport,
+  setCustomerStatus,
+  updateCustomerAdmin,
+  type CustomerListRow,
+} from "@/lib/admin-queries";
+import { Download, ExternalLink, Pencil, ShieldOff, ShieldCheck, User } from "lucide-react";
 import { formatCreateDate, formatCurrency } from "@/domains/admin/customers/utils";
 
 /** "active" | never-set both render as nothing extra — only a non-active status is called out. */
@@ -70,6 +75,7 @@ function CustomerProfileDialogBody({
   const [error, setError] = useState("");
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
   const [statusError, setStatusError] = useState("");
+  const [piiError, setPiiError] = useState("");
 
   const isDeactivated = ["inactive", "suspended"].includes(
     (customer.userStatus ?? "").trim().toLowerCase()
@@ -96,6 +102,25 @@ function CustomerProfileDialogBody({
       setStatusError("");
     },
     onError: (err: Error) => setStatusError(err.message || "Failed to update account status."),
+  });
+
+  const exportPiiMutation = useMutation({
+    mutationFn: () => fetchCustomerPiiExport(customer.userId),
+    onSuccess: (record) => {
+      if (!record) {
+        setPiiError("No PII record found for this customer.");
+        return;
+      }
+      setPiiError("");
+      const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sudattas-customer-${customer.userId}-pii-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onError: (err: Error) => setPiiError(err.message || "Failed to export PII."),
   });
 
   return (
@@ -203,6 +228,12 @@ function CustomerProfileDialogBody({
         </dl>
       )}
 
+      {!editing && piiError && (
+        <p className="text-sm text-red-600" role="alert">
+          {piiError}
+        </p>
+      )}
+
       {!editing && (
         <div className="flex flex-wrap gap-2 pt-2">
           <Button asChild className="flex-1">
@@ -214,6 +245,15 @@ function CustomerProfileDialogBody({
           <Button type="button" variant="outline" onClick={() => setEditing(true)}>
             <Pencil className="mr-1.5 h-4 w-4" />
             Edit
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={exportPiiMutation.isPending}
+            onClick={() => exportPiiMutation.mutate()}
+          >
+            <Download className="mr-1.5 h-4 w-4" />
+            {exportPiiMutation.isPending ? "Exporting…" : "Export PII"}
           </Button>
           <Button
             type="button"

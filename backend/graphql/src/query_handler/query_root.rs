@@ -636,4 +636,17 @@ impl QueryRoot {
             .await
             .map_err(|e| e.into_field_error())
     }
+
+    /// Admin lookup of another customer's PII by id — the admin-facing counterpart to
+    /// `exportMyPii`, which is deliberately self-scoped and can't be reused for this.
+    #[instrument(err, ret)]
+    async fn admin_export_user_pii(
+        context: &Context,
+        user_id: String,
+    ) -> FieldResult<UserPiiExport> {
+        require_admin(context)?;
+        user_pii::handlers::admin_export_user_pii(context, user_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
 }

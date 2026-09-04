@@ -1004,6 +1004,120 @@ async fn test_search_user_allows_admin_context() {
 }
 
 #[tokio::test]
+async fn test_admin_export_user_pii_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"{ adminExportUserPii(userId: "1") { userId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "adminExportUserPii should reject non-admin user, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(
+        err.contains("admin authorization required"),
+        "expected admin authz rejection, got: {}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn test_admin_export_user_pii_allows_admin_context() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("google_sub_admin".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: Some("google_sub_admin".to_string()),
+        admin_authorized: Some(true),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: None,
+    };
+
+    let (_res, errors) = juniper::execute(
+        r#"{ adminExportUserPii(userId: "1") { userId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    if !errors.is_empty() {
+        let err = format!("{:?}", errors[0]).to_lowercase();
+        assert!(
+            !err.contains("admin authorization required"),
+            "admin context should not fail authz: {}",
+            err
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_admin_export_user_pii_invalid_user_id_returns_error() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("google_sub_admin".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: Some("google_sub_admin".to_string()),
+        admin_authorized: Some(true),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"{ adminExportUserPii(userId: "not-a-number") { userId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "non-numeric userId should be rejected before any gRPC call, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(
+        err.contains("invalid user id"),
+        "expected an invalid-user-id error, got: {}",
+        err
+    );
+}
+
+#[tokio::test]
 async fn test_search_order_rejects_cross_user_access_for_customer() {
     let ctx = Context {
         jwks: JWKSet { keys: vec![] },

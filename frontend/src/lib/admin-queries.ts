@@ -448,6 +448,44 @@ export async function setCustomerStatus(
   return data?.setUserStatus?.[0] ?? null;
 }
 
+/** Fields `exportMyPii` doesn't already put in front of an admin via the customer list/profile
+ * dialog (gender, dateOfBirth, firstName/lastName) plus the rest, for a complete, exportable
+ * record — the admin-facing counterpart to a customer's own "Download my data" button. */
+export interface AdminUserPiiExport {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  address: string | null;
+  phone: string | null;
+  createDate: string;
+  firstName: string | null;
+  lastName: string | null;
+  gender: string | null;
+  dateOfBirth: string | null;
+}
+
+/** Admin lookup of another customer's full PII record by id, for support/data-request purposes. */
+export async function fetchCustomerPiiExport(userId: string): Promise<AdminUserPiiExport | null> {
+  const data = await gqlAdmin<{ adminExportUserPii?: AdminUserPiiExport }>(
+    `query AdminExportUserPii($userId: String!) {
+      adminExportUserPii(userId: $userId) {
+        userId
+        email
+        fullName
+        address
+        phone
+        createDate
+        firstName
+        lastName
+        gender
+        dateOfBirth
+      }
+    }`,
+    { userId }
+  );
+  return data?.adminExportUserPii ?? null;
+}
+
 export async function fetchAllCustomersList(): Promise<CustomerListRow[]> {
   const out: CustomerListRow[] = [];
   let offset = 0;

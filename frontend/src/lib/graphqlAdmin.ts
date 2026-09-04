@@ -46,7 +46,14 @@ function resolveAdminRoute(query: string): string {
   }
 
   if (
-    containsAny(query, ["searchUser", "updateUser", "createUser", "deleteUser", "setUserStatus"])
+    containsAny(query, [
+      "searchUser",
+      "updateUser",
+      "createUser",
+      "deleteUser",
+      "setUserStatus",
+      "adminExportUserPii",
+    ])
   ) {
     return "/api/admin/customers";
   }
