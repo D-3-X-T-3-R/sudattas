@@ -130,6 +130,27 @@ function resolveAdminRoute(query: string): string {
 
   if (
     containsAny(query, [
+      "searchReturnRequests",
+      "adminMarkReturnReceived",
+      "adminUpdateReturnStatus",
+    ])
+  ) {
+    return "/api/admin/returns";
+  }
+
+  if (
+    containsAny(query, [
+      "getRefunds",
+      "createRefund",
+      "searchRefundAttempts",
+      "resolveRefundAttemptNeedsReview",
+    ])
+  ) {
+    return "/api/admin/refunds";
+  }
+
+  if (
+    containsAny(query, [
       "searchOrder",
       "searchOrderStatus",
       "updateOrder",

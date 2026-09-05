@@ -22,6 +22,8 @@ import {
   ScrollText,
   Mail,
   Tag,
+  Undo2,
+  Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -39,6 +41,8 @@ const NAV = [
   { href: `${ADMIN_BASE}/inventory`, icon: Boxes, label: "Inventory" },
   { href: `${ADMIN_BASE}/customers`, icon: Users, label: "Customers" },
   { href: `${ADMIN_BASE}/reviews`, icon: MessageSquareText, label: "Reviews" },
+  { href: `${ADMIN_BASE}/returns`, icon: Undo2, label: "Returns" },
+  { href: `${ADMIN_BASE}/refunds`, icon: Banknote, label: "Refunds" },
   { href: `${ADMIN_BASE}/transactions`, icon: Receipt, label: "Transactions" },
   { href: `${ADMIN_BASE}/newsletter`, icon: Mail, label: "Newsletter" },
   { href: `${ADMIN_BASE}/activity-log`, icon: ScrollText, label: "Activity log" },
@@ -59,6 +63,8 @@ function getTitle(pathname: string): string {
     inventory: "Inventory",
     customers: "Customers",
     reviews: "Reviews",
+    returns: "Returns",
+    refunds: "Refunds",
     transactions: "Transactions",
     newsletter: "Newsletter",
     "activity-log": "Activity log",

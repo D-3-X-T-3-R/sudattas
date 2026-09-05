@@ -1765,6 +1765,34 @@ message ResolveRefundAttemptNeedsReviewResponse {
     string message = 2;  // e.g. "Refund attempt reset to pending_external for retry"
 }
 
+// Admin visibility into in-flight RefundAttempts (the row `resolveRefundAttemptNeedsReview`
+// acts on) — previously nothing exposed which attempt_ids existed or were stuck in
+// needs_review, so that mutation had no way to be driven from a UI.
+message SearchRefundAttemptsRequest {
+    optional int64 attempt_id = 1;
+    optional int64 order_id = 2;
+    optional string status = 3;  // e.g. "needs_review", "pending_external", "resolved"
+}
+
+message RefundAttemptResponse {
+    int64 attempt_id = 1;
+    int64 order_id = 2;
+    optional int64 payment_intent_id = 3;
+    optional string razorpay_payment_id = 4;
+    int64 amount_requested_paise = 5;
+    int64 amount_sent_to_gateway_paise = 6;
+    optional string gateway_refund_id = 7;
+    string status = 8;
+    optional string provider_error = 9;
+    string created_at = 10;
+    string updated_at = 11;
+    int32 attempt_count = 12;
+}
+
+message RefundAttemptsResponse {
+    repeated RefundAttemptResponse items = 1;
+}
+
 message GetOrderStatsRequest {
     optional int64 order_date_start = 1;  // unix seconds; omit for all-time
     optional int64 order_date_end = 2;

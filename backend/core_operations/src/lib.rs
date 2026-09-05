@@ -84,7 +84,8 @@ use proto::proto::core::{
     ProductMoodMappingsResponse, ProductMoodsResponse, ProductRatingSummaryRequest,
     ProductRatingSummaryResponse, ProductVariantsResponse, ProductsResponse, PublicCouponsResponse,
     ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
-    RefundsResponse, RequestExchangeRequest, RequestReturnRequest, ResolveNeedsReviewRequest,
+    RefundAttemptsResponse, RefundsResponse, RequestExchangeRequest,
+    RequestReturnRequest, ResolveNeedsReviewRequest,
     ResolveNeedsReviewResponse,
     ResolveRefundAttemptNeedsReviewRequest, ResolveRefundAttemptNeedsReviewResponse,
     ReturnRequestsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
@@ -95,6 +96,7 @@ use proto::proto::core::{
     SearchOrderEventsRequest, SearchOrderRequest,
     SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
     SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
+    SearchRefundAttemptsRequest,
     SearchReturnRequestsRequest, SearchReviewRequest, SearchShippingMethodRequest,
     SearchSizeRequest, SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
     SearchUserRoleRequest, SearchWeaveRequest, SearchWishlistItemRequest,
@@ -2845,6 +2847,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::refunds::resolve_refund_attempt_needs_review(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_refund_attempts(
+        &self,
+        request: Request<SearchRefundAttemptsRequest>,
+    ) -> Result<Response<RefundAttemptsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::refunds::search_refund_attempts(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

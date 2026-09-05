@@ -1,11 +1,13 @@
 use proto::proto::core::{
-    CreateRefundRequest, GetRefundsRequest, RefundResponse, RefundsResponse,
-    ResolveNeedsReviewRequest, ResolveRefundAttemptNeedsReviewRequest,
+    CreateRefundRequest, GetRefundsRequest, RefundAttemptResponse, RefundResponse,
+    RefundsResponse, ResolveNeedsReviewRequest, ResolveRefundAttemptNeedsReviewRequest,
+    SearchRefundAttemptsRequest,
 };
 use tracing::instrument;
 
 use super::schema::{
-    GetRefund, NewRefund, Refund, ResolveNeedsReviewInput, ResolveRefundAttemptNeedsReviewInput,
+    GetRefund, NewRefund, Refund, RefundAttempt, ResolveNeedsReviewInput,
+    ResolveRefundAttemptNeedsReviewInput, SearchRefundAttemptsInput,
 };
 use crate::resolvers::{
     error::GqlError,
@@ -94,4 +96,49 @@ pub(crate) async fn get_refunds(input: GetRefund) -> Result<Vec<Refund>, GqlErro
         })
         .await?;
     Ok(refunds_response_to_vec(resp.into_inner()))
+}
+
+fn refund_attempt_response_to_gql(r: RefundAttemptResponse) -> RefundAttempt {
+    RefundAttempt {
+        attempt_id: r.attempt_id.to_string(),
+        order_id: r.order_id.to_string(),
+        payment_intent_id: r.payment_intent_id.map(|v| v.to_string()),
+        razorpay_payment_id: r.razorpay_payment_id,
+        amount_requested_paise: r.amount_requested_paise.to_string(),
+        amount_sent_to_gateway_paise: r.amount_sent_to_gateway_paise.to_string(),
+        gateway_refund_id: r.gateway_refund_id,
+        status: r.status,
+        provider_error: r.provider_error,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        attempt_count: r.attempt_count,
+    }
+}
+
+#[instrument]
+pub(crate) async fn search_refund_attempts(
+    input: SearchRefundAttemptsInput,
+) -> Result<Vec<RefundAttempt>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let resp = client
+        .search_refund_attempts(SearchRefundAttemptsRequest {
+            attempt_id: input
+                .attempt_id
+                .as_deref()
+                .map(|s| parse_i64(s, "attempt_id"))
+                .transpose()?,
+            order_id: input
+                .order_id
+                .as_deref()
+                .map(|s| parse_i64(s, "order_id"))
+                .transpose()?,
+            status: input.status,
+        })
+        .await?;
+    Ok(resp
+        .into_inner()
+        .items
+        .into_iter()
+        .map(refund_attempt_response_to_gql)
+        .collect())
 }

@@ -48,7 +48,7 @@ use crate::resolvers::{
     },
     refunds::{
         self,
-        schema::{GetRefund, Refund},
+        schema::{GetRefund, Refund, RefundAttempt, SearchRefundAttemptsInput},
     },
     returns::{
         self,
@@ -541,6 +541,20 @@ impl QueryRoot {
             ));
         }
         refunds::handlers::get_refunds(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin-only visibility into in-flight refund attempts — the row
+    /// `resolveRefundAttemptNeedsReview` acts on. Without this there was no way to discover
+    /// which attempt_ids exist or are stuck in `needs_review` from the admin UI.
+    #[instrument(err, ret)]
+    async fn search_refund_attempts(
+        context: &Context,
+        input: SearchRefundAttemptsInput,
+    ) -> FieldResult<Vec<RefundAttempt>> {
+        require_admin(context)?;
+        refunds::handlers::search_refund_attempts(input)
             .await
             .map_err(|e| e.into_field_error())
     }

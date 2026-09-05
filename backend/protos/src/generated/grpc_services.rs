@@ -3161,6 +3161,57 @@ pub struct ResolveRefundAttemptNeedsReviewResponse {
     #[prost(string, tag = "2")]
     pub message: ::prost::alloc::string::String,
 }
+/// Admin visibility into in-flight RefundAttempts (the row `resolveRefundAttemptNeedsReview`
+/// acts on) — previously nothing exposed which attempt_ids existed or were stuck in
+/// needs_review, so that mutation had no way to be driven from a UI.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SearchRefundAttemptsRequest {
+    #[prost(int64, optional, tag = "1")]
+    pub attempt_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "2")]
+    pub order_id: ::core::option::Option<i64>,
+    /// e.g. "needs_review", "pending_external", "resolved"
+    #[prost(string, optional, tag = "3")]
+    pub status: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RefundAttemptResponse {
+    #[prost(int64, tag = "1")]
+    pub attempt_id: i64,
+    #[prost(int64, tag = "2")]
+    pub order_id: i64,
+    #[prost(int64, optional, tag = "3")]
+    pub payment_intent_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "4")]
+    pub razorpay_payment_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(int64, tag = "5")]
+    pub amount_requested_paise: i64,
+    #[prost(int64, tag = "6")]
+    pub amount_sent_to_gateway_paise: i64,
+    #[prost(string, optional, tag = "7")]
+    pub gateway_refund_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, tag = "8")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "9")]
+    pub provider_error: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, tag = "10")]
+    pub created_at: ::prost::alloc::string::String,
+    #[prost(string, tag = "11")]
+    pub updated_at: ::prost::alloc::string::String,
+    #[prost(int32, tag = "12")]
+    pub attempt_count: i32,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RefundAttemptsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<RefundAttemptResponse>,
+}
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -7405,6 +7456,33 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn search_refund_attempts(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SearchRefundAttemptsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::RefundAttemptsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SearchRefundAttempts",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "SearchRefundAttempts"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn get_order_stats(
             &mut self,
             request: impl tonic::IntoRequest<super::GetOrderStatsRequest>,
@@ -8580,6 +8658,13 @@ pub mod grpc_services_server {
             request: tonic::Request<super::ResolveRefundAttemptNeedsReviewRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ResolveRefundAttemptNeedsReviewResponse>,
+            tonic::Status,
+        >;
+        async fn search_refund_attempts(
+            &self,
+            request: tonic::Request<super::SearchRefundAttemptsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::RefundAttemptsResponse>,
             tonic::Status,
         >;
         async fn get_order_stats(
@@ -16049,6 +16134,53 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ResolveRefundAttemptNeedsReviewSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SearchRefundAttempts" => {
+                    #[allow(non_camel_case_types)]
+                    struct SearchRefundAttemptsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::SearchRefundAttemptsRequest>
+                    for SearchRefundAttemptsSvc<T> {
+                        type Response = super::RefundAttemptsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SearchRefundAttemptsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::search_refund_attempts(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SearchRefundAttemptsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

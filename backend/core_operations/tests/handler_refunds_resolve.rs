@@ -12,6 +12,7 @@ use core_db_entities::entity::sea_orm_active_enums::{
 };
 use proto::proto::core::{
     CreateRefundRequest, ResolveNeedsReviewRequest, ResolveRefundAttemptNeedsReviewRequest,
+    SearchRefundAttemptsRequest,
 };
 use sea_orm::entity::prelude::Decimal;
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
@@ -241,6 +242,52 @@ async fn resolve_needs_review_rejects_invalid_resolution() {
     let result = resolve_needs_review(&txn, req).await;
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+}
+
+#[tokio::test]
+async fn search_refund_attempts_returns_matching_rows() {
+    use core_operations::handlers::refunds::search_refund_attempts;
+
+    let attempt = refund_attempt(7, 42, "needs_review");
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![attempt]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchRefundAttemptsRequest {
+        attempt_id: None,
+        order_id: Some(42),
+        status: Some("needs_review".to_string()),
+    });
+
+    let result = search_refund_attempts(&txn, req).await;
+    assert!(result.is_ok(), "{result:?}");
+    let items = result.unwrap().into_inner().items;
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].attempt_id, 7);
+    assert_eq!(items[0].order_id, 42);
+    assert_eq!(items[0].status, "needs_review");
+    assert_eq!(items[0].provider_error.as_deref(), Some("gateway timeout"));
+}
+
+#[tokio::test]
+async fn search_refund_attempts_returns_empty_when_none_match() {
+    use core_operations::handlers::refunds::search_refund_attempts;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<refund_attempts::Model>::new()])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchRefundAttemptsRequest {
+        attempt_id: None,
+        order_id: Some(999),
+        status: None,
+    });
+
+    let result = search_refund_attempts(&txn, req).await;
+    assert!(result.is_ok(), "{result:?}");
+    assert!(result.unwrap().into_inner().items.is_empty());
 }
 
 #[tokio::test]
