@@ -54,6 +54,7 @@ async fn create_user_and_product(txn: &sea_orm::DatabaseTransaction, now_tag: i6
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_rv_{}", now_tag)),
     }
     .insert(txn)

@@ -226,6 +226,7 @@ async fn place_order_fixture(
 
     let category = core_db_entities::entity::product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_returns_cat_{tag}")),
     }
     .insert(&txn)

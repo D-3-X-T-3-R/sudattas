@@ -443,6 +443,7 @@ async fn integration_user_delete_cascades_to_cart() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_del_{}", now_tag)),
     }
     .insert(&txn)

@@ -1118,6 +1118,155 @@ async fn test_admin_export_user_pii_invalid_user_id_returns_error() {
 }
 
 #[tokio::test]
+async fn test_request_exchange_requires_login() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: Some("redis://127.0.0.1".to_string()),
+        auth: Some(AuthSource::Session("guest_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: Some("guest-session".to_string()),
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("none".to_string()),
+        account_status: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"mutation {
+            requestExchange(input: {
+                orderId: "1",
+                orderDetailId: "1",
+                desiredVariantId: "2",
+                reason: "Wrong size"
+            }) { exchangeId }
+        }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "requestExchange should reject a guest session, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("login required"), "got: {}", err);
+}
+
+#[tokio::test]
+async fn test_admin_mark_exchange_received_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"mutation { adminMarkExchangeReceived(input: { exchangeId: "1" }) { exchangeId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "adminMarkExchangeReceived should reject a non-admin user, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"), "got: {}", err);
+}
+
+#[tokio::test]
+async fn test_admin_update_exchange_status_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"mutation {
+            adminUpdateExchangeStatus(input: { exchangeId: "1", status: "approved" }) { exchangeId }
+        }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "adminUpdateExchangeStatus should reject a non-admin user, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"), "got: {}", err);
+}
+
+#[tokio::test]
+async fn test_search_exchange_requests_requires_customer_or_admin() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: Some("redis://127.0.0.1".to_string()),
+        auth: Some(AuthSource::Session("guest_1".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: Some("guest-session".to_string()),
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("none".to_string()),
+        account_status: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"{ searchExchangeRequests(input: {}) { exchangeId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "searchExchangeRequests should reject a guest session, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("login required"), "got: {}", err);
+}
+
+#[tokio::test]
 async fn test_search_order_rejects_cross_user_access_for_customer() {
     let ctx = Context {
         jwks: JWKSet { keys: vec![] },

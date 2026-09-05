@@ -252,6 +252,7 @@ async fn integration_place_order_uses_expected_shipping_address() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_sa2_{}", now_tag)),
     }
     .insert(&txn)

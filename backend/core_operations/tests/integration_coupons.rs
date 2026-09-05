@@ -107,6 +107,7 @@ async fn ensure_pending_and_place_order_setup(
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_cp_{}", now_tag)),
     }
     .insert(txn)

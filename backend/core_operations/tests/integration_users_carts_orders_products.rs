@@ -256,6 +256,7 @@ async fn integration_place_order_happy_path_removes_only_selected_items_after_cr
     // Minimal product category and product.
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_category_{}", now_tag)),
     }
     .insert(&txn)
@@ -505,6 +506,7 @@ async fn integration_place_order_insufficient_inventory_fails_and_preserves_cart
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_category_insufficient_{}", now_tag)),
     }
     .insert(&txn)
@@ -822,6 +824,7 @@ async fn integration_cart_add_get_update_then_place_order() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_cartup_{}", now_tag)),
     }
     .insert(&txn)
@@ -1050,6 +1053,7 @@ async fn integration_place_order_multiple_items_two_variants() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_multi_{}", now_tag)),
     }
     .insert(&txn)
@@ -1310,6 +1314,7 @@ async fn integration_place_order_then_search_order() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_srch_{}", now_tag)),
     }
     .insert(&txn)

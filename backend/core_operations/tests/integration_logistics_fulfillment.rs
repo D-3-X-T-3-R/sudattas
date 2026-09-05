@@ -404,6 +404,7 @@ async fn seed_checkout_user(txn: &sea_orm::DatabaseTransaction, tag: i64) -> (i6
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_logistics_cat_{tag}")),
     }
     .insert(txn)

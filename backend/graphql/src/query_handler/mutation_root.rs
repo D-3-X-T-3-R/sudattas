@@ -26,6 +26,13 @@ use crate::resolvers::{
             DeleteEventLogInput, EventLog, EventLogMutation, NewEventLog, SearchEventLogInput,
         },
     },
+    exchanges::{
+        self,
+        schema::{
+            AdminMarkExchangeReceivedInput, AdminUpdateExchangeStatusInput, ExchangeRequest,
+            RequestExchangeInput,
+        },
+    },
     fabrics::{
         self,
         schema::{DeleteFabricInput, Fabric, FabricMutation, NewFabric, SearchFabricInput},
@@ -735,6 +742,43 @@ impl MutationRoot {
     ) -> FieldResult<Vec<ReturnRequest>> {
         require_admin(context)?;
         returns::handlers::admin_update_return_status(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Category-scoped exchange (same product, different size/colour, exact same price) —
+    /// distinct from the refund-only `requestReturn` above.
+    #[instrument(err, ret)]
+    async fn request_exchange(
+        context: &Context,
+        input: RequestExchangeInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        let uid = require_jwt(context)?.to_string();
+        query_root::ensure_customer_can_access_order(context, &input.order_id).await?;
+        exchanges::handlers::request_exchange(input, uid)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: mark the original item received and create the $0 replacement order.
+    #[instrument(err, ret)]
+    async fn admin_mark_exchange_received(
+        context: &Context,
+        input: AdminMarkExchangeReceivedInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::admin_mark_exchange_received(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn admin_update_exchange_status(
+        context: &Context,
+        input: AdminUpdateExchangeStatusInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::admin_update_exchange_status(input)
             .await
             .map_err(|e| e.into_field_error())
     }

@@ -6,6 +6,7 @@ pub use super::coupon_redemptions::Entity as CouponRedemptions;
 pub use super::coupon_scope::Entity as CouponScope;
 pub use super::coupons::Entity as Coupons;
 pub use super::event_logs::Entity as EventLogs;
+pub use super::exchange_requests::Entity as ExchangeRequests;
 pub use super::fabrics::Entity as Fabrics;
 pub use super::idempotency_keys::Entity as IdempotencyKeys;
 pub use super::inventory::Entity as Inventory;

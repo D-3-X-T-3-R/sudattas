@@ -577,6 +577,9 @@ pub struct GetUserPiiExportResponse {
 pub struct CreateCategoryRequest {
     #[prost(string, tag = "1")]
     pub name: ::prost::alloc::string::String,
+    /// Defaults to false when unset.
+    #[prost(bool, optional, tag = "2")]
+    pub exchange_eligible: ::core::option::Option<bool>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -595,6 +598,9 @@ pub struct UpdateCategoryRequest {
     pub category_id: i64,
     #[prost(string, tag = "2")]
     pub name: ::prost::alloc::string::String,
+    /// Unset leaves the existing value unchanged.
+    #[prost(bool, optional, tag = "3")]
+    pub exchange_eligible: ::core::option::Option<bool>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -611,6 +617,8 @@ pub struct CategoryResponse {
     pub category_id: i64,
     #[prost(string, tag = "2")]
     pub name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "3")]
+    pub exchange_eligible: bool,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -897,6 +905,91 @@ pub struct ReturnRequestResponse {
 pub struct ReturnRequestsResponse {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<ReturnRequestResponse>,
+}
+/// Category-scoped exchanges: same product, different size/colour, exact same price — a swap, not
+/// a refund. Distinct pipeline from ReturnRequest above (which is refund-only). Only categories
+/// with exchange_eligible = true (see CategoryResponse) are eligible.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RequestExchangeRequest {
+    #[prost(int64, tag = "1")]
+    pub order_id: i64,
+    #[prost(int64, tag = "2")]
+    pub user_id: i64,
+    #[prost(int64, tag = "3")]
+    pub order_detail_id: i64,
+    #[prost(int64, tag = "4")]
+    pub desired_variant_id: i64,
+    /// Defaults to the order_detail's full purchased quantity when unset.
+    #[prost(int64, optional, tag = "5")]
+    pub quantity: ::core::option::Option<i64>,
+    #[prost(string, tag = "6")]
+    pub reason: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SearchExchangeRequestsRequest {
+    #[prost(int64, optional, tag = "1")]
+    pub exchange_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "2")]
+    pub order_id: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "3")]
+    pub user_id: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AdminMarkExchangeReceivedRequest {
+    #[prost(int64, tag = "1")]
+    pub exchange_id: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AdminUpdateExchangeStatusRequest {
+    #[prost(int64, tag = "1")]
+    pub exchange_id: i64,
+    #[prost(string, tag = "2")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub note: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExchangeRequestResponse {
+    #[prost(int64, tag = "1")]
+    pub exchange_id: i64,
+    #[prost(int64, tag = "2")]
+    pub order_id: i64,
+    #[prost(int64, tag = "3")]
+    pub user_id: i64,
+    #[prost(int64, tag = "4")]
+    pub order_detail_id: i64,
+    #[prost(int64, tag = "5")]
+    pub desired_variant_id: i64,
+    #[prost(int64, tag = "6")]
+    pub quantity: i64,
+    #[prost(string, tag = "7")]
+    pub status: ::prost::alloc::string::String,
+    #[prost(string, tag = "8")]
+    pub reason: ::prost::alloc::string::String,
+    #[prost(string, tag = "9")]
+    pub created_at: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "10")]
+    pub received_at: ::core::option::Option<::prost::alloc::string::String>,
+    /// Set once the admin marks the exchange received and the replacement order is created.
+    #[prost(int64, optional, tag = "11")]
+    pub replacement_order_id: ::core::option::Option<i64>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExchangeRequestsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<ExchangeRequestResponse>,
 }
 /// P1 Admin: mark order shipped/delivered with enforced transitions
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -4179,6 +4272,123 @@ pub mod grpc_services_client {
                     GrpcMethod::new(
                         "grpc_services.GRPCServices",
                         "AdminUpdateReturnStatus",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn request_exchange(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RequestExchangeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/RequestExchange",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "RequestExchange"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn search_exchange_requests(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SearchExchangeRequestsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SearchExchangeRequests",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "SearchExchangeRequests",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn admin_mark_exchange_received(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AdminMarkExchangeReceivedRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/AdminMarkExchangeReceived",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "AdminMarkExchangeReceived",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn admin_update_exchange_status(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AdminUpdateExchangeStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/AdminUpdateExchangeStatus",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "AdminUpdateExchangeStatus",
                     ),
                 );
             self.inner.unary(req, path, codec).await
@@ -7606,6 +7816,34 @@ pub mod grpc_services_server {
             tonic::Response<super::ReturnRequestsResponse>,
             tonic::Status,
         >;
+        async fn request_exchange(
+            &self,
+            request: tonic::Request<super::RequestExchangeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        >;
+        async fn search_exchange_requests(
+            &self,
+            request: tonic::Request<super::SearchExchangeRequestsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        >;
+        async fn admin_mark_exchange_received(
+            &self,
+            request: tonic::Request<super::AdminMarkExchangeReceivedRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        >;
+        async fn admin_update_exchange_status(
+            &self,
+            request: tonic::Request<super::AdminUpdateExchangeStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        >;
         async fn place_order(
             &self,
             request: tonic::Request<super::PlaceOrderRequest>,
@@ -10247,6 +10485,208 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = AdminUpdateReturnStatusSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/RequestExchange" => {
+                    #[allow(non_camel_case_types)]
+                    struct RequestExchangeSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::RequestExchangeRequest>
+                    for RequestExchangeSvc<T> {
+                        type Response = super::ExchangeRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RequestExchangeRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::request_exchange(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RequestExchangeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SearchExchangeRequests" => {
+                    #[allow(non_camel_case_types)]
+                    struct SearchExchangeRequestsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::SearchExchangeRequestsRequest>
+                    for SearchExchangeRequestsSvc<T> {
+                        type Response = super::ExchangeRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SearchExchangeRequestsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::search_exchange_requests(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SearchExchangeRequestsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/AdminMarkExchangeReceived" => {
+                    #[allow(non_camel_case_types)]
+                    struct AdminMarkExchangeReceivedSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<
+                        super::AdminMarkExchangeReceivedRequest,
+                    > for AdminMarkExchangeReceivedSvc<T> {
+                        type Response = super::ExchangeRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::AdminMarkExchangeReceivedRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::admin_mark_exchange_received(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = AdminMarkExchangeReceivedSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/AdminUpdateExchangeStatus" => {
+                    #[allow(non_camel_case_types)]
+                    struct AdminUpdateExchangeStatusSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<
+                        super::AdminUpdateExchangeStatusRequest,
+                    > for AdminUpdateExchangeStatusSvc<T> {
+                        type Response = super::ExchangeRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::AdminUpdateExchangeStatusRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::admin_update_exchange_status(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = AdminUpdateExchangeStatusSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

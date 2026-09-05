@@ -9,6 +9,10 @@ use crate::resolvers::{
         self,
         schema::{Coupon, CouponAdmin, PublicCoupon, SearchCouponAdminInput, ValidateCoupon},
     },
+    exchanges::{
+        self,
+        schema::{ExchangeRequest, SearchExchangeRequestsInput},
+    },
     inventory::{
         self,
         schema::{InventoryItem, SearchInventoryItem},
@@ -561,6 +565,30 @@ impl QueryRoot {
         }
 
         returns::handlers::search_return_requests(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_exchange_requests(
+        context: &Context,
+        mut input: SearchExchangeRequestsInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        if !context.is_admin() {
+            let uid = require_customer_actor(context)?.to_string();
+            if input.user_id.as_deref().is_some_and(|v| v != uid) {
+                return Err(juniper::FieldError::new(
+                    "Customers can only query their own exchanges",
+                    juniper::Value::null(),
+                ));
+            }
+            input.user_id = Some(uid);
+            if let Some(order_id) = input.order_id.as_deref() {
+                ensure_customer_can_access_order(context, order_id).await?;
+            }
+        }
+
+        exchanges::handlers::search_exchange_requests(input)
             .await
             .map_err(|e| e.into_field_error())
     }

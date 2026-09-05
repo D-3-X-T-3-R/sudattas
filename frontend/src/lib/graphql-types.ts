@@ -11,6 +11,9 @@ export interface ProductImageListItem {
 export interface CategoryRow {
   categoryId: string;
   name: string;
+  /** Whether products in this category can be exchanged (same product, different size/colour,
+   * same price) instead of only refunded via a return. */
+  exchangeEligible?: boolean;
 }
 
 export interface OccasionRow {

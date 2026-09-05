@@ -122,6 +122,7 @@ async fn create_variant_with_cart_item(
 ) -> (i64, i64, i64) {
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_sel_cat_{}_{}", name_suffix, now_tag)),
     }
     .insert(txn)

@@ -8,6 +8,7 @@ pub mod coupon_redemptions;
 pub mod coupon_scope;
 pub mod coupons;
 pub mod event_logs;
+pub mod exchange_requests;
 pub mod fabrics;
 pub mod idempotency_keys;
 pub mod inventory;

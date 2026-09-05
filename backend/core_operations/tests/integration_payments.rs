@@ -157,6 +157,7 @@ async fn place_order_setup(
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_pay_{}", now_tag)),
     }
     .insert(&txn)
@@ -455,6 +456,7 @@ async fn integration_place_order_prepaid_rolls_back_fully_when_razorpay_fails() 
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_pay_fail_{}", now_tag)),
     }
     .insert(&txn)

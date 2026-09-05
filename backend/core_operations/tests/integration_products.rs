@@ -34,6 +34,7 @@ async fn integration_create_product_search_by_name_and_category_returns_product(
     let now_tag = Utc::now().timestamp_millis();
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_pr1_{}", now_tag)),
     }
     .insert(&txn)
@@ -112,6 +113,7 @@ async fn integration_create_product_and_variant_get_by_id_returns_product_and_va
     let now_tag = Utc::now().timestamp_millis();
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_pr2_{}", now_tag)),
     }
     .insert(&txn)
@@ -189,6 +191,7 @@ async fn integration_update_product_price_get_by_id_reflects_new_price() {
     let now_tag = Utc::now().timestamp_millis();
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_pr3_{}", now_tag)),
     }
     .insert(&txn)
@@ -268,6 +271,7 @@ async fn integration_delete_product_get_by_id_returns_empty() {
     let now_tag = Utc::now().timestamp_millis();
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_pr4_{}", now_tag)),
     }
     .insert(&txn)

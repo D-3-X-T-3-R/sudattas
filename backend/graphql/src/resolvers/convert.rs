@@ -70,6 +70,7 @@ pub fn category_response_to_gql(c: CategoryResponse) -> Category {
     Category {
         category_id: c.category_id.to_string(),
         name: c.name,
+        exchange_eligible: c.exchange_eligible,
     }
 }
 

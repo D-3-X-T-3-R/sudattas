@@ -131,6 +131,7 @@ async fn place_order_minimal(db: &sea_orm::DatabaseConnection, now_tag: i64) -> 
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_ord_{}", now_tag)),
     }
     .insert(&txn)

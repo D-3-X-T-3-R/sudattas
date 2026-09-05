@@ -308,6 +308,7 @@ async fn run_atomicity_scenario(db: &DatabaseConnection, payment_mode: &str) -> 
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_atomic_category_{now_tag}")),
     }
     .insert(&txn)

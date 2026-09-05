@@ -442,6 +442,32 @@ export default function AdminProductsPage() {
     onError: (err: Error) => setCategoryManageError(err.message || "Failed to rename category."),
   });
 
+  const toggleExchangeEligibleMutation = useMutation({
+    mutationFn: async ({
+      categoryId,
+      exchangeEligible,
+    }: {
+      categoryId: string;
+      exchangeEligible: boolean;
+    }) => {
+      const currentName = categories.find((c) => c.categoryId === categoryId)?.name ?? "";
+      const data = await gqlAdmin<{
+        updateCategory?: Array<{ categoryId: string; name: string; exchangeEligible: boolean }>;
+      }>(
+        `mutation UpdateCategoryExchangeEligible($category: CategoryMutation!) {
+          updateCategory(category: $category) { categoryId name exchangeEligible }
+        }`,
+        { category: { categoryId, name: currentName, exchangeEligible } }
+      );
+      return data?.updateCategory?.[0];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+    },
+    onError: (err: Error) =>
+      setCategoryManageError(err.message || "Failed to update exchange eligibility."),
+  });
+
   const deleteCategoryMutation = useMutation({
     mutationFn: async (categoryId: string) => {
       const data = await gqlAdmin<{ deleteCategory?: Array<{ categoryId: string; name: string }> }>(
@@ -1874,6 +1900,24 @@ export default function AdminProductsPage() {
                             <span className="min-w-0 flex-1 truncate text-[15px] text-[var(--color-ink)]">
                               {c.name || `Category ${c.categoryId}`}
                             </span>
+                            <label
+                              className="flex shrink-0 items-center gap-1.5 text-xs text-[var(--color-muted)]"
+                              title="Products in this category can be exchanged (same product, different size/colour, same price) instead of only refunded"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={!!c.exchangeEligible}
+                                onChange={(e) =>
+                                  toggleExchangeEligibleMutation.mutate({
+                                    categoryId: c.categoryId,
+                                    exchangeEligible: e.target.checked,
+                                  })
+                                }
+                                disabled={toggleExchangeEligibleMutation.isPending}
+                                className="h-3.5 w-3.5 rounded border-[var(--color-line)]"
+                              />
+                              Exchange
+                            </label>
                             <button
                               type="button"
                               onClick={() => beginEditCategory(c)}

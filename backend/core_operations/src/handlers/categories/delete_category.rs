@@ -27,6 +27,7 @@ pub async fn delete_category(
                             items: vec![CategoryResponse {
                                 name: model.name,
                                 category_id: model.category_id,
+                                exchange_eligible: model.exchange_eligible != 0,
                             }],
                         };
                         Ok(Response::new(response))

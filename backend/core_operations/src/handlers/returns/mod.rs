@@ -81,7 +81,9 @@ async fn load_order_status_name(
     Ok(row.map(|r| r.status_name))
 }
 
-async fn load_delivered_at(
+/// Shared with the exchanges handler (`handlers::exchanges`) — both request flows use the same
+/// "must be delivered, within N days of delivery" eligibility window.
+pub(crate) async fn load_delivered_at(
     txn: &DatabaseTransaction,
     order: &orders::Model,
 ) -> Result<Option<DateTime<Utc>>, Status> {

@@ -110,6 +110,7 @@ async fn integration_abandoned_cart_opt_in_enqueues_one_event() {
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_ac1_{}", now_tag)),
     }
     .insert(&txn)
@@ -244,6 +245,7 @@ async fn integration_abandoned_cart_opt_out_no_events() {
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_ac2_{}", now_tag)),
     }
     .insert(&txn)
@@ -403,6 +405,7 @@ async fn place_order_setup(db: &sea_orm::DatabaseConnection, now_tag: i64) -> Ou
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_ob_{}", now_tag)),
     }
     .insert(&txn)

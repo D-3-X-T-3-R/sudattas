@@ -17,7 +17,7 @@ import type {
 
 export type { CategoryRow, OccasionRow, ProductListRow, ProductListRowWithVariantStock, ProductImageListItem };
 
-const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { categoryId name } }`;
+const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { categoryId name exchangeEligible } }`;
 const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId

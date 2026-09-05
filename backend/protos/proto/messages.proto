@@ -317,6 +317,8 @@ message GetUserPiiExportResponse {
 
 message CreateCategoryRequest {
     string name = 1;
+    // Defaults to false when unset.
+    optional bool exchange_eligible = 2;
 }
 
 message SearchCategoryRequest {
@@ -327,6 +329,8 @@ message SearchCategoryRequest {
 message UpdateCategoryRequest {
     int64 category_id = 1;
     string name = 2;
+    // Unset leaves the existing value unchanged.
+    optional bool exchange_eligible = 3;
 }
 
 message DeleteCategoryRequest {
@@ -336,6 +340,7 @@ message DeleteCategoryRequest {
 message CategoryResponse {
     int64 category_id = 1;
     string name = 2;
+    bool exchange_eligible = 3;
 }
 
 message CategoriesResponse {
@@ -495,6 +500,54 @@ message ReturnRequestResponse {
 
 message ReturnRequestsResponse {
     repeated ReturnRequestResponse items = 1;
+}
+
+// Category-scoped exchanges: same product, different size/colour, exact same price — a swap, not
+// a refund. Distinct pipeline from ReturnRequest above (which is refund-only). Only categories
+// with exchange_eligible = true (see CategoryResponse) are eligible.
+message RequestExchangeRequest {
+    int64 order_id = 1;
+    int64 user_id = 2;
+    int64 order_detail_id = 3;
+    int64 desired_variant_id = 4;
+    // Defaults to the order_detail's full purchased quantity when unset.
+    optional int64 quantity = 5;
+    string reason = 6;
+}
+
+message SearchExchangeRequestsRequest {
+    optional int64 exchange_id = 1;
+    optional int64 order_id = 2;
+    optional int64 user_id = 3;
+}
+
+message AdminMarkExchangeReceivedRequest {
+    int64 exchange_id = 1;
+}
+
+message AdminUpdateExchangeStatusRequest {
+    int64 exchange_id = 1;
+    string status = 2;
+    optional string note = 3;
+}
+
+message ExchangeRequestResponse {
+    int64 exchange_id = 1;
+    int64 order_id = 2;
+    int64 user_id = 3;
+    int64 order_detail_id = 4;
+    int64 desired_variant_id = 5;
+    int64 quantity = 6;
+    string status = 7;
+    string reason = 8;
+    string created_at = 9;
+    optional string received_at = 10;
+    // Set once the admin marks the exchange received and the replacement order is created.
+    optional int64 replacement_order_id = 11;
+}
+
+message ExchangeRequestsResponse {
+    repeated ExchangeRequestResponse items = 1;
 }
 
 // P1 Admin: mark order shipped/delivered with enforced transitions

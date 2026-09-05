@@ -81,6 +81,7 @@ async fn integration_cart_delete_one_item_returns_remaining() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_c1_{}", now_tag)),
     }
     .insert(&txn)
@@ -226,6 +227,7 @@ async fn integration_create_cart_item_duplicate_variant_increments_quantity() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_c1b_{}", now_tag)),
     }
     .insert(&txn)
@@ -364,6 +366,7 @@ async fn integration_merge_cart_moves_guest_items_and_sums_overlap() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_c1c_{}", now_tag)),
     }
     .insert(&txn)
@@ -540,6 +543,7 @@ async fn integration_guest_cart_not_used_for_place_order() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_c2_{}", now_tag)),
     }
     .insert(&txn)
@@ -814,6 +818,7 @@ async fn integration_place_order_removes_only_selected_user_cart_items() {
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_c3_{}", now_tag)),
     }
     .insert(&txn)

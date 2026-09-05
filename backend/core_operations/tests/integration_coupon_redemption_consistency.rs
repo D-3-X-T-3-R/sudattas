@@ -140,6 +140,7 @@ async fn seed_coupon_checkout_order(db: &DatabaseConnection, now_tag: i64) -> Co
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_coupon_consistency_cat_{}", now_tag)),
     }
     .insert(&txn)

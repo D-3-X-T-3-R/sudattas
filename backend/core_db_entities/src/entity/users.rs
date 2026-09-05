@@ -47,6 +47,8 @@ pub enum Relation {
     CouponRedemptions,
     #[sea_orm(has_many = "super::event_logs::Entity")]
     EventLogs,
+    #[sea_orm(has_many = "super::exchange_requests::Entity")]
+    ExchangeRequests,
     #[sea_orm(has_many = "super::invoices::Entity")]
     Invoices,
     #[sea_orm(has_many = "super::orders::Entity")]
@@ -100,6 +102,12 @@ impl Related<super::coupon_redemptions::Entity> for Entity {
 impl Related<super::event_logs::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::EventLogs.def()
+    }
+}
+
+impl Related<super::exchange_requests::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ExchangeRequests.def()
     }
 }
 

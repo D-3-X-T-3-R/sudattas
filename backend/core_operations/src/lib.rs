@@ -44,7 +44,9 @@ pub fn load_env_once() {
 use proto::proto::core::{
     grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkOrderDeliveredRequest,
     AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse,
-    AdminMarkReturnReceivedRequest, AdminUpdateReturnStatusRequest, AdminUpdateReviewStatusRequest,
+    AdminMarkExchangeReceivedRequest, AdminMarkReturnReceivedRequest,
+    AdminUpdateExchangeStatusRequest, AdminUpdateReturnStatusRequest,
+    AdminUpdateReviewStatusRequest,
     AdminUpdateReviewStatusResponse, ApplyCouponRequest, CancelOrderItemsRequest,
     CapturePaymentRequest, CartItemsResponse, CategoriesResponse, ColorsResponse,
     ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse, CreateCartItemRequest,
@@ -66,6 +68,7 @@ use proto::proto::core::{
     DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleRequest, DeleteWeaveRequest,
     DeleteWishlistItemRequest, EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse,
     EstimateCheckoutShippingRequest, EstimateCheckoutShippingResponse, EventLogsResponse,
+    ExchangeRequestsResponse,
     FabricsResponse, GetCartItemsRequest, GetOrderEventsRequest, GetOrderInvoiceDownloadRequest,
     GetOrderInvoiceDownloadResponse, GetOrderInvoiceRequest, GetOrderStatsRequest,
     GetOrderStatsResponse, GetPaymentIntentRequest, GetPresignedUploadUrlRequest,
@@ -81,13 +84,15 @@ use proto::proto::core::{
     ProductMoodMappingsResponse, ProductMoodsResponse, ProductRatingSummaryRequest,
     ProductRatingSummaryResponse, ProductVariantsResponse, ProductsResponse, PublicCouponsResponse,
     ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
-    RefundsResponse, RequestReturnRequest, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
+    RefundsResponse, RequestExchangeRequest, RequestReturnRequest, ResolveNeedsReviewRequest,
+    ResolveNeedsReviewResponse,
     ResolveRefundAttemptNeedsReviewRequest, ResolveRefundAttemptNeedsReviewResponse,
     ReturnRequestsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
     SearchCouponAdminRequest, SearchEventLogRequest, SearchFabricRequest,
     SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterCampaignRequest,
     SearchNewsletterSubscriberRequest,
-    SearchOccasionRequest, SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
+    SearchExchangeRequestsRequest, SearchOccasionRequest, SearchOrderDetailRequest,
+    SearchOrderEventsRequest, SearchOrderRequest,
     SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
     SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
     SearchReturnRequestsRequest, SearchReviewRequest, SearchShippingMethodRequest,
@@ -1059,6 +1064,68 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::returns::admin_update_return_status(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn request_exchange(
+        &self,
+        request: Request<RequestExchangeRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::exchanges::request_exchange(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_exchange_requests(
+        &self,
+        request: Request<SearchExchangeRequestsRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::exchanges::search_exchange_requests(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    // Unlike the other exchange endpoints, this one manages multiple transactions itself
+    // (restore stock, then place_order_admin's own transaction, then mark completed) — see the
+    // doc comment on handlers::exchanges::admin_mark_exchange_received.
+    async fn admin_mark_exchange_received(
+        &self,
+        request: Request<AdminMarkExchangeReceivedRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        handlers::exchanges::admin_mark_exchange_received(db, request).await
+    }
+
+    async fn admin_update_exchange_status(
+        &self,
+        request: Request<AdminUpdateExchangeStatusRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::exchanges::admin_update_exchange_status(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
