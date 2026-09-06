@@ -142,7 +142,7 @@ export async function generateMetadata({
   const base = siteUrl();
   const canonical = `${base}/product/${encodeURIComponent(product.id)}`;
   const image = absoluteImageUrl(base, product.image);
-  const title = product.metaTitle?.trim() || `${product.name} | Sudatta's`;
+  const title = product.metaTitle?.trim() || `${product.name} | Sudatta's Designer Boutique`;
   const description =
     product.metaDescription?.trim() ||
     product.description ||

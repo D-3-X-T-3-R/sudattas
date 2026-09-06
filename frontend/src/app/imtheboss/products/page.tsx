@@ -341,6 +341,8 @@ export default function AdminProductsPage() {
   const [activeSection, setActiveSection] = useState<FormSection>("basics");
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProductFormState, string>>>({});
   const [slugTouched, setSlugTouched] = useState(false);
+  const [metaTitleTouched, setMetaTitleTouched] = useState(false);
+  const [metaDescriptionTouched, setMetaDescriptionTouched] = useState(false);
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -1003,12 +1005,34 @@ export default function AdminProductsPage() {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     if (name === "slug") setSlugTouched(true);
+    if (name === "metaTitle") setMetaTitleTouched(true);
+    if (name === "metaDescription") setMetaDescriptionTouched(true);
     setForm((prev) => {
       const next = { ...prev, [name]: type === "checkbox" ? checked : value };
       if (name === "name" && !slugTouched) {
         next.slug = slugify(value);
       }
-      if (typeof window !== "undefined") {
+      // Autofill SEO title/description with the same defaults the storefront falls back to
+      // when they're left blank — gives the admin real, editable text instead of a blank field
+      // plus a placeholder. Stops following once the admin edits the SEO field itself.
+      if (name === "name" && !metaTitleTouched) {
+        next.metaTitle = value
+          ? `${value} | Sudatta's Designer Boutique`.slice(0, BACKEND_MAX_META_TITLE_LEN)
+          : "";
+      }
+      if ((name === "name" || name === "description") && !metaDescriptionTouched) {
+        const baseDescription = next.description.trim();
+        next.metaDescription = baseDescription
+          ? baseDescription.slice(0, BACKEND_MAX_META_DESCRIPTION_LEN)
+          : next.name
+            ? `Buy ${next.name} online from Sudatta's.`.slice(0, BACKEND_MAX_META_DESCRIPTION_LEN)
+            : "";
+      }
+      // Draft persistence is only for an in-progress new product — while editing an existing
+      // one, `next` is that product's own real data, and there's no successful-edit hook that
+      // clears this key, so writing here would leave it sitting in sessionStorage and silently
+      // resurface as the "Add product" form's contents next time that tab is opened.
+      if (typeof window !== "undefined" && !editingProductId) {
         window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next));
       }
       return next;
@@ -1317,6 +1341,8 @@ export default function AdminProductsPage() {
     setFieldErrors({});
     setActiveSection("basics");
     setSlugTouched(true);
+    setMetaTitleTouched(true);
+    setMetaDescriptionTouched(true);
     setMessage(`Loading product…`);
     let product: ProductListRow = p;
     let moodIds: string[] = [];
@@ -1514,13 +1540,43 @@ export default function AdminProductsPage() {
           onClick={() => {
             setActiveTab("add");
             setEditingProductId(null);
+            // Full reset — this button is reachable mid-edit too (not just from the products
+            // list), and previously only cleared a few auxiliary flags, leaving whatever
+            // product's fields/images/variants/moods were currently loaded still on screen.
+            setForm((prev) => ({
+              ...prev,
+              name: "",
+              description: "",
+              priceRupees: "",
+              stockQuantity: "0",
+              sku: "",
+              slug: "",
+              fabric: "",
+              weave: "",
+              occasion: "",
+              hasBlousePiece: true,
+              careInstructions: "",
+              productStatusId: "2",
+              metaTitle: "",
+              metaDescription: "",
+            }));
+            setVariants([]);
+            setSelectedMoodIds([]);
+            setImageFiles([]);
             setExistingProductImages([]);
             setOrderedProductImages(null);
             setInitialExistingImageIdsWhenEdit([]);
             setInitialVariantIdsWhenEdit([]);
+            setImageError("");
+            setImageMessage("");
             setFieldErrors({});
             setActiveSection("basics");
             setSlugTouched(false);
+            setMetaTitleTouched(false);
+            setMetaDescriptionTouched(false);
+            if (typeof window !== "undefined") {
+              window.sessionStorage.removeItem(DRAFT_KEY);
+            }
           }}
           className={cn(
             "rounded-lg px-5 py-2.5 text-[15px] font-semibold transition-colors",
@@ -2144,7 +2200,7 @@ export default function AdminProductsPage() {
                   name="metaTitle"
                   value={form.metaTitle}
                   onChange={handleChange}
-                  placeholder={form.name ? `${form.name} | Sudatta's` : "Optional — overrides the default page title"}
+                  placeholder="Optional — overrides the default page title"
                   maxLength={BACKEND_MAX_META_TITLE_LEN}
                   className={cn("rounded-lg text-[15px]", fieldErrors.metaTitle && "border-rose-400 focus:ring-rose-200")}
                   aria-invalid={Boolean(fieldErrors.metaTitle)}
@@ -2153,7 +2209,7 @@ export default function AdminProductsPage() {
                   <p className="mt-1.5 text-sm text-rose-600" role="alert">{fieldErrors.metaTitle}</p>
                 ) : (
                   <p className="mt-1.5 text-sm text-[var(--color-muted)]">
-                    {form.metaTitle.length}/{BACKEND_MAX_META_TITLE_LEN} — shown as the page title in search results. Leave blank to use the default.
+                    {form.metaTitle.length}/{BACKEND_MAX_META_TITLE_LEN} — shown as the page title in search results. Auto-filled from the product name; edit freely, or clear to use the default.
                   </p>
                 )}
               </div>
@@ -2177,7 +2233,7 @@ export default function AdminProductsPage() {
                   <p className="mt-1.5 text-sm text-rose-600" role="alert">{fieldErrors.metaDescription}</p>
                 ) : (
                   <p className="mt-1.5 text-sm text-[var(--color-muted)]">
-                    {form.metaDescription.length}/{BACKEND_MAX_META_DESCRIPTION_LEN} — leave blank to use the default.
+                    {form.metaDescription.length}/{BACKEND_MAX_META_DESCRIPTION_LEN} — auto-filled from the description; edit freely, or clear to use the default.
                   </p>
                 )}
               </div>
@@ -2322,6 +2378,8 @@ export default function AdminProductsPage() {
                       setImageError("");
                       setImageMessage("");
                       setSlugTouched(false);
+                      setMetaTitleTouched(false);
+                      setMetaDescriptionTouched(false);
                       setFieldErrors({});
                       setActiveSection("basics");
                     }}
