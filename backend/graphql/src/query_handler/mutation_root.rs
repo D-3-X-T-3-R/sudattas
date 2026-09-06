@@ -524,11 +524,21 @@ impl MutationRoot {
     }
 
     /// Soft delete — sets the product's status to "archived" (resolved server-side, never a
-    /// hardcoded id). Reversible: an admin can set it back to active via updateProduct.
+    /// hardcoded id). Reversible via `activateProduct` below.
     #[instrument(err, ret)]
     async fn archive_product(context: &Context, product_id: String) -> FieldResult<Vec<Product>> {
         require_admin(context)?;
         product::handlers::archive_product(product_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Reverses `archiveProduct` — sets the product's status back to "active" (resolved
+    /// server-side, never a hardcoded id). Touches nothing else on the product.
+    #[instrument(err, ret)]
+    async fn activate_product(context: &Context, product_id: String) -> FieldResult<Vec<Product>> {
+        require_admin(context)?;
+        product::handlers::activate_product(product_id)
             .await
             .map_err(|e| e.into_field_error())
     }

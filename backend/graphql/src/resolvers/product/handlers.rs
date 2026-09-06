@@ -1,7 +1,8 @@
 use proto::proto::core::{
-    ArchiveProductRequest, CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest,
-    GetRelatedProductsRequest, PermanentlyDeleteProductRequest, SearchInventoryItemRequest,
-    SearchProductRequest, SearchProductVariantRequest, SearchSizeRequest, UpdateProductRequest,
+    ActivateProductRequest, ArchiveProductRequest, CreateProductRequest, DeleteProductRequest,
+    GetProductsByIdRequest, GetRelatedProductsRequest, PermanentlyDeleteProductRequest,
+    SearchInventoryItemRequest, SearchProductRequest, SearchProductVariantRequest,
+    SearchSizeRequest, UpdateProductRequest,
 };
 
 use tracing::instrument;
@@ -168,6 +169,26 @@ pub(crate) async fn archive_product(product_id: String) -> Result<Vec<Product>, 
 
     let response = client
         .archive_product(ArchiveProductRequest { product_id })
+        .await?;
+
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::product_response_to_gql)
+        .collect())
+}
+
+/// Reverses `archiveProduct` — sets the product's status back to "active" (resolved
+/// server-side, never a hardcoded id). Touches nothing else on the product.
+#[instrument]
+pub(crate) async fn activate_product(product_id: String) -> Result<Vec<Product>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+
+    let product_id = parse_i64(&product_id, "product id")?;
+
+    let response = client
+        .activate_product(ActivateProductRequest { product_id })
         .await?;
 
     Ok(response

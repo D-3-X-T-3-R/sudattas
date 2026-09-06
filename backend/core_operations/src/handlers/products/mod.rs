@@ -10,6 +10,9 @@ pub use delete_product::*;
 pub mod archive_product;
 pub use archive_product::*;
 
+pub mod activate_product;
+pub use activate_product::*;
+
 pub mod update_product;
 pub use update_product::*;
 

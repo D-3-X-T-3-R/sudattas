@@ -116,11 +116,22 @@ export async function deleteProduct(productId: string): Promise<void> {
 
 /** Soft delete: sets the product's status to archived server-side (resolved there, not a
  * hardcoded id here) — hides it from the store but keeps everything else intact, unlike
- * permanentlyDeleteProduct. Reversible via updateProduct's status field. */
+ * permanentlyDeleteProduct. Reversible via activateProduct below. */
 export async function archiveProduct(productId: string): Promise<void> {
   await gqlAdmin<{ archiveProduct?: unknown[] }>(
     `mutation ArchiveProduct($productId: String!) {
       archiveProduct(productId: $productId) { productId }
+    }`,
+    { productId }
+  );
+}
+
+/** Reverses archiveProduct: sets the product's status back to active server-side (resolved
+ * there, not a hardcoded id here). Touches nothing else on the product. */
+export async function activateProduct(productId: string): Promise<void> {
+  await gqlAdmin<{ activateProduct?: unknown[] }>(
+    `mutation ActivateProduct($productId: String!) {
+      activateProduct(productId: $productId) { productId }
     }`,
     { productId }
   );

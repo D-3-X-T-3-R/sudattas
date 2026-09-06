@@ -43,7 +43,8 @@ pub fn load_env_once() {
 }
 
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkExchangeReceivedRequest,
+    grpc_services_server::GrpcServices, ActivateProductRequest, AddWishlistItemRequest,
+    AdminMarkExchangeReceivedRequest,
     AdminMarkOrderDeliveredRequest, AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest,
     AdminMarkOrderShippedResponse, AdminMarkReturnReceivedRequest,
     AdminUpdateExchangeStatusRequest, AdminUpdateReturnStatusRequest,
@@ -520,6 +521,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::products::archive_product(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn activate_product(
+        &self,
+        request: Request<ActivateProductRequest>,
+    ) -> Result<Response<ProductsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::products::activate_product(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

@@ -25,6 +25,7 @@ import {
   updateProductMood,
   deleteProductMood,
   archiveProduct,
+  activateProduct,
   permanentlyDeleteProduct,
   moveProductImageToProduct,
   createProductVariant,
@@ -313,7 +314,7 @@ export default function AdminProductsPage() {
     occasion: "",
     hasBlousePiece: true,
     careInstructions: "",
-    productStatusId: "",
+    productStatusId: "2",
     metaTitle: "",
     metaDescription: "",
   });
@@ -662,7 +663,7 @@ export default function AdminProductsPage() {
         occasion: "",
         hasBlousePiece: true,
         careInstructions: "",
-        productStatusId: "",
+        productStatusId: "2",
         metaTitle: "",
         metaDescription: "",
       }));
@@ -1268,6 +1269,18 @@ export default function AdminProductsPage() {
     archiveProductMutation.mutate(archiveConfirm.productId);
   };
 
+  // No confirmation dialog — reactivating a hidden product back to visible is the low-risk,
+  // easily-reversible direction (archive is the one that needs a confirm step).
+  const activateProductMutation = useMutation({
+    mutationFn: (product: ProductListRow) => activateProduct(product.productId),
+    onSuccess: async (_data, product) => {
+      await queryClient.refetchQueries({ queryKey: ["admin", "products"] });
+      setMessage(`${product.name} activated.`);
+      showToast({ title: "Product activated", description: product.name });
+    },
+    onError: (err: Error) => setError(err.message || "Failed to activate product."),
+  });
+
   const permanentlyDeleteMutation = useMutation({
     mutationFn: (productId: string) => permanentlyDeleteProduct(productId),
     onSuccess: (result) => {
@@ -1565,12 +1578,14 @@ export default function AdminProductsPage() {
             productsErrorUi={productsErrorUi}
             categoryNameById={categoryNameById}
             getThumbnail={getProductThumbnailWithCacheBuster}
+            getProductStatusLabel={getProductStatusLabel}
             onRetry={() => {
               void refetchProducts();
             }}
             onOpenProduct={setSelectedProduct}
             onEditProduct={beginEditProduct}
             onArchiveProduct={setArchiveConfirm}
+            onActivateProduct={(p) => activateProductMutation.mutate(p)}
             onPermanentlyDeleteProduct={(p) => {
               setPermanentDeleteError("");
               setPermanentDeleteConfirm(p);
@@ -2293,7 +2308,7 @@ export default function AdminProductsPage() {
                         occasion: "",
                         hasBlousePiece: true,
                         careInstructions: "",
-                        productStatusId: "",
+                        productStatusId: "2",
                         metaTitle: "",
                         metaDescription: "",
                       }));
