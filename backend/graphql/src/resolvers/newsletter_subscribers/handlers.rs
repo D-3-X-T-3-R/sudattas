@@ -92,7 +92,9 @@ pub(crate) async fn unsubscribe_newsletter(
     Ok(subs_response_to_vec(resp.into_inner()))
 }
 
-fn campaign_response_to_gql(c: proto::proto::core::NewsletterCampaignResponse) -> NewsletterCampaign {
+fn campaign_response_to_gql(
+    c: proto::proto::core::NewsletterCampaignResponse,
+) -> NewsletterCampaign {
     NewsletterCampaign {
         campaign_id: c.campaign_id.to_string(),
         subject: c.subject,

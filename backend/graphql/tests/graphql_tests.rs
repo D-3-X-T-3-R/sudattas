@@ -1893,7 +1893,11 @@ async fn test_send_newsletter_campaign_requires_admin_authorization() {
         "a logged-in but non-admin caller must not be able to send a campaign"
     );
     let err_str = format!("{:?}", errors[0]).to_lowercase();
-    assert!(err_str.contains("admin"), "error should mention admin: {}", err_str);
+    assert!(
+        err_str.contains("admin"),
+        "error should mention admin: {}",
+        err_str
+    );
 }
 
 #[tokio::test]
@@ -2089,7 +2093,11 @@ async fn test_suspended_admin_rejected_from_admin_action() {
         "a suspended admin must be rejected even though is_admin() would say true"
     );
     let err_str = format!("{:?}", errors[0]).to_lowercase();
-    assert!(err_str.contains("deactivated"), "error should mention deactivation: {}", err_str);
+    assert!(
+        err_str.contains("deactivated"),
+        "error should mention deactivation: {}",
+        err_str
+    );
 }
 
 #[tokio::test]
@@ -2163,5 +2171,9 @@ async fn test_permanently_delete_product_requires_admin_authorization() {
         "a logged-in but non-admin caller must not be able to permanently delete a product"
     );
     let err_str = format!("{:?}", errors[0]).to_lowercase();
-    assert!(err_str.contains("admin"), "error should mention admin: {}", err_str);
+    assert!(
+        err_str.contains("admin"),
+        "error should mention admin: {}",
+        err_str
+    );
 }

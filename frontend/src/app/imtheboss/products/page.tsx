@@ -7,6 +7,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { gqlAdmin } from "@/lib/graphqlAdmin";
 import { adminProductFormSchema } from "@/lib/schemas";
 import {
+  BACKEND_MAX_META_TITLE_LEN,
+  BACKEND_MAX_META_DESCRIPTION_LEN,
+} from "@/lib/validation-schemas";
+import {
   fetchCategories,
   fetchProductsList,
   fetchProductById,
@@ -20,6 +24,7 @@ import {
   createProductMood,
   updateProductMood,
   deleteProductMood,
+  archiveProduct,
   permanentlyDeleteProduct,
   moveProductImageToProduct,
   createProductVariant,
@@ -88,6 +93,8 @@ type ProductFormState = {
   hasBlousePiece: boolean;
   careInstructions: string;
   productStatusId: string;
+  metaTitle: string;
+  metaDescription: string;
 };
 
 const DRAFT_KEY = "sudattas_admin_product_draft";
@@ -106,6 +113,8 @@ const SECTION_FOR_FIELD: Partial<Record<keyof ProductFormState, FormSection>> = 
   occasion: "details",
   careInstructions: "details",
   productStatusId: "details",
+  metaTitle: "details",
+  metaDescription: "details",
 };
 
 /** Derive a URL-safe slug from a product name (lowercase, hyphenated, no repeats). */
@@ -305,6 +314,8 @@ export default function AdminProductsPage() {
     hasBlousePiece: true,
     careInstructions: "",
     productStatusId: "",
+    metaTitle: "",
+    metaDescription: "",
   });
   const [variants, setVariants] = useState<AdminProductVariantRow[]>([]);
   const [selectedMoodIds, setSelectedMoodIds] = useState<string[]>([]);
@@ -528,6 +539,8 @@ export default function AdminProductsPage() {
       hasBlousePiece?: boolean;
       careInstructions?: string;
       productStatusId?: string;
+      metaTitle?: string;
+      metaDescription?: string;
     }) => {
       const product: Record<string, unknown> = {
         name: payload.name,
@@ -544,6 +557,8 @@ export default function AdminProductsPage() {
       if (payload.hasBlousePiece !== undefined) product.hasBlousePiece = payload.hasBlousePiece;
       if (payload.careInstructions?.trim()) product.careInstructions = payload.careInstructions.trim();
       if (payload.productStatusId?.trim()) product.productStatusId = payload.productStatusId.trim();
+      if (payload.metaTitle?.trim()) product.metaTitle = payload.metaTitle.trim();
+      if (payload.metaDescription?.trim()) product.metaDescription = payload.metaDescription.trim();
       const data = await gqlAdmin<{ createProduct?: Array<{ productId: string; name: string; formatted?: string }> }>(
         `mutation CreateProduct($product: NewProduct!) {
           createProduct(product: $product) { productId name formatted }
@@ -648,6 +663,8 @@ export default function AdminProductsPage() {
         hasBlousePiece: true,
         careInstructions: "",
         productStatusId: "",
+        metaTitle: "",
+        metaDescription: "",
       }));
       setError("");
       if (typeof window !== "undefined") {
@@ -678,6 +695,8 @@ export default function AdminProductsPage() {
       hasBlousePiece?: boolean;
       careInstructions?: string;
       productStatusId?: string;
+      metaTitle?: string;
+      metaDescription?: string;
       selectedMoodIds?: string[];
       variants?: AdminProductVariantRow[];
       initialVariantIdsWhenEdit?: string[];
@@ -701,6 +720,8 @@ export default function AdminProductsPage() {
       if (payload.hasBlousePiece !== undefined) product.hasBlousePiece = payload.hasBlousePiece;
       if (payload.careInstructions?.trim()) product.careInstructions = payload.careInstructions.trim();
       if (payload.productStatusId?.trim()) product.productStatusId = payload.productStatusId.trim();
+      if (payload.metaTitle?.trim()) product.metaTitle = payload.metaTitle.trim();
+      if (payload.metaDescription?.trim()) product.metaDescription = payload.metaDescription.trim();
 
       const data = await gqlAdmin<{ updateProduct?: Array<{ productId: string; name: string; formatted?: string }> }>(
         `mutation UpdateProduct($product: ProductMutation!) {
@@ -1041,8 +1062,22 @@ export default function AdminProductsPage() {
       setActiveSection(firstSection ?? "basics");
       return;
     }
-    const { name, description, priceRupees, categoryId, sku, slug, fabric, weave, occasion, hasBlousePiece, careInstructions, productStatusId } =
-      parsed.data;
+    const {
+      name,
+      description,
+      priceRupees,
+      categoryId,
+      sku,
+      slug,
+      fabric,
+      weave,
+      occasion,
+      hasBlousePiece,
+      careInstructions,
+      productStatusId,
+      metaTitle,
+      metaDescription,
+    } = parsed.data;
     const pricePaise = rupeesInputToPaise(priceRupees || "0");
     if (pricePaise <= 0) {
       setActiveSection("basics");
@@ -1086,6 +1121,8 @@ export default function AdminProductsPage() {
         hasBlousePiece,
         careInstructions: careInstructions || undefined,
         productStatusId: productStatusId || undefined,
+        metaTitle: metaTitle || undefined,
+        metaDescription: metaDescription || undefined,
         selectedMoodIds,
         variants,
         initialVariantIdsWhenEdit,
@@ -1107,6 +1144,8 @@ export default function AdminProductsPage() {
         hasBlousePiece,
         careInstructions: careInstructions || undefined,
         productStatusId: productStatusId || undefined,
+        metaTitle: metaTitle || undefined,
+        metaDescription: metaDescription || undefined,
       });
     }
   };
@@ -1212,30 +1251,21 @@ export default function AdminProductsPage() {
     setAppliedSearch({ limit: "20" });
   };
 
+  const archiveProductMutation = useMutation({
+    mutationFn: (productId: string) => archiveProduct(productId),
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["admin", "products"] });
+      const name = archiveConfirm?.name ?? "Product";
+      setMessage(`${name} archived.`);
+      showToast({ title: "Product archived", description: name });
+      setArchiveConfirm(null);
+    },
+    onError: (err: Error) => setError(err.message || "Failed to archive product."),
+  });
+
   const handleArchiveConfirm = () => {
     if (!archiveConfirm) return;
-    const pricePaise = parseInt(archiveConfirm.amountPaise ?? "0", 10) || 0;
-    updateProductMutation.mutate(
-      {
-        productId: archiveConfirm.productId,
-        name: archiveConfirm.name,
-        description: archiveConfirm.description ?? "",
-        pricePaise,
-        categoryId: archiveConfirm.categoryId ?? "",
-        sku: archiveConfirm.sku ?? undefined,
-        slug: archiveConfirm.slug ?? undefined,
-        fabric: archiveConfirm.fabric ?? undefined,
-        weave: archiveConfirm.weave ?? undefined,
-        occasion: archiveConfirm.occasion ?? undefined,
-        hasBlousePiece: archiveConfirm.hasBlousePiece ?? undefined,
-        careInstructions: archiveConfirm.careInstructions ?? undefined,
-        productStatusId: "3",
-      },
-      {
-        onSettled: () => setArchiveConfirm(null),
-        onSuccess: () => setMessage(`${archiveConfirm.name} archived.`),
-      }
-    );
+    archiveProductMutation.mutate(archiveConfirm.productId);
   };
 
   const permanentlyDeleteMutation = useMutation({
@@ -1303,6 +1333,8 @@ export default function AdminProductsPage() {
       hasBlousePiece: product.hasBlousePiece ?? true,
       careInstructions: product.careInstructions ?? "",
       productStatusId: product.productStatusId ?? "",
+      metaTitle: product.metaTitle ?? "",
+      metaDescription: product.metaDescription ?? "",
     }));
     const variantRows = (product as ProductListRowWithVariantStock).variantStock ?? [];
     setVariants(
@@ -1431,7 +1463,7 @@ export default function AdminProductsPage() {
   const totalPhotos = existingProductImages.length + imageFiles.length;
   const FORM_SECTIONS: { id: FormSection; label: string; fields: (keyof ProductFormState)[]; completion?: string }[] = [
     { id: "basics", label: "Basics", fields: ["name", "description", "priceRupees", "categoryId"] },
-    { id: "details", label: "Details", fields: ["sku", "slug", "fabric", "weave", "occasion", "careInstructions", "productStatusId"] },
+    { id: "details", label: "Details", fields: ["sku", "slug", "fabric", "weave", "occasion", "careInstructions", "productStatusId", "metaTitle", "metaDescription"] },
     { id: "stock", label: "Sizes & stock", fields: [], completion: variants.length > 0 ? `(${variants.length})` : undefined },
     { id: "moods", label: "Moods", fields: [], completion: selectedMoodIds.length > 0 ? `(${selectedMoodIds.length})` : undefined },
     { id: "photos", label: "Photos", fields: [], completion: totalPhotos > 0 ? `(${totalPhotos})` : undefined },
@@ -1547,7 +1579,7 @@ export default function AdminProductsPage() {
 
           <ArchiveProductDialog
             product={archiveConfirm}
-            isPending={updateProductMutation.isPending}
+            isPending={archiveProductMutation.isPending}
             onClose={() => setArchiveConfirm(null)}
             onConfirm={handleArchiveConfirm}
           />
@@ -2089,6 +2121,51 @@ export default function AdminProductsPage() {
                   <option value="3">Archived</option>
                 </select>
               </div>
+              <div className="mt-4">
+                <label htmlFor="admin-product-meta-title" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">SEO title</label>
+                <Input
+                  id="admin-product-meta-title"
+                  type="text"
+                  name="metaTitle"
+                  value={form.metaTitle}
+                  onChange={handleChange}
+                  placeholder={form.name ? `${form.name} | Sudatta's` : "Optional — overrides the default page title"}
+                  maxLength={BACKEND_MAX_META_TITLE_LEN}
+                  className={cn("rounded-lg text-[15px]", fieldErrors.metaTitle && "border-rose-400 focus:ring-rose-200")}
+                  aria-invalid={Boolean(fieldErrors.metaTitle)}
+                />
+                {fieldErrors.metaTitle ? (
+                  <p className="mt-1.5 text-sm text-rose-600" role="alert">{fieldErrors.metaTitle}</p>
+                ) : (
+                  <p className="mt-1.5 text-sm text-[var(--color-muted)]">
+                    {form.metaTitle.length}/{BACKEND_MAX_META_TITLE_LEN} — shown as the page title in search results. Leave blank to use the default.
+                  </p>
+                )}
+              </div>
+              <div className="mt-4">
+                <label htmlFor="admin-product-meta-description" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">SEO description</label>
+                <textarea
+                  id="admin-product-meta-description"
+                  name="metaDescription"
+                  value={form.metaDescription}
+                  onChange={handleChange}
+                  placeholder="Optional — overrides the default meta description shown in search results"
+                  maxLength={BACKEND_MAX_META_DESCRIPTION_LEN}
+                  rows={2}
+                  className={cn(
+                    "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3 text-[15px] outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20",
+                    fieldErrors.metaDescription && "border-rose-400 focus:ring-rose-200"
+                  )}
+                  aria-invalid={Boolean(fieldErrors.metaDescription)}
+                />
+                {fieldErrors.metaDescription ? (
+                  <p className="mt-1.5 text-sm text-rose-600" role="alert">{fieldErrors.metaDescription}</p>
+                ) : (
+                  <p className="mt-1.5 text-sm text-[var(--color-muted)]">
+                    {form.metaDescription.length}/{BACKEND_MAX_META_DESCRIPTION_LEN} — leave blank to use the default.
+                  </p>
+                )}
+              </div>
               </div>
 
               <div className={cn(activeSection === "stock" ? "block" : "hidden")}>
@@ -2217,6 +2294,8 @@ export default function AdminProductsPage() {
                         hasBlousePiece: true,
                         careInstructions: "",
                         productStatusId: "",
+                        metaTitle: "",
+                        metaDescription: "",
                       }));
                       setVariants([]);
                       setSelectedMoodIds([]);

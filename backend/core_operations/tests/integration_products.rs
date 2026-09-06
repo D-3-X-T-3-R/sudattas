@@ -57,6 +57,8 @@ async fn integration_create_product_search_by_name_and_category_returns_product(
             has_blouse_piece: None,
             care_instructions: None,
             product_status_id: None,
+            meta_title: None,
+            meta_description: None,
         }),
     )
     .await
@@ -81,6 +83,7 @@ async fn integration_create_product_search_by_name_and_category_returns_product(
             weave: None,
             occasion: None,
             product_status_id: None,
+            product_status_code: None,
             mood_id: None,
         }),
     )
@@ -135,6 +138,8 @@ async fn integration_create_product_and_variant_get_by_id_returns_product_and_va
             has_blouse_piece: None,
             care_instructions: None,
             product_status_id: None,
+            meta_title: None,
+            meta_description: None,
         }),
     )
     .await
@@ -213,6 +218,8 @@ async fn integration_update_product_price_get_by_id_reflects_new_price() {
             has_blouse_piece: None,
             care_instructions: None,
             product_status_id: None,
+            meta_title: None,
+            meta_description: None,
         }),
     )
     .await
@@ -236,6 +243,8 @@ async fn integration_update_product_price_get_by_id_reflects_new_price() {
             has_blouse_piece: None,
             care_instructions: None,
             product_status_id: None,
+            meta_title: None,
+            meta_description: None,
         }),
     )
     .await
@@ -293,6 +302,8 @@ async fn integration_delete_product_get_by_id_returns_empty() {
             has_blouse_piece: None,
             care_instructions: None,
             product_status_id: None,
+            meta_title: None,
+            meta_description: None,
         }),
     )
     .await

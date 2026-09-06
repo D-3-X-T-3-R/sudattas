@@ -26,6 +26,8 @@ async fn create_product_inserts_and_returns_created_model() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -52,6 +54,8 @@ async fn create_product_inserts_and_returns_created_model() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
     });
     let result = create_product(&txn, req).await;
     assert!(result.is_ok());
@@ -82,6 +86,8 @@ async fn update_product_updates_fields_and_returns_response() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -109,6 +115,8 @@ async fn update_product_updates_fields_and_returns_response() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
     });
     let result = update_product(&txn, req).await;
     assert!(result.is_ok());
@@ -138,6 +146,8 @@ async fn delete_product_deletes_existing_and_returns_response() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -194,6 +204,8 @@ async fn search_product_filters_by_multiple_fields_and_pagination() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -216,6 +228,7 @@ async fn search_product_filters_by_multiple_fields_and_pagination() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        product_status_code: None,
         mood_id: None,
     });
 
@@ -247,6 +260,8 @@ async fn search_product_filters_by_product_id_only() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -269,6 +284,7 @@ async fn search_product_filters_by_product_id_only() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        product_status_code: None,
         mood_id: None,
     });
 
@@ -298,6 +314,8 @@ async fn search_product_filters_by_name_only() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -320,6 +338,7 @@ async fn search_product_filters_by_name_only() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        product_status_code: None,
         mood_id: None,
     });
 
@@ -348,6 +367,8 @@ async fn search_product_filters_by_category_only() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -370,6 +391,7 @@ async fn search_product_filters_by_category_only() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        product_status_code: None,
         mood_id: None,
     });
 
@@ -398,6 +420,8 @@ async fn search_product_filters_by_price_range_only() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -420,6 +444,7 @@ async fn search_product_filters_by_price_range_only() {
         weave: None,
         occasion: None,
         product_status_id: None,
+        product_status_code: None,
         mood_id: None,
     });
 
@@ -448,6 +473,8 @@ async fn get_products_by_id_returns_matching_products() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -497,6 +524,8 @@ async fn permanently_delete_product_rejects_when_order_history_exists() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: None,
         updated_at: None,
     };
@@ -533,7 +562,10 @@ async fn permanently_delete_product_rejects_when_order_history_exists() {
     let req = Request::new(PermanentlyDeleteProductRequest { product_id: 42 });
     let result = permanently_delete_product(&db, req).await;
 
-    assert!(result.is_err(), "must refuse to delete a product with order history");
+    assert!(
+        result.is_err(),
+        "must refuse to delete a product with order history"
+    );
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::FailedPrecondition);
     assert!(

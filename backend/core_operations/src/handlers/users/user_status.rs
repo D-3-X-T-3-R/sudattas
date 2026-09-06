@@ -29,7 +29,10 @@ pub(crate) async fn fetch_status_code_map(
     Ok(rows.into_iter().map(|r| (r.id, r.code)).collect())
 }
 
-pub(crate) fn resolve_status_code(map: &HashMap<i64, String>, user_status_id: Option<i64>) -> Option<String> {
+pub(crate) fn resolve_status_code(
+    map: &HashMap<i64, String>,
+    user_status_id: Option<i64>,
+) -> Option<String> {
     user_status_id.and_then(|id| map.get(&id).cloned())
 }
 
@@ -73,7 +76,10 @@ mod tests {
     fn resolve_status_code_maps_known_id() {
         let mut map = HashMap::new();
         map.insert(2, "inactive".to_string());
-        assert_eq!(resolve_status_code(&map, Some(2)), Some("inactive".to_string()));
+        assert_eq!(
+            resolve_status_code(&map, Some(2)),
+            Some("inactive".to_string())
+        );
     }
 
     #[test]

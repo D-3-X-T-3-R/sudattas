@@ -102,7 +102,9 @@ impl NewsletterCampaign {
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
-#[graphql(description = "Compose and immediately send a newsletter campaign to every subscriber who hasn't unsubscribed")]
+#[graphql(
+    description = "Compose and immediately send a newsletter campaign to every subscriber who hasn't unsubscribed"
+)]
 pub struct SendNewsletterCampaignInput {
     pub subject: String,
     pub body_text: String,

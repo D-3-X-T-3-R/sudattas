@@ -6,8 +6,8 @@
 
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::newsletter_subscribers::unsubscribe_token::generate_unsubscribe_token;
-use crate::notifications::email_provider::send_transactional_email;
 use crate::notifications::brand_email::storefront_url;
+use crate::notifications::email_provider::send_transactional_email;
 use crate::notifications::newsletter_mail::build_newsletter_campaign_email;
 use chrono::Utc;
 use core_db_entities::entity::{newsletter_campaigns, newsletter_subscribers};

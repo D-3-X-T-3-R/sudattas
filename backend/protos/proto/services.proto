@@ -27,6 +27,7 @@ service GRPCServices {
     rpc SearchProduct(SearchProductRequest) returns (ProductsResponse);
     rpc UpdateProduct(UpdateProductRequest) returns (ProductsResponse);
     rpc DeleteProduct(DeleteProductRequest) returns (ProductsResponse);
+    rpc ArchiveProduct(ArchiveProductRequest) returns (ProductsResponse);
     rpc PermanentlyDeleteProduct(PermanentlyDeleteProductRequest) returns (PermanentlyDeleteProductResponse);
     rpc GetProductsById(GetProductsByIdRequest) returns (ProductsResponse);
     rpc GetRelatedProducts(GetRelatedProductsRequest) returns (ProductsResponse);

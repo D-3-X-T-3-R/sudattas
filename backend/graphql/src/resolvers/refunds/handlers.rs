@@ -1,7 +1,6 @@
 use proto::proto::core::{
-    CreateRefundRequest, GetRefundsRequest, RefundAttemptResponse, RefundResponse,
-    RefundsResponse, ResolveNeedsReviewRequest, ResolveRefundAttemptNeedsReviewRequest,
-    SearchRefundAttemptsRequest,
+    CreateRefundRequest, GetRefundsRequest, RefundAttemptResponse, RefundResponse, RefundsResponse,
+    ResolveNeedsReviewRequest, ResolveRefundAttemptNeedsReviewRequest, SearchRefundAttemptsRequest,
 };
 use tracing::instrument;
 

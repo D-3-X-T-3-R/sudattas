@@ -126,7 +126,10 @@ impl Context {
     /// True when the JWT-authenticated user's account is "inactive" or "suspended" — the
     /// admin-set states, not just "never had a status set" (which stays `None`/active).
     pub fn account_deactivated(&self) -> bool {
-        matches!(self.account_status.as_deref(), Some("inactive") | Some("suspended"))
+        matches!(
+            self.account_status.as_deref(),
+            Some("inactive") | Some("suspended")
+        )
     }
 
     pub fn auth_mode(&self) -> &'static str {

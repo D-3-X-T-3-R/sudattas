@@ -6,7 +6,8 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use chrono::Utc;
 use core_db_entities::entity::newsletter_subscribers;
 use proto::proto::core::{
-    NewsletterSubscriberResponse, NewsletterSubscribersResponse, UnsubscribeNewsletterByTokenRequest,
+    NewsletterSubscriberResponse, NewsletterSubscribersResponse,
+    UnsubscribeNewsletterByTokenRequest,
 };
 use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseTransaction, EntityTrait, IntoActiveModel};
 use tonic::{Request, Response, Status};
@@ -18,7 +19,9 @@ pub async fn unsubscribe_newsletter_by_token(
     let req = request.into_inner();
 
     if !verify_unsubscribe_token(req.subscriber_id, &req.token) {
-        return Err(Status::permission_denied("Invalid or expired unsubscribe link"));
+        return Err(Status::permission_denied(
+            "Invalid or expired unsubscribe link",
+        ));
     }
 
     let existing = newsletter_subscribers::Entity::find_by_id(req.subscriber_id)

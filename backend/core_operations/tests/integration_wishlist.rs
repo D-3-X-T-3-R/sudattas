@@ -71,6 +71,8 @@ async fn wishlist_test_setup(txn: &sea_orm::DatabaseTransaction, now_tag: i64) -
             has_blouse_piece: None,
             care_instructions: None,
             product_status_id: None,
+            meta_title: None,
+            meta_description: None,
         }),
     )
     .await

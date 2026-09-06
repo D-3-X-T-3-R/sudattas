@@ -119,6 +119,8 @@ message CreateProductRequest {
     optional bool has_blouse_piece = 10;
     optional string care_instructions = 11;
     optional int64 product_status_id = 12;
+    optional string meta_title = 13;        // SEO <title>; storefront falls back to name-based default when unset
+    optional string meta_description = 14;  // SEO meta description; storefront falls back to description-based default when unset
 }
 
 message SearchProductRequest {
@@ -135,6 +137,11 @@ message SearchProductRequest {
     optional string occasion = 11;
     optional int64 product_status_id = 12;
     optional int64 mood_id = 13;  // filter products that have this mood linked
+    // Filter by ProductStatuses.code (e.g. "active") instead of a raw id — resolved against the
+    // DB here rather than making callers hardcode/guess the numeric id. Set internally by the
+    // GraphQL layer to enforce non-admin callers only ever see active products (not client
+    // settable via the public SearchProduct input); ANDed with product_status_id if both are set.
+    optional string product_status_code = 14;
 }
 
 message GetProductsByIdRequest {
@@ -155,9 +162,18 @@ message UpdateProductRequest {
     optional bool has_blouse_piece = 11;
     optional string care_instructions = 12;
     optional int64 product_status_id = 13;
+    optional string meta_title = 14;
+    optional string meta_description = 15;
 }
 
 message DeleteProductRequest {
+    int64 product_id = 1;
+}
+
+// Soft delete: sets the product's status to "archived" (resolved via the ProductStatuses
+// table, not a hardcoded id). Distinct from PermanentlyDeleteProductRequest — this is fully
+// reversible (admin can set it back to active) and touches nothing else on the product.
+message ArchiveProductRequest {
     int64 product_id = 1;
 }
 
@@ -197,6 +213,8 @@ message ProductResponse {
     optional bool has_blouse_piece = 11;
     optional string care_instructions = 12;
     optional int64 product_status_id = 13;
+    optional string meta_title = 14;
+    optional string meta_description = 15;
 }
 
 message ProductsResponse {

@@ -68,6 +68,8 @@ function mapToStorefrontProduct(
     fabric: row.fabric ?? "",
     occasion: row.occasion ?? "",
     description: row.description ?? "",
+    metaTitle: row.metaTitle ?? undefined,
+    metaDescription: row.metaDescription ?? undefined,
     image: imageUrl,
     hoverImage: hoverUrl || undefined,
     images: allUrls.length > 0 ? allUrls : undefined,
@@ -140,14 +142,19 @@ export async function generateMetadata({
   const base = siteUrl();
   const canonical = `${base}/product/${encodeURIComponent(product.id)}`;
   const image = absoluteImageUrl(base, product.image);
+  const title = product.metaTitle?.trim() || `${product.name} | Sudatta's`;
+  const description =
+    product.metaDescription?.trim() ||
+    product.description ||
+    `Buy ${product.name} online from Sudatta's.`;
 
   return {
-    title: `${product.name} | Sudatta's`,
-    description: product.description || `Buy ${product.name} online from Sudatta's.`,
+    title,
+    description,
     alternates: { canonical },
     openGraph: {
-      title: `${product.name} | Sudatta's`,
-      description: product.description || `Buy ${product.name} online from Sudatta's.`,
+      title,
+      description,
       type: "website",
       url: canonical,
       images: [{ url: image, alt: product.imageAlt || product.name }],

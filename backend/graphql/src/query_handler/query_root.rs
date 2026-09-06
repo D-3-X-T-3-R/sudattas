@@ -227,9 +227,18 @@ impl QueryRoot {
     }
 
     // Product
+    /// Storefront and admin share this field. Non-admin callers (guest or customer) are
+    /// always forced to the "active" product status, regardless of what they pass — this
+    /// is the only place draft/archived products are kept off the live storefront, so it
+    /// must not be bypassable by a caller-supplied product_status_id.
     #[instrument(err, ret)]
-    async fn search_product(search: SearchProduct) -> FieldResult<Vec<Product>> {
-        product::handlers::search_product(search)
+    async fn search_product(context: &Context, search: SearchProduct) -> FieldResult<Vec<Product>> {
+        let restrict_to_status_code = if context.is_admin() {
+            None
+        } else {
+            Some("active")
+        };
+        product::handlers::search_product(search, restrict_to_status_code)
             .await
             .map_err(|e| e.into_field_error())
     }

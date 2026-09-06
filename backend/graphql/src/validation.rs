@@ -13,6 +13,11 @@ pub const MAX_QUANTITY_PER_ITEM: i64 = 999;
 pub const MAX_CART_ITEMS: usize = 100;
 /// Max road/address line length.
 pub const MAX_ADDRESS_LINE_LEN: usize = 500;
+/// Max length for a product's SEO meta title (matches the `Products.meta_title` column and
+/// roughly what search engines render before truncating).
+pub const MAX_META_TITLE_LEN: usize = 70;
+/// Max length for a product's SEO meta description (matches `Products.meta_description`).
+pub const MAX_META_DESCRIPTION_LEN: usize = 160;
 
 /// Validates email format (must contain @ and a dot in domain). Returns `Ok(())` or `GqlError::InvalidArgument`.
 pub fn validate_email(email: &str) -> Result<(), GqlError> {
@@ -102,6 +107,18 @@ pub fn validate_sku_slug(s: &str, label: &str) -> Result<(), GqlError> {
                 "{} may only contain letters, numbers, hyphen and underscore",
                 label
             ),
+            Code::InvalidArgument,
+        ));
+    }
+    Ok(())
+}
+
+/// Validates an optional free-text field against a max length (empty/absent is allowed —
+/// callers that require the field non-empty should check that separately).
+pub fn validate_max_length(s: &str, label: &str, max_len: usize) -> Result<(), GqlError> {
+    if s.len() > max_len {
+        return Err(GqlError::new(
+            &format!("{} must not exceed {} characters", label, max_len),
             Code::InvalidArgument,
         ));
     }

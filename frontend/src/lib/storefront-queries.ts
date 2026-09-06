@@ -34,7 +34,7 @@ const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
 const PRODUCT_BY_ID_QUERY = `query ProductById($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
-    fabric occasion
+    fabric occasion metaTitle metaDescription
     images { thumbnailUrl url }
     variantStock { variantId sizeId sizeName quantity }
   }

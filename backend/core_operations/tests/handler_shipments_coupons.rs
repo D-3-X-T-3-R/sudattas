@@ -288,7 +288,9 @@ async fn cancel_order_via_logistics_blocks_when_pickup_in_progress_for_a_real_bo
     let result = cancel_order_via_logistics(&txn, 200, None).await;
     let status = result.expect_err("a real booking past pickup must still block cancellation");
     assert_eq!(status.code(), tonic::Code::FailedPrecondition);
-    assert!(status.message().contains("pickup/logistics is already in progress"));
+    assert!(status
+        .message()
+        .contains("pickup/logistics is already in progress"));
 }
 
 #[tokio::test]

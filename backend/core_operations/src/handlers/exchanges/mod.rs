@@ -363,10 +363,11 @@ pub async fn admin_mark_exchange_received(
 ) -> Result<Response<ExchangeRequestsResponse>, Status> {
     let req = request.into_inner();
 
-    let prep_txn = db
-        .begin()
-        .await
-        .map_err(|e| Status::internal(format!("failed to begin admin_mark_exchange_received txn: {e}")))?;
+    let prep_txn = db.begin().await.map_err(|e| {
+        Status::internal(format!(
+            "failed to begin admin_mark_exchange_received txn: {e}"
+        ))
+    })?;
 
     let row = exchange_requests::Entity::find_by_id(req.exchange_id)
         .lock(LockType::Update)

@@ -10,6 +10,7 @@ pub mod cancellation_saga;
 pub mod money;
 pub mod observability;
 pub mod order_policy;
+pub mod product_state;
 pub mod razorpay;
 pub mod services;
 
@@ -42,24 +43,23 @@ pub fn load_env_once() {
 }
 
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkOrderDeliveredRequest,
-    AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse,
-    AdminMarkExchangeReceivedRequest, AdminMarkReturnReceivedRequest,
+    grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkExchangeReceivedRequest,
+    AdminMarkOrderDeliveredRequest, AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest,
+    AdminMarkOrderShippedResponse, AdminMarkReturnReceivedRequest,
     AdminUpdateExchangeStatusRequest, AdminUpdateReturnStatusRequest,
-    AdminUpdateReviewStatusRequest,
-    AdminUpdateReviewStatusResponse, ApplyCouponRequest, CancelOrderItemsRequest,
-    CapturePaymentRequest, CartItemsResponse, CategoriesResponse, ColorsResponse,
-    ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse, CreateCartItemRequest,
-    CreateCategoryRequest, CreateColorRequest, CreateCouponRequest, CreateEventLogRequest,
-    CreateFabricRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
-    CreateNewsletterSubscriberRequest, CreateOccasionRequest, CreateOrderDetailsRequest,
-    CreateOrderEventRequest, CreateOrderRequest, CreatePaymentIntentRequest,
-    CreateProductMoodMappingRequest, CreateProductMoodRequest, CreateProductRequest,
-    CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest, CreateShipmentRequest,
-    CreateShippingAddressRequest, CreateShippingMethodRequest, CreateSizeRequest,
-    CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest, CreateUserRoleRequest,
-    CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest, DeleteColorRequest,
-    DeleteCouponAdminRequest, DeleteEventLogRequest, DeleteFabricRequest,
+    AdminUpdateReviewStatusRequest, AdminUpdateReviewStatusResponse, ApplyCouponRequest,
+    ArchiveProductRequest, CancelOrderItemsRequest, CapturePaymentRequest, CartItemsResponse,
+    CategoriesResponse, ColorsResponse, ConfirmImageUploadRequest, CouponsAdminResponse,
+    CouponsResponse, CreateCartItemRequest, CreateCategoryRequest, CreateColorRequest,
+    CreateCouponRequest, CreateEventLogRequest, CreateFabricRequest, CreateInventoryItemRequest,
+    CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOccasionRequest,
+    CreateOrderDetailsRequest, CreateOrderEventRequest, CreateOrderRequest,
+    CreatePaymentIntentRequest, CreateProductMoodMappingRequest, CreateProductMoodRequest,
+    CreateProductRequest, CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest,
+    CreateShipmentRequest, CreateShippingAddressRequest, CreateShippingMethodRequest,
+    CreateSizeRequest, CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest,
+    CreateUserRoleRequest, CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest,
+    DeleteColorRequest, DeleteCouponAdminRequest, DeleteEventLogRequest, DeleteFabricRequest,
     DeleteInventoryItemRequest, DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest,
     DeleteOccasionRequest, DeleteOrderRequest, DeleteProductImageRequest,
     DeleteProductMoodMappingRequest, DeleteProductMoodRequest, DeleteProductRequest,
@@ -68,44 +68,39 @@ use proto::proto::core::{
     DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleRequest, DeleteWeaveRequest,
     DeleteWishlistItemRequest, EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse,
     EstimateCheckoutShippingRequest, EstimateCheckoutShippingResponse, EventLogsResponse,
-    ExchangeRequestsResponse,
-    FabricsResponse, GetCartItemsRequest, GetOrderEventsRequest, GetOrderInvoiceDownloadRequest,
-    GetOrderInvoiceDownloadResponse, GetOrderInvoiceRequest, GetOrderStatsRequest,
-    GetOrderStatsResponse, GetPaymentIntentRequest, GetPresignedUploadUrlRequest,
-    GetProductsByIdRequest, GetRefundsRequest, GetRelatedProductsRequest, GetShipmentRequest,
-    GetShippingAddressRequest, GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse,
-    GetUserPiiExportRequest, GetUserPiiExportResponse, IngestWebhookRequest,
-    InventoryItemsResponse, InventoryLogsResponse, InvoiceResponse, ListActiveCouponsRequest,
-    MergeCartRequest, NewsletterCampaignsResponse, NewsletterSubscribersResponse,
-    OccasionsResponse, OrderDetailsResponse,
-    OrderEventsResponse, OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse,
-    PermanentlyDeleteProductRequest, PermanentlyDeleteProductResponse, PlaceOrderAdminRequest,
-    PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
-    ProductMoodMappingsResponse, ProductMoodsResponse, ProductRatingSummaryRequest,
-    ProductRatingSummaryResponse, ProductVariantsResponse, ProductsResponse, PublicCouponsResponse,
-    ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
-    RefundAttemptsResponse, RefundsResponse, RequestExchangeRequest,
-    RequestReturnRequest, ResolveNeedsReviewRequest,
-    ResolveNeedsReviewResponse,
-    ResolveRefundAttemptNeedsReviewRequest, ResolveRefundAttemptNeedsReviewResponse,
-    ReturnRequestsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
-    SearchCouponAdminRequest, SearchEventLogRequest, SearchFabricRequest,
-    SearchInventoryItemRequest, SearchInventoryLogRequest, SearchNewsletterCampaignRequest,
-    SearchNewsletterSubscriberRequest,
-    SearchExchangeRequestsRequest, SearchOccasionRequest, SearchOrderDetailRequest,
-    SearchOrderEventsRequest, SearchOrderRequest,
+    ExchangeRequestsResponse, FabricsResponse, GetCartItemsRequest, GetOrderEventsRequest,
+    GetOrderInvoiceDownloadRequest, GetOrderInvoiceDownloadResponse, GetOrderInvoiceRequest,
+    GetOrderStatsRequest, GetOrderStatsResponse, GetPaymentIntentRequest,
+    GetPresignedUploadUrlRequest, GetProductsByIdRequest, GetRefundsRequest,
+    GetRelatedProductsRequest, GetShipmentRequest, GetShippingAddressRequest,
+    GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse, GetUserPiiExportRequest,
+    GetUserPiiExportResponse, IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
+    InvoiceResponse, ListActiveCouponsRequest, MergeCartRequest, NewsletterCampaignsResponse,
+    NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse, OrderEventsResponse,
+    OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse, PermanentlyDeleteProductRequest,
+    PermanentlyDeleteProductResponse, PlaceOrderAdminRequest, PlaceOrderRequest,
+    PresignedUploadUrlResponse, ProductImagesResponse, ProductMoodMappingsResponse,
+    ProductMoodsResponse, ProductRatingSummaryRequest, ProductRatingSummaryResponse,
+    ProductVariantsResponse, ProductsResponse, PublicCouponsResponse, ReadinessRequest,
+    ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
+    RefundAttemptsResponse, RefundsResponse, RequestExchangeRequest, RequestReturnRequest,
+    ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ResolveRefundAttemptNeedsReviewRequest,
+    ResolveRefundAttemptNeedsReviewResponse, ReturnRequestsResponse, ReviewsResponse,
+    SearchCategoryRequest, SearchColorRequest, SearchCouponAdminRequest, SearchEventLogRequest,
+    SearchExchangeRequestsRequest, SearchFabricRequest, SearchInventoryItemRequest,
+    SearchInventoryLogRequest, SearchNewsletterCampaignRequest, SearchNewsletterSubscriberRequest,
+    SearchOccasionRequest, SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
     SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
     SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
-    SearchRefundAttemptsRequest,
-    SearchReturnRequestsRequest, SearchReviewRequest, SearchShippingMethodRequest,
-    SearchSizeRequest, SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
-    SearchUserRoleRequest, SearchWeaveRequest, SearchWishlistItemRequest,
-    SendNewsletterCampaignRequest, SetUserStatusRequest, ShipmentsResponse,
-    ShippingAddressesResponse, ShippingMethodsResponse, ShopHighlightMoodsRequest,
-    ShopHighlightMoodsResponse, SizesResponse, SyncOrderShipmentsFromShiprocketRequest,
-    SyncOrderShipmentsFromShiprocketResponse, SyncProductImagesRequest, TransactionsResponse,
-    UnsubscribeNewsletterByTokenRequest, UpdateCartItemRequest, UpdateCategoryRequest,
-    UpdateColorRequest, UpdateCouponRequest,
+    SearchRefundAttemptsRequest, SearchReturnRequestsRequest, SearchReviewRequest,
+    SearchShippingMethodRequest, SearchSizeRequest, SearchTransactionRequest,
+    SearchUserActivityRequest, SearchUserRequest, SearchUserRoleRequest, SearchWeaveRequest,
+    SearchWishlistItemRequest, SendNewsletterCampaignRequest, SetUserStatusRequest,
+    ShipmentsResponse, ShippingAddressesResponse, ShippingMethodsResponse,
+    ShopHighlightMoodsRequest, ShopHighlightMoodsResponse, SizesResponse,
+    SyncOrderShipmentsFromShiprocketRequest, SyncOrderShipmentsFromShiprocketResponse,
+    SyncProductImagesRequest, TransactionsResponse, UnsubscribeNewsletterByTokenRequest,
+    UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest,
     UpdateEventLogRequest, UpdateFabricRequest, UpdateInventoryItemRequest,
     UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOccasionRequest,
     UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
@@ -509,6 +504,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::products::delete_product(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn archive_product(
+        &self,
+        request: Request<ArchiveProductRequest>,
+    ) -> Result<Response<ProductsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::products::archive_product(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

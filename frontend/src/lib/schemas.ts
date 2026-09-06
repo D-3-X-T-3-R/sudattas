@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  BACKEND_MAX_META_DESCRIPTION_LEN,
+  BACKEND_MAX_META_TITLE_LEN,
   BACKEND_MAX_QUANTITY_PER_ITEM,
   BACKEND_MAX_SKU_SLUG_LEN,
   rupeesInputSchema,
@@ -21,6 +23,9 @@ export const productSchema = z.object({
   hasBlousePiece: z.boolean().nullable().optional(),
   stockQuantity: z.string().nullable().optional(),
   description: z.string(),
+  /** Admin-set SEO overrides; storefront falls back to a name/description-based default when unset. */
+  metaTitle: z.string().optional(),
+  metaDescription: z.string().optional(),
   image: z.string(),
   hoverImage: z.string().optional(),
   /** All image URLs for gallery; when set, use instead of just image + hoverImage. */
@@ -105,6 +110,17 @@ export const adminProductFormSchema = z.object({
   hasBlousePiece: z.boolean().optional(),
   careInstructions: z.string().optional(),
   productStatusId: z.string().optional(),
+  metaTitle: z
+    .string()
+    .max(BACKEND_MAX_META_TITLE_LEN, `SEO title must not exceed ${BACKEND_MAX_META_TITLE_LEN} characters`)
+    .optional(),
+  metaDescription: z
+    .string()
+    .max(
+      BACKEND_MAX_META_DESCRIPTION_LEN,
+      `SEO description must not exceed ${BACKEND_MAX_META_DESCRIPTION_LEN} characters`
+    )
+    .optional(),
 });
 export const adminNewCategorySchema = z.object({ name: z.string().min(1) });
 export type AdminProductForm = z.infer<typeof adminProductFormSchema>;

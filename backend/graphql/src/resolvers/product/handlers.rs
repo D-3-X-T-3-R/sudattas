@@ -1,7 +1,7 @@
 use proto::proto::core::{
-    CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest, GetRelatedProductsRequest,
-    PermanentlyDeleteProductRequest, SearchInventoryItemRequest, SearchProductRequest,
-    SearchProductVariantRequest, SearchSizeRequest, UpdateProductRequest,
+    ArchiveProductRequest, CreateProductRequest, DeleteProductRequest, GetProductsByIdRequest,
+    GetRelatedProductsRequest, PermanentlyDeleteProductRequest, SearchInventoryItemRequest,
+    SearchProductRequest, SearchProductVariantRequest, SearchSizeRequest, UpdateProductRequest,
 };
 
 use tracing::instrument;
@@ -16,7 +16,8 @@ use crate::resolvers::{
     utils::{connect_grpc_client, parse_i64, to_i64, to_option_i64},
 };
 use crate::validation::{
-    validate_amount_paise, validate_non_negative_amount_paise, validate_sku_slug,
+    validate_amount_paise, validate_max_length, validate_non_negative_amount_paise,
+    validate_sku_slug, MAX_META_DESCRIPTION_LEN, MAX_META_TITLE_LEN,
 };
 
 #[instrument]
@@ -33,6 +34,16 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
     }
     if let Some(ref slug) = product.slug {
         validate_sku_slug(slug, "slug")?;
+    }
+    if let Some(ref meta_title) = product.meta_title {
+        validate_max_length(meta_title, "meta_title", MAX_META_TITLE_LEN)?;
+    }
+    if let Some(ref meta_description) = product.meta_description {
+        validate_max_length(
+            meta_description,
+            "meta_description",
+            MAX_META_DESCRIPTION_LEN,
+        )?;
     }
     let product_status_id = product
         .product_status_id
@@ -53,6 +64,8 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
             has_blouse_piece: product.has_blouse_piece,
             care_instructions: product.care_instructions.clone(),
             product_status_id,
+            meta_title: product.meta_title,
+            meta_description: product.meta_description,
         })
         .await?;
 
@@ -64,8 +77,14 @@ pub(crate) async fn create_product(product: NewProduct) -> Result<Vec<Product>, 
         .collect())
 }
 
+/// `restrict_to_status_code`: not part of the client-settable `SearchProduct` input — set only
+/// by the caller in query_root.rs (e.g. `Some("active")` for non-admin callers) to enforce a
+/// status restriction the client cannot override by passing its own product_status_id.
 #[instrument]
-pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>, GqlError> {
+pub(crate) async fn search_product(
+    search: SearchProduct,
+    restrict_to_status_code: Option<&str>,
+) -> Result<Vec<Product>, GqlError> {
     let mut client = connect_grpc_client().await?;
 
     let starting_price_paise = match search.starting_price_paise.as_ref() {
@@ -109,6 +128,7 @@ pub(crate) async fn search_product(search: SearchProduct) -> Result<Vec<Product>
             occasion: search.occasion,
             product_status_id: to_option_i64(search.product_status_id),
             mood_id: to_option_i64(search.mood_id),
+            product_status_code: restrict_to_status_code.map(|s| s.to_string()),
         })
         .await?;
 
@@ -128,6 +148,26 @@ pub(crate) async fn delete_product(product_id: String) -> Result<Vec<Product>, G
 
     let response = client
         .delete_product(DeleteProductRequest { product_id })
+        .await?;
+
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::product_response_to_gql)
+        .collect())
+}
+
+/// Soft delete — sets the product's status to "archived" (resolved server-side, never a
+/// hardcoded id). Reversible, unlike `permanentlyDeleteProduct` below.
+#[instrument]
+pub(crate) async fn archive_product(product_id: String) -> Result<Vec<Product>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+
+    let product_id = parse_i64(&product_id, "product id")?;
+
+    let response = client
+        .archive_product(ArchiveProductRequest { product_id })
         .await?;
 
     Ok(response
@@ -174,6 +214,16 @@ pub(crate) async fn update_product(product: ProductMutation) -> Result<Vec<Produ
     if let Some(ref slug) = product.slug {
         validate_sku_slug(slug, "slug")?;
     }
+    if let Some(ref meta_title) = product.meta_title {
+        validate_max_length(meta_title, "meta_title", MAX_META_TITLE_LEN)?;
+    }
+    if let Some(ref meta_description) = product.meta_description {
+        validate_max_length(
+            meta_description,
+            "meta_description",
+            MAX_META_DESCRIPTION_LEN,
+        )?;
+    }
 
     let product_status_id = product
         .product_status_id
@@ -195,6 +245,8 @@ pub(crate) async fn update_product(product: ProductMutation) -> Result<Vec<Produ
             has_blouse_piece: product.has_blouse_piece,
             care_instructions: product.care_instructions.clone(),
             product_status_id,
+            meta_title: product.meta_title,
+            meta_description: product.meta_description,
         })
         .await?;
 

@@ -60,12 +60,19 @@ pub fn cta_button_html(label: &str, url: &str) -> String {
 /// "you're receiving this" line (e.g. a newsletter's unsubscribe link) — transactional order
 /// emails pass `None` and get a plain contact-us footer instead, since they aren't marketing
 /// and don't need (or legally require) an unsubscribe option.
-pub fn render_branded_email(subject: &str, body_html: &str, footer_extra_html: Option<&str>) -> String {
+pub fn render_branded_email(
+    subject: &str,
+    body_html: &str,
+    footer_extra_html: Option<&str>,
+) -> String {
     let store = store_display_name();
     let site_url = storefront_url();
     let subject_escaped = html_escape(subject.trim());
-    let site_url_display =
-        html_escape(site_url.trim_start_matches("https://").trim_start_matches("http://"));
+    let site_url_display = html_escape(
+        site_url
+            .trim_start_matches("https://")
+            .trim_start_matches("http://"),
+    );
 
     let footer_line = match footer_extra_html {
         Some(extra) => format!(
@@ -138,7 +145,11 @@ mod tests {
 
     #[test]
     fn footer_extra_html_is_appended_when_given() {
-        let html = render_branded_email("S", "<p>b</p>", Some("<a href=\"https://x/u\">Unsubscribe</a>"));
+        let html = render_branded_email(
+            "S",
+            "<p>b</p>",
+            Some("<a href=\"https://x/u\">Unsubscribe</a>"),
+        );
         assert!(html.contains("Unsubscribe"));
         assert!(!html.contains("don't reply to this address"));
     }

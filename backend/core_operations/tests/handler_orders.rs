@@ -556,10 +556,11 @@ async fn cancel_order_items_admin_still_blocked_once_pickup_is_in_progress() {
         acting_user_id: None,
     });
     let result = cancel_order_items(&txn, req).await;
-    let status =
-        result.expect_err("admin must not force-cancel past an in-progress pickup either");
+    let status = result.expect_err("admin must not force-cancel past an in-progress pickup either");
     assert_eq!(status.code(), tonic::Code::FailedPrecondition);
-    assert!(status.message().contains("pickup/logistics is already in progress"));
+    assert!(status
+        .message()
+        .contains("pickup/logistics is already in progress"));
 }
 
 #[tokio::test]

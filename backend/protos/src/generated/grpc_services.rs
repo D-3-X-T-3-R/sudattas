@@ -209,6 +209,12 @@ pub struct CreateProductRequest {
     pub care_instructions: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "12")]
     pub product_status_id: ::core::option::Option<i64>,
+    /// SEO <title>; storefront falls back to name-based default when unset
+    #[prost(string, optional, tag = "13")]
+    pub meta_title: ::core::option::Option<::prost::alloc::string::String>,
+    /// SEO meta description; storefront falls back to description-based default when unset
+    #[prost(string, optional, tag = "14")]
+    pub meta_description: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -241,6 +247,12 @@ pub struct SearchProductRequest {
     /// filter products that have this mood linked
     #[prost(int64, optional, tag = "13")]
     pub mood_id: ::core::option::Option<i64>,
+    /// Filter by ProductStatuses.code (e.g. "active") instead of a raw id — resolved against the
+    /// DB here rather than making callers hardcode/guess the numeric id. Set internally by the
+    /// GraphQL layer to enforce non-admin callers only ever see active products (not client
+    /// settable via the public SearchProduct input); ANDed with product_status_id if both are set.
+    #[prost(string, optional, tag = "14")]
+    pub product_status_code: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -279,11 +291,25 @@ pub struct UpdateProductRequest {
     pub care_instructions: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "13")]
     pub product_status_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "14")]
+    pub meta_title: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "15")]
+    pub meta_description: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeleteProductRequest {
+    #[prost(int64, tag = "1")]
+    pub product_id: i64,
+}
+/// Soft delete: sets the product's status to "archived" (resolved via the ProductStatuses
+/// table, not a hardcoded id). Distinct from PermanentlyDeleteProductRequest — this is fully
+/// reversible (admin can set it back to active) and touches nothing else on the product.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ArchiveProductRequest {
     #[prost(int64, tag = "1")]
     pub product_id: i64,
 }
@@ -349,6 +375,10 @@ pub struct ProductResponse {
     pub care_instructions: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "13")]
     pub product_status_id: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "14")]
+    pub meta_title: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "15")]
+    pub meta_description: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -3717,6 +3747,31 @@ pub mod grpc_services_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "DeleteProduct"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn archive_product(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ArchiveProductRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ProductsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/ArchiveProduct",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("grpc_services.GRPCServices", "ArchiveProduct"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn permanently_delete_product(
@@ -7753,6 +7808,13 @@ pub mod grpc_services_server {
             tonic::Response<super::ProductsResponse>,
             tonic::Status,
         >;
+        async fn archive_product(
+            &self,
+            request: tonic::Request<super::ArchiveProductRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ProductsResponse>,
+            tonic::Status,
+        >;
         async fn permanently_delete_product(
             &self,
             request: tonic::Request<super::PermanentlyDeleteProductRequest>,
@@ -9435,6 +9497,52 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = DeleteProductSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/ArchiveProduct" => {
+                    #[allow(non_camel_case_types)]
+                    struct ArchiveProductSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::ArchiveProductRequest>
+                    for ArchiveProductSvc<T> {
+                        type Response = super::ProductsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ArchiveProductRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::archive_product(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = ArchiveProductSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

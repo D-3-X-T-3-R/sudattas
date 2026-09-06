@@ -182,5 +182,9 @@ pub async fn resolve_account_status_by_user_id(
         .map_err(|e| e.message().to_string())?
         .into_inner();
 
-    Ok(user_resp.items.into_iter().next().and_then(|u| u.user_status))
+    Ok(user_resp
+        .items
+        .into_iter()
+        .next()
+        .and_then(|u| u.user_status))
 }

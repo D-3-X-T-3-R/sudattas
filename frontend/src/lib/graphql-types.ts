@@ -45,6 +45,8 @@ export interface ProductListRow {
   hasBlousePiece?: boolean | null;
   careInstructions?: string | null;
   productStatusId?: string | null;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
   images?: ProductImageListItem[] | null;
 }
 

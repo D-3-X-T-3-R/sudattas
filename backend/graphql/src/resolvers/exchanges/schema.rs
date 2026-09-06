@@ -16,7 +16,9 @@ pub struct ExchangeRequest {
 }
 
 #[graphql_object]
-#[graphql(description = "Category-scoped exchange request (same product, different size/colour, same price) — distinct from the refund-only ReturnRequest")]
+#[graphql(
+    description = "Category-scoped exchange request (same product, different size/colour, same price) — distinct from the refund-only ReturnRequest"
+)]
 impl ExchangeRequest {
     async fn exchange_id(&self) -> &String {
         &self.exchange_id

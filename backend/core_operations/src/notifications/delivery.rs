@@ -132,11 +132,17 @@ async fn load_invoice_attachment(
     };
 
     let Ok(pdf_bytes) = BASE64_STANDARD.decode(invoice.pdf_blob.as_bytes()) else {
-        warn!(order_id, "outbox: invoice PDF payload decode failed; sending confirmation without attachment");
+        warn!(
+            order_id,
+            "outbox: invoice PDF payload decode failed; sending confirmation without attachment"
+        );
         return Ok(None);
     };
     if !pdf_bytes.starts_with(b"%PDF-") {
-        warn!(order_id, "outbox: invoice PDF payload malformed; sending confirmation without attachment");
+        warn!(
+            order_id,
+            "outbox: invoice PDF payload malformed; sending confirmation without attachment"
+        );
         return Ok(None);
     }
 
@@ -166,7 +172,10 @@ async fn deliver_abandoned_cart(event: &outbox_events::Model) -> Result<(), Stat
 /// after the branded order-confirmation email, both for the same event). The outbox event is
 /// still enqueued by `ensure_invoice_for_order` (unrelated bookkeeping may depend on its
 /// existence), so it's consumed here rather than left to retry forever with nothing to do.
-async fn deliver_invoice_generated(_db: &DatabaseConnection, event: &outbox_events::Model) -> Result<(), Status> {
+async fn deliver_invoice_generated(
+    _db: &DatabaseConnection,
+    event: &outbox_events::Model,
+) -> Result<(), Status> {
     info!(
         event_id = event.event_id,
         "outbox: InvoiceGenerated — no separate email sent; invoice is attached to the PaymentCaptured email instead"

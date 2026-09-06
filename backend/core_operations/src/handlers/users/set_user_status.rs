@@ -15,8 +15,8 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
 use core_db_entities::entity::users;
 use proto::proto::core::{SetUserStatusRequest, UserResponse, UsersResponse};
-use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, IntoActiveModel};
 use sea_orm::DatabaseTransaction;
+use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, IntoActiveModel};
 use tonic::{Request, Response, Status};
 
 pub async fn set_user_status(

@@ -21,7 +21,7 @@ const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { catego
 const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
-    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
+    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId metaTitle metaDescription
     images { imageId thumbnailUrl url }
     variantStock { variantId sizeId sizeName quantity }
   }
@@ -30,7 +30,7 @@ const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
 const PRODUCT_BY_ID_QUERY = `query ProductById($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
-    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
+    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId metaTitle metaDescription
     images { imageId thumbnailUrl url }
     variantStock { sizeId sizeName quantity }
   }
@@ -109,6 +109,18 @@ export async function deleteProduct(productId: string): Promise<void> {
   await gqlAdmin<{ deleteProduct?: unknown[] }>(
     `mutation DeleteProduct($productId: String!) {
       deleteProduct(productId: $productId) { productId }
+    }`,
+    { productId }
+  );
+}
+
+/** Soft delete: sets the product's status to archived server-side (resolved there, not a
+ * hardcoded id here) — hides it from the store but keeps everything else intact, unlike
+ * permanentlyDeleteProduct. Reversible via updateProduct's status field. */
+export async function archiveProduct(productId: string): Promise<void> {
+  await gqlAdmin<{ archiveProduct?: unknown[] }>(
+    `mutation ArchiveProduct($productId: String!) {
+      archiveProduct(productId: $productId) { productId }
     }`,
     { productId }
   );
