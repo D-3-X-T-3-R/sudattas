@@ -151,23 +151,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="space-y-1.5 border-t border-[var(--admin-border-subtle)] p-4">
-          <Link
-            href={STORE_URL}
-            className="flex items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Back to store
-          </Link>
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
-            className="flex w-full items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-left text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
-        </div>
       </aside>
 
       <main id="admin-main-content" className="flex min-w-0 flex-1 flex-col md:ml-[288px]">
@@ -184,6 +167,24 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div>
             <p className="text-sm font-medium text-[var(--color-muted)]">Sudatta&apos;s Admin</p>
             <h1 className="font-display text-2xl leading-none text-[var(--color-ink)] md:text-[1.7rem]">{title}</h1>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <Link
+              href={STORE_URL}
+              className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span className="hidden sm:inline">Back to store</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
+              className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           </div>
         </header>
 

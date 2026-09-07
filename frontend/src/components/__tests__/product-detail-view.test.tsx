@@ -71,7 +71,7 @@ describe("ProductDetailView", () => {
     expect(onAddToCart).toHaveBeenCalledWith(product, 2, "S");
   });
 
-  it("shows fit guidance copy when standard size variants are unavailable", () => {
+  it("shows no size selector or fit guidance copy for free-size products", () => {
     render(
       <ProductDetailView
         product={{
@@ -84,7 +84,7 @@ describe("ProductDetailView", () => {
       />
     );
 
-    expect(screen.getByText(/does not use standard size variants/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /view size & fit guide/i })).toHaveAttribute("href", "/size-fit-guide");
+    expect(screen.queryByText(/does not use standard size variants/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/select size/i)).not.toBeInTheDocument();
   });
 });

@@ -14,12 +14,35 @@ type ProductVariantsSectionProps = {
   colors: ColorRow[];
 };
 
+/** Rows with the same (size, color) combination represent the exact same real item split
+ * across two DB rows with independently-tracked stock — the backend rejects this on save, but
+ * flagging it inline here is faster to notice than a save-time error. Blank-size rows are
+ * excluded; the separate "must have a size" check already covers those. */
+export function findDuplicateVariantIndexes(variants: AdminProductVariantRow[]): Set<number> {
+  const firstIndexForKey = new Map<string, number>();
+  const duplicates = new Set<number>();
+  variants.forEach((v, idx) => {
+    const sizeId = v.sizeId?.trim();
+    if (!sizeId) return;
+    const key = `${sizeId}::${v.colorId?.trim() ?? ""}`;
+    const firstIndex = firstIndexForKey.get(key);
+    if (firstIndex === undefined) {
+      firstIndexForKey.set(key, idx);
+    } else {
+      duplicates.add(firstIndex);
+      duplicates.add(idx);
+    }
+  });
+  return duplicates;
+}
+
 export function ProductVariantsSection({
   variants,
   setVariants,
   sizes,
   colors,
 }: ProductVariantsSectionProps) {
+  const duplicateIndexes = findDuplicateVariantIndexes(variants);
   return (
     <div className="mt-8 border-t border-[var(--color-line)] pt-5">
       <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">
@@ -29,10 +52,15 @@ export function ProductVariantsSection({
         Add size/color combinations. Each one can have an extra price and starting stock.
       </p>
       <div className="mt-3 space-y-2.5">
-        {variants.map((v, idx) => (
+        {variants.map((v, idx) => {
+          const isDuplicate = duplicateIndexes.has(idx);
+          return (
           <div
             key={idx}
-            className="flex flex-wrap items-end gap-2.5 rounded-xl border border-[var(--color-line)] bg-white/40 p-3.5"
+            className={cn(
+              "flex flex-wrap items-end gap-2.5 rounded-xl border bg-white/40 p-3.5",
+              isDuplicate ? "border-red-300 bg-red-50/60" : "border-[var(--color-line)]"
+            )}
           >
             <select
               className={cn(
@@ -128,8 +156,14 @@ export function ProductVariantsSection({
             >
               Remove
             </Button>
+            {isDuplicate && (
+              <p className="w-full text-sm text-red-600" role="alert">
+                Duplicate size/color — this combination is already used by another row above. Remove one or change its size/color.
+              </p>
+            )}
           </div>
-        ))}
+          );
+        })}
         <Button
           type="button"
           variant="outline"

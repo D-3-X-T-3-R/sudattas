@@ -63,7 +63,10 @@ import {
   ProductImagesDialogs,
   type AdminReorderableImage,
 } from "@/domains/admin/products/components/product-images-dialogs";
-import { ProductVariantsSection } from "@/domains/admin/products/components/product-variants-section";
+import {
+  ProductVariantsSection,
+  findDuplicateVariantIndexes,
+} from "@/domains/admin/products/components/product-variants-section";
 import { ProductMoodsSection } from "@/domains/admin/products/components/product-moods-section";
 import { ProductImagesSection } from "@/domains/admin/products/components/product-images-section";
 import { ProductFormPreview } from "@/domains/admin/products/components/product-form-preview";
@@ -733,7 +736,13 @@ export default function AdminProductsPage() {
         { product }
       );
       const updated = data?.updateProduct?.[0];
-      if (!updated?.productId) return updated ?? null;
+      if (!updated?.productId) return updated ? { ...updated, failures: [] } : null;
+
+      // Collected instead of only console.error'd — a failure here used to be completely
+      // invisible: the toast still said "Product updated" while the DB silently diverged from
+      // what the form showed (e.g. a "kept" variant row failing to update in place). Surfaced
+      // to the admin in onSuccess below.
+      const failures: string[] = [];
 
       // Sync mood mappings to match selectedMoodIds
       const selected = new Set((payload.selectedMoodIds ?? []).map((id) => id?.trim()).filter(Boolean));
@@ -746,6 +755,7 @@ export default function AdminProductsPage() {
             await createProductMoodMapping(updated.productId, moodId);
           } catch (err) {
             console.error("Failed to add mood mapping:", err);
+            failures.push("adding a mood tag");
           }
         }
       }
@@ -755,6 +765,7 @@ export default function AdminProductsPage() {
             await deleteProductMoodMapping(updated.productId, m.moodId);
           } catch (err) {
             console.error("Failed to remove mood mapping:", err);
+            failures.push("removing a mood tag");
           }
         }
       }
@@ -763,6 +774,7 @@ export default function AdminProductsPage() {
       const incomingVariants = payload.variants ?? [];
       const keptVariantIds = new Set<string>();
       for (const v of incomingVariants) {
+        const rowLabel = v.sizeId?.trim() ? `size id ${v.sizeId.trim()}` : "an unlabeled size row";
         try {
           const sizeId = v.sizeId?.trim() || undefined;
           const colorId = v.colorId?.trim() || undefined;
@@ -782,16 +794,29 @@ export default function AdminProductsPage() {
               additionalPricePaise,
             });
             variantId = createdVariant?.variantId ?? "";
+            if (!variantId) {
+              failures.push(`creating a new variant (${rowLabel})`);
+              continue;
+            }
           } else {
-            await updateProductVariant({
-              variantId,
-              productId: updated.productId,
-              sizeId,
-              colorId,
-              additionalPricePaise,
-            });
+            try {
+              await updateProductVariant({
+                variantId,
+                productId: updated.productId,
+                sizeId,
+                colorId,
+                additionalPricePaise,
+              });
+            } catch (err) {
+              console.error("Failed to update existing variant:", err);
+              failures.push(`updating existing variant #${variantId} (${rowLabel})`);
+              // Still mark it "kept" — the row wasn't actually removed from the product, and
+              // failing to do so would make the cleanup loop below delete it outright on top
+              // of the update failure.
+              keptVariantIds.add(variantId);
+              continue;
+            }
           }
-          if (!variantId) continue;
           keptVariantIds.add(variantId);
 
           const inventoryRows = await searchInventoryByVariantId(variantId);
@@ -810,6 +835,7 @@ export default function AdminProductsPage() {
           }
         } catch (err) {
           console.error("Failed to sync variant/inventory:", err);
+          failures.push(`saving stock for ${rowLabel}`);
         }
       }
       // Delete variants removed from the edit form
@@ -819,11 +845,12 @@ export default function AdminProductsPage() {
             await deleteProductVariant(oldVariantId);
           } catch (err) {
             console.error("Failed to delete removed variant:", err);
+            failures.push(`removing old variant #${oldVariantId}`);
           }
         }
       }
 
-      return updated;
+      return { ...updated, failures };
     },
     onSuccess: async (updated) => {
       try {
@@ -832,6 +859,13 @@ export default function AdminProductsPage() {
           : "Product updated.";
         setMessage(successText);
         showToast({ title: "Product updated", description: successText });
+        const syncFailures = updated?.failures ?? [];
+        if (syncFailures.length > 0) {
+          showToast({
+            title: "Product updated, but incomplete",
+            description: `Some changes did not save: ${syncFailures.join("; ")}. Reopen the product to check its current sizes/stock and try again.`,
+          });
+        }
         // Sync product images: update order for kept, bulk insert new, delete removed (1 row per image)
         setIsUpdateReflecting(true);
         const productId = updated?.productId;
@@ -1129,6 +1163,11 @@ export default function AdminProductsPage() {
     if (invalidVariant && variants.length > 0) {
       setActiveSection("stock");
       setError("Each variant must have a size and non-negative stock quantity.");
+      return;
+    }
+    if (findDuplicateVariantIndexes(variants).size > 0) {
+      setActiveSection("stock");
+      setError("Remove or change duplicate size/color combinations before saving.");
       return;
     }
     if (editingProductId) {

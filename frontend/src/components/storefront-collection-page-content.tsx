@@ -567,7 +567,7 @@ function ProductGrid({ products }: { products: CollectionCardProduct[] }) {
           href={`/product/${encodeURIComponent(product.id)}`}
           className="group flex flex-col"
         >
-          <div className="relative aspect-[3/4] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]">
+          <div className="relative aspect-[2/3] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]">
             <Image
               src={product.imageUrl || PLACEHOLDER_IMAGE}
               alt={product.name}

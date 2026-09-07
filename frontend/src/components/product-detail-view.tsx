@@ -72,7 +72,7 @@ function ProductGallery({
             onClick={() => setSelectedImageIndex(i)}
             aria-label={`View image ${i + 1} of ${images.length} for ${productName}`}
             className={cn(
-              "relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface-soft)] md:w-full",
+              "relative aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface-soft)] md:w-full",
               selectedImageIndex === i
                 ? "border-[var(--color-green)]"
                 : "border-[var(--color-line)] hover:border-[var(--color-gold)]"
@@ -90,7 +90,7 @@ function ProductGallery({
         ))}
       </div>
 
-      <div className="order-1 relative aspect-[3/4] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] shadow-[var(--shadow-soft)] md:order-2">
+      <div className="order-1 relative aspect-[2/3] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] shadow-[var(--shadow-soft)] md:order-2">
         <Image
           src={mainImage}
           alt={productName}
@@ -279,14 +279,7 @@ export function ProductDetailView({
                 })}
               </div>
             </div>
-          ) : (
-            <div className="rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] p-3.5 text-sm leading-relaxed text-[var(--color-muted)]">
-              This style does not use standard size variants. Free-size drape fit can vary by fabric and silhouette.
-              <Link href="/size-fit-guide" className="ml-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-green)] hover:text-[var(--color-green-2)]">
-                View Size &amp; Fit Guide
-              </Link>
-            </div>
-          )}
+          ) : null}
 
           <div>
             <p className="text-sm font-semibold text-[var(--color-ink)]">Quantity</p>

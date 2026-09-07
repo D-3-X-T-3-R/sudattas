@@ -75,7 +75,7 @@ export function ProductsGridCard({
                 className="overflow-hidden rounded-xl border border-[var(--color-line)] bg-white"
               >
                 <button type="button" onClick={() => onOpenProduct(p)} className="block w-full text-left">
-                  <div className="aspect-square w-full bg-[var(--color-surface-soft)]">
+                  <div className="aspect-[2/3] w-full bg-[var(--color-surface-soft)]">
                     {thumb ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={thumb} alt={p.name} className="h-full w-full object-cover" />

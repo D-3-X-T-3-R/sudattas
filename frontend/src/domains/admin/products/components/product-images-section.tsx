@@ -132,7 +132,7 @@ function ExistingOrNewImageGrid({
         {orderedProductImages.map((item, idx) => (
           <div
             key={item.type === "existing" ? `existing-${idx}-${item.image.imageId ?? item.image.url ?? ""}` : `new-${idx}-${item.previewUrl}`}
-            className={`relative aspect-square w-28 shrink-0 overflow-hidden rounded-lg border bg-[var(--color-ivory)] ${
+            className={`relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-lg border bg-[var(--color-ivory)] ${
               item.type === "existing" ? "border-[var(--color-line)]" : "border-dashed border-[var(--color-line)]"
             }`}
           >
@@ -169,7 +169,7 @@ function ExistingOrNewImageGrid({
       {existingProductImages.map((img, idx) => (
         <div
           key={`existing-${idx}-${img.imageId ?? img.url ?? img.thumbnailUrl ?? ""}`}
-          className="relative aspect-square w-28 shrink-0 overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-ivory)]"
+          className="relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-ivory)]"
         >
           {getImageUrlWithCacheBuster(img, productImagesLoadKey) ? <img src={getImageUrlWithCacheBuster(img, productImagesLoadKey)} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-[var(--color-line)]/30 text-[10px] text-[var(--color-muted)]">No image</div>}
           {editingProductId && <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">Existing</span>}
@@ -204,7 +204,7 @@ function ExistingOrNewImageGrid({
         </div>
       ))}
       {imagePreviews.map((url, idx) => (
-        <div key={`new-${idx}-${url}`} className="relative aspect-square w-28 shrink-0 overflow-hidden rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-ivory)]">
+        <div key={`new-${idx}-${url}`} className="relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-ivory)]">
           <img src={url} alt="" className="h-full w-full object-cover" />
           <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">New</span>
           <button
