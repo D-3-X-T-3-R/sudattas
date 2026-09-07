@@ -8,8 +8,8 @@ use proto::proto::core::{
     CreatePaymentIntentRequest, PaymentIntentResponse, PaymentIntentsResponse,
 };
 use sea_orm::{
-    sea_query::LockType, ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction,
-    EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, QuerySelect,
+    sea_query::LockType, ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection,
+    DatabaseTransaction, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, QuerySelect,
 };
 use tonic::{Request, Response, Status as TonicStatus};
 
@@ -42,6 +42,49 @@ fn model_to_response(model: payment_intents::Model) -> PaymentIntentResponse {
         expires_at: model.expires_at.to_string(),
         razorpay_key_id,
     }
+}
+
+/// Resolves a Razorpay order id for a `CreatePaymentIntentRequest` that didn't supply one,
+/// performing the Razorpay HTTP call (up to 15s, see `razorpay::http_client`) against a plain
+/// read-only order lookup on `db` rather than an open `DatabaseTransaction`, so the round-trip
+/// doesn't hold a pooled connection idle. Mirrors the "server-authoritative" branch of
+/// [`create_payment_intent`] below; callers that resolve an order id this way should feed the
+/// returned `(razorpay_order_id, amount_paise, currency)` back into the request before calling
+/// [`create_payment_intent`], which will take the caller-supplied-id branch.
+pub async fn resolve_server_created_razorpay_order(
+    db: &DatabaseConnection,
+    order_id: i64,
+) -> Result<(String, i64, String), TonicStatus> {
+    let order = orders::Entity::find_by_id(order_id)
+        .one(db)
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| TonicStatus::not_found(format!("Order {} not found", order_id)))?;
+
+    let amount_paise = order.grand_total_minor;
+    let currency = order.currency.as_deref().unwrap_or("INR").to_string();
+    let receipt = format!("ord_{}", order_id);
+    if receipt.len() > 40 {
+        return Err(TonicStatus::invalid_argument(
+            "Order receipt string exceeds Razorpay 40-char limit",
+        ));
+    }
+
+    let razorpay_order_id = razorpay::create_order(amount_paise, &currency, &receipt)
+        .await
+        .map_err(|e| {
+            TonicStatus::unavailable(format!(
+                "Unable to create Razorpay order for order {}: {}",
+                order_id, e
+            ))
+        })?;
+    if !is_valid_razorpay_order_id(razorpay_order_id.as_str()) {
+        return Err(TonicStatus::internal(format!(
+            "Razorpay returned invalid order id '{}' for order {}",
+            razorpay_order_id, order_id
+        )));
+    }
+    Ok((razorpay_order_id, amount_paise, currency))
 }
 
 pub async fn create_payment_intent(

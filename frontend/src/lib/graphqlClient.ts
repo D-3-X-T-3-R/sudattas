@@ -11,13 +11,37 @@ import {
 } from "@/lib/session";
 import { fetchWithResilience, normalizeNetworkError } from "@/lib/network-resilience";
 import { publicGraphqlUrl } from "@/lib/env/public";
+import type { GraphqlErrorLike } from "@/lib/graphql-error-types";
 
 const GRAPHQL_URL = publicGraphqlUrl();
 
 type GraphqlErrorPayload = {
   message?: string;
-  errors?: Array<{ message?: string }>;
+  errors?: Array<{ message?: string; extensions?: { code?: string; grpc_code?: number } }>;
 };
+
+/**
+ * The backend serializes `extensions: {code, grpc_code}` on every GraphQL error (see
+ * backend/graphql/src/resolvers/error.rs IntoFieldError) — `code` mirrors gRPC status names
+ * (e.g. "FailedPrecondition", "NotFound") and should be preferred over substring-matching
+ * `message`. Callers that need to distinguish error classes (e.g. permission vs. validation)
+ * should catch this instead of a plain `Error`.
+ *
+ * A near-identical class also exists in graphqlWithSession.ts rather than being shared here,
+ * because this module (browser-side) pulls in authStore/session, which the server-side
+ * graphqlWithSession.ts must not import — both implement GraphqlErrorLike instead.
+ */
+export class GraphqlRequestError extends Error implements GraphqlErrorLike {
+  code?: string;
+  grpcCode?: number;
+
+  constructor(message: string, code?: string, grpcCode?: number) {
+    super(message);
+    this.name = "GraphqlRequestError";
+    this.code = code;
+    this.grpcCode = grpcCode;
+  }
+}
 
 function randomRequestId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -168,8 +192,11 @@ export async function gql<T = unknown>(
   if (!res.ok) {
     try {
       const json = JSON.parse(text) as GraphqlErrorPayload;
-      throw new Error(
-        json.message || json.errors?.[0]?.message || String(res.status)
+      const firstError = json.errors?.[0];
+      throw new GraphqlRequestError(
+        json.message || firstError?.message || String(res.status),
+        firstError?.extensions?.code,
+        firstError?.extensions?.grpc_code
       );
     } catch (e) {
       if (e instanceof SyntaxError) throw new Error(text || String(res.status));
@@ -177,9 +204,17 @@ export async function gql<T = unknown>(
     }
   }
 
-  const json = JSON.parse(text) as { data?: T; errors?: Array<{ message: string }> };
+  const json = JSON.parse(text) as {
+    data?: T;
+    errors?: Array<{ message: string; extensions?: { code?: string; grpc_code?: number } }>;
+  };
   if (json.errors?.length) {
-    throw new Error(json.errors.map((e) => e.message).join("; "));
+    const firstError = json.errors[0];
+    throw new GraphqlRequestError(
+      json.errors.map((e) => e.message).join("; "),
+      firstError.extensions?.code,
+      firstError.extensions?.grpc_code
+    );
   }
   return json.data as T;
 }

@@ -341,11 +341,17 @@ pub async fn validate_order_can_be_booked(
     })
 }
 
+/// Takes a plain `&DatabaseConnection` rather than a `&DatabaseTransaction` deliberately: this
+/// function makes an outbound Shiprocket quote call (`best_courier_quote_for_checkout`, up to
+/// 90s) between its read and its write. Neither the read nor the write needs to be part of a
+/// larger caller-held transaction — each is a single, self-contained statement — so giving it
+/// its own connection means callers never hold a pooled DB connection open across the external
+/// call by routing it through an already-open transaction of their own.
 async fn recompute_cod_payable_before_booking(
-    txn: &DatabaseTransaction,
+    db: &DatabaseConnection,
     order_id: i64,
 ) -> Result<(), TonicStatus> {
-    let row = txn
+    let row = db
         .query_one(Statement::from_sql_and_values(
             DbBackend::MySql,
             r#"SELECT o.payment_method,
@@ -400,7 +406,7 @@ async fn recompute_cod_payable_before_booking(
     };
     let recomputed_grand_total_minor = active_items_minor.saturating_add(recomputed_shipping_minor);
 
-    txn.execute(Statement::from_sql_and_values(
+    db.execute(Statement::from_sql_and_values(
         DbBackend::MySql,
         r#"UPDATE Orders
            SET items_total_minor_after_discount = ?,
@@ -662,9 +668,7 @@ pub async fn process_booking_intent(
     }
 
     let validation = validate_order_can_be_booked(&prep_txn, order_id, Utc::now(), true).await?;
-    if validation.payment_method.eq_ignore_ascii_case("cod") {
-        recompute_cod_payable_before_booking(&prep_txn, order_id).await?;
-    }
+    let is_cod = validation.payment_method.eq_ignore_ascii_case("cod");
 
     let shipment = if let Some(existing) = existing_shipment {
         existing
@@ -720,6 +724,12 @@ pub async fn process_booking_intent(
 
     let preferred_courier_id = shipment.selected_courier_id;
     prep_txn.commit().await.map_err(map_db_error_to_status)?;
+
+    // Recompute COD payable (its own Shiprocket quote call) after prep_txn has already
+    // committed and released its connection/lock — same reasoning as the booking call below.
+    if is_cod {
+        recompute_cod_payable_before_booking(db, order_id).await?;
+    }
 
     let booking = match shiprocket::book_shipment_for_order_with_preferred_courier(
         db,
@@ -981,6 +991,15 @@ pub async fn cancel_order_via_logistics(
         return Ok(None);
     }
 
+    if !shipment_has_provider_booking_reference(&shipment) {
+        // No real logistics-partner booking behind this shipment row at all — e.g. one created
+        // manually via the admin "create shipment" action without a Shiprocket order ID/AWB
+        // (which also hardcodes `can_customer_cancel = 0` regardless). There's nothing to cancel
+        // with a provider, so don't block on either check below; let the caller fall through to
+        // ordinary local cancellation instead.
+        return Ok(None);
+    }
+
     if !shipment.can_customer_cancel {
         return Err(TonicStatus::failed_precondition(
             "Order can no longer be cancelled because pickup/logistics is already in progress",
@@ -1021,19 +1040,37 @@ pub async fn cancel_order_via_logistics(
     ))
 }
 
+/// Takes a plain `&DatabaseConnection`, not a `&DatabaseTransaction`: the COD branch below
+/// calls `recompute_cod_payable_before_booking`, which makes its own outbound Shiprocket quote
+/// call. Splitting validate/commit from that external call — instead of holding one
+/// transaction open across all of it — means a caller processing many orders in sequence (see
+/// `create_shipments_after_cancel_window_batch` below) never holds a pooled connection (or,
+/// worse, a whole batch's worth of `FOR UPDATE` locks) open for the duration of N external
+/// calls. The brief window between `prep_txn` committing and `write_txn` opening — during which
+/// another actor could theoretically cancel this order — is the same class of race
+/// `process_booking_intent` already accepts elsewhere in this file: `upsert_booking_intent`
+/// only persists a "booking_pending" *intent*, not a real Shiprocket booking, and
+/// `process_booking_intent` re-validates cancellation status (via `validate_order_can_be_booked`)
+/// before it ever calls Shiprocket for the actual booking — so a stray intent row created here
+/// on a since-cancelled order is caught and rejected there, never resulting in a real booking.
 pub async fn book_order_after_validation(
-    txn: &DatabaseTransaction,
+    db: &DatabaseConnection,
     order_id: i64,
     now: DateTime<Utc>,
     event_name: &'static str,
 ) -> Result<i64, TonicStatus> {
-    let validation = validate_order_can_be_booked(txn, order_id, now, true).await?;
+    let prep_txn = db.begin().await.map_err(map_db_error_to_status)?;
+    let validation = validate_order_can_be_booked(&prep_txn, order_id, now, true).await?;
+    let is_cod = validation.payment_method.eq_ignore_ascii_case("cod");
+    prep_txn.commit().await.map_err(map_db_error_to_status)?;
 
-    if validation.payment_method.eq_ignore_ascii_case("cod") {
-        recompute_cod_payable_before_booking(txn, order_id).await?;
+    if is_cod {
+        recompute_cod_payable_before_booking(db, order_id).await?;
     }
 
-    let shipment_id = upsert_booking_intent(txn, order_id).await?;
+    let write_txn = db.begin().await.map_err(map_db_error_to_status)?;
+    let shipment_id = upsert_booking_intent(&write_txn, order_id).await?;
+    write_txn.commit().await.map_err(map_db_error_to_status)?;
 
     crate::observability::log_operational_event(
         event_name,
@@ -1056,10 +1093,10 @@ pub async fn book_order_after_validation(
     Ok(shipment_id)
 }
 
-pub async fn create_shipments_after_cancel_window_batch(
+async fn claim_eligible_cancel_window_order_ids(
     txn: &DatabaseTransaction,
     batch_limit: u64,
-) -> Result<u64, TonicStatus> {
+) -> Result<Vec<i64>, TonicStatus> {
     let window_hours = crate::order_policy::cancel_window_hours();
     let eligibility_sql = format!(
         r#"SELECT o.OrderID
@@ -1090,11 +1127,37 @@ pub async fn create_shipments_after_cancel_window_batch(
         .await
         .map_err(map_db_error_to_status)?;
 
-    let mut processed = 0_u64;
+    let mut order_ids = Vec::with_capacity(rows.len());
     for row in rows {
-        let order_id: i64 = row.try_get("", "OrderID").map_err(map_db_error_to_status)?;
+        order_ids.push(row.try_get("", "OrderID").map_err(map_db_error_to_status)?);
+    }
+    Ok(order_ids)
+}
+
+/// Claims eligible orders in one short transaction (released immediately, see
+/// `claim_eligible_cancel_window_order_ids`), then processes each one independently via
+/// `book_order_after_validation`, which owns its own short transactions around its external
+/// Shiprocket call. Previously this locked the whole batch `FOR UPDATE` and processed every
+/// order (including any outbound Shiprocket quote calls) inside that one held transaction —
+/// worst case, N sequential slow external calls all under one open connection and one held
+/// batch-wide lock. No durable "claimed" marker beyond the row lock is needed here: unlike
+/// `RefundAttempts`/`process_booking_intents_batch`'s claims, a redundant re-processing of an
+/// already-`booking_pending` order by an overlapping worker tick is harmless —
+/// `upsert_booking_intent` is idempotent (it just re-writes the same "pending" fields on the
+/// existing row), and the real, non-idempotent action (the actual Shiprocket booking) is gated
+/// separately and correctly by `process_booking_intents_batch`'s own durable status-based claim.
+pub async fn create_shipments_after_cancel_window_batch(
+    db: &DatabaseConnection,
+    batch_limit: u64,
+) -> Result<u64, TonicStatus> {
+    let claim_txn = db.begin().await.map_err(map_db_error_to_status)?;
+    let order_ids = claim_eligible_cancel_window_order_ids(&claim_txn, batch_limit).await?;
+    claim_txn.commit().await.map_err(map_db_error_to_status)?;
+
+    let mut processed = 0_u64;
+    for order_id in order_ids {
         match book_order_after_validation(
-            txn,
+            db,
             order_id,
             Utc::now(),
             "shipment_booked_after_cancel_window",

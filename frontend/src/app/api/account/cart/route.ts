@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 
@@ -70,7 +71,8 @@ export async function GET() {
     { userId: customerUserId, sessionId: null }
   );
   if (result.errors?.length) {
-    return apiError(result.errors[0]?.message ?? "Failed to load cart", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to load cart");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   return Response.json({
@@ -109,7 +111,8 @@ export async function POST(request: Request) {
     idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}
   );
   if (result.errors?.length) {
-    return apiError(result.errors[0]?.message ?? "Failed to add cart item", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to add cart item");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   return Response.json({
@@ -154,7 +157,8 @@ export async function PATCH(request: Request) {
     idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}
   );
   if (result.errors?.length) {
-    return apiError(result.errors[0]?.message ?? "Failed to update cart item", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to update cart item");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   return Response.json({
@@ -191,7 +195,8 @@ export async function DELETE(request: Request) {
     idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}
   );
   if (result.errors?.length) {
-    return apiError(result.errors[0]?.message ?? "Failed to delete cart item", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to delete cart item");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   return Response.json({

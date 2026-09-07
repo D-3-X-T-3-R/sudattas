@@ -57,22 +57,44 @@ async fn make_order_booking_eligible(txn: &sea_orm::DatabaseTransaction, order_i
         .expect("make order booking-eligible");
 }
 
-/// Build user + shipping + one product/variant/inventory + one cart item, place order; return (order_id, user_id, shipping_id, variant_id, total_paise).
-async fn place_order_minimal(
-    txn: &sea_orm::DatabaseTransaction,
-    now_tag: i64,
-) -> (i64, i64, i64, i64, i64) {
-    let _ = ensure_order_status(txn, "pending").await;
+/// Fixture ids from `place_order_minimal`: the placed order plus everything created to place
+/// it, needed both by the tests that build on top of it and (now that setup/place_order must be
+/// committed rather than left inside a rollback-able transaction — see the comment on the
+/// `txn.commit()` call below) to clean the rows up afterward.
+struct OrderStateFixtures {
+    order_id: i64,
+    user_id: i64,
+    shipping_id: i64,
+    variant_id: i64,
+    total_paise: i64,
+    role_id: i64,
+    category_id: i64,
+}
+
+/// Build user + shipping + one product/variant/inventory + one cart item, place order.
+///
+/// Setup runs in its own transaction, committed before calling `place_order`: `place_order` now
+/// manages its own transactions internally (a short claim/prep transaction, then the
+/// Shiprocket/Razorpay calls with no DB connection held, then a write transaction) so it can no
+/// longer run as a nested savepoint inside a caller-supplied, still-open transaction. Setup
+/// fixtures must therefore be committed and visible before place_order's own prep phase reads
+/// them, rather than sharing one uncommitted transaction with it as before. Each O-test below
+/// opens its own fresh transaction after this returns, to wrap the order-state-machine calls it
+/// is actually testing (those handlers are unaffected by the place_order restructuring and still
+/// take `&DatabaseTransaction`).
+async fn place_order_minimal(db: &sea_orm::DatabaseConnection, now_tag: i64) -> OrderStateFixtures {
+    let txn = db.begin().await.expect("begin transaction");
+    let _ = ensure_order_status(&txn, "pending").await;
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(format!("itest_ord_{}", now_tag)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert UserRoles");
 
     let user_res = core_operations::handlers::users::create_user(
-        txn,
+        &txn,
         Request::new(CreateUserRequest {
             username: format!("itest_ord_{}", now_tag),
             email: format!("itest_ord+{}@example.com", now_tag),
@@ -102,16 +124,17 @@ async fn place_order_minimal(
         road: ActiveValue::Set(None),
         apartment_no_or_name: ActiveValue::Set(None),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ShippingAddresses");
     let shipping_id = ship.shipping_address_id;
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_ord_{}", now_tag)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ProductCategories");
 
@@ -130,10 +153,12 @@ async fn place_order_minimal(
         has_blouse_piece: ActiveValue::Set(None),
         care_instructions: ActiveValue::Set(None),
         product_status_id: ActiveValue::Set(None),
+        meta_title: ActiveValue::Set(None),
+        meta_description: ActiveValue::Set(None),
         created_at: ActiveValue::Set(Some(Utc::now())),
         updated_at: ActiveValue::Set(None),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert Products");
 
@@ -144,7 +169,7 @@ async fn place_order_minimal(
         color_id: ActiveValue::Set(None),
         additional_price: ActiveValue::Set(Some(0)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert ProductVariants");
 
@@ -156,12 +181,12 @@ async fn place_order_minimal(
         reorder_level: ActiveValue::Set(None),
         updated_at: ActiveValue::Set(Some(Utc::now())),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert Inventory");
 
     let cart_res = core_operations::handlers::cart::create_cart_item(
-        txn,
+        &txn,
         Request::new(CreateCartItemRequest {
             user_id: Some(user_id),
             session_id: None,
@@ -173,8 +198,13 @@ async fn place_order_minimal(
     .expect("create_cart_item");
     let cart_id = cart_res.into_inner().items[0].cart_id;
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // place_order no longer runs as a nested savepoint inside our transaction, so anything it
+    // needs to read (user, cart, shipping address) must already be committed.
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        txn,
+        db,
         Request::new(PlaceOrderRequest {
             shipping_address_id: shipping_id,
             user_id,
@@ -186,13 +216,123 @@ async fn place_order_minimal(
     .await
     .expect("place_order");
     let order = place_res.into_inner().items[0].clone();
-    (
-        order.order_id,
+
+    OrderStateFixtures {
+        order_id: order.order_id,
         user_id,
         shipping_id,
-        variant.variant_id,
-        order.total_amount_paise,
-    )
+        variant_id: variant.variant_id,
+        total_paise: order.total_amount_paise,
+        role_id: role.role_id,
+        category_id: cat.category_id,
+    }
+}
+
+/// Best-effort teardown of everything `place_order_minimal` committed (fixtures + the placed
+/// order and its dependents). Previously this all lived inside the same uncommitted transaction
+/// as the test's own state-machine assertions, so one final `txn.rollback()` undid everything;
+/// now that place_order_minimal's work is committed independently (see the comment on its
+/// `txn.commit()` call), it needs explicit cleanup instead. Each O-test's own per-test
+/// transaction (wrapping the update_order/admin_mark_* calls under test) is still rolled back as
+/// before, so this only needs to clean up what place_order_minimal itself persisted. Deletes in
+/// FK-safe order (children before parents). Errors here are logged, not fatal — they must never
+/// mask the actual test assertions.
+async fn cleanup_order_state_fixtures(
+    db: &sea_orm::DatabaseConnection,
+    fixtures: &OrderStateFixtures,
+) -> Result<(), String> {
+    for (table, column) in [
+        ("PaymentIntents", "order_id"),
+        ("Shipments", "order_id"),
+        ("OrderDetails", "OrderID"),
+        ("OrderEvents", "OrderID"),
+        ("Orders", "OrderID"),
+    ] {
+        db.execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::MySql,
+            format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+            [fixtures.order_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("cleanup {table} for order_id={}: {e}", fixtures.order_id))?;
+    }
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `Cart` WHERE `UserID` = ?",
+        [fixtures.user_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup Cart for user_id={}: {e}", fixtures.user_id))?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `Inventory` WHERE `VariantID` = ?",
+        [fixtures.variant_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup Inventory for variant_id={}: {e}",
+            fixtures.variant_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+        [fixtures.variant_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup ProductVariants for variant_id={}: {e}",
+            fixtures.variant_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `Products` WHERE `CategoryID` = ?",
+        [fixtures.category_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup Products for category_id={}: {e}",
+            fixtures.category_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+        [fixtures.category_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup ProductCategories for category_id={}: {e}",
+            fixtures.category_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+        [fixtures.shipping_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup ShippingAddresses id={}: {e}", fixtures.shipping_id))?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `Users` WHERE `UserID` = ?",
+        [fixtures.user_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup Users for user_id={}: {e}", fixtures.user_id))?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+        [fixtures.role_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup UserRoles for role_id={}: {e}", fixtures.role_id))?;
+    Ok(())
 }
 
 /// O1 – update_order transitions pending → confirmed; order row updated and order_events entry created.
@@ -208,11 +348,20 @@ async fn integration_order_update_pending_to_confirmed_and_order_event() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, shipping_id, _variant_id, total_paise) =
-        place_order_minimal(&txn, now_tag).await;
+    let fixtures = place_order_minimal(&db, now_tag).await;
+    let (order_id, user_id, shipping_id, total_paise) = (
+        fixtures.order_id,
+        fixtures.user_id,
+        fixtures.shipping_id,
+        fixtures.total_paise,
+    );
+
+    // Fresh transaction for the update_order call under test; place_order_minimal already
+    // committed its own work (see the comment on its `txn.commit()` call), so this only wraps
+    // the state-machine mutation and its assertions, same as before.
+    let txn = db.begin().await.expect("begin transaction");
 
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
 
@@ -249,6 +398,10 @@ async fn integration_order_update_pending_to_confirmed_and_order_event() {
     );
 
     txn.rollback().await.ok();
+
+    if let Err(e) = cleanup_order_state_fixtures(&db, &fixtures).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// O2 – Cancelling an order via update_order restores inventory quantities from order_details.
@@ -264,11 +417,15 @@ async fn integration_order_cancel_restores_inventory() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, _shipping_id, variant_id, _total_paise) =
-        place_order_minimal(&txn, now_tag).await;
+    let fixtures = place_order_minimal(&db, now_tag).await;
+    let (order_id, user_id, variant_id) =
+        (fixtures.order_id, fixtures.user_id, fixtures.variant_id);
+
+    // Fresh transaction for the delete_order call under test; see the comment on the equivalent
+    // transaction in `integration_order_update_pending_to_confirmed_and_order_event`.
+    let txn = db.begin().await.expect("begin transaction");
 
     let inv_before = inventory::Entity::find()
         .filter(inventory::Column::VariantId.eq(Some(variant_id)))
@@ -302,6 +459,10 @@ async fn integration_order_cancel_restores_inventory() {
     );
 
     txn.rollback().await.ok();
+
+    if let Err(e) = cleanup_order_state_fixtures(&db, &fixtures).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// O3 – Illegal transition (pending → delivered) via update_order returns InvalidArgument.
@@ -317,11 +478,19 @@ async fn integration_order_illegal_transition_returns_invalid_argument() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, shipping_id, _variant_id, total_paise) =
-        place_order_minimal(&txn, now_tag).await;
+    let fixtures = place_order_minimal(&db, now_tag).await;
+    let (order_id, user_id, shipping_id, total_paise) = (
+        fixtures.order_id,
+        fixtures.user_id,
+        fixtures.shipping_id,
+        fixtures.total_paise,
+    );
+
+    // Fresh transaction for the update_order call under test; see the comment on the equivalent
+    // transaction in `integration_order_update_pending_to_confirmed_and_order_event`.
+    let txn = db.begin().await.expect("begin transaction");
 
     let delivered_id = ensure_order_status(&txn, "delivered").await;
 
@@ -346,6 +515,10 @@ async fn integration_order_illegal_transition_returns_invalid_argument() {
     );
 
     txn.rollback().await.ok();
+
+    if let Err(e) = cleanup_order_state_fixtures(&db, &fixtures).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// O4 – admin_mark_order_shipped transitions order to shipped and creates a shipment row when tracking is provided.
@@ -361,11 +534,19 @@ async fn integration_admin_mark_shipped_creates_shipment() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, shipping_id, _variant_id, total_paise) =
-        place_order_minimal(&txn, now_tag).await;
+    let fixtures = place_order_minimal(&db, now_tag).await;
+    let (order_id, user_id, shipping_id, total_paise) = (
+        fixtures.order_id,
+        fixtures.user_id,
+        fixtures.shipping_id,
+        fixtures.total_paise,
+    );
+
+    // Fresh transaction for the state-machine calls under test; see the comment on the
+    // equivalent transaction in `integration_order_update_pending_to_confirmed_and_order_event`.
+    let txn = db.begin().await.expect("begin transaction");
 
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
     let processing_id = ensure_order_status(&txn, "processing").await;
@@ -400,6 +581,7 @@ async fn integration_admin_mark_shipped_creates_shipment() {
 
     let ship_res = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
+        &db, // pre-existing signature drift, unrelated to the place_order adaptation — see final report
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
             awb_code: Some("AWB123".to_string()),
@@ -435,6 +617,10 @@ async fn integration_admin_mark_shipped_creates_shipment() {
     assert_eq!(ship_rows[0].carrier.as_deref(), Some("DHL"));
 
     txn.rollback().await.ok();
+
+    if let Err(e) = cleanup_order_state_fixtures(&db, &fixtures).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// O5 – admin_mark_order_shipped called twice updates existing shipment (awb/carrier) instead of creating a new one.
@@ -450,11 +636,19 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, shipping_id, _variant_id, total_paise) =
-        place_order_minimal(&txn, now_tag).await;
+    let fixtures = place_order_minimal(&db, now_tag).await;
+    let (order_id, user_id, shipping_id, total_paise) = (
+        fixtures.order_id,
+        fixtures.user_id,
+        fixtures.shipping_id,
+        fixtures.total_paise,
+    );
+
+    // Fresh transaction for the state-machine calls under test; see the comment on the
+    // equivalent transaction in `integration_order_update_pending_to_confirmed_and_order_event`.
+    let txn = db.begin().await.expect("begin transaction");
 
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
     let processing_id = ensure_order_status(&txn, "processing").await;
@@ -489,6 +683,7 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
+        &db, // pre-existing signature drift, unrelated to the place_order adaptation — see final report
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
             awb_code: Some("AWB1".to_string()),
@@ -504,6 +699,7 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
+        &db, // pre-existing signature drift, unrelated to the place_order adaptation — see final report
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
             awb_code: Some("AWB2".to_string()),
@@ -527,6 +723,10 @@ async fn integration_admin_mark_shipped_twice_updates_shipment() {
     assert_eq!(ship_rows[0].carrier.as_deref(), Some("Carrier2"));
 
     txn.rollback().await.ok();
+
+    if let Err(e) = cleanup_order_state_fixtures(&db, &fixtures).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// O6 – admin_mark_order_delivered transitions shipped → delivered and records the change.
@@ -542,11 +742,19 @@ async fn integration_admin_mark_delivered_transitions_to_delivered() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, shipping_id, _variant_id, total_paise) =
-        place_order_minimal(&txn, now_tag).await;
+    let fixtures = place_order_minimal(&db, now_tag).await;
+    let (order_id, user_id, shipping_id, total_paise) = (
+        fixtures.order_id,
+        fixtures.user_id,
+        fixtures.shipping_id,
+        fixtures.total_paise,
+    );
+
+    // Fresh transaction for the state-machine calls under test; see the comment on the
+    // equivalent transaction in `integration_order_update_pending_to_confirmed_and_order_event`.
+    let txn = db.begin().await.expect("begin transaction");
 
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
     let processing_id = ensure_order_status(&txn, "processing").await;
@@ -581,6 +789,7 @@ async fn integration_admin_mark_delivered_transitions_to_delivered() {
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
+        &db, // pre-existing signature drift, unrelated to the place_order adaptation — see final report
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
             awb_code: Some("AWB".to_string()),
@@ -610,6 +819,10 @@ async fn integration_admin_mark_delivered_transitions_to_delivered() {
     assert_eq!(order.status_id, delivered_id);
 
     txn.rollback().await.ok();
+
+    if let Err(e) = cleanup_order_state_fixtures(&db, &fixtures).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// O7 – Full lifecycle: pending → confirmed → processing → shipped → delivered using allowed transitions only.
@@ -625,11 +838,19 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
     let db = Database::connect(&test_db_url())
         .await
         .expect("connect to test DB");
-    let txn = db.begin().await.expect("begin transaction");
 
     let now_tag = Utc::now().timestamp_millis();
-    let (order_id, user_id, shipping_id, _variant_id, total_paise) =
-        place_order_minimal(&txn, now_tag).await;
+    let fixtures = place_order_minimal(&db, now_tag).await;
+    let (order_id, user_id, shipping_id, total_paise) = (
+        fixtures.order_id,
+        fixtures.user_id,
+        fixtures.shipping_id,
+        fixtures.total_paise,
+    );
+
+    // Fresh transaction for the state-machine calls under test; see the comment on the
+    // equivalent transaction in `integration_order_update_pending_to_confirmed_and_order_event`.
+    let txn = db.begin().await.expect("begin transaction");
 
     let active_sale_id = ensure_order_status(&txn, "active_sale").await;
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
@@ -674,6 +895,7 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
 
     let _ = core_operations::handlers::orders::admin_mark_order_shipped(
         &txn,
+        &db, // pre-existing signature drift, unrelated to the place_order adaptation — see final report
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
             awb_code: Some("FULL-AWB".to_string()),
@@ -713,4 +935,8 @@ async fn integration_order_full_lifecycle_pending_to_delivered() {
     assert!(to_statuses.contains(&Some("delivered")));
 
     txn.rollback().await.ok();
+
+    if let Err(e) = cleanup_order_state_fixtures(&db, &fixtures).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }

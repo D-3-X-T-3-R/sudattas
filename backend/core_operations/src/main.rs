@@ -199,10 +199,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         });
-    tokio::spawn(async move {
+    let metrics_server_handle = tokio::spawn(async move {
         warp::serve(metrics_route.or(health_route).or(readiness_route))
             .run(metrics_addr)
             .await;
+    });
+    tokio::spawn(async move {
+        if let Err(e) = metrics_server_handle.await {
+            log::error!("metrics/health server: task died unexpectedly: {e}");
+            observability::record_worker_died_total("metrics_health_server");
+        }
     });
 
     let addr = startup.grpc_server_addr;
@@ -232,7 +238,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "outbox worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
 
-        tokio::spawn(async move {
+        let outbox_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -250,6 +256,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 refresh_backlog_metrics(&db).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = outbox_worker_handle.await {
+                log::error!("outbox worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("outbox");
             }
         });
     } else {
@@ -276,7 +288,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "stale order expiry worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
 
-        tokio::spawn(async move {
+        let stale_order_expiry_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -291,6 +303,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 refresh_backlog_metrics(&db).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = stale_order_expiry_worker_handle.await {
+                log::error!("stale order expiry worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("stale_order_expiry");
             }
         });
     } else {
@@ -315,7 +333,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!(
             "cancel pending logistics worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
-        tokio::spawn(async move {
+        let cancel_pending_logistics_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -335,6 +353,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 refresh_backlog_metrics(&db).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = cancel_pending_logistics_worker_handle.await {
+                log::error!("cancel pending logistics worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("cancel_pending_logistics");
             }
         });
     } else {
@@ -362,7 +386,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!(
             "delayed shipment creation worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
-        tokio::spawn(async move {
+        let delayed_shipment_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -382,6 +406,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 refresh_backlog_metrics(&db).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = delayed_shipment_worker_handle.await {
+                log::error!("delayed shipment creation worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("delayed_shipment_creation");
             }
         });
     } else {
@@ -408,7 +438,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!(
             "refund attempts worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
-        tokio::spawn(async move {
+        let refund_attempts_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -425,6 +455,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 refresh_backlog_metrics(&db).await;
             }
         });
+        tokio::spawn(async move {
+            if let Err(e) = refund_attempts_worker_handle.await {
+                log::error!("refund attempts worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("refund_attempts");
+            }
+        });
     } else {
         log::info!("refund attempts worker: disabled via REFUND_ATTEMPTS_DISABLE_WORKER");
     }
@@ -432,7 +468,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Server::builder()
         .add_service(GrpcServicesServer::with_interceptor(service, check_auth))
         .serve_with_shutdown(addr, async {
-            let _ = tokio::signal::ctrl_c().await;
+            let ctrl_c = tokio::signal::ctrl_c();
+            #[cfg(unix)]
+            {
+                let mut terminate =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                        .expect("failed to install SIGTERM handler");
+                tokio::select! {
+                    _ = ctrl_c => {}
+                    _ = terminate.recv() => {}
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = ctrl_c.await;
+            }
             log::info!("core_operations shutdown signal received");
         })
         .await?;

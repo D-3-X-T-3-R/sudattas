@@ -31,6 +31,7 @@ type CheckoutInput = {
   shippingAddressId?: string;
   selectedCartLineIds?: string[];
   paymentMode?: "prepaid" | "cod";
+  couponCode?: string;
   onSuccess?: (payload: CheckoutOutcomePayload) => void;
   onPending?: (payload: CheckoutOutcomePayload) => void;
   onNeedsReview?: (payload: CheckoutOutcomePayload) => void;
@@ -169,6 +170,7 @@ export function useRazorpayCheckout() {
           selectedCartLineIds,
           idempotencyKey: activeAttempt.placeOrderKey,
           paymentMode,
+          couponCode: input?.couponCode?.trim() || undefined,
         }),
       });
       if (start?.idempotency?.verifyKey) {

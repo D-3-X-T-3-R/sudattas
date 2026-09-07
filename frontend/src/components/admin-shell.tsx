@@ -10,11 +10,20 @@ import {
   Package,
   ShoppingCart,
   Users,
+  Boxes,
+  Truck,
   Settings,
   Menu,
   X,
   LogOut,
   ExternalLink,
+  MessageSquareText,
+  Receipt,
+  ScrollText,
+  Mail,
+  Tag,
+  Undo2,
+  Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,8 +35,17 @@ const STORE_URL = publicEnv.NEXT_PUBLIC_STORE_URL || "/";
 const NAV = [
   { href: `${ADMIN_BASE}`, icon: LayoutDashboard, label: "Dashboard" },
   { href: `${ADMIN_BASE}/orders`, icon: ShoppingCart, label: "Orders" },
+  { href: `${ADMIN_BASE}/shipments`, icon: Truck, label: "Shipments" },
   { href: `${ADMIN_BASE}/products`, icon: Package, label: "Products" },
+  { href: `${ADMIN_BASE}/coupons`, icon: Tag, label: "Coupons" },
+  { href: `${ADMIN_BASE}/inventory`, icon: Boxes, label: "Inventory" },
   { href: `${ADMIN_BASE}/customers`, icon: Users, label: "Customers" },
+  { href: `${ADMIN_BASE}/reviews`, icon: MessageSquareText, label: "Reviews" },
+  { href: `${ADMIN_BASE}/returns`, icon: Undo2, label: "Returns" },
+  { href: `${ADMIN_BASE}/refunds`, icon: Banknote, label: "Refunds" },
+  { href: `${ADMIN_BASE}/transactions`, icon: Receipt, label: "Transactions" },
+  { href: `${ADMIN_BASE}/newsletter`, icon: Mail, label: "Newsletter" },
+  { href: `${ADMIN_BASE}/activity-log`, icon: ScrollText, label: "Activity log" },
   { href: `${ADMIN_BASE}/settings`, icon: Settings, label: "Settings" },
 ] as const;
 
@@ -39,8 +57,17 @@ function getTitle(pathname: string): string {
   const titles: Record<string, string> = {
     dashboard: "Dashboard",
     orders: "Orders",
+    shipments: "Shipments",
     products: "Products",
+    coupons: "Coupons",
+    inventory: "Inventory",
     customers: "Customers",
+    reviews: "Reviews",
+    returns: "Returns",
+    refunds: "Refunds",
+    transactions: "Transactions",
+    newsletter: "Newsletter",
+    "activity-log": "Activity log",
     settings: "Settings",
   };
   return titles[segment] ?? "Admin";
@@ -124,23 +151,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="space-y-1.5 border-t border-[var(--admin-border-subtle)] p-4">
-          <Link
-            href={STORE_URL}
-            className="flex items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Back to store
-          </Link>
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
-            className="flex w-full items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-left text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
-        </div>
       </aside>
 
       <main id="admin-main-content" className="flex min-w-0 flex-1 flex-col md:ml-[288px]">
@@ -157,6 +167,24 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div>
             <p className="text-sm font-medium text-[var(--color-muted)]">Sudatta&apos;s Admin</p>
             <h1 className="font-display text-2xl leading-none text-[var(--color-ink)] md:text-[1.7rem]">{title}</h1>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <Link
+              href={STORE_URL}
+              className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span className="hidden sm:inline">Back to store</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
+              className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           </div>
         </header>
 

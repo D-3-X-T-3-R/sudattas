@@ -1,4 +1,5 @@
 import type { DatePreset } from "@/domains/admin/orders/types";
+import type { OrderListRow } from "@/lib/admin-queries";
 
 export function getDateRange(
   preset: DatePreset
@@ -56,4 +57,33 @@ export function getStatusLabel(
 
 export function formatOrderStatusName(statusName: string): string {
   return statusName.trim().toLowerCase() === "processing" ? "processing order" : statusName;
+}
+
+/** Same CSV-blob-download pattern as downloadCustomersCsv (domains/admin/customers/utils.ts). */
+export function downloadOrdersCsv(
+  rows: OrderListRow[],
+  statuses: { statusId: string; statusName: string }[]
+): void {
+  const headers = ["Order ID", "Date", "Customer ID", "Amount", "Status"];
+  const escaped = (v: string | null | undefined) =>
+    v == null ? "" : `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [
+    headers.join(","),
+    ...rows.map((o) =>
+      [
+        o.orderId,
+        escaped(formatOrderDate(o.orderDate)),
+        o.userId,
+        escaped(o.totalAmountFormatted),
+        escaped(getStatusLabel(o.statusId, statuses)),
+      ].join(",")
+    ),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

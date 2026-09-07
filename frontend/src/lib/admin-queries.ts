@@ -389,6 +389,8 @@ export interface CustomerListRow {
   address: string | null;
   phone: string | null;
   createDate: string;
+  /** "active" | "inactive" | "suspended"; null means never explicitly set (treated as active). */
+  userStatus: string | null;
 }
 
 /** Fetch one customers page (bounded). */
@@ -409,11 +411,79 @@ export async function fetchCustomersList(params?: {
         address
         phone
         createDate
+        userStatus
       }
     }`,
     { input: { userId: "0", limit, offset } }
   );
   return data?.searchUser ?? [];
+}
+
+/**
+ * Admin: activate/deactivate/suspend a customer account. Not cosmetic — the backend auth gate
+ * rejects every future JWT-authenticated request from a deactivated/suspended account (login,
+ * checkout, everything), subject to a short cache TTL server-side. Deliberately a separate
+ * mutation from updateCustomerAdmin, which intentionally never touches this field.
+ */
+export async function setCustomerStatus(
+  userId: string,
+  status: "active" | "inactive" | "suspended"
+): Promise<CustomerListRow | null> {
+  const data = await gqlAdmin<{ setUserStatus?: CustomerListRow[] }>(
+    `mutation AdminSetCustomerStatus($input: SetUserStatusInput!) {
+      setUserStatus(input: $input) {
+        userId
+        username
+        email
+        authProvider
+        fullName
+        address
+        phone
+        createDate
+        userStatus
+      }
+    }`,
+    { input: { userId, status } }
+  );
+  return data?.setUserStatus?.[0] ?? null;
+}
+
+/** Fields `exportMyPii` doesn't already put in front of an admin via the customer list/profile
+ * dialog (gender, dateOfBirth, firstName/lastName) plus the rest, for a complete, exportable
+ * record — the admin-facing counterpart to a customer's own "Download my data" button. */
+export interface AdminUserPiiExport {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  address: string | null;
+  phone: string | null;
+  createDate: string;
+  firstName: string | null;
+  lastName: string | null;
+  gender: string | null;
+  dateOfBirth: string | null;
+}
+
+/** Admin lookup of another customer's full PII record by id, for support/data-request purposes. */
+export async function fetchCustomerPiiExport(userId: string): Promise<AdminUserPiiExport | null> {
+  const data = await gqlAdmin<{ adminExportUserPii?: AdminUserPiiExport }>(
+    `query AdminExportUserPii($userId: String!) {
+      adminExportUserPii(userId: $userId) {
+        userId
+        email
+        fullName
+        address
+        phone
+        createDate
+        firstName
+        lastName
+        gender
+        dateOfBirth
+      }
+    }`,
+    { userId }
+  );
+  return data?.adminExportUserPii ?? null;
 }
 
 export async function fetchAllCustomersList(): Promise<CustomerListRow[]> {
@@ -430,6 +500,41 @@ export async function fetchAllCustomersList(): Promise<CustomerListRow[]> {
     if (offset > 100_000) break;
   }
   return out;
+}
+
+/** Admin: edit a customer's non-status profile fields (name/address/phone). Deliberately
+ * excludes email/username/role/status — those are identity- or access-critical and out of scope
+ * for a quick profile edit; use dedicated flows for those if/when built. */
+export async function updateCustomerAdmin(params: {
+  userId: string;
+  fullName?: string;
+  address?: string;
+  phone?: string;
+}): Promise<CustomerListRow | null> {
+  const data = await gqlAdmin<{ updateUser?: CustomerListRow[] }>(
+    `mutation AdminUpdateCustomer($input: UpdateUserInput!) {
+      updateUser(input: $input) {
+        userId
+        username
+        email
+        authProvider
+        fullName
+        address
+        phone
+        createDate
+        userStatus
+      }
+    }`,
+    {
+      input: {
+        userId: params.userId,
+        fullName: params.fullName,
+        address: params.address,
+        phone: params.phone,
+      },
+    }
+  );
+  return data?.updateUser?.[0] ?? null;
 }
 
 /** Order counts by status for dashboard (total, pending, delivered, cancelled, in transit). */

@@ -27,6 +27,9 @@ service GRPCServices {
     rpc SearchProduct(SearchProductRequest) returns (ProductsResponse);
     rpc UpdateProduct(UpdateProductRequest) returns (ProductsResponse);
     rpc DeleteProduct(DeleteProductRequest) returns (ProductsResponse);
+    rpc ArchiveProduct(ArchiveProductRequest) returns (ProductsResponse);
+    rpc ActivateProduct(ActivateProductRequest) returns (ProductsResponse);
+    rpc PermanentlyDeleteProduct(PermanentlyDeleteProductRequest) returns (PermanentlyDeleteProductResponse);
     rpc GetProductsById(GetProductsByIdRequest) returns (ProductsResponse);
     rpc GetRelatedProducts(GetRelatedProductsRequest) returns (ProductsResponse);
     rpc GetSitemapProductUrls(GetSitemapProductUrlsRequest) returns (GetSitemapProductUrlsResponse);
@@ -36,6 +39,7 @@ service GRPCServices {
     rpc SearchUser(SearchUserRequest) returns (UsersResponse);
     rpc UpdateUser(UpdateUserRequest) returns (UsersResponse);
     rpc DeleteUser(DeleteUserRequest) returns (UsersResponse);
+    rpc SetUserStatus(SetUserStatusRequest) returns (UsersResponse);
     rpc GetUserPiiExport(GetUserPiiExportRequest) returns (GetUserPiiExportResponse);
     rpc RecordSecurityAuditEvent(RecordSecurityAuditRequest) returns (RecordSecurityAuditResponse);
 
@@ -55,7 +59,12 @@ service GRPCServices {
     rpc SearchReturnRequests(SearchReturnRequestsRequest) returns (ReturnRequestsResponse);
     rpc AdminMarkReturnReceived(AdminMarkReturnReceivedRequest) returns (ReturnRequestsResponse);
     rpc AdminUpdateReturnStatus(AdminUpdateReturnStatusRequest) returns (ReturnRequestsResponse);
+    rpc RequestExchange(RequestExchangeRequest) returns (ExchangeRequestsResponse);
+    rpc SearchExchangeRequests(SearchExchangeRequestsRequest) returns (ExchangeRequestsResponse);
+    rpc AdminMarkExchangeReceived(AdminMarkExchangeReceivedRequest) returns (ExchangeRequestsResponse);
+    rpc AdminUpdateExchangeStatus(AdminUpdateExchangeStatusRequest) returns (ExchangeRequestsResponse);
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
+    rpc PlaceOrderAdmin(PlaceOrderAdminRequest) returns (OrdersResponse);
     rpc EstimateCheckoutShipping(EstimateCheckoutShippingRequest) returns (EstimateCheckoutShippingResponse);
     rpc AdminMarkOrderShipped(AdminMarkOrderShippedRequest) returns (AdminMarkOrderShippedResponse);
     rpc AdminMarkOrderDelivered(AdminMarkOrderDeliveredRequest) returns (AdminMarkOrderDeliveredResponse);
@@ -75,6 +84,7 @@ service GRPCServices {
     rpc UpdateReview(UpdateReviewRequest) returns (ReviewsResponse);
     rpc DeleteReview(DeleteReviewRequest) returns (ReviewsResponse);
     rpc AdminUpdateReviewStatus(AdminUpdateReviewStatusRequest) returns (AdminUpdateReviewStatusResponse);
+    rpc GetProductRatingSummary(ProductRatingSummaryRequest) returns (ProductRatingSummaryResponse);
 
     // ProductImages
     // AddProductImage removed — use GetPresignedUploadUrl + ConfirmImageUpload instead
@@ -124,6 +134,9 @@ service GRPCServices {
     rpc SearchNewsletterSubscriber(SearchNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
     rpc UpdateNewsletterSubscriber(UpdateNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
     rpc DeleteNewsletterSubscriber(DeleteNewsletterSubscriberRequest) returns (NewsletterSubscribersResponse);
+    rpc SendNewsletterCampaign(SendNewsletterCampaignRequest) returns (NewsletterCampaignsResponse);
+    rpc SearchNewsletterCampaign(SearchNewsletterCampaignRequest) returns (NewsletterCampaignsResponse);
+    rpc UnsubscribeNewsletterByToken(UnsubscribeNewsletterByTokenRequest) returns (NewsletterSubscribersResponse);
 
     // Sizes
     rpc CreateSize(CreateSizeRequest) returns (SizesResponse);
@@ -197,8 +210,11 @@ service GRPCServices {
     // Coupons
     rpc ValidateCoupon(ValidateCouponRequest) returns (CouponsResponse);
     rpc ApplyCoupon(ApplyCouponRequest) returns (CouponsResponse);
+    rpc ListActiveCoupons(ListActiveCouponsRequest) returns (PublicCouponsResponse);
     rpc CreateCoupon(CreateCouponRequest) returns (CouponsAdminResponse);
     rpc UpdateCoupon(UpdateCouponRequest) returns (CouponsAdminResponse);
+    rpc SearchCouponAdmin(SearchCouponAdminRequest) returns (CouponsAdminResponse);
+    rpc DeleteCouponAdmin(DeleteCouponAdminRequest) returns (CouponsAdminResponse);
 
     // Webhooks
     rpc IngestWebhook(IngestWebhookRequest) returns (WebhookEventsResponse);
@@ -215,6 +231,7 @@ service GRPCServices {
     // P1 Manual NeedsReview resolution (admin)
     rpc ResolveNeedsReview(ResolveNeedsReviewRequest) returns (ResolveNeedsReviewResponse);
     rpc ResolveRefundAttemptNeedsReview(ResolveRefundAttemptNeedsReviewRequest) returns (ResolveRefundAttemptNeedsReviewResponse);
+    rpc SearchRefundAttempts(SearchRefundAttemptsRequest) returns (RefundAttemptsResponse);
     rpc GetOrderStats(GetOrderStatsRequest) returns (GetOrderStatsResponse);
 
     // Shipments

@@ -1,3 +1,4 @@
+use super::user_status::{fetch_status_code_map, resolve_status_code};
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
 use core_db_entities::entity::users;
@@ -67,6 +68,7 @@ pub async fn search_user(
 
     match query.all(txn).await {
         Ok(models) => {
+            let status_map = fetch_status_code_map(txn).await?;
             let items = models
                 .into_iter()
                 .map(|m| {
@@ -90,6 +92,7 @@ pub async fn search_user(
                         last_name: m.last_name,
                         gender: m.gender.as_ref().map(super::gender_to_string),
                         date_of_birth: m.date_of_birth.map(|d| d.to_string()),
+                        user_status: resolve_status_code(&status_map, m.user_status_id),
                     }
                 })
                 .collect();

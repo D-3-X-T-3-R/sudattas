@@ -1,6 +1,7 @@
 ﻿import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 import {
@@ -9,6 +10,7 @@ import {
   deriveShipmentState,
   statusNameFromId,
 } from "@/lib/order-state";
+import { formatInrFromPaise } from "@/lib/money";
 
 type OrderDetailRow = {
   orderDetailId: string;
@@ -393,16 +395,20 @@ export async function GET(
       }),
     ]);
 
-  const firstError =
-    orderResult.errors?.[0]?.message ??
-    statusesResult.errors?.[0]?.message ??
-    paymentResult.errors?.[0]?.message ??
-    shipmentResult.errors?.[0]?.message ??
-    eventsResult.errors?.[0]?.message ??
-    refundsResult.errors?.[0]?.message ??
-    returnsResult.errors?.[0]?.message;
-  if (firstError) {
-    return apiError(firstError, 400, "GRAPHQL_ERROR");
+  const firstErrors =
+    orderResult.errors ??
+    statusesResult.errors ??
+    paymentResult.errors ??
+    shipmentResult.errors ??
+    eventsResult.errors ??
+    refundsResult.errors ??
+    returnsResult.errors;
+  if (firstErrors?.length) {
+    const { status, message } = graphqlErrorToApiStatus(
+      firstErrors,
+      "Failed to load order details"
+    );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   const order = orderResult.data?.searchOrder?.[0];
@@ -488,9 +494,9 @@ export async function GET(
       shippingRefundMinor,
       totalRefundMinor,
       breakdownAvailable,
-      totalRefundFormatted: `₹${(totalRefundMinor / 100).toFixed(2)}`,
-      itemRefundFormatted: `₹${(itemRefundMinor / 100).toFixed(2)}`,
-      shippingRefundFormatted: `₹${(shippingRefundMinor / 100).toFixed(2)}`,
+      totalRefundFormatted: formatInrFromPaise(totalRefundMinor),
+      itemRefundFormatted: formatInrFromPaise(itemRefundMinor),
+      shippingRefundFormatted: formatInrFromPaise(shippingRefundMinor),
     },
   };
 

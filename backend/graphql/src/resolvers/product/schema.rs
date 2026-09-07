@@ -32,6 +32,10 @@ pub struct Product {
     pub has_blouse_piece: Option<bool>,
     pub care_instructions: Option<String>,
     pub product_status_id: Option<String>,
+    /// SEO <title>; storefront falls back to a name-based default when unset.
+    pub meta_title: Option<String>,
+    /// SEO meta description; storefront falls back to a description-based default when unset.
+    pub meta_description: Option<String>,
 }
 
 #[graphql_object]
@@ -100,6 +104,14 @@ impl Product {
         &self.product_status_id
     }
 
+    async fn meta_title(&self) -> &Option<String> {
+        &self.meta_title
+    }
+
+    async fn meta_description(&self) -> &Option<String> {
+        &self.meta_description
+    }
+
     async fn category_details(&self) -> FieldResult<Vec<Category>> {
         crate::resolvers::category::handlers::search_category(SearchCategory {
             category_id: self.category_id.as_ref().map(|val| val.to_string()),
@@ -162,6 +174,8 @@ pub struct NewProduct {
     pub has_blouse_piece: Option<bool>,
     pub care_instructions: Option<String>,
     pub product_status_id: Option<String>,
+    pub meta_title: Option<String>,
+    pub meta_description: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, GraphQLInputObject)]
@@ -213,4 +227,39 @@ pub struct ProductMutation {
     pub has_blouse_piece: Option<bool>,
     pub care_instructions: Option<String>,
     pub product_status_id: Option<String>,
+    pub meta_title: Option<String>,
+    pub meta_description: Option<String>,
+}
+
+/// Result of permanentlyDeleteProduct — distinct from the returned `Product` shape of
+/// `deleteProduct` since this reports what was actually purged, not the (now-gone) product.
+#[derive(Default, Debug, Clone)]
+pub struct PermanentlyDeleteProductResult {
+    pub product_id: String,
+    pub name: String,
+    pub variants_deleted: String,
+    pub images_deleted: String,
+    /// Count of images whose R2 object couldn't be deleted — the product is fully gone from
+    /// the DB regardless; this is a storage-hygiene signal only, never a failure indicator.
+    pub images_purge_failed: String,
+}
+
+#[graphql_object]
+#[graphql(description = "Outcome of permanently deleting a product")]
+impl PermanentlyDeleteProductResult {
+    async fn product_id(&self) -> &String {
+        &self.product_id
+    }
+    async fn name(&self) -> &String {
+        &self.name
+    }
+    async fn variants_deleted(&self) -> &String {
+        &self.variants_deleted
+    }
+    async fn images_deleted(&self) -> &String {
+        &self.images_deleted
+    }
+    async fn images_purge_failed(&self) -> &String {
+        &self.images_purge_failed
+    }
 }

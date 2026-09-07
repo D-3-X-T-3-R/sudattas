@@ -33,11 +33,11 @@ export interface ProductRow {
   name: string;
 }
 
-const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { categoryId name } }`;
+const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { categoryId name exchangeEligible } }`;
 const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
-    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
+    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId metaTitle metaDescription
     images { imageId thumbnailUrl url }
     variantStock { variantId sizeId sizeName quantity }
   }
@@ -46,9 +46,9 @@ const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
 const PRODUCT_BY_ID_QUERY = `query ProductById($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
-    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
+    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId metaTitle metaDescription
     images { imageId thumbnailUrl url }
-    variantStock { sizeId sizeName quantity }
+    variantStock { variantId sizeId sizeName quantity }
   }
 }`;
 

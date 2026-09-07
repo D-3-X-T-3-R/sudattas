@@ -4,6 +4,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -710,6 +711,8 @@ type ProfileAuthenticatedContentProps = {
   displayName: string;
   displayEmail: string;
   loginMethodLabel: string;
+  /** Same data already loaded to populate this page — reused for the "Download my data" export, not a fresh fetch. */
+  accountProfile: AccountProfileRow | null;
   error: string | null;
   loadingData: boolean;
   addresses: ShippingAddressRow[];
@@ -740,6 +743,7 @@ export function ProfileAuthenticatedContent({
   displayName,
   displayEmail,
   loginMethodLabel,
+  accountProfile,
   error,
   loadingData,
   addresses,
@@ -965,6 +969,19 @@ export function ProfileAuthenticatedContent({
     ].filter(Boolean);
     return `mailto:sudattasdesignerboutique@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
   }, [displayEmail, displayName, supportCategory, supportFiles, supportMessage, supportOrderId]);
+
+  const handleDownloadMyData = useCallback(() => {
+    if (!accountProfile) return;
+    const blob = new Blob([JSON.stringify(accountProfile, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sudattas-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [accountProfile]);
 
   const navItems: { id: ProfileNavId; label: string; Icon: SidebarIconComponent }[] = [
     { id: "profile", label: "Profile", Icon: UserIcon },
@@ -1654,6 +1671,22 @@ export function ProfileAuthenticatedContent({
               </p>
               <Button type="button" onClick={onSignOut} className="mt-6">
                 Sign out everywhere on this device
+              </Button>
+            </AccountCard>
+            <AccountCard>
+              <Kicker>Your data</Kicker>
+              <p className="mt-3 text-sm leading-relaxed text-[var(--color-muted)]">
+                Download a copy of the personal information we hold for your account &mdash; name,
+                email, phone, address, and date of birth &mdash; as a JSON file.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDownloadMyData}
+                disabled={!accountProfile}
+                className="mt-6"
+              >
+                Download my data
               </Button>
             </AccountCard>
           </div>

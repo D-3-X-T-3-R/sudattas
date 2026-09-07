@@ -29,6 +29,14 @@ RUN cargo build --release --package core_operations
 # Start another stage (trixie has glibc 2.38+; bookworm has 2.36 and is too old for rust:slim-built binary)
 FROM debian:trixie-slim as core-operations-runner
 
+# rustls-based TLS clients that use the OS's native root store (e.g. the AWS SDK's default S3
+# client, used for R2 image uploads/deletes) find zero trusted CAs without this — every such
+# connection fails TLS validation with "invalid peer certificate: UnknownIssuer", even though
+# reqwest-based calls elsewhere (Razorpay, Shiprocket, Resend) keep working fine, since those
+# bundle their own root store (webpki-roots) instead of relying on the OS's.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set environment variables for core-operations-runner
 ENV GRPC_SERVER=0.0.0.0:50051
 

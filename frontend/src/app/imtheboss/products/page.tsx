@@ -7,6 +7,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { gqlAdmin } from "@/lib/graphqlAdmin";
 import { adminProductFormSchema } from "@/lib/schemas";
 import {
+  BACKEND_MAX_META_TITLE_LEN,
+  BACKEND_MAX_META_DESCRIPTION_LEN,
+} from "@/lib/validation-schemas";
+import {
   fetchCategories,
   fetchProductsList,
   fetchProductById,
@@ -18,6 +22,12 @@ import {
   searchProductMoods,
   searchProductMoodMappingsByProduct,
   createProductMood,
+  updateProductMood,
+  deleteProductMood,
+  archiveProduct,
+  activateProduct,
+  permanentlyDeleteProduct,
+  moveProductImageToProduct,
   createProductVariant,
   updateProductVariant,
   deleteProductVariant,
@@ -45,11 +55,18 @@ import { ProductsFiltersCard } from "@/domains/admin/products/components/product
 import { ProductsGridCard } from "@/domains/admin/products/components/products-grid-card";
 import { ProductPreviewDialog } from "@/domains/admin/products/components/product-preview-dialog";
 import { ArchiveProductDialog } from "@/domains/admin/products/components/archive-product-dialog";
+import { PermanentlyDeleteProductDialog } from "@/domains/admin/products/components/permanently-delete-product-dialog";
+import { DeleteCategoryDialog } from "@/domains/admin/products/components/delete-category-dialog";
+import { MoveImageDialog } from "@/domains/admin/products/components/move-image-dialog";
+import { DeleteEntityDialog } from "@/components/admin/delete-entity-dialog";
 import {
   ProductImagesDialogs,
   type AdminReorderableImage,
 } from "@/domains/admin/products/components/product-images-dialogs";
-import { ProductVariantsSection } from "@/domains/admin/products/components/product-variants-section";
+import {
+  ProductVariantsSection,
+  findDuplicateVariantIndexes,
+} from "@/domains/admin/products/components/product-variants-section";
 import { ProductMoodsSection } from "@/domains/admin/products/components/product-moods-section";
 import { ProductImagesSection } from "@/domains/admin/products/components/product-images-section";
 import { ProductFormPreview } from "@/domains/admin/products/components/product-form-preview";
@@ -57,7 +74,7 @@ import { AdminPageShell } from "@/components/admin/admin-page-shell";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
-import { Pencil, Package, Plus } from "lucide-react";
+import { Pencil, Package, Plus, Trash2 } from "lucide-react";
 import {
   MAX_MONEY_PAISE,
   optionalRupeesInputToPaise,
@@ -80,6 +97,8 @@ type ProductFormState = {
   hasBlousePiece: boolean;
   careInstructions: string;
   productStatusId: string;
+  metaTitle: string;
+  metaDescription: string;
 };
 
 const DRAFT_KEY = "sudattas_admin_product_draft";
@@ -98,6 +117,8 @@ const SECTION_FOR_FIELD: Partial<Record<keyof ProductFormState, FormSection>> = 
   occasion: "details",
   careInstructions: "details",
   productStatusId: "details",
+  metaTitle: "details",
+  metaDescription: "details",
 };
 
 /** Derive a URL-safe slug from a product name (lowercase, hyphenated, no repeats). */
@@ -249,6 +270,27 @@ export default function AdminProductsPage() {
     },
     onError: (err: Error) => setMoodCreateError(err.message || "Failed to create mood"),
   });
+  const updateMoodMutation = useMutation({
+    mutationFn: ({ moodId, moodName }: { moodId: string; moodName: string }) =>
+      updateProductMood(moodId, moodName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "productMoods"] });
+      setEditingMoodId(null);
+      setEditingMoodName("");
+      setMoodManageError("");
+    },
+    onError: (err: Error) => setMoodManageError(err.message || "Failed to rename mood."),
+  });
+  const deleteMoodMutation = useMutation({
+    mutationFn: (moodId: string) => deleteProductMood(moodId),
+    onSuccess: (_data, moodId) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "productMoods"] });
+      setSelectedMoodIds((prev) => prev.filter((id) => id !== moodId));
+      setDeleteMoodConfirm(null);
+      setDeleteMoodError("");
+    },
+    onError: (err: Error) => setDeleteMoodError(err.message || "Failed to delete mood."),
+  });
 
   const { data: fabrics = [] } = useQuery<FabricRow[], Error>({
     queryKey: ["admin", "fabrics"],
@@ -256,6 +298,8 @@ export default function AdminProductsPage() {
   });
 
   const [archiveConfirm, setArchiveConfirm] = useState<ProductListRow | null>(null);
+  const [permanentDeleteConfirm, setPermanentDeleteConfirm] = useState<ProductListRow | null>(null);
+  const [permanentDeleteError, setPermanentDeleteError] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ProductListRow | null>(null);
 
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -273,20 +317,35 @@ export default function AdminProductsPage() {
     occasion: "",
     hasBlousePiece: true,
     careInstructions: "",
-    productStatusId: "",
+    productStatusId: "2",
+    metaTitle: "",
+    metaDescription: "",
   });
   const [variants, setVariants] = useState<AdminProductVariantRow[]>([]);
   const [selectedMoodIds, setSelectedMoodIds] = useState<string[]>([]);
   const [newMoodName, setNewMoodName] = useState("");
   const [moodCreateError, setMoodCreateError] = useState("");
+  const [editingMoodId, setEditingMoodId] = useState<string | null>(null);
+  const [editingMoodName, setEditingMoodName] = useState("");
+  const [moodManageError, setMoodManageError] = useState("");
+  const [deleteMoodConfirm, setDeleteMoodConfirm] = useState<ProductMoodRow | null>(null);
+  const [deleteMoodError, setDeleteMoodError] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryError, setCategoryError] = useState("");
+  const [showManageCategories, setShowManageCategories] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState("");
+  const [categoryManageError, setCategoryManageError] = useState("");
+  const [deleteCategoryConfirm, setDeleteCategoryConfirm] = useState<CategoryRow | null>(null);
+  const [deleteCategoryError, setDeleteCategoryError] = useState("");
   const [activeSection, setActiveSection] = useState<FormSection>("basics");
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProductFormState, string>>>({});
   const [slugTouched, setSlugTouched] = useState(false);
+  const [metaTitleTouched, setMetaTitleTouched] = useState(false);
+  const [metaDescriptionTouched, setMetaDescriptionTouched] = useState(false);
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -295,6 +354,25 @@ export default function AdminProductsPage() {
   const [imageError, setImageError] = useState("");
   const [imageMessage, setImageMessage] = useState("");
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [moveImageTarget, setMoveImageTarget] = useState<ProductImageListItem | null>(null);
+  const [moveImageError, setMoveImageError] = useState("");
+  const moveImageMutation = useMutation({
+    mutationFn: (targetProductId: string) => {
+      if (!moveImageTarget?.imageId) throw new Error("No image selected.");
+      return moveProductImageToProduct(moveImageTarget.imageId, targetProductId);
+    },
+    onSuccess: () => {
+      const moved = moveImageTarget;
+      setExistingProductImages((prev) =>
+        prev.filter((im) => im.imageId !== moved?.imageId)
+      );
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      setMoveImageTarget(null);
+      setMoveImageError("");
+      showToast({ title: "Product images", description: "Image moved to the other product." });
+    },
+    onError: (err: Error) => setMoveImageError(err.message || "Failed to move image."),
+  });
   /** When editing, image IDs that were present when we opened edit (so we can delete removed ones on Update). */
   const [initialExistingImageIdsWhenEdit, setInitialExistingImageIdsWhenEdit] = useState<string[]>([]);
   const [initialVariantIdsWhenEdit, setInitialVariantIdsWhenEdit] = useState<string[]>([]);
@@ -361,6 +439,97 @@ export default function AdminProductsPage() {
     onError: (err: Error) => setCategoryError(err.message || "Failed to create category."),
   });
 
+  const updateCategoryMutation = useMutation({
+    mutationFn: async ({ categoryId, name }: { categoryId: string; name: string }) => {
+      const data = await gqlAdmin<{ updateCategory?: Array<{ categoryId: string; name: string }> }>(
+        `mutation UpdateCategory($category: CategoryMutation!) {
+          updateCategory(category: $category) { categoryId name }
+        }`,
+        { category: { categoryId, name: name.trim() } }
+      );
+      return data?.updateCategory?.[0];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+      setEditingCategoryId(null);
+      setEditingCategoryName("");
+      setCategoryManageError("");
+      showToast({ title: "Category", description: "Category renamed." });
+    },
+    onError: (err: Error) => setCategoryManageError(err.message || "Failed to rename category."),
+  });
+
+  const toggleExchangeEligibleMutation = useMutation({
+    mutationFn: async ({
+      categoryId,
+      exchangeEligible,
+    }: {
+      categoryId: string;
+      exchangeEligible: boolean;
+    }) => {
+      const currentName = categories.find((c) => c.categoryId === categoryId)?.name ?? "";
+      const data = await gqlAdmin<{
+        updateCategory?: Array<{ categoryId: string; name: string; exchangeEligible: boolean }>;
+      }>(
+        `mutation UpdateCategoryExchangeEligible($category: CategoryMutation!) {
+          updateCategory(category: $category) { categoryId name exchangeEligible }
+        }`,
+        { category: { categoryId, name: currentName, exchangeEligible } }
+      );
+      return data?.updateCategory?.[0];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+    },
+    onError: (err: Error) =>
+      setCategoryManageError(err.message || "Failed to update exchange eligibility."),
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (categoryId: string) => {
+      const data = await gqlAdmin<{ deleteCategory?: Array<{ categoryId: string; name: string }> }>(
+        `mutation DeleteCategory($categoryId: String!) {
+          deleteCategory(categoryId: $categoryId) { categoryId name }
+        }`,
+        { categoryId }
+      );
+      return data?.deleteCategory?.[0];
+    },
+    onSuccess: (deleted) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+      setDeleteCategoryConfirm(null);
+      setDeleteCategoryError("");
+      showToast({
+        title: "Category",
+        description: deleted?.name ? `"${deleted.name}" deleted.` : "Category deleted.",
+      });
+    },
+    onError: (err: Error) =>
+      setDeleteCategoryError(err.message || "Failed to delete category."),
+  });
+
+  const beginEditCategory = (c: CategoryRow) => {
+    setEditingCategoryId(c.categoryId);
+    setEditingCategoryName(c.name);
+    setCategoryManageError("");
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName("");
+    setCategoryManageError("");
+  };
+
+  const handleSaveCategoryRename = () => {
+    if (!editingCategoryId) return;
+    const name = editingCategoryName.trim();
+    if (!name) {
+      setCategoryManageError("Category name is required.");
+      return;
+    }
+    updateCategoryMutation.mutate({ categoryId: editingCategoryId, name });
+  };
+
   const createProductMutation = useMutation({
     mutationFn: async (payload: {
       name: string;
@@ -376,6 +545,8 @@ export default function AdminProductsPage() {
       hasBlousePiece?: boolean;
       careInstructions?: string;
       productStatusId?: string;
+      metaTitle?: string;
+      metaDescription?: string;
     }) => {
       const product: Record<string, unknown> = {
         name: payload.name,
@@ -392,6 +563,8 @@ export default function AdminProductsPage() {
       if (payload.hasBlousePiece !== undefined) product.hasBlousePiece = payload.hasBlousePiece;
       if (payload.careInstructions?.trim()) product.careInstructions = payload.careInstructions.trim();
       if (payload.productStatusId?.trim()) product.productStatusId = payload.productStatusId.trim();
+      if (payload.metaTitle?.trim()) product.metaTitle = payload.metaTitle.trim();
+      if (payload.metaDescription?.trim()) product.metaDescription = payload.metaDescription.trim();
       const data = await gqlAdmin<{ createProduct?: Array<{ productId: string; name: string; formatted?: string }> }>(
         `mutation CreateProduct($product: NewProduct!) {
           createProduct(product: $product) { productId name formatted }
@@ -411,21 +584,33 @@ export default function AdminProductsPage() {
         description: "Product created.",
       });
       if (created?.productId) {
-        if (imageFiles.length > 0) {
-          imageFiles.forEach((file, index) => {
-            uploadImageMutation.mutate({
-              file,
+        const failures: string[] = [];
+
+        // Upload images — awaited (via mutateAsync, not fire-and-forget mutate) so the grid
+        // refetch below actually happens after they land, and so a failure here is caught
+        // instead of vanishing silently.
+        for (let index = 0; index < imageFiles.length; index += 1) {
+          try {
+            await uploadImageMutation.mutateAsync({
+              file: imageFiles[index],
               productId: created.productId,
               order: index,
             });
-          });
+          } catch (err) {
+            console.error("Failed to upload image:", err);
+            failures.push(`image "${imageFiles[index].name}"`);
+          }
         }
         // Create variants and inventory
         for (const v of variants) {
           try {
             const sizeId = v.sizeId?.trim() || undefined;
             const colorId = v.colorId?.trim() || undefined;
-            const additionalPricePaise = v.additionalPricePaise?.trim() || undefined;
+            // The field holds what the admin typed in rupees; convert to paise only here, at the
+            // GraphQL boundary — never ask the admin to type or read raw paise.
+            const additionalPricePaise = v.additionalPricePaise?.trim()
+              ? String(rupeesInputToPaise(v.additionalPricePaise.trim()))
+              : undefined;
             const variant = await createProductVariant({
               productId: created.productId,
               sizeId: sizeId || undefined,
@@ -441,6 +626,7 @@ export default function AdminProductsPage() {
             }
           } catch (err) {
             console.error("Failed to create variant/inventory:", err);
+            failures.push("a size/stock variant");
           }
         }
         // Link moods
@@ -450,10 +636,23 @@ export default function AdminProductsPage() {
             await createProductMoodMapping(created.productId, moodId.trim());
           } catch (err) {
             console.error("Failed to link mood:", err);
+            failures.push("a mood tag");
           }
         }
         setVariants([]);
         setSelectedMoodIds([]);
+
+        if (failures.length > 0) {
+          showToast({
+            title: "Product created, but incomplete",
+            description: `"${created.name}" was created, but failed to save: ${failures.join(", ")}. Edit the product to retry.`,
+          });
+        }
+
+        // The product row above was created before its images/variants existed, so refetch now
+        // that they're in — otherwise the grid keeps showing the bare row (no image, "Stock: -")
+        // until something else happens to trigger a refetch.
+        await queryClient.refetchQueries({ queryKey: ["admin", "products"] });
       }
       setForm((prev) => ({
         ...prev,
@@ -469,7 +668,9 @@ export default function AdminProductsPage() {
         occasion: "",
         hasBlousePiece: true,
         careInstructions: "",
-        productStatusId: "",
+        productStatusId: "2",
+        metaTitle: "",
+        metaDescription: "",
       }));
       setError("");
       if (typeof window !== "undefined") {
@@ -500,6 +701,8 @@ export default function AdminProductsPage() {
       hasBlousePiece?: boolean;
       careInstructions?: string;
       productStatusId?: string;
+      metaTitle?: string;
+      metaDescription?: string;
       selectedMoodIds?: string[];
       variants?: AdminProductVariantRow[];
       initialVariantIdsWhenEdit?: string[];
@@ -523,6 +726,8 @@ export default function AdminProductsPage() {
       if (payload.hasBlousePiece !== undefined) product.hasBlousePiece = payload.hasBlousePiece;
       if (payload.careInstructions?.trim()) product.careInstructions = payload.careInstructions.trim();
       if (payload.productStatusId?.trim()) product.productStatusId = payload.productStatusId.trim();
+      if (payload.metaTitle?.trim()) product.metaTitle = payload.metaTitle.trim();
+      if (payload.metaDescription?.trim()) product.metaDescription = payload.metaDescription.trim();
 
       const data = await gqlAdmin<{ updateProduct?: Array<{ productId: string; name: string; formatted?: string }> }>(
         `mutation UpdateProduct($product: ProductMutation!) {
@@ -531,7 +736,13 @@ export default function AdminProductsPage() {
         { product }
       );
       const updated = data?.updateProduct?.[0];
-      if (!updated?.productId) return updated ?? null;
+      if (!updated?.productId) return updated ? { ...updated, failures: [] } : null;
+
+      // Collected instead of only console.error'd — a failure here used to be completely
+      // invisible: the toast still said "Product updated" while the DB silently diverged from
+      // what the form showed (e.g. a "kept" variant row failing to update in place). Surfaced
+      // to the admin in onSuccess below.
+      const failures: string[] = [];
 
       // Sync mood mappings to match selectedMoodIds
       const selected = new Set((payload.selectedMoodIds ?? []).map((id) => id?.trim()).filter(Boolean));
@@ -544,6 +755,7 @@ export default function AdminProductsPage() {
             await createProductMoodMapping(updated.productId, moodId);
           } catch (err) {
             console.error("Failed to add mood mapping:", err);
+            failures.push("adding a mood tag");
           }
         }
       }
@@ -553,6 +765,7 @@ export default function AdminProductsPage() {
             await deleteProductMoodMapping(updated.productId, m.moodId);
           } catch (err) {
             console.error("Failed to remove mood mapping:", err);
+            failures.push("removing a mood tag");
           }
         }
       }
@@ -561,10 +774,14 @@ export default function AdminProductsPage() {
       const incomingVariants = payload.variants ?? [];
       const keptVariantIds = new Set<string>();
       for (const v of incomingVariants) {
+        const rowLabel = v.sizeId?.trim() ? `size id ${v.sizeId.trim()}` : "an unlabeled size row";
         try {
           const sizeId = v.sizeId?.trim() || undefined;
           const colorId = v.colorId?.trim() || undefined;
-          const additionalPricePaise = v.additionalPricePaise?.trim() || undefined;
+          // See the create path above: field holds rupees as typed, converted to paise here only.
+          const additionalPricePaise = v.additionalPricePaise?.trim()
+            ? String(rupeesInputToPaise(v.additionalPricePaise.trim()))
+            : undefined;
           const quantityAvailable = (v.quantityAvailable?.trim() || "0").replace(/^$/, "0");
           const reorderLevel = v.reorderLevel?.trim() || undefined;
 
@@ -577,16 +794,29 @@ export default function AdminProductsPage() {
               additionalPricePaise,
             });
             variantId = createdVariant?.variantId ?? "";
+            if (!variantId) {
+              failures.push(`creating a new variant (${rowLabel})`);
+              continue;
+            }
           } else {
-            await updateProductVariant({
-              variantId,
-              productId: updated.productId,
-              sizeId,
-              colorId,
-              additionalPricePaise,
-            });
+            try {
+              await updateProductVariant({
+                variantId,
+                productId: updated.productId,
+                sizeId,
+                colorId,
+                additionalPricePaise,
+              });
+            } catch (err) {
+              console.error("Failed to update existing variant:", err);
+              failures.push(`updating existing variant #${variantId} (${rowLabel})`);
+              // Still mark it "kept" — the row wasn't actually removed from the product, and
+              // failing to do so would make the cleanup loop below delete it outright on top
+              // of the update failure.
+              keptVariantIds.add(variantId);
+              continue;
+            }
           }
-          if (!variantId) continue;
           keptVariantIds.add(variantId);
 
           const inventoryRows = await searchInventoryByVariantId(variantId);
@@ -605,6 +835,7 @@ export default function AdminProductsPage() {
           }
         } catch (err) {
           console.error("Failed to sync variant/inventory:", err);
+          failures.push(`saving stock for ${rowLabel}`);
         }
       }
       // Delete variants removed from the edit form
@@ -614,11 +845,12 @@ export default function AdminProductsPage() {
             await deleteProductVariant(oldVariantId);
           } catch (err) {
             console.error("Failed to delete removed variant:", err);
+            failures.push(`removing old variant #${oldVariantId}`);
           }
         }
       }
 
-      return updated;
+      return { ...updated, failures };
     },
     onSuccess: async (updated) => {
       try {
@@ -627,6 +859,13 @@ export default function AdminProductsPage() {
           : "Product updated.";
         setMessage(successText);
         showToast({ title: "Product updated", description: successText });
+        const syncFailures = updated?.failures ?? [];
+        if (syncFailures.length > 0) {
+          showToast({
+            title: "Product updated, but incomplete",
+            description: `Some changes did not save: ${syncFailures.join("; ")}. Reopen the product to check its current sizes/stock and try again.`,
+          });
+        }
         // Sync product images: update order for kept, bulk insert new, delete removed (1 row per image)
         setIsUpdateReflecting(true);
         const productId = updated?.productId;
@@ -643,29 +882,37 @@ export default function AdminProductsPage() {
                 const item = orderedProductImages[i];
                 if (item.type !== "new") continue;
                 const file = item.file;
-                const presigned = await gqlAdmin<{
-                  getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
-                }>(
-                  `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
-                    getPresignedUploadUrl(input: $input) { uploadUrl key }
-                  }`,
-                  {
-                    input: {
-                      productId,
-                      filename: file.name,
-                      contentType: file.type || "application/octet-stream",
-                      displayOrder: i,
-                    },
-                  }
-                );
-                const info = presigned.getPresignedUploadUrl?.[0];
-                if (!info) throw new Error("Did not receive upload URL.");
-                await fetch(info.uploadUrl, {
-                  method: "PUT",
-                  headers: { "Content-Type": file.type || "application/octet-stream" },
-                  body: file,
-                });
-                newKeys.push(info.key);
+                try {
+                  const presigned = await gqlAdmin<{
+                    getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
+                  }>(
+                    `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
+                      getPresignedUploadUrl(input: $input) { uploadUrl key }
+                    }`,
+                    {
+                      input: {
+                        productId,
+                        filename: file.name,
+                        contentType: file.type || "application/octet-stream",
+                        displayOrder: i,
+                      },
+                    }
+                  );
+                  const info = presigned.getPresignedUploadUrl?.[0];
+                  if (!info) throw new Error("Did not receive upload URL.");
+                  await fetch(info.uploadUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type || "application/octet-stream" },
+                    body: file,
+                  });
+                  newKeys.push(info.key);
+                } catch (uploadErr) {
+                  const reason =
+                    uploadErr instanceof Error ? uploadErr.message : "upload failed";
+                  throw new Error(
+                    `Image "${file.name}" (${newKeys.length + 1} of the new images) failed to upload: ${reason}. Product images were not changed — remove or replace this file and try again.`
+                  );
+                }
               }
               let newIndex = 0;
               items = orderedProductImages.map((item) =>
@@ -678,29 +925,37 @@ export default function AdminProductsPage() {
               const newKeys: string[] = [];
               for (let i = 0; i < imageFiles.length; i++) {
                 const file = imageFiles[i];
-                const presigned = await gqlAdmin<{
-                  getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
-                }>(
-                  `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
-                    getPresignedUploadUrl(input: $input) { uploadUrl key }
-                  }`,
-                  {
-                    input: {
-                      productId,
-                      filename: file.name,
-                      contentType: file.type || "application/octet-stream",
-                      displayOrder: i,
-                    },
-                  }
-                );
-                const info = presigned.getPresignedUploadUrl?.[0];
-                if (!info) throw new Error("Did not receive upload URL.");
-                await fetch(info.uploadUrl, {
-                  method: "PUT",
-                  headers: { "Content-Type": file.type || "application/octet-stream" },
-                  body: file,
-                });
-                newKeys.push(info.key);
+                try {
+                  const presigned = await gqlAdmin<{
+                    getPresignedUploadUrl?: Array<{ uploadUrl: string; key: string }>;
+                  }>(
+                    `query GetPresignedUploadUrl($input: GetPresignedUploadUrl!) {
+                      getPresignedUploadUrl(input: $input) { uploadUrl key }
+                    }`,
+                    {
+                      input: {
+                        productId,
+                        filename: file.name,
+                        contentType: file.type || "application/octet-stream",
+                        displayOrder: i,
+                      },
+                    }
+                  );
+                  const info = presigned.getPresignedUploadUrl?.[0];
+                  if (!info) throw new Error("Did not receive upload URL.");
+                  await fetch(info.uploadUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type || "application/octet-stream" },
+                    body: file,
+                  });
+                  newKeys.push(info.key);
+                } catch (uploadErr) {
+                  const reason =
+                    uploadErr instanceof Error ? uploadErr.message : "upload failed";
+                  throw new Error(
+                    `Image "${file.name}" (${newKeys.length + 1} of ${imageFiles.length} new images) failed to upload: ${reason}. Product images were not changed — remove or replace this file and try again.`
+                  );
+                }
               }
               const existingItems = existingProductImages.map((im) => ({
                 imageId: im.imageId ?? undefined,
@@ -784,12 +1039,34 @@ export default function AdminProductsPage() {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     if (name === "slug") setSlugTouched(true);
+    if (name === "metaTitle") setMetaTitleTouched(true);
+    if (name === "metaDescription") setMetaDescriptionTouched(true);
     setForm((prev) => {
       const next = { ...prev, [name]: type === "checkbox" ? checked : value };
       if (name === "name" && !slugTouched) {
         next.slug = slugify(value);
       }
-      if (typeof window !== "undefined") {
+      // Autofill SEO title/description with the same defaults the storefront falls back to
+      // when they're left blank — gives the admin real, editable text instead of a blank field
+      // plus a placeholder. Stops following once the admin edits the SEO field itself.
+      if (name === "name" && !metaTitleTouched) {
+        next.metaTitle = value
+          ? `${value} | Sudatta's Designer Boutique`.slice(0, BACKEND_MAX_META_TITLE_LEN)
+          : "";
+      }
+      if ((name === "name" || name === "description") && !metaDescriptionTouched) {
+        const baseDescription = next.description.trim();
+        next.metaDescription = baseDescription
+          ? baseDescription.slice(0, BACKEND_MAX_META_DESCRIPTION_LEN)
+          : next.name
+            ? `Buy ${next.name} online from Sudatta's.`.slice(0, BACKEND_MAX_META_DESCRIPTION_LEN)
+            : "";
+      }
+      // Draft persistence is only for an in-progress new product — while editing an existing
+      // one, `next` is that product's own real data, and there's no successful-edit hook that
+      // clears this key, so writing here would leave it sitting in sessionStorage and silently
+      // resurface as the "Add product" form's contents next time that tab is opened.
+      if (typeof window !== "undefined" && !editingProductId) {
         window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next));
       }
       return next;
@@ -844,8 +1121,22 @@ export default function AdminProductsPage() {
       setActiveSection(firstSection ?? "basics");
       return;
     }
-    const { name, description, priceRupees, categoryId, sku, slug, fabric, weave, occasion, hasBlousePiece, careInstructions, productStatusId } =
-      parsed.data;
+    const {
+      name,
+      description,
+      priceRupees,
+      categoryId,
+      sku,
+      slug,
+      fabric,
+      weave,
+      occasion,
+      hasBlousePiece,
+      careInstructions,
+      productStatusId,
+      metaTitle,
+      metaDescription,
+    } = parsed.data;
     const pricePaise = rupeesInputToPaise(priceRupees || "0");
     if (pricePaise <= 0) {
       setActiveSection("basics");
@@ -874,6 +1165,11 @@ export default function AdminProductsPage() {
       setError("Each variant must have a size and non-negative stock quantity.");
       return;
     }
+    if (findDuplicateVariantIndexes(variants).size > 0) {
+      setActiveSection("stock");
+      setError("Remove or change duplicate size/color combinations before saving.");
+      return;
+    }
     if (editingProductId) {
       updateProductMutation.mutate({
         productId: editingProductId,
@@ -889,6 +1185,8 @@ export default function AdminProductsPage() {
         hasBlousePiece,
         careInstructions: careInstructions || undefined,
         productStatusId: productStatusId || undefined,
+        metaTitle: metaTitle || undefined,
+        metaDescription: metaDescription || undefined,
         selectedMoodIds,
         variants,
         initialVariantIdsWhenEdit,
@@ -910,6 +1208,8 @@ export default function AdminProductsPage() {
         hasBlousePiece,
         careInstructions: careInstructions || undefined,
         productStatusId: productStatusId || undefined,
+        metaTitle: metaTitle || undefined,
+        metaDescription: metaDescription || undefined,
       });
     }
   };
@@ -1015,31 +1315,53 @@ export default function AdminProductsPage() {
     setAppliedSearch({ limit: "20" });
   };
 
+  const archiveProductMutation = useMutation({
+    mutationFn: (productId: string) => archiveProduct(productId),
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["admin", "products"] });
+      const name = archiveConfirm?.name ?? "Product";
+      setMessage(`${name} archived.`);
+      showToast({ title: "Product archived", description: name });
+      setArchiveConfirm(null);
+    },
+    onError: (err: Error) => setError(err.message || "Failed to archive product."),
+  });
+
   const handleArchiveConfirm = () => {
     if (!archiveConfirm) return;
-    const pricePaise = parseInt(archiveConfirm.amountPaise ?? "0", 10) || 0;
-    updateProductMutation.mutate(
-      {
-        productId: archiveConfirm.productId,
-        name: archiveConfirm.name,
-        description: archiveConfirm.description ?? "",
-        pricePaise,
-        categoryId: archiveConfirm.categoryId ?? "",
-        sku: archiveConfirm.sku ?? undefined,
-        slug: archiveConfirm.slug ?? undefined,
-        fabric: archiveConfirm.fabric ?? undefined,
-        weave: archiveConfirm.weave ?? undefined,
-        occasion: archiveConfirm.occasion ?? undefined,
-        hasBlousePiece: archiveConfirm.hasBlousePiece ?? undefined,
-        careInstructions: archiveConfirm.careInstructions ?? undefined,
-        productStatusId: "3",
-      },
-      {
-        onSettled: () => setArchiveConfirm(null),
-        onSuccess: () => setMessage(`${archiveConfirm.name} archived.`),
-      }
-    );
+    archiveProductMutation.mutate(archiveConfirm.productId);
   };
+
+  // No confirmation dialog — reactivating a hidden product back to visible is the low-risk,
+  // easily-reversible direction (archive is the one that needs a confirm step).
+  const activateProductMutation = useMutation({
+    mutationFn: (product: ProductListRow) => activateProduct(product.productId),
+    onSuccess: async (_data, product) => {
+      await queryClient.refetchQueries({ queryKey: ["admin", "products"] });
+      setMessage(`${product.name} activated.`);
+      showToast({ title: "Product activated", description: product.name });
+    },
+    onError: (err: Error) => setError(err.message || "Failed to activate product."),
+  });
+
+  const permanentlyDeleteMutation = useMutation({
+    mutationFn: (productId: string) => permanentlyDeleteProduct(productId),
+    onSuccess: (result) => {
+      void refetchProducts();
+      setPermanentDeleteConfirm(null);
+      setPermanentDeleteError("");
+      const imageNote =
+        result.imagesPurgeFailed !== "0"
+          ? ` (${result.imagesPurgeFailed} image(s) could not be purged from storage — safe to ignore, just leftover storage cost)`
+          : "";
+      setMessage(
+        `${result.name} permanently deleted — ${result.variantsDeleted} variant(s) and ${result.imagesDeleted} image(s) removed${imageNote}.`
+      );
+      showToast({ title: "Product permanently deleted", description: result.name });
+    },
+    onError: (err: Error) =>
+      setPermanentDeleteError(err.message || "Failed to permanently delete product."),
+  });
 
   const loadProductEditData = async (productId: string): Promise<string[]> => {
     try {
@@ -1058,6 +1380,8 @@ export default function AdminProductsPage() {
     setFieldErrors({});
     setActiveSection("basics");
     setSlugTouched(true);
+    setMetaTitleTouched(true);
+    setMetaDescriptionTouched(true);
     setMessage(`Loading product…`);
     let product: ProductListRow = p;
     let moodIds: string[] = [];
@@ -1087,6 +1411,8 @@ export default function AdminProductsPage() {
       hasBlousePiece: product.hasBlousePiece ?? true,
       careInstructions: product.careInstructions ?? "",
       productStatusId: product.productStatusId ?? "",
+      metaTitle: product.metaTitle ?? "",
+      metaDescription: product.metaDescription ?? "",
     }));
     const variantRows = (product as ProductListRowWithVariantStock).variantStock ?? [];
     setVariants(
@@ -1215,7 +1541,7 @@ export default function AdminProductsPage() {
   const totalPhotos = existingProductImages.length + imageFiles.length;
   const FORM_SECTIONS: { id: FormSection; label: string; fields: (keyof ProductFormState)[]; completion?: string }[] = [
     { id: "basics", label: "Basics", fields: ["name", "description", "priceRupees", "categoryId"] },
-    { id: "details", label: "Details", fields: ["sku", "slug", "fabric", "weave", "occasion", "careInstructions", "productStatusId"] },
+    { id: "details", label: "Details", fields: ["sku", "slug", "fabric", "weave", "occasion", "careInstructions", "productStatusId", "metaTitle", "metaDescription"] },
     { id: "stock", label: "Sizes & stock", fields: [], completion: variants.length > 0 ? `(${variants.length})` : undefined },
     { id: "moods", label: "Moods", fields: [], completion: selectedMoodIds.length > 0 ? `(${selectedMoodIds.length})` : undefined },
     { id: "photos", label: "Photos", fields: [], completion: totalPhotos > 0 ? `(${totalPhotos})` : undefined },
@@ -1253,13 +1579,43 @@ export default function AdminProductsPage() {
           onClick={() => {
             setActiveTab("add");
             setEditingProductId(null);
+            // Full reset — this button is reachable mid-edit too (not just from the products
+            // list), and previously only cleared a few auxiliary flags, leaving whatever
+            // product's fields/images/variants/moods were currently loaded still on screen.
+            setForm((prev) => ({
+              ...prev,
+              name: "",
+              description: "",
+              priceRupees: "",
+              stockQuantity: "0",
+              sku: "",
+              slug: "",
+              fabric: "",
+              weave: "",
+              occasion: "",
+              hasBlousePiece: true,
+              careInstructions: "",
+              productStatusId: "2",
+              metaTitle: "",
+              metaDescription: "",
+            }));
+            setVariants([]);
+            setSelectedMoodIds([]);
+            setImageFiles([]);
             setExistingProductImages([]);
             setOrderedProductImages(null);
             setInitialExistingImageIdsWhenEdit([]);
             setInitialVariantIdsWhenEdit([]);
+            setImageError("");
+            setImageMessage("");
             setFieldErrors({});
             setActiveSection("basics");
             setSlugTouched(false);
+            setMetaTitleTouched(false);
+            setMetaDescriptionTouched(false);
+            if (typeof window !== "undefined") {
+              window.sessionStorage.removeItem(DRAFT_KEY);
+            }
           }}
           className={cn(
             "rounded-lg px-5 py-2.5 text-[15px] font-semibold transition-colors",
@@ -1317,19 +1673,82 @@ export default function AdminProductsPage() {
             productsErrorUi={productsErrorUi}
             categoryNameById={categoryNameById}
             getThumbnail={getProductThumbnailWithCacheBuster}
+            getProductStatusLabel={getProductStatusLabel}
             onRetry={() => {
               void refetchProducts();
             }}
             onOpenProduct={setSelectedProduct}
             onEditProduct={beginEditProduct}
             onArchiveProduct={setArchiveConfirm}
+            onActivateProduct={(p) => activateProductMutation.mutate(p)}
+            onPermanentlyDeleteProduct={(p) => {
+              setPermanentDeleteError("");
+              setPermanentDeleteConfirm(p);
+            }}
           />
 
           <ArchiveProductDialog
             product={archiveConfirm}
-            isPending={updateProductMutation.isPending}
+            isPending={archiveProductMutation.isPending}
             onClose={() => setArchiveConfirm(null)}
             onConfirm={handleArchiveConfirm}
+          />
+
+          <PermanentlyDeleteProductDialog
+            product={permanentDeleteConfirm}
+            isPending={permanentlyDeleteMutation.isPending}
+            error={permanentDeleteError}
+            onClose={() => {
+              setPermanentDeleteConfirm(null);
+              setPermanentDeleteError("");
+            }}
+            onConfirm={() => {
+              if (permanentDeleteConfirm) {
+                permanentlyDeleteMutation.mutate(permanentDeleteConfirm.productId);
+              }
+            }}
+          />
+
+          <DeleteCategoryDialog
+            category={deleteCategoryConfirm}
+            isPending={deleteCategoryMutation.isPending}
+            error={deleteCategoryError}
+            onClose={() => {
+              setDeleteCategoryConfirm(null);
+              setDeleteCategoryError("");
+            }}
+            onConfirm={() => {
+              if (deleteCategoryConfirm) {
+                deleteCategoryMutation.mutate(deleteCategoryConfirm.categoryId);
+              }
+            }}
+          />
+
+          <DeleteEntityDialog
+            entity={deleteMoodConfirm ? { name: deleteMoodConfirm.moodName } : null}
+            label="mood"
+            isPending={deleteMoodMutation.isPending}
+            error={deleteMoodError}
+            warning="Products currently tagged with it will lose the tag."
+            onClose={() => {
+              setDeleteMoodConfirm(null);
+              setDeleteMoodError("");
+            }}
+            onConfirm={() => {
+              if (deleteMoodConfirm) deleteMoodMutation.mutate(deleteMoodConfirm.moodId);
+            }}
+          />
+
+          <MoveImageDialog
+            open={!!moveImageTarget}
+            isPending={moveImageMutation.isPending}
+            error={moveImageError}
+            currentProductId={editingProductId}
+            onClose={() => {
+              setMoveImageTarget(null);
+              setMoveImageError("");
+            }}
+            onConfirm={(targetProductId) => moveImageMutation.mutate(targetProductId)}
           />
 
           <ProductPreviewDialog
@@ -1527,7 +1946,7 @@ export default function AdminProductsPage() {
                     {fieldErrors.categoryId}
                   </p>
                 ) : null}
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -1539,6 +1958,18 @@ export default function AdminProductsPage() {
                   >
                     {showNewCategory ? "Cancel" : "+ Add new category"}
                   </button>
+                  {categories.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowManageCategories((s) => !s);
+                        cancelEditCategory();
+                      }}
+                      className="text-sm font-medium text-[var(--color-accent-brown)] underline focus:outline-none"
+                    >
+                      {showManageCategories ? "Hide categories" : "Manage categories"}
+                    </button>
+                  )}
                 </div>
                 {showNewCategory && (
                   <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-[var(--color-line)] p-3">
@@ -1577,6 +2008,87 @@ export default function AdminProductsPage() {
                     No categories yet. Use &quot;Add new category&quot; above to
                     create one.
                   </p>
+                )}
+                {showManageCategories && (
+                  <div className="mt-3 divide-y divide-[var(--color-line)] rounded-lg border border-[var(--color-line)]">
+                    {categories.map((c) => (
+                      <div key={c.categoryId} className="flex items-center gap-2 p-2.5">
+                        {editingCategoryId === c.categoryId ? (
+                          <>
+                            <Input
+                              value={editingCategoryName}
+                              onChange={(e) => {
+                                setEditingCategoryName(e.target.value);
+                                setCategoryManageError("");
+                              }}
+                              className="min-w-0 flex-1 rounded-lg text-[15px]"
+                              autoFocus
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleSaveCategoryRename}
+                              disabled={updateCategoryMutation.isPending}
+                              className="rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
+                            >
+                              {updateCategoryMutation.isPending ? "Saving…" : "Save"}
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={cancelEditCategory}>
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="min-w-0 flex-1 truncate text-[15px] text-[var(--color-ink)]">
+                              {c.name || `Category ${c.categoryId}`}
+                            </span>
+                            <label
+                              className="flex shrink-0 items-center gap-1.5 text-xs text-[var(--color-muted)]"
+                              title="Products in this category can be exchanged (same product, different size/colour, same price) instead of only refunded"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={!!c.exchangeEligible}
+                                onChange={(e) =>
+                                  toggleExchangeEligibleMutation.mutate({
+                                    categoryId: c.categoryId,
+                                    exchangeEligible: e.target.checked,
+                                  })
+                                }
+                                disabled={toggleExchangeEligibleMutation.isPending}
+                                className="h-3.5 w-3.5 rounded border-[var(--color-line)]"
+                              />
+                              Exchange
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => beginEditCategory(c)}
+                              aria-label={`Edit ${c.name}`}
+                              className="rounded-md p-1.5 text-[var(--color-muted)] hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-ink)]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteCategoryError("");
+                                setDeleteCategoryConfirm(c);
+                              }}
+                              aria-label={`Delete ${c.name}`}
+                              className="rounded-md p-1.5 text-[var(--color-muted)] hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                    {categoryManageError && (
+                      <p className="p-2.5 text-sm text-red-600" role="alert">
+                        {categoryManageError}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               </div>
@@ -1719,6 +2231,51 @@ export default function AdminProductsPage() {
                   <option value="3">Archived</option>
                 </select>
               </div>
+              <div className="mt-4">
+                <label htmlFor="admin-product-meta-title" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">SEO title</label>
+                <Input
+                  id="admin-product-meta-title"
+                  type="text"
+                  name="metaTitle"
+                  value={form.metaTitle}
+                  onChange={handleChange}
+                  placeholder="Optional — overrides the default page title"
+                  maxLength={BACKEND_MAX_META_TITLE_LEN}
+                  className={cn("rounded-lg text-[15px]", fieldErrors.metaTitle && "border-rose-400 focus:ring-rose-200")}
+                  aria-invalid={Boolean(fieldErrors.metaTitle)}
+                />
+                {fieldErrors.metaTitle ? (
+                  <p className="mt-1.5 text-sm text-rose-600" role="alert">{fieldErrors.metaTitle}</p>
+                ) : (
+                  <p className="mt-1.5 text-sm text-[var(--color-muted)]">
+                    {form.metaTitle.length}/{BACKEND_MAX_META_TITLE_LEN} — shown as the page title in search results. Auto-filled from the product name; edit freely, or clear to use the default.
+                  </p>
+                )}
+              </div>
+              <div className="mt-4">
+                <label htmlFor="admin-product-meta-description" className="mb-1.5 block text-[15px] font-medium text-[var(--color-ink)]">SEO description</label>
+                <textarea
+                  id="admin-product-meta-description"
+                  name="metaDescription"
+                  value={form.metaDescription}
+                  onChange={handleChange}
+                  placeholder="Optional — overrides the default meta description shown in search results"
+                  maxLength={BACKEND_MAX_META_DESCRIPTION_LEN}
+                  rows={2}
+                  className={cn(
+                    "w-full resize-y rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3 text-[15px] outline-none focus:bg-white focus:ring-2 focus:ring-[var(--color-ink)]/20",
+                    fieldErrors.metaDescription && "border-rose-400 focus:ring-rose-200"
+                  )}
+                  aria-invalid={Boolean(fieldErrors.metaDescription)}
+                />
+                {fieldErrors.metaDescription ? (
+                  <p className="mt-1.5 text-sm text-rose-600" role="alert">{fieldErrors.metaDescription}</p>
+                ) : (
+                  <p className="mt-1.5 text-sm text-[var(--color-muted)]">
+                    {form.metaDescription.length}/{BACKEND_MAX_META_DESCRIPTION_LEN} — auto-filled from the description; edit freely, or clear to use the default.
+                  </p>
+                )}
+              </div>
               </div>
 
               <div className={cn(activeSection === "stock" ? "block" : "hidden")}>
@@ -1740,6 +2297,34 @@ export default function AdminProductsPage() {
                 moodCreateError={moodCreateError}
                 setMoodCreateError={setMoodCreateError}
                 createMoodMutation={createMoodMutation}
+                editingMoodId={editingMoodId}
+                editingMoodName={editingMoodName}
+                setEditingMoodName={setEditingMoodName}
+                moodManageError={moodManageError}
+                updateMoodMutation={updateMoodMutation}
+                onBeginEditMood={(m) => {
+                  setEditingMoodId(m.moodId);
+                  setEditingMoodName(m.moodName);
+                  setMoodManageError("");
+                }}
+                onCancelEditMood={() => {
+                  setEditingMoodId(null);
+                  setEditingMoodName("");
+                  setMoodManageError("");
+                }}
+                onSaveEditMood={() => {
+                  if (!editingMoodId) return;
+                  const name = editingMoodName.trim();
+                  if (!name) {
+                    setMoodManageError("Mood name is required.");
+                    return;
+                  }
+                  updateMoodMutation.mutate({ moodId: editingMoodId, moodName: name });
+                }}
+                onRequestDeleteMood={(m) => {
+                  setDeleteMoodError("");
+                  setDeleteMoodConfirm(m);
+                }}
               />
               </div>
 
@@ -1763,6 +2348,10 @@ export default function AdminProductsPage() {
                 productImagesLoadKey={productImagesLoadKey}
                 getImageUrlWithCacheBuster={getImageUrlWithCacheBuster}
                 setExistingProductImages={setExistingProductImages}
+                onRequestMoveImage={(img) => {
+                  setMoveImageError("");
+                  setMoveImageTarget(img);
+                }}
               />
               </div>
                 </div>
@@ -1814,7 +2403,9 @@ export default function AdminProductsPage() {
                         occasion: "",
                         hasBlousePiece: true,
                         careInstructions: "",
-                        productStatusId: "",
+                        productStatusId: "2",
+                        metaTitle: "",
+                        metaDescription: "",
                       }));
                       setVariants([]);
                       setSelectedMoodIds([]);
@@ -1826,6 +2417,8 @@ export default function AdminProductsPage() {
                       setImageError("");
                       setImageMessage("");
                       setSlugTouched(false);
+                      setMetaTitleTouched(false);
+                      setMetaDescriptionTouched(false);
                       setFieldErrors({});
                       setActiveSection("basics");
                     }}

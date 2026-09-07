@@ -13,6 +13,11 @@ pub const MAX_QUANTITY_PER_ITEM: i64 = 999;
 pub const MAX_CART_ITEMS: usize = 100;
 /// Max road/address line length.
 pub const MAX_ADDRESS_LINE_LEN: usize = 500;
+/// Max length for a product's SEO meta title (matches the `Products.meta_title` column and
+/// roughly what search engines render before truncating).
+pub const MAX_META_TITLE_LEN: usize = 70;
+/// Max length for a product's SEO meta description (matches `Products.meta_description`).
+pub const MAX_META_DESCRIPTION_LEN: usize = 160;
 
 /// Validates email format (must contain @ and a dot in domain). Returns `Ok(())` or `GqlError::InvalidArgument`.
 pub fn validate_email(email: &str) -> Result<(), GqlError> {
@@ -108,6 +113,18 @@ pub fn validate_sku_slug(s: &str, label: &str) -> Result<(), GqlError> {
     Ok(())
 }
 
+/// Validates an optional free-text field against a max length (empty/absent is allowed —
+/// callers that require the field non-empty should check that separately).
+pub fn validate_max_length(s: &str, label: &str, max_len: usize) -> Result<(), GqlError> {
+    if s.len() > max_len {
+        return Err(GqlError::new(
+            &format!("{} must not exceed {} characters", label, max_len),
+            Code::InvalidArgument,
+        ));
+    }
+    Ok(())
+}
+
 /// Validates address road (required, max length).
 pub fn validate_address_road(road: &str) -> Result<(), GqlError> {
     let r = road.trim();
@@ -186,6 +203,27 @@ pub fn validate_cart_size(current_count: usize) -> Result<(), GqlError> {
     Ok(())
 }
 
+/// Minimum allowed star rating for a product review.
+pub const MIN_RATING: i32 = 1;
+/// Maximum allowed star rating for a product review.
+pub const MAX_RATING: i32 = 5;
+
+/// Validates a review rating is a whole number of stars between MIN_RATING and MAX_RATING
+/// inclusive. Mirrors the DB-level `CHECK (Rating BETWEEN 1 AND 5)` constraint on `Reviews`, but
+/// rejects out-of-range input with a clean 400 here instead of surfacing a raw DB error.
+pub fn validate_rating(rating: i32) -> Result<(), GqlError> {
+    if !(MIN_RATING..=MAX_RATING).contains(&rating) {
+        return Err(GqlError::new(
+            &format!(
+                "Rating must be between {} and {} stars",
+                MIN_RATING, MAX_RATING
+            ),
+            Code::InvalidArgument,
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,6 +259,16 @@ mod tests {
     fn sku_slug_invalid() {
         assert!(validate_sku_slug("", "sku").is_err());
         assert!(validate_sku_slug("has space", "sku").is_err());
+    }
+
+    #[test]
+    fn rating_bounds() {
+        assert!(validate_rating(1).is_ok());
+        assert!(validate_rating(5).is_ok());
+        assert!(validate_rating(3).is_ok());
+        assert!(validate_rating(0).is_err());
+        assert!(validate_rating(6).is_err());
+        assert!(validate_rating(-1).is_err());
     }
 
     #[test]

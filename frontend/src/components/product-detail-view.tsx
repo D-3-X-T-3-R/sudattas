@@ -10,6 +10,9 @@ import { Accordion } from "@/components/ui/accordion";
 import { ScrollCarousel } from "@/components/ui/carousel";
 import { Kicker, SectionHeading } from "@/components/ui/typography";
 import { ProductCard } from "@/components/product-card";
+// Reviews/ratings are disabled in the frontend for now (backend + component kept intact —
+// see product-rating-widget.tsx — re-enable by uncommenting this import and its usage below).
+// import { ProductRatingWidget } from "@/components/product-rating-widget";
 import { INR } from "@/lib/constants";
 import type { Product } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
@@ -69,7 +72,7 @@ function ProductGallery({
             onClick={() => setSelectedImageIndex(i)}
             aria-label={`View image ${i + 1} of ${images.length} for ${productName}`}
             className={cn(
-              "relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface-soft)] md:w-full",
+              "relative aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface-soft)] md:w-full",
               selectedImageIndex === i
                 ? "border-[var(--color-green)]"
                 : "border-[var(--color-line)] hover:border-[var(--color-gold)]"
@@ -87,7 +90,7 @@ function ProductGallery({
         ))}
       </div>
 
-      <div className="order-1 relative aspect-[3/4] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] shadow-[var(--shadow-soft)] md:order-2">
+      <div className="order-1 relative aspect-[2/3] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] shadow-[var(--shadow-soft)] md:order-2">
         <Image
           src={mainImage}
           alt={productName}
@@ -234,6 +237,14 @@ export function ProductDetailView({
           <p className="mt-4 font-sans text-2xl font-semibold text-[var(--color-ink)] md:text-[1.75rem]">
             {product.priceFormatted ?? INR.format(product.price)}
           </p>
+          {/* Reviews/ratings disabled in the frontend for now — see the import comment above. */}
+          {/* <div className="mt-4">
+            <ProductRatingWidget
+              productId={product.id}
+              initialAverage={product.rating}
+              initialCount={product.reviews ?? 0}
+            />
+          </div> */}
         </div>
 
         <div className="space-y-6 border-b border-[var(--color-line)] py-6">
@@ -268,14 +279,7 @@ export function ProductDetailView({
                 })}
               </div>
             </div>
-          ) : (
-            <div className="rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] p-3.5 text-sm leading-relaxed text-[var(--color-muted)]">
-              This style does not use standard size variants. Free-size drape fit can vary by fabric and silhouette.
-              <Link href="/size-fit-guide" className="ml-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-green)] hover:text-[var(--color-green-2)]">
-                View Size &amp; Fit Guide
-              </Link>
-            </div>
-          )}
+          ) : null}
 
           <div>
             <p className="text-sm font-semibold text-[var(--color-ink)]">Quantity</p>

@@ -28,11 +28,23 @@ use sea_orm::{
 };
 use tonic::Request;
 
+/// Fixture ids created by `ensure_pending_and_place_order_setup`, needed both to build the
+/// `PlaceOrderRequest` and (now that setup must be committed for place_order to see it — see
+/// the comment above each test's `txn.commit()` call) to clean the rows up afterward.
+struct CouponScenarioFixtures {
+    user_id: i64,
+    shipping_id: i64,
+    cart_id: i64,
+    role_id: i64,
+    category_id: i64,
+    variant_id: i64,
+}
+
 async fn ensure_pending_and_place_order_setup(
     txn: &sea_orm::DatabaseTransaction,
     now_tag: i64,
     cart_total_paise: i64,
-) -> (i64, i64, i64, i64) {
+) -> CouponScenarioFixtures {
     let pending = order_status::Entity::find()
         .filter(order_status::Column::StatusName.eq("pending"))
         .one(txn)
@@ -95,6 +107,7 @@ async fn ensure_pending_and_place_order_setup(
 
     let cat = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_cat_cp_{}", now_tag)),
     }
     .insert(txn)
@@ -115,6 +128,8 @@ async fn ensure_pending_and_place_order_setup(
         has_blouse_piece: ActiveValue::Set(None),
         care_instructions: ActiveValue::Set(None),
         product_status_id: ActiveValue::Set(None),
+        meta_title: ActiveValue::Set(None),
+        meta_description: ActiveValue::Set(None),
         created_at: ActiveValue::Set(Some(Utc::now())),
         updated_at: ActiveValue::Set(None),
     }
@@ -158,7 +173,134 @@ async fn ensure_pending_and_place_order_setup(
     .expect("create_cart_item");
     let cart_id = cart_res.into_inner().items[0].cart_id;
 
-    (user_id, shipping_id, cart_total_paise, cart_id)
+    CouponScenarioFixtures {
+        user_id,
+        shipping_id,
+        cart_id,
+        role_id: role.role_id,
+        category_id: cat.category_id,
+        variant_id: variant.variant_id,
+    }
+}
+
+/// Best-effort teardown of everything `ensure_pending_and_place_order_setup` committed, plus
+/// anything place_order itself persisted. Setup used to live inside the same uncommitted
+/// transaction as the place_order call under test, so a `txn.rollback()` at the end undid it
+/// automatically; now that setup must be committed before place_order's own (separately-opened)
+/// transactions can see it (see the comment above each test's `txn.commit()` call), it needs
+/// explicit cleanup instead. Deletes in FK-safe order (children before parents). Errors here are
+/// logged, not fatal — they must never mask the actual test assertions.
+async fn cleanup_coupon_scenario_rows(
+    db: &sea_orm::DatabaseConnection,
+    fixtures: &CouponScenarioFixtures,
+    coupon_code: Option<&str>,
+    observed_order_id: Option<i64>,
+) -> Result<(), String> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    if let Some(order_id) = observed_order_id {
+        for (table, column) in [
+            ("PaymentIntents", "order_id"),
+            ("Shipments", "order_id"),
+            ("OrderDetails", "OrderID"),
+            ("OrderEvents", "OrderID"),
+            ("Orders", "OrderID"),
+        ] {
+            db.execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+                [order_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("cleanup {table} for order_id={order_id}: {e}"))?;
+        }
+    }
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `Cart` WHERE `UserID` = ?",
+        [fixtures.user_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup Cart for user_id={}: {e}", fixtures.user_id))?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `Inventory` WHERE `VariantID` = ?",
+        [fixtures.variant_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup Inventory for variant_id={}: {e}",
+            fixtures.variant_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+        [fixtures.variant_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup ProductVariants for variant_id={}: {e}",
+            fixtures.variant_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `Products` WHERE `CategoryID` = ?",
+        [fixtures.category_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup Products for category_id={}: {e}",
+            fixtures.category_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+        [fixtures.category_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        format!(
+            "cleanup ProductCategories for category_id={}: {e}",
+            fixtures.category_id
+        )
+    })?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+        [fixtures.shipping_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup ShippingAddresses id={}: {e}", fixtures.shipping_id))?;
+    if let Some(code) = coupon_code {
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "DELETE FROM `Coupons` WHERE `code` = ?",
+            [code.into()],
+        ))
+        .await
+        .map_err(|e| format!("cleanup Coupons for code={code}: {e}"))?;
+    }
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `Users` WHERE `UserID` = ?",
+        [fixtures.user_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup Users for user_id={}: {e}", fixtures.user_id))?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::MySql,
+        "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+        [fixtures.role_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("cleanup UserRoles for role_id={}: {e}", fixtures.role_id))?;
+    Ok(())
 }
 
 /// CP1 – create_coupon + place_order with valid coupon applies discount to grand_total_minor and order snapshot.
@@ -179,8 +321,7 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
     let now_tag = Utc::now().timestamp_millis();
     // Keep subtotal above FREE_SHIPPING_THRESHOLD_MINOR so checkout does not depend on live shipping quote.
     let cart_total = 200_000_i64;
-    let (user_id, shipping_id, _, cart_id) =
-        ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
+    let fixtures = ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP1_{}", now_tag);
     let _ = core_operations::handlers::coupons::create_coupon(
@@ -199,13 +340,18 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
     .await
     .expect("create_coupon");
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // place_order no longer runs as a nested savepoint inside our transaction, so anything it
+    // needs to read (user, cart, shipping address, coupon) must already be committed.
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
-            shipping_address_id: shipping_id,
-            user_id,
+            shipping_address_id: fixtures.shipping_id,
+            user_id: fixtures.user_id,
             coupon_code: Some(code.clone()),
-            selected_cart_ids: vec![cart_id],
+            selected_cart_ids: vec![fixtures.cart_id],
             payment_mode: None,
         }),
     )
@@ -218,7 +364,7 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
     );
 
     let db_order = orders::Entity::find_by_id(order.order_id)
-        .one(&txn)
+        .one(&db)
         .await
         .expect("query order")
         .expect("order exists");
@@ -227,7 +373,14 @@ async fn integration_coupon_applied_at_checkout_reduces_total() {
     assert_eq!(db_order.applied_coupon_code.as_deref(), Some(code.as_str()));
     assert_eq!(db_order.applied_discount_paise, Some(500));
 
-    txn.rollback().await.ok();
+    // Best-effort cleanup of the now-committed setup fixtures and the order place_order
+    // persisted (see the comment on `cleanup_coupon_scenario_rows`).
+    if let Err(e) =
+        cleanup_coupon_scenario_rows(&db, &fixtures, Some(code.as_str()), Some(order.order_id))
+            .await
+    {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// CP2 – Expired coupon (past ends_at) is ignored at checkout; full price charged and no coupon snapshot stored.
@@ -247,8 +400,7 @@ async fn integration_expired_coupon_ignored_at_checkout() {
 
     let now_tag = Utc::now().timestamp_millis();
     let cart_total = 200_000_i64;
-    let (user_id, shipping_id, _, cart_id) =
-        ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
+    let fixtures = ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP2_EXP_{}", now_tag);
     let _ = core_operations::handlers::coupons::create_coupon(
@@ -267,13 +419,17 @@ async fn integration_expired_coupon_ignored_at_checkout() {
     .await
     .expect("create_coupon");
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // see the comment on the equivalent commit in `integration_coupon_applied_at_checkout_reduces_total`.
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
-            shipping_address_id: shipping_id,
-            user_id,
-            coupon_code: Some(code),
-            selected_cart_ids: vec![cart_id],
+            shipping_address_id: fixtures.shipping_id,
+            user_id: fixtures.user_id,
+            coupon_code: Some(code.clone()),
+            selected_cart_ids: vec![fixtures.cart_id],
             payment_mode: None,
         }),
     )
@@ -286,7 +442,7 @@ async fn integration_expired_coupon_ignored_at_checkout() {
     );
 
     let db_order = orders::Entity::find_by_id(order.order_id)
-        .one(&txn)
+        .one(&db)
         .await
         .expect("query order")
         .expect("order exists");
@@ -294,7 +450,12 @@ async fn integration_expired_coupon_ignored_at_checkout() {
     assert!(db_order.applied_coupon_id.is_none());
     assert!(db_order.applied_coupon_code.is_none());
 
-    txn.rollback().await.ok();
+    if let Err(e) =
+        cleanup_coupon_scenario_rows(&db, &fixtures, Some(code.as_str()), Some(order.order_id))
+            .await
+    {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// CP3 – apply_coupon is preview-only and does not increment usage_count.
@@ -427,8 +588,7 @@ async fn integration_coupon_min_order_not_met_not_applied() {
 
     let now_tag = Utc::now().timestamp_millis();
     let cart_total = 150_000_i64;
-    let (user_id, shipping_id, _, cart_id) =
-        ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
+    let fixtures = ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP5_MIN_{}", now_tag);
     let _ = core_operations::handlers::coupons::create_coupon(
@@ -447,13 +607,17 @@ async fn integration_coupon_min_order_not_met_not_applied() {
     .await
     .expect("create_coupon");
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // see the comment on the equivalent commit in `integration_coupon_applied_at_checkout_reduces_total`.
+    txn.commit().await.expect("commit setup txn");
+
     let place_res = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
-            shipping_address_id: shipping_id,
-            user_id,
-            coupon_code: Some(code),
-            selected_cart_ids: vec![cart_id],
+            shipping_address_id: fixtures.shipping_id,
+            user_id: fixtures.user_id,
+            coupon_code: Some(code.clone()),
+            selected_cart_ids: vec![fixtures.cart_id],
             payment_mode: None,
         }),
     )
@@ -466,7 +630,7 @@ async fn integration_coupon_min_order_not_met_not_applied() {
     );
 
     let db_order = orders::Entity::find_by_id(order.order_id)
-        .one(&txn)
+        .one(&db)
         .await
         .expect("query order")
         .expect("order exists");
@@ -474,7 +638,12 @@ async fn integration_coupon_min_order_not_met_not_applied() {
     assert!(db_order.applied_coupon_id.is_none());
     assert!(db_order.applied_coupon_code.is_none());
 
-    txn.rollback().await.ok();
+    if let Err(e) =
+        cleanup_coupon_scenario_rows(&db, &fixtures, Some(code.as_str()), Some(order.order_id))
+            .await
+    {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }
 
 /// CP6 – Free-shipping threshold is evaluated on post-discount items total.
@@ -495,8 +664,7 @@ async fn integration_free_shipping_threshold_uses_post_discount_total() {
 
     let now_tag = Utc::now().timestamp_millis();
     let cart_total = 120_000_i64;
-    let (user_id, shipping_id, _, cart_id) =
-        ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
+    let fixtures = ensure_pending_and_place_order_setup(&txn, now_tag, cart_total).await;
 
     let code = format!("CP6_THRESH_{}", now_tag);
     let _ = core_operations::handlers::coupons::create_coupon(
@@ -515,13 +683,17 @@ async fn integration_free_shipping_threshold_uses_post_discount_total() {
     .await
     .expect("create_coupon");
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions —
+    // see the comment on the equivalent commit in `integration_coupon_applied_at_checkout_reduces_total`.
+    txn.commit().await.expect("commit setup txn");
+
     let err = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
-            shipping_address_id: shipping_id,
-            user_id,
-            coupon_code: Some(code),
-            selected_cart_ids: vec![cart_id],
+            shipping_address_id: fixtures.shipping_id,
+            user_id: fixtures.user_id,
+            coupon_code: Some(code.clone()),
+            selected_cart_ids: vec![fixtures.cart_id],
             payment_mode: None,
         }),
     )
@@ -536,5 +708,9 @@ async fn integration_free_shipping_threshold_uses_post_discount_total() {
         err.message()
     );
 
-    txn.rollback().await.ok();
+    // place_order failed during the external-call phase (no write transaction ever opened), so
+    // no Orders/OrderDetails row exists to clean up here — only the setup fixtures themselves.
+    if let Err(e) = cleanup_coupon_scenario_rows(&db, &fixtures, Some(code.as_str()), None).await {
+        eprintln!("warning: scenario cleanup failed (non-fatal): {e}");
+    }
 }

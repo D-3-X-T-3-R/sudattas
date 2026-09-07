@@ -19,6 +19,18 @@ function AuthBadge({ provider }: { provider: string }) {
   );
 }
 
+/** Only rendered for a non-active status — an active/never-set account shows nothing here,
+ * keeping the common case visually unchanged. */
+function StatusBadge({ status }: { status: string | null }) {
+  const key = (status ?? "").trim().toLowerCase();
+  if (key !== "inactive" && key !== "suspended") return null;
+  return (
+    <span className="ml-2 inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium capitalize text-red-700">
+      {key}
+    </span>
+  );
+}
+
 type SortKey = "name" | "email" | "created" | "orders" | "spent";
 
 type CustomersTableCardProps = {
@@ -83,7 +95,10 @@ function CustomerRow({
         selectedCustomer?.userId === customer.userId && "bg-[var(--color-surface-soft)]"
       )}
     >
-      <td className="py-4 pr-4 font-medium text-[var(--color-ink)]">{customer.fullName ?? customer.username ?? "-"}</td>
+      <td className="py-4 pr-4 font-medium text-[var(--color-ink)]">
+        {customer.fullName ?? customer.username ?? "-"}
+        <StatusBadge status={customer.userStatus} />
+      </td>
       <td className="py-4 pr-4 text-[var(--color-ink)]">{customer.email}</td>
       <td className="py-4 pr-4 text-[var(--color-muted)]">{customer.userId}</td>
       <td className="py-4 pr-4"><AuthBadge provider={customer.authProvider} /></td>

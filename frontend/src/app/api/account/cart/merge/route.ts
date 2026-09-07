@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 
@@ -56,7 +57,8 @@ export async function POST(request: Request) {
   );
 
   if (res.errors?.length) {
-    return apiError(res.errors[0]?.message ?? "Failed to merge cart", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(res.errors, "Failed to merge cart");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   const items = res.data?.mergeCart ?? [];

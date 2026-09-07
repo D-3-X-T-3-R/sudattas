@@ -2,14 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { fetchOrdersList, fetchOrderStatuses, type OrderListRow } from "@/lib/admin-queries";
 import { toRouteFailureUi } from "@/lib/route-state";
-import { ListOrdered } from "lucide-react";
+import { ListOrdered, Plus } from "lucide-react";
 import { OrdersFiltersCard } from "@/domains/admin/orders/components/orders-filters-card";
 import { OrdersTableCard } from "@/domains/admin/orders/components/orders-table-card";
-import { getDateRange } from "@/domains/admin/orders/utils";
+import { downloadOrdersCsv, getDateRange } from "@/domains/admin/orders/utils";
 import type { DatePreset } from "@/domains/admin/orders/types";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { Button } from "@/components/ui/button";
 
 const MAX_ORDER_PAGE_SIZE = 100;
 
@@ -61,10 +63,18 @@ export default function AdminOrdersPage() {
       title="Order management"
       description="Filter by date, status, and customer to manage fulfillment efficiently."
       action={
-        <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-4 py-2 text-sm font-semibold text-[var(--color-ink)]">
-          <ListOrdered className="h-4 w-4" />
-          {orders.length} orders
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-4 py-2 text-sm font-semibold text-[var(--color-ink)]">
+            <ListOrdered className="h-4 w-4" />
+            {orders.length} orders
+          </span>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/imtheboss/orders/new" className="gap-1">
+              <Plus className="h-4 w-4" />
+              Create order
+            </Link>
+          </Button>
+        </div>
       }
     >
       <OrdersFiltersCard
@@ -78,6 +88,8 @@ export default function AdminOrdersPage() {
         statuses={statuses}
         userIdFromUrl={userIdFromUrl}
         onRefresh={() => refetch()}
+        onExportCsv={() => downloadOrdersCsv(orders, statuses)}
+        exportDisabled={orders.length === 0}
       />
 
       <OrdersTableCard

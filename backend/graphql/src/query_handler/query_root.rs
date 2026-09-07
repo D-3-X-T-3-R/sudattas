@@ -7,7 +7,11 @@ use crate::resolvers::{
     },
     coupons::{
         self,
-        schema::{Coupon, ValidateCoupon},
+        schema::{Coupon, CouponAdmin, PublicCoupon, SearchCouponAdminInput, ValidateCoupon},
+    },
+    exchanges::{
+        self,
+        schema::{ExchangeRequest, SearchExchangeRequestsInput},
     },
     inventory::{
         self,
@@ -44,7 +48,7 @@ use crate::resolvers::{
     },
     refunds::{
         self,
-        schema::{GetRefund, Refund},
+        schema::{GetRefund, Refund, RefundAttempt, SearchRefundAttemptsInput},
     },
     returns::{
         self,
@@ -52,7 +56,7 @@ use crate::resolvers::{
     },
     reviews::{
         self,
-        schema::{Review, SearchReview},
+        schema::{ProductRatingSummary, Review, SearchReview},
     },
     shipments::{
         self,
@@ -78,19 +82,35 @@ use juniper::IntoFieldError;
 
 pub struct QueryRoot;
 
+/// Deactivated/suspended accounts (`setUserStatus`) are rejected here, ahead of the specific
+/// `jwt_user_id`/`is_admin` check each caller does — see the identical helper in
+/// `mutation_root.rs` for the full rationale.
+fn require_not_deactivated(context: &Context) -> Result<(), juniper::FieldError> {
+    if context.account_deactivated() {
+        return Err(juniper::FieldError::new(
+            "This account has been deactivated. Contact support if you believe this is a mistake.",
+            juniper::Value::null(),
+        ));
+    }
+    Ok(())
+}
+
 fn require_jwt(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_customer_actor(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
+    require_not_deactivated(context)?;
     if context.is_admin() {
         Ok(())
     } else {
@@ -153,6 +173,11 @@ struct AuthInfo {
     jwks_key_count: i32,
     /// Current request’s user ID (JWT or session), if any.
     current_user_id: Option<String>,
+    /// True when the current JWT-authenticated identity's account is deactivated/suspended.
+    /// Deliberately readable even for a deactivated account — every other JWT-gated query/mutation
+    /// rejects them via `require_jwt`/`jwt_user_id()`, so the frontend needs one ungated way to
+    /// learn "you're deactivated" in order to show that message instead of a wall of errors.
+    account_deactivated: bool,
 }
 
 #[juniper::graphql_object(Context = Context)]
@@ -175,6 +200,7 @@ impl QueryRoot {
             session_enabled: context.redis_url.is_some(),
             jwks_key_count: context.jwks().keys.len() as i32,
             current_user_id: context.user_id().map(|s| s.to_string()),
+            account_deactivated: context.account_deactivated(),
         }
     }
 
@@ -201,9 +227,18 @@ impl QueryRoot {
     }
 
     // Product
+    /// Storefront and admin share this field. Non-admin callers (guest or customer) are
+    /// always forced to the "active" product status, regardless of what they pass — this
+    /// is the only place draft/archived products are kept off the live storefront, so it
+    /// must not be bypassable by a caller-supplied product_status_id.
     #[instrument(err, ret)]
-    async fn search_product(search: SearchProduct) -> FieldResult<Vec<Product>> {
-        product::handlers::search_product(search)
+    async fn search_product(context: &Context, search: SearchProduct) -> FieldResult<Vec<Product>> {
+        let restrict_to_status_code = if context.is_admin() {
+            None
+        } else {
+            Some("active")
+        };
+        product::handlers::search_product(search, restrict_to_status_code)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -419,10 +454,41 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Currently-usable coupons (active, in date window, not exhausted) for a "available offers"
+    /// list — so customers aren't limited to codes they already know from elsewhere.
+    #[instrument(err, ret)]
+    async fn list_active_coupons(context: &Context) -> FieldResult<Vec<PublicCoupon>> {
+        let _ = require_customer_actor(context)?;
+        coupons::handlers::list_active_coupons()
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: list/search coupons.
+    #[instrument(err, ret)]
+    async fn search_coupon_admin(
+        context: &Context,
+        input: SearchCouponAdminInput,
+    ) -> FieldResult<Vec<CouponAdmin>> {
+        require_admin(context)?;
+        coupons::handlers::search_coupon_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Reviews
     #[instrument(err, ret)]
     async fn search_review(input: SearchReview) -> FieldResult<Vec<Review>> {
         reviews::handlers::search_review(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Server-computed star rating aggregate for a product (ceil-rounded average + count).
+    /// Public, same as search_review — no auth required to view a product's rating.
+    #[instrument(err, ret)]
+    async fn product_rating_summary(product_id: String) -> FieldResult<ProductRatingSummary> {
+        reviews::handlers::get_product_rating_summary(product_id)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -488,6 +554,20 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Admin-only visibility into in-flight refund attempts — the row
+    /// `resolveRefundAttemptNeedsReview` acts on. Without this there was no way to discover
+    /// which attempt_ids exist or are stuck in `needs_review` from the admin UI.
+    #[instrument(err, ret)]
+    async fn search_refund_attempts(
+        context: &Context,
+        input: SearchRefundAttemptsInput,
+    ) -> FieldResult<Vec<RefundAttempt>> {
+        require_admin(context)?;
+        refunds::handlers::search_refund_attempts(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     #[instrument(err, ret)]
     async fn search_return_requests(
         context: &Context,
@@ -508,6 +588,30 @@ impl QueryRoot {
         }
 
         returns::handlers::search_return_requests(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn search_exchange_requests(
+        context: &Context,
+        mut input: SearchExchangeRequestsInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        if !context.is_admin() {
+            let uid = require_customer_actor(context)?.to_string();
+            if input.user_id.as_deref().is_some_and(|v| v != uid) {
+                return Err(juniper::FieldError::new(
+                    "Customers can only query their own exchanges",
+                    juniper::Value::null(),
+                ));
+            }
+            input.user_id = Some(uid);
+            if let Some(order_id) = input.order_id.as_deref() {
+                ensure_customer_can_access_order(context, order_id).await?;
+            }
+        }
+
+        exchanges::handlers::search_exchange_requests(input)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -580,6 +684,19 @@ impl QueryRoot {
     async fn search_user(context: &Context, input: SearchUserInput) -> FieldResult<Vec<User>> {
         require_admin(context)?;
         users::handlers::search_user(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin lookup of another customer's PII by id — the admin-facing counterpart to
+    /// `exportMyPii`, which is deliberately self-scoped and can't be reused for this.
+    #[instrument(err, ret)]
+    async fn admin_export_user_pii(
+        context: &Context,
+        user_id: String,
+    ) -> FieldResult<UserPiiExport> {
+        require_admin(context)?;
+        user_pii::handlers::admin_export_user_pii(context, user_id)
             .await
             .map_err(|e| e.into_field_error())
     }

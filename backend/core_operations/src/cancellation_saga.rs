@@ -336,7 +336,12 @@ async fn restore_inventory_for_cancelled_items_impl(
         query = query.filter(order_details::Column::OrderDetailId.is_in(ids.iter().copied()));
     }
 
-    let details = query.all(txn).await.map_err(map_db_error_to_status)?;
+    // Lock Inventory rows in sorted VariantID order (not DB return order, which is
+    // unspecified without an ORDER BY) so two concurrent cancellations/restores whose
+    // affected order details share overlapping variants always acquire the FOR UPDATE
+    // locks in the same order, avoiding an InnoDB deadlock (error 1213) between them.
+    let mut details = query.all(txn).await.map_err(map_db_error_to_status)?;
+    details.sort_by_key(|d| d.variant_id);
     for d in &details {
         let ins = txn
             .execute(Statement::from_sql_and_values(
@@ -531,6 +536,56 @@ pub async fn run_order_settlement(
 
     if !matches!(order.payment_status, Some(PaymentStatus::Captured)) {
         set_order_refund_settlement_status(txn, order_id, "refund_not_applicable").await?;
+        return Ok(());
+    }
+
+    // An admin-placed order (place_order_admin) never creates a PaymentIntent — there is no live
+    // Razorpay step for either of its payment methods. Real checkout orders always create exactly
+    // one PaymentIntent, even before capture. So "zero PaymentIntent rows for this order, ever" is
+    // a reliable signal this money was never in the payment gateway to begin with: it was
+    // collected outside the system (cash/UPI/bank transfer), and cancelling it is the admin's
+    // assertion that they've already returned it the same way. Record it as a completed refund
+    // immediately (reusing create_refund's own ledger/over-refund-guard/Refunded-transition logic)
+    // rather than queuing a gateway refund attempt that could never succeed.
+    let has_any_intent = payment_intents::Entity::find()
+        .filter(payment_intents::Column::OrderId.eq(order_id))
+        .count(txn)
+        .await
+        .map_err(map_db_error_to_status)?
+        > 0;
+    if !has_any_intent {
+        let remaining = remaining_after_processed_refunds(target_refund_minor, settled_processed);
+        if remaining <= 0 {
+            set_order_refund_settlement_status(txn, order_id, "refund_processed").await?;
+            return Ok(());
+        }
+        create_refund(
+            txn,
+            Request::new(CreateRefundRequest {
+                order_id,
+                gateway_refund_id: format!("admin_settled_{order_id}_{remaining}"),
+                amount_paise: remaining,
+                currency: order.currency.clone(),
+                line_items_refunded_json: None,
+            }),
+        )
+        .await?;
+        set_order_refund_settlement_status(txn, order_id, "refund_processed").await?;
+        let _ = create_order_event(
+            txn,
+            Request::new(CreateOrderEventRequest {
+                order_id,
+                event_type: "refund_recorded_admin_settled".to_string(),
+                from_status: None,
+                to_status: None,
+                actor_type: "system".to_string(),
+                message: Some(format!(
+                    "No online payment on file for this order; {} paise treated as already refunded by the admin outside the payment gateway",
+                    remaining
+                )),
+            }),
+        )
+        .await;
         return Ok(());
     }
 

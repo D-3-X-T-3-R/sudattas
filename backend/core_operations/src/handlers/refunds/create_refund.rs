@@ -120,7 +120,7 @@ pub async fn create_refund(
     let is_full_refund = grand_total > 0 && total_refunded >= grand_total;
 
     if is_full_refund {
-        let _ = order_state_machine::transition_order_status(
+        if let Err(e) = order_state_machine::transition_order_status(
             txn,
             req.order_id,
             order_state_machine::OrderState::Refunded,
@@ -129,7 +129,16 @@ pub async fn create_refund(
             Some("Full refund processed"),
             Some(PaymentStatus::Failed),
         )
-        .await;
+        .await
+        {
+            tracing::error!(
+                order_id = req.order_id,
+                gateway_refund_id = %req.gateway_refund_id,
+                error = %e,
+                "create_refund: refund persisted but order transition to Refunded failed; state diverged"
+            );
+            return Err(e);
+        }
     } else {
         let _ = create_order_event(
             txn,

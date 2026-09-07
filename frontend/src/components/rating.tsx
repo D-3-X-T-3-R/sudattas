@@ -27,7 +27,7 @@ export function Rating({ value }: { value: number }) {
         );
       })}
       <span className="ml-1 text-xs text-[var(--color-muted)]">
-        {value.toFixed(1)}
+        {Number.isInteger(value) ? value : value.toFixed(1)}
       </span>
     </div>
   );

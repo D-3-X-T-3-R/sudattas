@@ -119,6 +119,8 @@ message CreateProductRequest {
     optional bool has_blouse_piece = 10;
     optional string care_instructions = 11;
     optional int64 product_status_id = 12;
+    optional string meta_title = 13;        // SEO <title>; storefront falls back to name-based default when unset
+    optional string meta_description = 14;  // SEO meta description; storefront falls back to description-based default when unset
 }
 
 message SearchProductRequest {
@@ -135,6 +137,11 @@ message SearchProductRequest {
     optional string occasion = 11;
     optional int64 product_status_id = 12;
     optional int64 mood_id = 13;  // filter products that have this mood linked
+    // Filter by ProductStatuses.code (e.g. "active") instead of a raw id — resolved against the
+    // DB here rather than making callers hardcode/guess the numeric id. Set internally by the
+    // GraphQL layer to enforce non-admin callers only ever see active products (not client
+    // settable via the public SearchProduct input); ANDed with product_status_id if both are set.
+    optional string product_status_code = 14;
 }
 
 message GetProductsByIdRequest {
@@ -155,10 +162,47 @@ message UpdateProductRequest {
     optional bool has_blouse_piece = 11;
     optional string care_instructions = 12;
     optional int64 product_status_id = 13;
+    optional string meta_title = 14;
+    optional string meta_description = 15;
 }
 
 message DeleteProductRequest {
     int64 product_id = 1;
+}
+
+// Soft delete: sets the product's status to "archived" (resolved via the ProductStatuses
+// table, not a hardcoded id). Distinct from PermanentlyDeleteProductRequest — this is fully
+// reversible (admin can set it back to active) and touches nothing else on the product.
+message ArchiveProductRequest {
+    int64 product_id = 1;
+}
+
+// Reverses ArchiveProductRequest — sets the product's status back to "active" (resolved via
+// ProductStatuses, not a hardcoded id). Touches nothing else on the product (mood tags, etc.).
+message ActivateProductRequest {
+    int64 product_id = 1;
+}
+
+// Permanent, unrecoverable hard delete — distinct from DeleteProductRequest, which is
+// currently unused and would fail on any product with real data (FK constraints on
+// ProductVariants/ProductImages/Reviews/Wishlist are all NO ACTION). This orchestrates the
+// full cascade (cart lines, inventory + its log, variants, reviews, wishlist entries, image
+// rows) in one transaction, refuses outright if the product has real order history (archive
+// instead), and purges the product's images from Cloudflare R2 as a best-effort step after
+// the DB transaction commits.
+message PermanentlyDeleteProductRequest {
+    int64 product_id = 1;
+}
+
+message PermanentlyDeleteProductResponse {
+    int64 product_id = 1;
+    string name = 2;
+    int32 variants_deleted = 3;
+    int32 images_deleted = 4;
+    // Count of images whose R2 object could not be deleted (e.g. R2 not configured, or the
+    // stored URL wasn't actually an R2 object) — the product is still fully gone from the DB
+    // either way; this is purely a storage-hygiene signal for the admin.
+    int32 images_purge_failed = 5;
 }
 
 message ProductResponse {
@@ -175,6 +219,8 @@ message ProductResponse {
     optional bool has_blouse_piece = 11;
     optional string care_instructions = 12;
     optional int64 product_status_id = 13;
+    optional string meta_title = 14;
+    optional string meta_description = 15;
 }
 
 message ProductsResponse {
@@ -248,10 +294,21 @@ message UserResponse {
     optional string last_name = 13;
     optional string gender = 14;         // "male" | "female" | "other"
     optional string date_of_birth = 15;  // ISO yyyy-mm-dd
+    // Resolved from user_status_id via UserStatuses.code ("active" | "inactive" | "suspended");
+    // absent if user_status_id is unset (treated as active — never explicitly deactivated).
+    optional string user_status = 16;
 }
 
 message UsersResponse {
     repeated UserResponse items = 1;
+}
+
+// Admin: activate/deactivate/suspend a user account. Deliberately a dedicated mutation, not a
+// field on UpdateUserRequest (which excludes it on purpose) — access-restricting actions get
+// their own explicit, auditable entry point rather than being a side effect of a profile edit.
+message SetUserStatusRequest {
+    int64 user_id = 1;
+    string status = 2; // "active" | "inactive" | "suspended"
 }
 
 // P2 Security: audit log for secrets rotation etc.
@@ -284,6 +341,8 @@ message GetUserPiiExportResponse {
 
 message CreateCategoryRequest {
     string name = 1;
+    // Defaults to false when unset.
+    optional bool exchange_eligible = 2;
 }
 
 message SearchCategoryRequest {
@@ -294,6 +353,8 @@ message SearchCategoryRequest {
 message UpdateCategoryRequest {
     int64 category_id = 1;
     string name = 2;
+    // Unset leaves the existing value unchanged.
+    optional bool exchange_eligible = 3;
 }
 
 message DeleteCategoryRequest {
@@ -303,6 +364,7 @@ message DeleteCategoryRequest {
 message CategoryResponse {
     int64 category_id = 1;
     string name = 2;
+    bool exchange_eligible = 3;
 }
 
 message CategoriesResponse {
@@ -350,6 +412,35 @@ message CreateOrderRequest {
     optional int64 applied_coupon_id = 10;
     optional string applied_coupon_code = 11;
     optional int32 applied_discount_paise = 12;
+    // "cod" | "prepaid". Required so the order can ever become bookable for shipping (the same
+    // eligibility gate real checkout orders go through checks this). "prepaid" here means payment
+    // was already collected outside this system (cash/UPI/bank transfer) — the caller is
+    // asserting that happened, not triggering a live payment flow; it is recorded as captured
+    // immediately.
+    string payment_method = 13;
+}
+
+// Admin: place a full order on a customer's behalf (phone/in-person sale, etc.) in one atomic
+// call — order + line items + immediate confirmation, mirroring the same order_state_machine
+// transition, invoice generation, and order_event that real COD checkout produces. Unlike real
+// checkout, there is never a live Razorpay step here: both "cod" and "prepaid" are treated as
+// already settled the instant the admin places the order — "prepaid" only records that payment
+// happened outside this system, it does not trigger collecting it.
+message PlaceOrderAdminLineItem {
+    int64 variant_id = 1;
+    int64 quantity = 2;
+    int64 price_paise = 3;  // Line total (unit price x quantity), matching CreateOrderDetailRequest
+}
+
+message PlaceOrderAdminRequest {
+    int64 user_id = 1;
+    int64 shipping_address_id = 2;
+    string payment_method = 3;  // "cod" | "prepaid"
+    repeated PlaceOrderAdminLineItem line_items = 4;
+    optional int64 shipping_minor = 5;
+    optional int64 applied_coupon_id = 6;
+    optional string applied_coupon_code = 7;
+    optional int32 applied_discount_paise = 8;
 }
 
 message SearchOrderRequest {
@@ -433,6 +524,54 @@ message ReturnRequestResponse {
 
 message ReturnRequestsResponse {
     repeated ReturnRequestResponse items = 1;
+}
+
+// Category-scoped exchanges: same product, different size/colour, exact same price — a swap, not
+// a refund. Distinct pipeline from ReturnRequest above (which is refund-only). Only categories
+// with exchange_eligible = true (see CategoryResponse) are eligible.
+message RequestExchangeRequest {
+    int64 order_id = 1;
+    int64 user_id = 2;
+    int64 order_detail_id = 3;
+    int64 desired_variant_id = 4;
+    // Defaults to the order_detail's full purchased quantity when unset.
+    optional int64 quantity = 5;
+    string reason = 6;
+}
+
+message SearchExchangeRequestsRequest {
+    optional int64 exchange_id = 1;
+    optional int64 order_id = 2;
+    optional int64 user_id = 3;
+}
+
+message AdminMarkExchangeReceivedRequest {
+    int64 exchange_id = 1;
+}
+
+message AdminUpdateExchangeStatusRequest {
+    int64 exchange_id = 1;
+    string status = 2;
+    optional string note = 3;
+}
+
+message ExchangeRequestResponse {
+    int64 exchange_id = 1;
+    int64 order_id = 2;
+    int64 user_id = 3;
+    int64 order_detail_id = 4;
+    int64 desired_variant_id = 5;
+    int64 quantity = 6;
+    string status = 7;
+    string reason = 8;
+    string created_at = 9;
+    optional string received_at = 10;
+    // Set once the admin marks the exchange received and the replacement order is created.
+    optional int64 replacement_order_id = 11;
+}
+
+message ExchangeRequestsResponse {
+    repeated ExchangeRequestResponse items = 1;
 }
 
 // P1 Admin: mark order shipped/delivered with enforced transitions
@@ -623,6 +762,9 @@ message ReviewResponse {
     int64 user_id = 3;
     int32 rating = 4;  // 1-5
     string comment = 5;
+    string review_status = 6;  // "pending" | "approved" | "rejected"
+    bool is_verified_purchase = 7;
+    string created_at = 8;  // RFC3339; empty if unset
 }
 
 message ReviewsResponse {
@@ -636,6 +778,18 @@ message AdminUpdateReviewStatusRequest {
 }
 message AdminUpdateReviewStatusResponse {
     bool success = 1;
+}
+
+// Server-side rating aggregate for a product (real SQL AVG/COUNT instead of the caller fetching
+// every review row and averaging client-side). average_rating is CEIL(AVG(Rating)), so e.g. 3.2
+// and 3.8 both come back as 4; 0 when the product has no ratings yet.
+message ProductRatingSummaryRequest {
+    int64 product_id = 1;
+}
+message ProductRatingSummaryResponse {
+    int64 product_id = 1;
+    int32 average_rating = 2;  // ceil(AVG(Rating)), 0-5
+    int64 rating_count = 3;
 }
 
 // P2 Abandoned cart: scheduler enqueues events (call periodically, e.g. every hour)
@@ -948,6 +1102,8 @@ message SearchNewsletterSubscriberRequest {
 message UpdateNewsletterSubscriberRequest {
     int64 subscriber_id = 1;
     string email = 2;
+    // Set true to unsubscribe (records now()), false to resubscribe (clears it); omit to leave unchanged.
+    optional bool unsubscribed = 3;
 }
 
 message DeleteNewsletterSubscriberRequest {
@@ -958,10 +1114,52 @@ message NewsletterSubscriberResponse {
     int64 subscriber_id = 1;
     string email = 2;
     string subscription_date = 3;
+    // RFC3339; empty if still subscribed.
+    string unsubscribed_at = 4;
 }
 
 message NewsletterSubscribersResponse {
     repeated NewsletterSubscriberResponse items = 1;
+}
+
+// NewsletterCampaigns — one row per admin-triggered "send to all subscribers" action.
+// There is no draft/scheduled state: creating one *is* sending it (synchronously, within the
+// RPC call), and the row records the outcome. Kept immutable once written — a permanent log
+// of what was actually sent and when, not an editable document.
+
+message SendNewsletterCampaignRequest {
+    string subject = 1;
+    // Plain text; blank-line-separated paragraphs. Rendered into the branded HTML template
+    // server-side, so the caller never supplies HTML directly.
+    string body_text = 2;
+    optional string cta_label = 3;
+    optional string cta_url = 4;
+}
+
+message SearchNewsletterCampaignRequest {
+    optional int64 campaign_id = 1;
+}
+
+message NewsletterCampaignResponse {
+    int64 campaign_id = 1;
+    string subject = 2;
+    string body_text = 3;
+    string cta_label = 4;
+    string cta_url = 5;
+    int64 recipient_count = 6;
+    int64 success_count = 7;
+    int64 failure_count = 8;
+    string sent_at = 9;
+}
+
+message NewsletterCampaignsResponse {
+    repeated NewsletterCampaignResponse items = 1;
+}
+
+// Public, unauthenticated: the link a subscriber clicks from inside a campaign email.
+message UnsubscribeNewsletterByTokenRequest {
+    int64 subscriber_id = 1;
+    string token = 2;
 }
 
 // Sizes
@@ -1304,6 +1502,24 @@ message CouponsResponse {
     repeated CouponResponse items = 1;
 }
 
+message ListActiveCouponsRequest {
+}
+
+// Customer-safe view of a currently-usable coupon — deliberately excludes usage_count/limit
+// internals, only what a customer needs to decide whether to apply it.
+message PublicCouponResponse {
+    int64 coupon_id = 1;
+    string code = 2;
+    string discount_type = 3;   // percentage | fixed_amount
+    int32 discount_value = 4;
+    optional int32 min_order_value_paise = 5;
+    optional string ends_at = 6;  // RFC3339
+}
+
+message PublicCouponsResponse {
+    repeated PublicCouponResponse items = 1;
+}
+
 // P1 Admin coupon management
 message CreateCouponRequest {
     string code = 1;
@@ -1336,6 +1552,14 @@ message CouponAdminResponse {
 }
 message CouponsAdminResponse {
     repeated CouponAdminResponse items = 1;
+}
+
+message SearchCouponAdminRequest {
+    int64 coupon_id = 1;  // 0 = all
+}
+
+message DeleteCouponAdminRequest {
+    int64 coupon_id = 1;
 }
 
 // Shipments
@@ -1563,6 +1787,34 @@ message ResolveRefundAttemptNeedsReviewRequest {
 message ResolveRefundAttemptNeedsReviewResponse {
     bool success = 1;
     string message = 2;  // e.g. "Refund attempt reset to pending_external for retry"
+}
+
+// Admin visibility into in-flight RefundAttempts (the row `resolveRefundAttemptNeedsReview`
+// acts on) — previously nothing exposed which attempt_ids existed or were stuck in
+// needs_review, so that mutation had no way to be driven from a UI.
+message SearchRefundAttemptsRequest {
+    optional int64 attempt_id = 1;
+    optional int64 order_id = 2;
+    optional string status = 3;  // e.g. "needs_review", "pending_external", "resolved"
+}
+
+message RefundAttemptResponse {
+    int64 attempt_id = 1;
+    int64 order_id = 2;
+    optional int64 payment_intent_id = 3;
+    optional string razorpay_payment_id = 4;
+    int64 amount_requested_paise = 5;
+    int64 amount_sent_to_gateway_paise = 6;
+    optional string gateway_refund_id = 7;
+    string status = 8;
+    optional string provider_error = 9;
+    string created_at = 10;
+    string updated_at = 11;
+    int32 attempt_count = 12;
+}
+
+message RefundAttemptsResponse {
+    repeated RefundAttemptResponse items = 1;
 }
 
 message GetOrderStatsRequest {

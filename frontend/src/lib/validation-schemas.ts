@@ -13,6 +13,8 @@ export const BACKEND_MAX_SKU_SLUG_LEN = 128;
 export const BACKEND_MAX_QUANTITY_PER_ITEM = 999;
 export const BACKEND_MAX_ADDRESS_LINE_LEN = 500;
 export const BACKEND_POSTAL_CODE_LEN = 6;
+export const BACKEND_MAX_META_TITLE_LEN = 70;
+export const BACKEND_MAX_META_DESCRIPTION_LEN = 160;
 
 export const PINCODE_REGEX = new RegExp(`^\\d{${BACKEND_POSTAL_CODE_LEN}}$`);
 export const PHONE_ALLOWED_REGEX = /^[0-9+\-()\s]+$/;

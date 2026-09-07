@@ -1,11 +1,12 @@
 use proto::proto::core::{
     CreateUserRequest, DeleteUserRequest, RecordSecurityAuditRequest, SearchUserRequest,
-    UpdateUserRequest, UserResponse,
+    SetUserStatusRequest, UpdateUserRequest, UserResponse,
 };
 use tracing::instrument;
 
 use super::schema::{
-    DeleteUserInput, NewUser, RecordSecurityAuditEventInput, SearchUserInput, UpdateUserInput, User,
+    DeleteUserInput, NewUser, RecordSecurityAuditEventInput, SearchUserInput, SetUserStatusInput,
+    UpdateUserInput, User,
 };
 use crate::resolvers::{
     error::GqlError,
@@ -27,6 +28,7 @@ fn user_response_to_gql(u: UserResponse) -> User {
         last_name: u.last_name,
         gender: u.gender,
         date_of_birth: u.date_of_birth,
+        user_status: u.user_status,
     }
 }
 
@@ -129,6 +131,24 @@ pub(crate) async fn delete_user(input: DeleteUserInput) -> Result<Vec<User>, Gql
     let mut client = connect_grpc_client().await?;
     let user_id = parse_i64(&input.user_id, "user_id")?;
     let response = client.delete_user(DeleteUserRequest { user_id }).await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(user_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn set_user_status(input: SetUserStatusInput) -> Result<Vec<User>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let user_id = parse_i64(&input.user_id, "user_id")?;
+    let response = client
+        .set_user_status(SetUserStatusRequest {
+            user_id,
+            status: input.status,
+        })
+        .await?;
     Ok(response
         .into_inner()
         .items

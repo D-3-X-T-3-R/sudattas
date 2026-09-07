@@ -52,6 +52,52 @@ function envelopeErr(
   };
 }
 
+/**
+ * Maps the backend's GraphQL `extensions.code` (see backend/graphql/src/resolvers/error.rs,
+ * gRPC-status-style names) to an HTTP status + errorCode, so a PermissionDenied rejection is
+ * distinguishable from a plain validation failure instead of every GraphQL-layer error
+ * collapsing to a flat 400/"GRAPHQL_ERROR".
+ */
+function graphqlCodeToStatus(code: string | undefined): { status: number; errorCode: string } {
+  switch (code) {
+    case "Unauthenticated":
+      return { status: 401, errorCode: "UNAUTHORIZED" };
+    case "PermissionDenied":
+      return { status: 403, errorCode: "FORBIDDEN" };
+    case "NotFound":
+      return { status: 404, errorCode: "NOT_FOUND" };
+    case "AlreadyExists":
+      return { status: 409, errorCode: "CONFLICT" };
+    case "FailedPrecondition":
+      return { status: 409, errorCode: "FAILED_PRECONDITION" };
+    case "Aborted":
+      // Transient conflict (e.g. transaction abort) — same status family as FailedPrecondition.
+      return { status: 409, errorCode: "CONFLICT" };
+    case "OutOfRange":
+      return { status: 400, errorCode: "VALIDATION_ERROR" };
+    case "Unimplemented":
+      return { status: 501, errorCode: "NOT_IMPLEMENTED" };
+    case "ResourceExhausted":
+      return { status: 429, errorCode: "RATE_LIMITED" };
+    case "InvalidArgument":
+      return { status: 400, errorCode: "VALIDATION_ERROR" };
+    case "Unavailable":
+      // Backend-down / circuit-breaker-tripped — distinct from a generic upstream error so
+      // callers can treat it as retryable rather than a bad request.
+      return { status: 503, errorCode: "UPSTREAM_UNAVAILABLE" };
+    case "DeadlineExceeded":
+      return { status: 504, errorCode: "UPSTREAM_TIMEOUT" };
+    case "Cancelled":
+      return { status: 503, errorCode: "UPSTREAM_UNAVAILABLE" };
+    case "Internal":
+    case "Unknown":
+    case "DataLoss":
+      return { status: 502, errorCode: "UPSTREAM_ERROR" };
+    default:
+      return { status: 400, errorCode: "GRAPHQL_ERROR" };
+  }
+}
+
 function errorStatusToCode(status: number): string {
   if (status === 400) return "BAD_REQUEST";
   if (status === 401) return "UNAUTHORIZED";
@@ -172,20 +218,29 @@ export async function forwardAdminGraphql(
   }
 
   const text = await response.text();
-  let parsed: { data?: unknown; errors?: Array<{ message?: string }> } | null = null;
+  let parsed: {
+    data?: unknown;
+    errors?: Array<{ message?: string; extensions?: { code?: string; grpc_code?: number } }>;
+  } | null = null;
   try {
-    parsed = JSON.parse(text) as { data?: unknown; errors?: Array<{ message?: string }> };
+    parsed = JSON.parse(text) as {
+      data?: unknown;
+      errors?: Array<{ message?: string; extensions?: { code?: string; grpc_code?: number } }>;
+    };
   } catch {
     parsed = null;
   }
 
-  // GraphQL layer can return HTTP 200 with `errors`; normalize these to envelope errors.
+  // GraphQL layer can return HTTP 200 with `errors`; normalize these to envelope errors,
+  // reading the backend's structured extensions.code rather than flattening every failure
+  // to 400/"GRAPHQL_ERROR" (that previously made PermissionDenied indistinguishable from a
+  // plain validation error to any caller classifying on status/errorCode).
   if (parsed?.errors?.length) {
-    const first = parsed.errors[0]?.message?.trim() || "GraphQL operation failed";
-    return NextResponse.json(
-      envelopeErr(response.status === 200 ? 400 : response.status, "GRAPHQL_ERROR", first),
-      { status: response.status === 200 ? 400 : response.status }
-    );
+    const firstErrorEntry = parsed.errors[0];
+    const first = firstErrorEntry?.message?.trim() || "GraphQL operation failed";
+    const mapped = graphqlCodeToStatus(firstErrorEntry?.extensions?.code);
+    const status = response.status === 200 ? mapped.status : response.status;
+    return NextResponse.json(envelopeErr(status, mapped.errorCode, first), { status });
   }
 
   if (!response.ok) {
