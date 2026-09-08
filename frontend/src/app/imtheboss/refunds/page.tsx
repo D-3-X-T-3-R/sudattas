@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { Banknote, AlertTriangle } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { AdminGroupTabs } from "@/components/admin/admin-group-tabs";
+import { FINANCE_GROUP_TABS } from "@/lib/admin-nav-groups";
 import { AdminTableCard } from "@/components/admin/admin-cards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,6 +91,7 @@ export default function AdminRefundsPage() {
       title="Refunds"
       description="Refund attempts against real gateway payments (automatic), and a manually maintained ledger of refunds settled outside the system."
     >
+      <AdminGroupTabs tabs={FINANCE_GROUP_TABS} />
       <AdminTableCard
         title="Refund attempts"
         icon={<AlertTriangle className="h-4 w-4 text-[var(--color-green)]" />}

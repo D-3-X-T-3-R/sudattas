@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Truck } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { AdminGroupTabs } from "@/components/admin/admin-group-tabs";
+import { ORDERS_GROUP_TABS } from "@/lib/admin-nav-groups";
 import { AdminTableCard } from "@/components/admin/admin-cards";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { fetchOrdersList } from "@/lib/admin-queries";
@@ -53,6 +55,7 @@ export default function AdminShipmentsPage() {
       title="Shipments"
       description={`Tracking across the ${RECENT_ORDERS_LIMIT} most recent orders. Create or edit a shipment from its order page.`}
     >
+      <AdminGroupTabs tabs={ORDERS_GROUP_TABS} />
       <AdminTableCard title="Shipments" icon={<Truck className="h-4 w-4 text-[var(--color-green)]" />}>
         {isLoading ? (
           <p className="py-8 text-center text-sm text-[var(--color-muted)]">Loading shipments…</p>

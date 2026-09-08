@@ -71,6 +71,8 @@ import { ProductMoodsSection } from "@/domains/admin/products/components/product
 import { ProductImagesSection } from "@/domains/admin/products/components/product-images-section";
 import { ProductFormPreview } from "@/domains/admin/products/components/product-form-preview";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { AdminGroupTabs } from "@/components/admin/admin-group-tabs";
+import { CATALOG_GROUP_TABS } from "@/lib/admin-nav-groups";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
@@ -1561,6 +1563,7 @@ export default function AdminProductsPage() {
         ) : null
       }
     >
+      <AdminGroupTabs tabs={CATALOG_GROUP_TABS} />
       <div className="inline-flex rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-[var(--shadow-subtle)]">
         <button
           type="button"

@@ -11,6 +11,8 @@ import { OrdersTableCard } from "@/domains/admin/orders/components/orders-table-
 import { downloadOrdersCsv, getDateRange } from "@/domains/admin/orders/utils";
 import type { DatePreset } from "@/domains/admin/orders/types";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { AdminGroupTabs } from "@/components/admin/admin-group-tabs";
+import { ORDERS_GROUP_TABS } from "@/lib/admin-nav-groups";
 import { Button } from "@/components/ui/button";
 
 const MAX_ORDER_PAGE_SIZE = 100;
@@ -77,6 +79,7 @@ export default function AdminOrdersPage() {
         </div>
       }
     >
+      <AdminGroupTabs tabs={ORDERS_GROUP_TABS} />
       <OrdersFiltersCard
         datePreset={datePreset}
         setDatePreset={setDatePreset}

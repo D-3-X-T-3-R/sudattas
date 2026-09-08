@@ -15,6 +15,8 @@ pub struct PaymentIntent {
     pub razorpay_payment_id: Option<String>,
     pub created_at: String,
     pub expires_at: String,
+    pub gateway_fee_paise: Option<String>,
+    pub gateway_tax_paise: Option<String>,
 }
 
 #[graphql_object]
@@ -59,6 +61,12 @@ impl PaymentIntent {
     async fn expires_at(&self) -> &String {
         &self.expires_at
     }
+    async fn gateway_fee_paise(&self) -> &Option<String> {
+        &self.gateway_fee_paise
+    }
+    async fn gateway_tax_paise(&self) -> &Option<String> {
+        &self.gateway_tax_paise
+    }
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]
@@ -84,6 +92,19 @@ pub struct CapturePayment {
 pub struct GetPaymentIntent {
     pub intent_id: Option<String>,
     pub order_id: Option<String>,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "Admin: search/browse payment intents")]
+pub struct SearchPaymentIntent {
+    pub order_id: Option<String>,
+    pub user_id: Option<String>,
+    pub razorpay_order_id: Option<String>,
+    pub razorpay_payment_id: Option<String>,
+    /// "pending" | "processed" | "failed" | "needs_review" | "client_verified"
+    pub status: Option<String>,
+    pub limit: Option<String>,
+    pub offset: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

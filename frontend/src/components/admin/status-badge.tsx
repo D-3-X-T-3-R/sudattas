@@ -25,6 +25,10 @@ const STATUS_TONES: Record<string, StatusTone> = {
   draft: "muted",
   active: "green",
   archived: "muted",
+  processed: "green",
+  failed: "red",
+  client_verified: "blue",
+  "client verified": "blue",
 };
 
 function toneForStatus(statusName: string): StatusTone {

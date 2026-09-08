@@ -149,6 +149,10 @@ function resolveAdminRoute(query: string): string {
     return "/api/admin/refunds";
   }
 
+  if (containsAny(query, ["searchPaymentIntent", "getPaymentIntent"])) {
+    return "/api/admin/payment-intents";
+  }
+
   if (
     containsAny(query, [
       "searchOrder",

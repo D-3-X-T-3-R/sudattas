@@ -91,7 +91,8 @@ use proto::proto::core::{
     SearchExchangeRequestsRequest, SearchFabricRequest, SearchInventoryItemRequest,
     SearchInventoryLogRequest, SearchNewsletterCampaignRequest, SearchNewsletterSubscriberRequest,
     SearchOccasionRequest, SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
-    SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
+    SearchOrderStatusRequest, SearchPaymentIntentRequest, SearchProductImageRequest,
+    SearchProductMoodMappingRequest,
     SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
     SearchRefundAttemptsRequest, SearchReturnRequestsRequest, SearchReviewRequest,
     SearchShippingMethodRequest, SearchSizeRequest, SearchTransactionRequest,
@@ -2557,6 +2558,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::payment_intents::get_payment_intent(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_payment_intent(
+        &self,
+        request: Request<SearchPaymentIntentRequest>,
+    ) -> Result<Response<PaymentIntentsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::payment_intents::search_payment_intent(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }

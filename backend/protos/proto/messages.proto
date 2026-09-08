@@ -1640,6 +1640,19 @@ message GetPaymentIntentRequest {
     optional int64 order_id = 2;
 }
 
+// Admin lookup — unlike GetPaymentIntentRequest (single record by known id), this is a real
+// filtered/paginated browse so admin can actually find a payment intent without already
+// knowing its id.
+message SearchPaymentIntentRequest {
+    optional int64 order_id = 1;
+    optional int64 user_id = 2;
+    optional string razorpay_order_id = 3;
+    optional string razorpay_payment_id = 4;
+    optional string status = 5;  // "pending" | "processed" | "failed" | "needs_review" | "client_verified"
+    optional int64 limit = 6;
+    optional int64 offset = 7;
+}
+
 message PaymentIntentResponse {
     int64 intent_id = 1;
     string razorpay_order_id = 2;
@@ -1652,6 +1665,8 @@ message PaymentIntentResponse {
     string created_at = 9;
     string expires_at = 10;
     optional string razorpay_key_id = 11;  // For frontend Checkout (key_id only, never secret)
+    optional int64 gateway_fee_paise = 12;
+    optional int64 gateway_tax_paise = 13;
 }
 
 message PaymentIntentsResponse {

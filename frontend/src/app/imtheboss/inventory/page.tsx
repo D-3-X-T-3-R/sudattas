@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { AdminGroupTabs } from "@/components/admin/admin-group-tabs";
+import { CATALOG_GROUP_TABS } from "@/lib/admin-nav-groups";
 import { InventoryStockCard } from "@/domains/admin/inventory/components/inventory-stock-card";
 import { InventoryLogsCard } from "@/domains/admin/inventory/components/inventory-logs-card";
 import type { InventoryDisplayRow, VariantLabelMap } from "@/domains/admin/inventory/types";
@@ -66,6 +68,7 @@ export default function AdminInventoryPage() {
       title="Inventory"
       description="Stock levels across every product variant, and a manual change log."
     >
+      <AdminGroupTabs tabs={CATALOG_GROUP_TABS} />
       <div className="space-y-6">
         <InventoryStockCard
           rows={stockRows}

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Receipt } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { AdminGroupTabs } from "@/components/admin/admin-group-tabs";
+import { FINANCE_GROUP_TABS } from "@/lib/admin-nav-groups";
 import { AdminTableCard } from "@/components/admin/admin-cards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +90,7 @@ export default function AdminTransactionsPage() {
       title="Transaction ledger"
       description="A manually maintained payment ledger — nothing in checkout, refunds, or shipping writes here automatically yet, so entries only appear once added below."
     >
+      <AdminGroupTabs tabs={FINANCE_GROUP_TABS} />
       <AdminTableCard title="Transactions" icon={<Receipt className="h-4 w-4 text-[var(--color-green)]" />}>
         {txQuery.isLoading ? (
           <p className="py-8 text-center text-sm text-[var(--color-muted)]">Loading transactions…</p>

@@ -5,25 +5,22 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Package,
   ShoppingCart,
   Users,
-  Boxes,
-  Truck,
   Settings,
   Menu,
   X,
   LogOut,
   ExternalLink,
   MessageSquareText,
-  Receipt,
   ScrollText,
   Mail,
   Tag,
-  Undo2,
-  Banknote,
+  IndianRupee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -32,22 +29,42 @@ import { publicEnv } from "@/lib/env/public";
 const ADMIN_BASE = "/imtheboss";
 const STORE_URL = publicEnv.NEXT_PUBLIC_STORE_URL || "/";
 
-const NAV = [
+interface NavItem {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  /** Other routes that should also highlight this item — grouped pages reached via its
+   * in-page tab bar (see AdminGroupTabs) rather than a sidebar entry of their own. */
+  match?: string[];
+}
+
+const NAV: NavItem[] = [
   { href: `${ADMIN_BASE}`, icon: LayoutDashboard, label: "Dashboard" },
-  { href: `${ADMIN_BASE}/orders`, icon: ShoppingCart, label: "Orders" },
-  { href: `${ADMIN_BASE}/shipments`, icon: Truck, label: "Shipments" },
-  { href: `${ADMIN_BASE}/products`, icon: Package, label: "Products" },
+  {
+    href: `${ADMIN_BASE}/orders`,
+    icon: ShoppingCart,
+    label: "Orders",
+    match: [`${ADMIN_BASE}/shipments`, `${ADMIN_BASE}/returns`],
+  },
+  {
+    href: `${ADMIN_BASE}/products`,
+    icon: Package,
+    label: "Products",
+    match: [`${ADMIN_BASE}/inventory`],
+  },
   { href: `${ADMIN_BASE}/coupons`, icon: Tag, label: "Coupons" },
-  { href: `${ADMIN_BASE}/inventory`, icon: Boxes, label: "Inventory" },
   { href: `${ADMIN_BASE}/customers`, icon: Users, label: "Customers" },
   { href: `${ADMIN_BASE}/reviews`, icon: MessageSquareText, label: "Reviews" },
-  { href: `${ADMIN_BASE}/returns`, icon: Undo2, label: "Returns" },
-  { href: `${ADMIN_BASE}/refunds`, icon: Banknote, label: "Refunds" },
-  { href: `${ADMIN_BASE}/transactions`, icon: Receipt, label: "Transactions" },
+  {
+    href: `${ADMIN_BASE}/payments`,
+    icon: IndianRupee,
+    label: "Payments",
+    match: [`${ADMIN_BASE}/refunds`, `${ADMIN_BASE}/transactions`],
+  },
   { href: `${ADMIN_BASE}/newsletter`, icon: Mail, label: "Newsletter" },
   { href: `${ADMIN_BASE}/activity-log`, icon: ScrollText, label: "Activity log" },
   { href: `${ADMIN_BASE}/settings`, icon: Settings, label: "Settings" },
-] as const;
+];
 
 function getTitle(pathname: string): string {
   const segment =
@@ -65,6 +82,7 @@ function getTitle(pathname: string): string {
     reviews: "Reviews",
     returns: "Returns",
     refunds: "Refunds",
+    payments: "Payments",
     transactions: "Transactions",
     newsletter: "Newsletter",
     "activity-log": "Activity log",
@@ -125,11 +143,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-1.5 p-4" aria-label="Admin navigation">
-          {NAV.map(({ href, icon: Icon, label }) => {
+          {NAV.map(({ href, icon: Icon, label, match }) => {
             const isActive =
               href === ADMIN_BASE
                 ? pathname === ADMIN_BASE || pathname === `${ADMIN_BASE}/`
-                : pathname.startsWith(href);
+                : pathname.startsWith(href) || (match ?? []).some((m) => pathname.startsWith(m));
 
             return (
               <Link

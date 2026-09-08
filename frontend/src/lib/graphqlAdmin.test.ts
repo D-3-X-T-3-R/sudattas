@@ -23,6 +23,15 @@ describe("gqlAdmin", () => {
     expect(fetchApiEnvelopeMock.mock.calls[0]?.[0]).toBe("/api/admin/orders");
   });
 
+  it("routes admin payment-intent queries through /api/admin/payment-intents", async () => {
+    await gqlAdmin(`query AdminSearchPaymentIntent($input: SearchPaymentIntent!) {
+      searchPaymentIntent(input: $input) { intentId status }
+    }`, { input: {} });
+
+    expect(fetchApiEnvelopeMock).toHaveBeenCalledTimes(1);
+    expect(fetchApiEnvelopeMock.mock.calls[0]?.[0]).toBe("/api/admin/payment-intents");
+  });
+
   it("never calls GraphQL /v2 directly from browser admin client", async () => {
     await gqlAdmin("query UnknownAdminQuery { customRoot }");
 

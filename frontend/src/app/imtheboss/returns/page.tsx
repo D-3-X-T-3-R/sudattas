@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Undo2 } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { AdminGroupTabs } from "@/components/admin/admin-group-tabs";
+import { ORDERS_GROUP_TABS } from "@/lib/admin-nav-groups";
 import { AdminTableCard } from "@/components/admin/admin-cards";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -64,6 +66,7 @@ export default function AdminReturnsPage() {
       title="Returns approval queue"
       description="Review, approve, and process customer return requests. Marking an item received starts the refund against the original payment automatically."
     >
+      <AdminGroupTabs tabs={ORDERS_GROUP_TABS} />
       <AdminTableCard title="Return requests" icon={<Undo2 className="h-4 w-4 text-[var(--color-green)]" />}>
         {returnsQuery.isLoading ? (
           <p className="py-8 text-center text-sm text-[var(--color-muted)]">Loading returns…</p>

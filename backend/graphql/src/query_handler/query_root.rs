@@ -32,7 +32,7 @@ use crate::resolvers::{
     },
     payment_intents::{
         self,
-        schema::{GetPaymentIntent, PaymentIntent},
+        schema::{GetPaymentIntent, PaymentIntent, SearchPaymentIntent},
     },
     product::{
         self,
@@ -427,6 +427,20 @@ impl QueryRoot {
         } else {
             Ok(rows)
         }
+    }
+
+    /// Admin-only: unlike getPaymentIntent (a single record by known id), this is a real
+    /// filtered/paginated browse so admin can find a payment intent without already knowing
+    /// its intent/order id.
+    #[instrument(err, ret)]
+    async fn search_payment_intent(
+        context: &Context,
+        input: SearchPaymentIntent,
+    ) -> FieldResult<Vec<PaymentIntent>> {
+        require_admin(context)?;
+        payment_intents::handlers::search_payment_intent(input)
+            .await
+            .map_err(|e| e.into_field_error())
     }
 
     // Shipments
