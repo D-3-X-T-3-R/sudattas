@@ -1,6 +1,7 @@
 use super::query_root;
 use super::Context;
 use crate::resolvers::{
+    app_settings::{self, schema::{AbandonedCartSettings, UpdateAbandonedCartSettingsInput}},
     cart::{
         self,
         schema::{Cart, CartMutation, DeleteCartItem, NewCart},
@@ -1897,6 +1898,19 @@ impl MutationRoot {
     ) -> FieldResult<Vec<ShippingMethod>> {
         require_admin(context)?;
         shipping_methods::handlers::delete_shipping_method(method_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: update the abandoned-cart worker's schedule. Only the fields provided are
+    /// changed; the worker picks up the new values on its next poll, no restart needed.
+    #[instrument(err, ret)]
+    async fn update_abandoned_cart_settings(
+        context: &Context,
+        input: UpdateAbandonedCartSettingsInput,
+    ) -> FieldResult<AbandonedCartSettings> {
+        require_admin(context)?;
+        app_settings::handlers::update_abandoned_cart_settings(input)
             .await
             .map_err(|e| e.into_field_error())
     }

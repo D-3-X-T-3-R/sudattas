@@ -1,3 +1,4 @@
+pub mod app_settings;
 pub mod cart;
 pub mod category;
 pub mod colors;

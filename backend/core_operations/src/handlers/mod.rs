@@ -1,3 +1,4 @@
+pub mod app_settings;
 pub mod cart;
 pub mod categories;
 pub mod colors;
@@ -40,6 +41,7 @@ pub mod webhooks;
 pub mod wishlist;
 
 // Re-export all handlers (used by gRPC server and other crates)
+pub use app_settings::*;
 pub use cart::*;
 pub use categories::*;
 pub use colors::*;

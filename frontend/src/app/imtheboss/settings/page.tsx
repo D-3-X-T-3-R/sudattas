@@ -6,6 +6,7 @@ import { AdminPageShell } from "@/components/admin/admin-page-shell";
 import { AdminTableCard } from "@/components/admin/admin-cards";
 import { TaxonomyManagerCard } from "@/components/admin/taxonomy-manager-card";
 import { ShippingMethodsCard } from "@/components/admin/shipping-methods-card";
+import { AbandonedCartSettingsCard } from "@/components/admin/abandoned-cart-settings-card";
 import {
   fetchSizes,
   createSize,
@@ -42,7 +43,7 @@ export default function AdminSettingsPage() {
     <AdminPageShell
       label="Settings"
       title="Store configuration"
-      description="Product taxonomy (sizes, colors, fabrics, weaves, occasions), staff roles, shipping methods, and, eventually, payment/tax settings."
+      description="Product taxonomy (sizes, colors, fabrics, weaves, occasions), staff roles, shipping methods, background job schedules, and, eventually, payment/tax settings."
     >
       <div className="grid gap-6 lg:grid-cols-2">
         <TaxonomyManagerCard
@@ -132,6 +133,10 @@ export default function AdminSettingsPage() {
 
       <div className="mt-6">
         <ShippingMethodsCard />
+      </div>
+
+      <div className="mt-6 max-w-xl">
+        <AbandonedCartSettingsCard />
       </div>
 
       <AdminTableCard

@@ -128,6 +128,10 @@ function resolveAdminRoute(query: string): string {
     return "/api/admin/shipping-methods";
   }
 
+  if (containsAny(query, ["abandonedCartSettings", "updateAbandonedCartSettings"])) {
+    return "/api/admin/app-settings";
+  }
+
   if (
     containsAny(query, [
       "searchReturnRequests",

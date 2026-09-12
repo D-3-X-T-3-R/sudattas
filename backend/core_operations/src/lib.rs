@@ -43,7 +43,8 @@ pub fn load_env_once() {
 }
 
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, ActivateProductRequest, AddWishlistItemRequest,
+    grpc_services_server::GrpcServices, AbandonedCartSettingsResponse, ActivateProductRequest,
+    AddWishlistItemRequest,
     AdminMarkExchangeReceivedRequest, AdminMarkOrderDeliveredRequest,
     AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse,
     AdminMarkReturnReceivedRequest, AdminUpdateExchangeStatusRequest,
@@ -69,7 +70,8 @@ use proto::proto::core::{
     DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleRequest, DeleteWeaveRequest,
     DeleteWishlistItemRequest, EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse,
     EstimateCheckoutShippingRequest, EstimateCheckoutShippingResponse, EventLogsResponse,
-    ExchangeRequestsResponse, FabricsResponse, GetCartItemsRequest, GetOrderEventsRequest,
+    ExchangeRequestsResponse, FabricsResponse, GetAbandonedCartSettingsRequest,
+    GetCartItemsRequest, GetOrderEventsRequest,
     GetOrderInvoiceDownloadRequest, GetOrderInvoiceDownloadResponse, GetOrderInvoiceRequest,
     GetOrderStatsRequest, GetOrderStatsResponse, GetPaymentIntentRequest,
     GetPresignedUploadUrlRequest, GetProductsByIdRequest, GetRefundsRequest,
@@ -104,7 +106,8 @@ use proto::proto::core::{
     SyncExchangePickupRequest, SyncOrderShipmentsFromShiprocketRequest,
     SyncOrderShipmentsFromShiprocketResponse,
     SyncProductImagesRequest, TransactionsResponse, UnsubscribeNewsletterByTokenRequest,
-    UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest,
+    UpdateAbandonedCartSettingsRequest, UpdateCartItemRequest, UpdateCategoryRequest,
+    UpdateColorRequest, UpdateCouponRequest,
     UpdateEventLogRequest, UpdateFabricRequest, UpdateInventoryItemRequest,
     UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOccasionRequest,
     UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
@@ -3029,6 +3032,45 @@ impl GrpcServices for MyGRPCServices {
         Ok(Response::new(ReadinessResponse {
             ok: true,
             error: None,
+        }))
+    }
+
+    async fn get_abandoned_cart_settings(
+        &self,
+        _request: Request<GetAbandonedCartSettingsRequest>,
+    ) -> Result<Response<AbandonedCartSettingsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        let settings = handlers::app_settings::get_abandoned_cart_settings(db.as_ref()).await?;
+        Ok(Response::new(AbandonedCartSettingsResponse {
+            enabled: settings.enabled,
+            delay_hours: settings.delay_hours,
+            poll_interval_sec: settings.poll_interval_sec,
+        }))
+    }
+
+    async fn update_abandoned_cart_settings(
+        &self,
+        request: Request<UpdateAbandonedCartSettingsRequest>,
+    ) -> Result<Response<AbandonedCartSettingsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        let req = request.into_inner();
+        let settings = handlers::app_settings::update_abandoned_cart_settings(
+            db.as_ref(),
+            req.enabled,
+            req.delay_hours,
+            req.poll_interval_sec,
+        )
+        .await?;
+        Ok(Response::new(AbandonedCartSettingsResponse {
+            enabled: settings.enabled,
+            delay_hours: settings.delay_hours,
+            poll_interval_sec: settings.poll_interval_sec,
         }))
     }
 }

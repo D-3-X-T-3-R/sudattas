@@ -41,6 +41,13 @@ describe("gqlAdmin", () => {
     expect(fetchApiEnvelopeMock.mock.calls[0]?.[0]).toBe("/api/admin/exchanges");
   });
 
+  it("routes admin app-settings queries through /api/admin/app-settings", async () => {
+    await gqlAdmin(`query AdminAbandonedCartSettings { abandonedCartSettings { enabled } }`);
+
+    expect(fetchApiEnvelopeMock).toHaveBeenCalledTimes(1);
+    expect(fetchApiEnvelopeMock.mock.calls[0]?.[0]).toBe("/api/admin/app-settings");
+  });
+
   it("never calls GraphQL /v2 directly from browser admin client", async () => {
     await gqlAdmin("query UnknownAdminQuery { customRoot }");
 

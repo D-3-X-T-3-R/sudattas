@@ -3371,6 +3371,35 @@ pub struct ReadinessResponse {
     #[prost(string, optional, tag = "2")]
     pub error: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// Admin-configurable schedule for the abandoned-cart recovery worker (backed by AppSettings,
+/// a generic key/value store) — DB-backed so a change here takes effect on the worker's next
+/// tick with no restart, unlike the ABANDONED_CART_* env vars it falls back to when unset.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetAbandonedCartSettingsRequest {}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AbandonedCartSettingsResponse {
+    #[prost(bool, tag = "1")]
+    pub enabled: bool,
+    #[prost(int64, tag = "2")]
+    pub delay_hours: i64,
+    #[prost(int64, tag = "3")]
+    pub poll_interval_sec: i64,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateAbandonedCartSettingsRequest {
+    #[prost(bool, optional, tag = "1")]
+    pub enabled: ::core::option::Option<bool>,
+    #[prost(int64, optional, tag = "2")]
+    pub delay_hours: ::core::option::Option<i64>,
+    #[prost(int64, optional, tag = "3")]
+    pub poll_interval_sec: ::core::option::Option<i64>,
+}
 /// Generated client implementations.
 pub mod grpc_services_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
@@ -7888,6 +7917,66 @@ pub mod grpc_services_client {
                 .insert(GrpcMethod::new("grpc_services.GRPCServices", "Readiness"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_abandoned_cart_settings(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetAbandonedCartSettingsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::AbandonedCartSettingsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/GetAbandonedCartSettings",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "GetAbandonedCartSettings",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn update_abandoned_cart_settings(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdateAbandonedCartSettingsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::AbandonedCartSettingsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/UpdateAbandonedCartSettings",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "UpdateAbandonedCartSettings",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -8990,6 +9079,20 @@ pub mod grpc_services_server {
             request: tonic::Request<super::ReadinessRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ReadinessResponse>,
+            tonic::Status,
+        >;
+        async fn get_abandoned_cart_settings(
+            &self,
+            request: tonic::Request<super::GetAbandonedCartSettingsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::AbandonedCartSettingsResponse>,
+            tonic::Status,
+        >;
+        async fn update_abandoned_cart_settings(
+            &self,
+            request: tonic::Request<super::UpdateAbandonedCartSettingsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::AbandonedCartSettingsResponse>,
             tonic::Status,
         >;
     }
@@ -16982,6 +17085,111 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ReadinessSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/GetAbandonedCartSettings" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetAbandonedCartSettingsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::GetAbandonedCartSettingsRequest>
+                    for GetAbandonedCartSettingsSvc<T> {
+                        type Response = super::AbandonedCartSettingsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::GetAbandonedCartSettingsRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::get_abandoned_cart_settings(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetAbandonedCartSettingsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/UpdateAbandonedCartSettings" => {
+                    #[allow(non_camel_case_types)]
+                    struct UpdateAbandonedCartSettingsSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<
+                        super::UpdateAbandonedCartSettingsRequest,
+                    > for UpdateAbandonedCartSettingsSvc<T> {
+                        type Response = super::AbandonedCartSettingsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::UpdateAbandonedCartSettingsRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::update_abandoned_cart_settings(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = UpdateAbandonedCartSettingsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod app_settings;
 pub mod cart;
 pub mod colors;
 pub mod coupon_redemptions;

@@ -246,4 +246,6 @@ service GRPCServices {
 
     // Health / readiness (DB ping; for orchestrators)
     rpc Readiness(ReadinessRequest) returns (ReadinessResponse);
+    rpc GetAbandonedCartSettings(GetAbandonedCartSettingsRequest) returns (AbandonedCartSettingsResponse);
+    rpc UpdateAbandonedCartSettings(UpdateAbandonedCartSettingsRequest) returns (AbandonedCartSettingsResponse);
 }

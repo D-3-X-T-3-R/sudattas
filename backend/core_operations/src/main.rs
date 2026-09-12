@@ -1,7 +1,9 @@
 use core_db_entities::get_db;
 use core_operations::{
     check_auth,
+    handlers::app_settings::get_abandoned_cart_settings,
     procedures::{
+        abandoned_cart::enqueue_abandoned_cart_events,
         cancel_pending_logistics::process_cancel_pending_logistics,
         create_shipments_after_cancel_window::process_create_shipments_after_cancel_window,
         outbox_worker::process_pending_outbox_events,
@@ -463,6 +465,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     } else {
         log::info!("refund attempts worker: disabled via REFUND_ATTEMPTS_DISABLE_WORKER");
+    }
+
+    // Closes a real gap: enqueueAbandonedCart / enqueue_abandoned_cart_events (the template +
+    // outbox delivery path were already built and tested) had no caller anywhere — no cart was
+    // ever actually flagged as abandoned, no matter how long it sat. This is that trigger.
+    //
+    // Settings (enabled / delay_hours / poll_interval_sec) are re-read from AppSettings on
+    // every cycle rather than once at startup, so an admin changing them on the Settings page
+    // takes effect on the next tick — no restart needed. Env vars (ABANDONED_CART_*) remain the
+    // fallback default for whichever of these an admin has never actually set.
+    {
+        let db = shared_db.clone();
+        log::info!("abandoned cart worker: background task started (settings loaded from AppSettings, env-var defaults as fallback)");
+        let abandoned_cart_worker_handle = tokio::spawn(async move {
+            loop {
+                let settings = match get_abandoned_cart_settings(db.as_ref()).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::warn!(
+                            "abandoned cart worker: failed to load settings, retrying in 60s: {}",
+                            e.message()
+                        );
+                        tokio::time::sleep(Duration::from_secs(60)).await;
+                        continue;
+                    }
+                };
+                tokio::time::sleep(Duration::from_secs(settings.poll_interval_sec as u64)).await;
+                if !settings.enabled {
+                    continue;
+                }
+                match enqueue_abandoned_cart_events(&db, settings.delay_hours).await {
+                    Ok(n) if n > 0 => {
+                        log::info!("abandoned cart worker: enqueued {n} abandoned-cart email(s)");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::warn!("abandoned cart worker: sweep failed: {}", e.message());
+                    }
+                }
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = abandoned_cart_worker_handle.await {
+                log::error!("abandoned cart worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("abandoned_cart");
+            }
+        });
     }
 
     Server::builder()

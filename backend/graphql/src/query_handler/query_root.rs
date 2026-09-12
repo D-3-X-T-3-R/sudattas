@@ -1,5 +1,6 @@
 use super::Context;
 use crate::resolvers::{
+    app_settings::{self, schema::AbandonedCartSettings},
     cart::{self, schema::Cart},
     category::{
         self,
@@ -683,6 +684,15 @@ impl QueryRoot {
             .into_iter()
             .filter(|a| a.user_id.as_deref() == Some(uid.as_str()))
             .collect())
+    }
+
+    /// Admin: the abandoned-cart worker's live schedule (backed by AppSettings, not env vars).
+    #[instrument(err, ret)]
+    async fn abandoned_cart_settings(context: &Context) -> FieldResult<AbandonedCartSettings> {
+        require_admin(context)?;
+        app_settings::handlers::abandoned_cart_settings()
+            .await
+            .map_err(|e| e.into_field_error())
     }
 
     // P2 Data retention: export current user's PII (no password)

@@ -1881,3 +1881,20 @@ message ReadinessResponse {
     bool ok = 1;
     optional string error = 2;  // set when ok is false
 }
+
+// Admin-configurable schedule for the abandoned-cart recovery worker (backed by AppSettings,
+// a generic key/value store) — DB-backed so a change here takes effect on the worker's next
+// tick with no restart, unlike the ABANDONED_CART_* env vars it falls back to when unset.
+message GetAbandonedCartSettingsRequest {}
+
+message AbandonedCartSettingsResponse {
+    bool enabled = 1;
+    int64 delay_hours = 2;
+    int64 poll_interval_sec = 3;
+}
+
+message UpdateAbandonedCartSettingsRequest {
+    optional bool enabled = 1;
+    optional int64 delay_hours = 2;
+    optional int64 poll_interval_sec = 3;
+}
