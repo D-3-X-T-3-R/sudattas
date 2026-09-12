@@ -87,7 +87,8 @@ use proto::proto::core::{
     RefundAttemptsResponse, RefundsResponse, RequestExchangeRequest, RequestReturnRequest,
     ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ResolveRefundAttemptNeedsReviewRequest,
     ResolveRefundAttemptNeedsReviewResponse, ReturnRequestsResponse, ReviewsResponse,
-    SearchCategoryRequest, SearchColorRequest, SearchCouponAdminRequest, SearchEventLogRequest,
+    ScheduleExchangePickupRequest, SearchCategoryRequest, SearchColorRequest,
+    SearchCouponAdminRequest, SearchEventLogRequest,
     SearchExchangeRequestsRequest, SearchFabricRequest, SearchInventoryItemRequest,
     SearchInventoryLogRequest, SearchNewsletterCampaignRequest, SearchNewsletterSubscriberRequest,
     SearchOccasionRequest, SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
@@ -100,7 +101,8 @@ use proto::proto::core::{
     SearchWishlistItemRequest, SendNewsletterCampaignRequest, SetUserStatusRequest,
     ShipmentsResponse, ShippingAddressesResponse, ShippingMethodsResponse,
     ShopHighlightMoodsRequest, ShopHighlightMoodsResponse, SizesResponse,
-    SyncOrderShipmentsFromShiprocketRequest, SyncOrderShipmentsFromShiprocketResponse,
+    SyncExchangePickupRequest, SyncOrderShipmentsFromShiprocketRequest,
+    SyncOrderShipmentsFromShiprocketResponse,
     SyncProductImagesRequest, TransactionsResponse, UnsubscribeNewsletterByTokenRequest,
     UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest,
     UpdateEventLogRequest, UpdateFabricRequest, UpdateInventoryItemRequest,
@@ -1159,6 +1161,32 @@ impl GrpcServices for MyGRPCServices {
         let res = handlers::exchanges::admin_update_exchange_status(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
+    }
+
+    // Manages its own transactions (precheck, then a real Shiprocket network call outside any
+    // transaction, then persist the booking) — see handlers::exchanges::schedule_exchange_pickup.
+    async fn schedule_exchange_pickup(
+        &self,
+        request: Request<ScheduleExchangePickupRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        handlers::exchanges::schedule_exchange_pickup(db, request).await
+    }
+
+    // May internally delegate into admin_mark_exchange_received (its own multi-transaction
+    // flow) once the courier reports delivery — see handlers::exchanges::sync_exchange_pickup.
+    async fn sync_exchange_pickup(
+        &self,
+        request: Request<SyncExchangePickupRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        handlers::exchanges::sync_exchange_pickup(db, request).await
     }
 
     // OrderDetails Services

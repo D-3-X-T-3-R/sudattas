@@ -30,7 +30,7 @@ use crate::resolvers::{
         self,
         schema::{
             AdminMarkExchangeReceivedInput, AdminUpdateExchangeStatusInput, ExchangeRequest,
-            RequestExchangeInput,
+            RequestExchangeInput, ScheduleExchangePickupInput, SyncExchangePickupInput,
         },
     },
     fabrics::{
@@ -114,13 +114,15 @@ use crate::resolvers::{
             NewRefund, Refund, ResolveNeedsReviewInput, ResolveRefundAttemptNeedsReviewInput,
         },
     },
-    returns::{
-        self,
-        schema::{
-            AdminMarkReturnReceivedInput, AdminUpdateReturnStatusInput, RequestReturnInput,
-            ReturnRequest,
-        },
-    },
+    // Unused while the request_return/admin_mark_return_received/admin_update_return_status
+    // mutations below are commented out — restore alongside them.
+    // returns::{
+    //     self,
+    //     schema::{
+    //         AdminMarkReturnReceivedInput, AdminUpdateReturnStatusInput, RequestReturnInput,
+    //         ReturnRequest,
+    //     },
+    // },
     reviews::{
         self,
         schema::{NewReview, Review, ReviewMutation},
@@ -732,6 +734,11 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    // Temporarily disabled (2026-09-12) to test the new exchange flow in isolation — these
+    // three fields are removed from the schema entirely while disabled (not just gated at
+    // runtime), matching the frontend-side disable in profile-authenticated-content.tsx.
+    // Uncomment to re-enable; nothing else references these three methods.
+    /*
     #[instrument(err, ret)]
     async fn request_return(
         context: &Context,
@@ -765,6 +772,7 @@ impl MutationRoot {
             .await
             .map_err(|e| e.into_field_error())
     }
+    */
 
     /// Category-scoped exchange (same product, different size/colour, exact same price) —
     /// distinct from the refund-only `requestReturn` above.
@@ -799,6 +807,34 @@ impl MutationRoot {
     ) -> FieldResult<Vec<ExchangeRequest>> {
         require_admin(context)?;
         exchanges::handlers::admin_update_exchange_status(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: book the reverse-pickup shipment via Shiprocket. Deliberately separate from
+    /// adminUpdateExchangeStatus so approving an exchange never itself dispatches a real
+    /// courier request — a distinct explicit click.
+    #[instrument(err, ret)]
+    async fn schedule_exchange_pickup(
+        context: &Context,
+        input: ScheduleExchangePickupInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::schedule_exchange_pickup(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: refresh the reverse-pickup shipment's tracking; auto-completes the exchange
+    /// (restores stock, creates the replacement order) once Shiprocket reports it delivered
+    /// to the warehouse.
+    #[instrument(err, ret)]
+    async fn sync_exchange_pickup(
+        context: &Context,
+        input: SyncExchangePickupInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::sync_exchange_pickup(input)
             .await
             .map_err(|e| e.into_field_error())
     }

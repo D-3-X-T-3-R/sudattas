@@ -1,12 +1,14 @@
 use proto::proto::core::{
     AdminMarkExchangeReceivedRequest, AdminUpdateExchangeStatusRequest, ExchangeRequestResponse,
-    RequestExchangeRequest, SearchExchangeRequestsRequest,
+    RequestExchangeRequest, ScheduleExchangePickupRequest, SearchExchangeRequestsRequest,
+    SyncExchangePickupRequest,
 };
 use tracing::instrument;
 
 use super::schema::{
     AdminMarkExchangeReceivedInput, AdminUpdateExchangeStatusInput, ExchangeRequest,
-    RequestExchangeInput, SearchExchangeRequestsInput,
+    RequestExchangeInput, ScheduleExchangePickupInput, SearchExchangeRequestsInput,
+    SyncExchangePickupInput,
 };
 use crate::resolvers::{
     error::GqlError,
@@ -26,6 +28,13 @@ fn exchange_response_to_gql(row: ExchangeRequestResponse) -> ExchangeRequest {
         created_at: row.created_at,
         received_at: row.received_at,
         replacement_order_id: row.replacement_order_id.map(|v| v.to_string()),
+        pickup_shiprocket_order_id: row.pickup_shiprocket_order_id,
+        pickup_shiprocket_shipment_id: row.pickup_shiprocket_shipment_id,
+        pickup_awb_code: row.pickup_awb_code,
+        pickup_courier_name: row.pickup_courier_name,
+        pickup_status: row.pickup_status,
+        pickup_scheduled_at: row.pickup_scheduled_at,
+        pickup_tracking_events_json: row.pickup_tracking_events_json,
     }
 }
 
@@ -96,6 +105,42 @@ pub(crate) async fn admin_mark_exchange_received(
     let mut client = connect_grpc_client().await?;
     let response = client
         .admin_mark_exchange_received(AdminMarkExchangeReceivedRequest {
+            exchange_id: parse_i64(&input.exchange_id, "exchange_id")?,
+        })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(exchange_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn schedule_exchange_pickup(
+    input: ScheduleExchangePickupInput,
+) -> Result<Vec<ExchangeRequest>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .schedule_exchange_pickup(ScheduleExchangePickupRequest {
+            exchange_id: parse_i64(&input.exchange_id, "exchange_id")?,
+        })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(exchange_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn sync_exchange_pickup(
+    input: SyncExchangePickupInput,
+) -> Result<Vec<ExchangeRequest>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .sync_exchange_pickup(SyncExchangePickupRequest {
             exchange_id: parse_i64(&input.exchange_id, "exchange_id")?,
         })
         .await?;

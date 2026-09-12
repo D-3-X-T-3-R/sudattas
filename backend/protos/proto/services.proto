@@ -63,6 +63,8 @@ service GRPCServices {
     rpc SearchExchangeRequests(SearchExchangeRequestsRequest) returns (ExchangeRequestsResponse);
     rpc AdminMarkExchangeReceived(AdminMarkExchangeReceivedRequest) returns (ExchangeRequestsResponse);
     rpc AdminUpdateExchangeStatus(AdminUpdateExchangeStatusRequest) returns (ExchangeRequestsResponse);
+    rpc ScheduleExchangePickup(ScheduleExchangePickupRequest) returns (ExchangeRequestsResponse);
+    rpc SyncExchangePickup(SyncExchangePickupRequest) returns (ExchangeRequestsResponse);
     rpc PlaceOrder(PlaceOrderRequest) returns (OrdersResponse);
     rpc PlaceOrderAdmin(PlaceOrderAdminRequest) returns (OrdersResponse);
     rpc EstimateCheckoutShipping(EstimateCheckoutShippingRequest) returns (EstimateCheckoutShippingResponse);

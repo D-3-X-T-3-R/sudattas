@@ -29,6 +29,12 @@ const STATUS_TONES: Record<string, StatusTone> = {
   failed: "red",
   client_verified: "blue",
   "client verified": "blue",
+  requested: "gold",
+  approved: "blue",
+  in_transit: "blue",
+  received: "blue",
+  completed: "green",
+  rejected: "red",
 };
 
 function toneForStatus(statusName: string): StatusTone {

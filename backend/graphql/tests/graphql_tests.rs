@@ -1267,6 +1267,76 @@ async fn test_admin_update_exchange_status_requires_admin_authorization() {
 }
 
 #[tokio::test]
+async fn test_schedule_exchange_pickup_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"mutation { scheduleExchangePickup(input: { exchangeId: "1" }) { exchangeId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "scheduleExchangePickup should reject a non-admin user, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"), "got: {}", err);
+}
+
+#[tokio::test]
+async fn test_sync_exchange_pickup_requires_admin_authorization() {
+    let ctx = Context {
+        jwks: JWKSet { keys: vec![] },
+        redis_url: None,
+        auth: Some(AuthSource::Jwt("regular_user_123".to_string())),
+        request_id: None,
+        idempotency_key: None,
+        client_action: None,
+        guest_session_id: None,
+        jwt_subject: None,
+        admin_authorized: Some(false),
+        admin_resolution_source: Some("db".to_string()),
+        account_status: None,
+    };
+
+    let (res, errors) = juniper::execute(
+        r#"mutation { syncExchangePickup(input: { exchangeId: "1" }) { exchangeId } }"#,
+        None,
+        &schema(),
+        &juniper::Variables::new(),
+        &ctx,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !errors.is_empty(),
+        "syncExchangePickup should reject a non-admin user, got: {:?}",
+        (res, errors)
+    );
+    let err = format!("{:?}", errors[0]).to_lowercase();
+    assert!(err.contains("admin authorization required"), "got: {}", err);
+}
+
+#[tokio::test]
 async fn test_search_exchange_requests_requires_customer_or_admin() {
     let ctx = Context {
         jwks: JWKSet { keys: vec![] },

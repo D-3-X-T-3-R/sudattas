@@ -26,6 +26,8 @@ type OrderDetailRow = {
     name?: string;
     formatted?: string;
     images?: Array<{ url?: string | null; thumbnailUrl?: string | null }>;
+    categoryDetails?: Array<{ categoryId?: string; name?: string; exchangeEligible?: boolean }>;
+    variantStock?: Array<{ variantId?: string; sizeId?: string; sizeName?: string; quantity?: number }>;
   }>;
 };
 
@@ -102,6 +104,19 @@ type AccountOrderDetailResponse = {
   fulfillmentState: string;
   paymentState: string;
   returnWindowDays: number;
+  exchangeRequests: Array<{
+    exchangeId: string;
+    orderId: string;
+    userId: string;
+    orderDetailId: string;
+    desiredVariantId: string;
+    quantity: string;
+    status: string;
+    reason: string;
+    createdAt: string;
+    receivedAt?: string | null;
+    replacementOrderId?: string | null;
+  }>;
   returnRequests: Array<{
     returnId: string;
     orderId: string;
@@ -166,6 +181,17 @@ const ORDER_DETAIL_QUERY = `query AccountOrderDetail($search: SearchOrder!) {
           url
           thumbnailUrl
         }
+        categoryDetails {
+          categoryId
+          name
+          exchangeEligible
+        }
+        variantStock {
+          variantId
+          sizeId
+          sizeName
+          quantity
+        }
       }
     }
   }
@@ -188,6 +214,22 @@ const RETURN_REQUESTS_QUERY = `query AccountOrderReturns($input: SearchReturnReq
       refundAmountMinor
       status
     }
+  }
+}`;
+
+const EXCHANGE_REQUESTS_QUERY = `query AccountOrderExchanges($input: SearchExchangeRequestsInput!) {
+  searchExchangeRequests(input: $input) {
+    exchangeId
+    orderId
+    userId
+    orderDetailId
+    desiredVariantId
+    quantity
+    status
+    reason
+    createdAt
+    receivedAt
+    replacementOrderId
   }
 }`;
 
@@ -368,8 +410,16 @@ export async function GET(
     orderId: trimmedOrderId,
   }).catch(() => null);
 
-  const [orderResult, statusesResult, paymentResult, shipmentResult, eventsResult, refundsResult, returnsResult] =
-    await Promise.all([
+  const [
+    orderResult,
+    statusesResult,
+    paymentResult,
+    shipmentResult,
+    eventsResult,
+    refundsResult,
+    returnsResult,
+    exchangesResult,
+  ] = await Promise.all([
       callGraphqlAsCustomer<{ searchOrder?: OrderRow[] }>(userId, ORDER_DETAIL_QUERY, {
         search: { userId, orderId: trimmedOrderId, limit: "1", offset: "0" },
       }),
@@ -393,6 +443,11 @@ export async function GET(
       }>(userId, RETURN_REQUESTS_QUERY, {
         input: { orderId: trimmedOrderId },
       }),
+      callGraphqlAsCustomer<{
+        searchExchangeRequests?: AccountOrderDetailResponse["exchangeRequests"];
+      }>(userId, EXCHANGE_REQUESTS_QUERY, {
+        input: { orderId: trimmedOrderId },
+      }),
     ]);
 
   const firstErrors =
@@ -402,7 +457,8 @@ export async function GET(
     shipmentResult.errors ??
     eventsResult.errors ??
     refundsResult.errors ??
-    returnsResult.errors;
+    returnsResult.errors ??
+    exchangesResult.errors;
   if (firstErrors?.length) {
     const { status, message } = graphqlErrorToApiStatus(
       firstErrors,
@@ -435,6 +491,7 @@ export async function GET(
   const events = eventsResult.data?.getOrderEvents ?? [];
   const refunds = refundsResult.data?.getRefunds ?? [];
   const returnRequests = returnsResult.data?.searchReturnRequests ?? [];
+  const exchangeRequests = exchangesResult.data?.searchExchangeRequests ?? [];
   const returnWindowDays = Number.parseInt(
     (process.env.RETURN_WINDOW_DAYS ?? "7").trim(),
     10
@@ -488,6 +545,7 @@ export async function GET(
     paymentState: derivePaymentStateFromIntents(paymentIntents),
     fulfillmentState: deriveShipmentState(shipments),
     returnRequests,
+    exchangeRequests,
     returnWindowDays: normalizedReturnWindowDays,
     refundSummary: {
       itemRefundMinor,

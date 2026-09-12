@@ -18,7 +18,11 @@ export const CATALOG_GROUP_TABS: AdminGroupTab[] = [
 export const ORDERS_GROUP_TABS: AdminGroupTab[] = [
   { href: "/imtheboss/orders", label: "Orders" },
   { href: "/imtheboss/shipments", label: "Shipments" },
-  { href: "/imtheboss/returns", label: "Returns" },
+  // Returns tab temporarily hidden (2026-09-12) while testing the exchange flow in
+  // isolation — the page/route itself is untouched, just unreachable via nav. Re-add this
+  // line to bring it back.
+  // { href: "/imtheboss/returns", label: "Returns" },
+  { href: "/imtheboss/exchanges", label: "Exchanges" },
 ];
 
 export const FINANCE_GROUP_TABS: AdminGroupTab[] = [

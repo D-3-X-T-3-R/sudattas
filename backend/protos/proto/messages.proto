@@ -555,6 +555,21 @@ message AdminUpdateExchangeStatusRequest {
     optional string note = 3;
 }
 
+// Books the reverse-pickup leg (courier collects the original item from the customer,
+// delivers it to the registered warehouse) via Shiprocket's return-order API. Deliberately
+// separate from AdminUpdateExchangeStatus so approving an exchange never itself dispatches a
+// real courier request.
+message ScheduleExchangePickupRequest {
+    int64 exchange_id = 1;
+}
+
+// Refreshes the reverse-pickup shipment's tracking from Shiprocket; auto-transitions the
+// exchange to "received" (restoring stock and creating the replacement order, same as
+// AdminMarkExchangeReceived) once the courier reports it delivered to the warehouse.
+message SyncExchangePickupRequest {
+    int64 exchange_id = 1;
+}
+
 message ExchangeRequestResponse {
     int64 exchange_id = 1;
     int64 order_id = 2;
@@ -568,6 +583,15 @@ message ExchangeRequestResponse {
     optional string received_at = 10;
     // Set once the admin marks the exchange received and the replacement order is created.
     optional int64 replacement_order_id = 11;
+    // Reverse-pickup shipment (courier collects the original item from the customer) — set once
+    // an admin schedules the pickup; distinct from replacement_order_id's forward shipment.
+    optional string pickup_shiprocket_order_id = 12;
+    optional string pickup_shiprocket_shipment_id = 13;
+    optional string pickup_awb_code = 14;
+    optional string pickup_courier_name = 15;
+    optional string pickup_status = 16;
+    optional string pickup_scheduled_at = 17;
+    optional string pickup_tracking_events_json = 18;
 }
 
 message ExchangeRequestsResponse {

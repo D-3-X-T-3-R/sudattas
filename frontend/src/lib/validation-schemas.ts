@@ -71,9 +71,15 @@ export const addressInputSchema = z.object({
       BACKEND_MAX_ADDRESS_LINE_LEN,
       `Road/street must be at most ${BACKEND_MAX_ADDRESS_LINE_LEN} characters`
     ),
+  // Apartment/house is the one genuinely optional line — everything else on an address is
+  // required to actually get a courier to the right door.
   apartmentNoOrName: z.string().trim().nullable().optional(),
-  recipientName: z.string().trim().nullable().optional(),
-  phoneNumber: phoneSchema.nullable().optional(),
+  recipientName: z
+    .string()
+    .trim()
+    .min(1, "Recipient name is required")
+    .max(255, "Recipient name must be at most 255 characters"),
+  phoneNumber: requiredPhoneSchema,
 });
 
 // Accept positive rupee amount with up to 2 decimal places.

@@ -87,6 +87,9 @@ export type AccountOrderDetailRow = {
       thumbnailUrl?: string | null;
       thumbnail_url?: string | null;
     }>;
+    categoryDetails?: Array<{ categoryId?: string; name?: string; exchangeEligible?: boolean }>;
+    /** Sibling sizes of this same product — the pool a customer can request an exchange into. */
+    variantStock?: Array<{ variantId?: string; sizeId?: string; sizeName?: string; quantity?: number }>;
   }>;
 };
 
@@ -128,6 +131,19 @@ export type AccountOrderDetailPayload = {
   fulfillmentState: string;
   paymentState: string;
   returnWindowDays: number;
+  exchangeRequests: Array<{
+    exchangeId: string;
+    orderId: string;
+    userId: string;
+    orderDetailId: string;
+    desiredVariantId: string;
+    quantity: string;
+    status: string;
+    reason: string;
+    createdAt: string;
+    receivedAt?: string | null;
+    replacementOrderId?: string | null;
+  }>;
   returnRequests: Array<{
     returnId: string;
     orderId: string;
@@ -154,6 +170,12 @@ export type AccountOrderDetailPayload = {
     shippingRefundFormatted: string;
   };
 };
+
+// Temporarily disabled (2026-09-12) to test the new exchange flow in isolation, without
+// returns competing for the same order line — flip back to true to re-enable. Backend
+// mutations/queries are untouched by this flag; see mutation_root.rs/query_root.rs for the
+// matching GraphQL-side disable.
+const RETURNS_ENABLED = false;
 
 type ProfileNavId = "profile" | "orders" | "addresses" | "settings" | "support";
 type SupportCategory = "order" | "payment" | "refund" | "shipping" | "account";
@@ -611,6 +633,40 @@ function lineHasActiveReturn(detail: AccountOrderDetailPayload | undefined, orde
   return s !== "rejected" && s !== "cancelled";
 }
 
+function exchangeStatusLabel(rawStatus: string, replacementOrderId?: string | null): string {
+  const s = rawStatus.trim().toLowerCase();
+  if (s === "requested") return "Exchange requested";
+  if (s === "approved" || s === "in_transit") return "Exchange in progress";
+  if (s === "received") return "Received at store — preparing replacement";
+  if (s === "completed") {
+    return replacementOrderId ? `Exchange complete — replacement order #${replacementOrderId}` : "Exchange complete";
+  }
+  if (s === "rejected") return "Exchange rejected";
+  if (s === "cancelled") return "Exchange cancelled";
+  return "Exchange in progress";
+}
+
+function lineExchangeRequest(
+  detail: AccountOrderDetailPayload | undefined,
+  orderDetailId: string
+): AccountOrderDetailPayload["exchangeRequests"][number] | null {
+  const requests = (detail?.exchangeRequests ?? []).filter((r) => r.orderDetailId === orderDetailId);
+  if (requests.length === 0) return null;
+  const priority = ["completed", "received", "in_transit", "approved", "requested", "rejected", "cancelled"];
+  for (const state of priority) {
+    const found = requests.find((r) => r.status.toLowerCase() === state);
+    if (found) return found;
+  }
+  return requests[0] ?? null;
+}
+
+function lineHasActiveExchange(detail: AccountOrderDetailPayload | undefined, orderDetailId: string): boolean {
+  const request = lineExchangeRequest(detail, orderDetailId);
+  if (!request) return false;
+  const s = request.status.toLowerCase();
+  return s !== "rejected" && s !== "cancelled";
+}
+
 function UserIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
@@ -736,6 +792,12 @@ type ProfileAuthenticatedContentProps = {
   cancelOrder: (orderId: string) => Promise<void>;
   cancelOrderItems: (orderId: string, orderDetailIds: string[]) => Promise<void>;
   requestReturn: (orderId: string, orderDetailIds: string[], reason: string) => Promise<void>;
+  requestExchange: (
+    orderId: string,
+    orderDetailId: string,
+    desiredVariantId: string,
+    reason: string
+  ) => Promise<void>;
   onSignOut: () => void;
 };
 
@@ -767,6 +829,7 @@ export function ProfileAuthenticatedContent({
   cancelOrder,
   cancelOrderItems,
   requestReturn,
+  requestExchange,
   onSignOut,
 }: ProfileAuthenticatedContentProps) {
   const [activeNav, setActiveNav] = useState<ProfileNavId>("profile");
@@ -777,6 +840,18 @@ export function ProfileAuthenticatedContent({
   const [returnSelectionByOrder, setReturnSelectionByOrder] = useState<Record<string, string[]>>({});
   const [returnReasonByOrder, setReturnReasonByOrder] = useState<Record<string, string>>({});
   const [requestingReturnOrderId, setRequestingReturnOrderId] = useState<string | null>(null);
+  const [exchangeDialogContext, setExchangeDialogContext] = useState<{
+    lineKey: string;
+    orderId: string;
+    orderDetailId: string;
+    productName: string;
+    currentSizeName: string;
+    sizeOptions: Array<{ variantId?: string; sizeName?: string; quantity?: number }>;
+  } | null>(null);
+  const [exchangeDraftByLine, setExchangeDraftByLine] = useState<
+    Record<string, { desiredVariantId: string; reason: string }>
+  >({});
+  const [requestingExchangeLine, setRequestingExchangeLine] = useState<string | null>(null);
   const [refreshingOrderId, setRefreshingOrderId] = useState<string | null>(null);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [supportCategory, setSupportCategory] = useState<SupportCategory>("order");
@@ -890,6 +965,21 @@ export function ProfileAuthenticatedContent({
       setReturnReasonByOrder((prev) => ({ ...prev, [orderId]: "" }));
     } finally {
       setRequestingReturnOrderId((prev) => (prev === orderId ? null : prev));
+    }
+  };
+
+  const submitExchangeRequest = async (orderId: string, orderDetailId: string, lineKey: string) => {
+    const draft = exchangeDraftByLine[lineKey];
+    const desiredVariantId = (draft?.desiredVariantId ?? "").trim();
+    const reason = (draft?.reason ?? "").trim();
+    if (!desiredVariantId || !reason) return;
+    setRequestingExchangeLine(lineKey);
+    try {
+      await requestExchange(orderId, orderDetailId, desiredVariantId, reason);
+      setExchangeDraftByLine((prev) => ({ ...prev, [lineKey]: { desiredVariantId: "", reason: "" } }));
+      setExchangeDialogContext((prev) => (prev?.lineKey === lineKey ? null : prev));
+    } finally {
+      setRequestingExchangeLine((prev) => (prev === lineKey ? null : prev));
     }
   };
 
@@ -1110,6 +1200,30 @@ export function ProfileAuthenticatedContent({
                         withinReturnWindow &&
                         !((line.itemStatus ?? "").toLowerCase().includes("cancel")) &&
                         !lineHasOpenReturnRequest;
+                      const lineExchangeReq = line ? lineExchangeRequest(detail, line.orderDetailId) : null;
+                      const lineExchangeLabel = lineExchangeReq
+                        ? exchangeStatusLabel(lineExchangeReq.status, lineExchangeReq.replacementOrderId)
+                        : null;
+                      const lineHasOpenExchangeRequest = line
+                        ? lineHasActiveExchange(detail, line.orderDetailId)
+                        : false;
+                      const categoryExchangeEligible =
+                        line?.productDetails?.[0]?.categoryDetails?.[0]?.exchangeEligible === true;
+                      const sizeOptions = (line?.productDetails?.[0]?.variantStock ?? []).filter(
+                        (v) => v.variantId && v.variantId !== line?.variantId
+                      );
+                      // Exchanges swap size, never move money — unlike returns, COD orders are
+                      // eligible too (mirrors request_exchange's backend validation exactly).
+                      const lineEligibleForExchange =
+                        !!line &&
+                        deliveredForReturns &&
+                        withinReturnWindow &&
+                        !((line.itemStatus ?? "").toLowerCase().includes("cancel")) &&
+                        !lineHasOpenExchangeRequest &&
+                        !lineHasOpenReturnRequest &&
+                        categoryExchangeEligible &&
+                        sizeOptions.length > 0;
+                      const lineKey = `${o.orderId}:${line?.orderDetailId ?? ""}`;
                       const eligibleLineIdsForOrder = (detail?.order?.orderDetails ?? [])
                         .filter((row) => {
                           const rowHasReturn = lineHasActiveReturn(
@@ -1161,7 +1275,9 @@ export function ProfileAuthenticatedContent({
                               </p>
                             ) : null}
                             {line && (line.itemStatus ?? "").toLowerCase().includes("cancel") ? (
-                              <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#A34A4A]">Cancelled</p>
+                              // The order-status headline above already says "Cancelled" — no
+                              // need to repeat it here too.
+                              null
                             ) : showCancel ? (
                               <button
                                 type="button"
@@ -1178,12 +1294,15 @@ export function ProfileAuthenticatedContent({
                                   ? "Cancelling..."
                                   : "Cancel item"}
                               </button>
-                            ) : line ? (
+                            ) : line && !deliveredForReturns ? (
+                              // "Refuse delivery" only makes sense before delivery actually
+                              // happens (still shipped/in-transit) — showCancel being false
+                              // doesn't mean that on its own, it's also false once delivered.
                               <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">
                                 Cancellation window closed. You can refuse delivery.
                               </p>
                             ) : null}
-                            {line && lineEligibleForReturn ? (
+                            {RETURNS_ENABLED && line && lineEligibleForReturn ? (
                               <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs text-[var(--color-ink)]">
                                 <input
                                   type="checkbox"
@@ -1198,18 +1317,43 @@ export function ProfileAuthenticatedContent({
                                 Select for return
                               </label>
                             ) : null}
-                            {lineReturnLabel ? (
+                            {RETURNS_ENABLED && lineReturnLabel ? (
                               <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink)]">
                                 {lineReturnLabel}
                               </p>
-                            ) : isCodOrder && line ? (
+                            ) : RETURNS_ENABLED && isCodOrder && line ? (
                               <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">
                                 Returns are available only for prepaid orders.
                               </p>
-                            ) : showReturnWindowClosed ? (
+                            ) : RETURNS_ENABLED && showReturnWindowClosed ? (
                               <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">
                                 Return window closed.
                               </p>
+                            ) : null}
+                            {lineExchangeLabel ? (
+                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink)]">
+                                {lineExchangeLabel}
+                              </p>
+                            ) : line && lineEligibleForExchange ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExchangeDialogContext({
+                                    lineKey,
+                                    orderId: o.orderId,
+                                    orderDetailId: line.orderDetailId,
+                                    productName: pres.title,
+                                    currentSizeName:
+                                      line?.productDetails?.[0]?.variantStock?.find(
+                                        (v) => v.variantId === line?.variantId
+                                      )?.sizeName ?? "",
+                                    sizeOptions,
+                                  })
+                                }
+                                className="mt-2 rounded-full border border-[var(--color-gold)]/45 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-ink)] transition hover:bg-[var(--color-surface-soft)]"
+                              >
+                                Request exchange
+                              </button>
                             ) : null}
                             {showFullOrderCancel ? (
                               <button
@@ -1221,7 +1365,7 @@ export function ProfileAuthenticatedContent({
                                 {cancellingOrderId === o.orderId ? "Cancelling..." : "Cancel full order"}
                               </button>
                             ) : null}
-                            {isFirstForOrder && eligibleLineIdsForOrder.length > 0 ? (
+                            {RETURNS_ENABLED && isFirstForOrder && eligibleLineIdsForOrder.length > 0 ? (
                               <div className="mt-3 rounded-lg border border-[var(--color-gold)]/25 bg-[var(--color-surface-soft)] p-3">
                                 <Kicker tone="accent">Request return</Kicker>
                                 <textarea
@@ -1252,7 +1396,7 @@ export function ProfileAuthenticatedContent({
                                 </Button>
                               </div>
                             ) : null}
-                            {isFirstForOrder && detail?.refundSummary ? (
+                            {RETURNS_ENABLED && isFirstForOrder && detail?.refundSummary ? (
                               <p className="mt-2 text-xs text-[var(--color-muted)]">
                                 {refundTrackingState === "processed"
                                   ? "Refunded"
@@ -1922,6 +2066,107 @@ export function ProfileAuthenticatedContent({
               Continue with Cancellation
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!exchangeDialogContext}
+        onOpenChange={(open) => {
+          if (!open) setExchangeDialogContext(null);
+        }}
+      >
+        <DialogContent
+          title="Request exchange"
+          className="max-w-md border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]"
+          contentClassName="space-y-4"
+        >
+          {exchangeDialogContext ? (
+            (() => {
+              const draft = exchangeDraftByLine[exchangeDialogContext.lineKey] ?? {
+                desiredVariantId: "",
+                reason: "",
+              };
+              const canSubmit =
+                draft.desiredVariantId.trim().length > 0 &&
+                draft.reason.trim().length > 0 &&
+                requestingExchangeLine !== exchangeDialogContext.lineKey;
+              return (
+                <>
+                  <div>
+                    <p className="font-display text-lg font-semibold text-[var(--color-ink)]">
+                      {exchangeDialogContext.productName}
+                    </p>
+                    {exchangeDialogContext.currentSizeName ? (
+                      <p className="mt-0.5 text-sm text-[var(--color-muted)]">
+                        Currently: {exchangeDialogContext.currentSizeName}
+                      </p>
+                    ) : null}
+                  </div>
+                  <label className="block text-xs font-medium text-[var(--color-muted)]">
+                    New size
+                    <select
+                      value={draft.desiredVariantId}
+                      onChange={(e) =>
+                        setExchangeDraftByLine((prev) => ({
+                          ...prev,
+                          [exchangeDialogContext.lineKey]: { ...draft, desiredVariantId: e.target.value },
+                        }))
+                      }
+                      className="mt-1 w-full rounded-md border border-[var(--color-line)] bg-white px-3 py-2 text-sm text-[var(--color-ink)]"
+                    >
+                      <option value="">Select a size</option>
+                      {exchangeDialogContext.sizeOptions.map((v) => (
+                        <option key={v.variantId} value={v.variantId} disabled={v.quantity === 0}>
+                          {v.sizeName || "Size"}
+                          {v.quantity === 0 ? " (out of stock)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-medium text-[var(--color-muted)]">
+                    Reason for exchange
+                    <textarea
+                      value={draft.reason}
+                      onChange={(e) =>
+                        setExchangeDraftByLine((prev) => ({
+                          ...prev,
+                          [exchangeDialogContext.lineKey]: { ...draft, reason: e.target.value },
+                        }))
+                      }
+                      placeholder="e.g. runs a size small"
+                      rows={3}
+                      className="mt-1 w-full rounded-md border border-[var(--color-line)] bg-white px-3 py-2 text-sm text-[var(--color-ink)]"
+                    />
+                  </label>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setExchangeDialogContext(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      className="flex-1"
+                      onClick={() =>
+                        void submitExchangeRequest(
+                          exchangeDialogContext.orderId,
+                          exchangeDialogContext.orderDetailId,
+                          exchangeDialogContext.lineKey
+                        )
+                      }
+                      disabled={!canSubmit}
+                    >
+                      {requestingExchangeLine === exchangeDialogContext.lineKey
+                        ? "Submitting..."
+                        : "Submit exchange"}
+                    </Button>
+                  </div>
+                </>
+              );
+            })()
+          ) : null}
         </DialogContent>
       </Dialog>
     </section>

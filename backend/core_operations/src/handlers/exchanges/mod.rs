@@ -10,6 +10,8 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::returns::load_delivered_at;
+use crate::integrations::shiprocket::{self, ShiprocketError};
+use crate::integrations::shiprocket_status::shiprocket_status_label_for_id;
 use crate::order_policy;
 use crate::procedures::orders::place_order_admin;
 use chrono::Utc;
@@ -19,12 +21,13 @@ use core_db_entities::entity::{
 use proto::proto::core::{
     AdminMarkExchangeReceivedRequest, AdminUpdateExchangeStatusRequest, CreateOrderEventRequest,
     ExchangeRequestResponse, ExchangeRequestsResponse, PlaceOrderAdminLineItem,
-    PlaceOrderAdminRequest, RequestExchangeRequest, SearchExchangeRequestsRequest,
+    PlaceOrderAdminRequest, RequestExchangeRequest, ScheduleExchangePickupRequest,
+    SearchExchangeRequestsRequest, SyncExchangePickupRequest,
 };
 use sea_orm::{
     sea_query::LockType, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait,
-    DatabaseConnection, DatabaseTransaction, DbBackend, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait, Statement, TransactionTrait,
+    DatabaseConnection, DatabaseTransaction, DbBackend, EntityTrait, IntoActiveModel,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, TransactionTrait,
 };
 use tonic::{Request, Response, Status};
 
@@ -74,6 +77,22 @@ fn exchange_response(row: &exchange_requests::Model) -> ExchangeRequestResponse 
         created_at: row.created_at.to_rfc3339(),
         received_at: row.received_at.map(|v| v.to_rfc3339()),
         replacement_order_id: row.replacement_order_id,
+        pickup_shiprocket_order_id: row.pickup_shiprocket_order_id.clone(),
+        pickup_shiprocket_shipment_id: row.pickup_shiprocket_shipment_id.clone(),
+        pickup_awb_code: row.pickup_awb_code.clone(),
+        pickup_courier_name: row.pickup_courier_name.clone(),
+        pickup_status: row.pickup_status.clone(),
+        pickup_scheduled_at: row.pickup_scheduled_at.map(|v| v.to_rfc3339()),
+        pickup_tracking_events_json: row.pickup_tracking_events.as_ref().map(|v| v.to_string()),
+    }
+}
+
+fn map_shiprocket_error(error: ShiprocketError) -> Status {
+    match error {
+        ShiprocketError::NotConfigured => Status::failed_precondition(
+            "Shiprocket is not configured (set SHIPROCKET_EMAIL/SHIPROCKET_PASSWORD)",
+        ),
+        other => Status::unavailable(format!("Shiprocket request failed: {other}")),
     }
 }
 
@@ -220,6 +239,13 @@ pub async fn request_exchange(
         replacement_order_id: ActiveValue::Set(None),
         created_at: ActiveValue::NotSet,
         received_at: ActiveValue::Set(None),
+        pickup_shiprocket_order_id: ActiveValue::Set(None),
+        pickup_shiprocket_shipment_id: ActiveValue::Set(None),
+        pickup_awb_code: ActiveValue::Set(None),
+        pickup_courier_name: ActiveValue::Set(None),
+        pickup_status: ActiveValue::Set(None),
+        pickup_scheduled_at: ActiveValue::Set(None),
+        pickup_tracking_events: ActiveValue::Set(None),
     }
     .insert(txn)
     .await
@@ -520,6 +546,168 @@ pub async fn admin_mark_exchange_received(
     finish_txn.commit().await.map_err(map_db_error_to_status)?;
 
     let updated = exchange_requests::Entity::find_by_id(row.exchange_id)
+        .one(db)
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| Status::not_found("Exchange request not found"))?;
+    Ok(Response::new(ExchangeRequestsResponse {
+        items: vec![exchange_response(&updated)],
+    }))
+}
+
+/// Books the reverse-pickup leg via Shiprocket (courier collects the original item from the
+/// customer, delivers it to the warehouse). Deliberately its own explicit action, distinct from
+/// `admin_update_exchange_status`, so approving an exchange never itself fires a real courier
+/// request — an admin has to take this second, separate action.
+pub async fn schedule_exchange_pickup(
+    db: &DatabaseConnection,
+    request: Request<ScheduleExchangePickupRequest>,
+) -> Result<Response<ExchangeRequestsResponse>, Status> {
+    let req = request.into_inner();
+
+    let precheck_txn = db.begin().await.map_err(|e| {
+        Status::internal(format!("failed to begin schedule_exchange_pickup txn: {e}"))
+    })?;
+    let row = exchange_requests::Entity::find_by_id(req.exchange_id)
+        .lock(LockType::Update)
+        .one(&precheck_txn)
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| Status::not_found("Exchange request not found"))?;
+
+    if row.pickup_awb_code.is_some() {
+        // Already booked — idempotent no-op, same shape as admin_mark_exchange_received's
+        // "already done" early return.
+        precheck_txn.commit().await.map_err(map_db_error_to_status)?;
+        return Ok(Response::new(ExchangeRequestsResponse {
+            items: vec![exchange_response(&row)],
+        }));
+    }
+    let current_status = normalize_status(&row.status);
+    if !matches!(current_status.as_str(), STATUS_APPROVED | STATUS_IN_TRANSIT) {
+        return Err(Status::failed_precondition(
+            "Pickup can only be scheduled once the exchange has been approved",
+        ));
+    }
+    precheck_txn.commit().await.map_err(map_db_error_to_status)?;
+
+    // Real network call, deliberately outside any open transaction — mirrors how place_order.rs
+    // never holds a DB transaction across an outbound Razorpay/Shiprocket call.
+    let booking = shiprocket::create_reverse_pickup_for_exchange(db, req.exchange_id)
+        .await
+        .map_err(map_shiprocket_error)?;
+
+    let finish_txn = db.begin().await.map_err(|e| {
+        Status::internal(format!("failed to begin exchange-pickup-booked txn: {e}"))
+    })?;
+    let row = exchange_requests::Entity::find_by_id(req.exchange_id)
+        .one(&finish_txn)
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| Status::not_found("Exchange request not found"))?;
+    let mut active = row.into_active_model();
+    active.pickup_shiprocket_order_id = ActiveValue::Set(booking.shiprocket_order_id.clone());
+    active.pickup_shiprocket_shipment_id =
+        ActiveValue::Set(Some(booking.shiprocket_shipment_id.clone()));
+    active.pickup_awb_code = ActiveValue::Set(Some(booking.awb_code.clone()));
+    active.pickup_courier_name = ActiveValue::Set(Some(booking.courier_name.clone()));
+    active.pickup_status = ActiveValue::Set(booking.shiprocket_status_label.clone());
+    active.pickup_scheduled_at = ActiveValue::Set(Some(Utc::now()));
+    let updated = active
+        .update(&finish_txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+
+    let _ = create_order_event(
+        &finish_txn,
+        Request::new(CreateOrderEventRequest {
+            order_id: updated.order_id,
+            event_type: "exchange_pickup_scheduled".to_string(),
+            from_status: None,
+            to_status: None,
+            actor_type: "admin".to_string(),
+            message: Some(format!(
+                "Reverse-pickup booked for exchange {}: AWB {} via {}",
+                req.exchange_id, booking.awb_code, booking.courier_name
+            )),
+        }),
+    )
+    .await;
+    finish_txn.commit().await.map_err(map_db_error_to_status)?;
+
+    Ok(Response::new(ExchangeRequestsResponse {
+        items: vec![exchange_response(&updated)],
+    }))
+}
+
+/// Refreshes the reverse-pickup shipment's tracking from Shiprocket. Once the courier reports it
+/// delivered to the warehouse (status id 7/23, same "delivered" signal `apply_shiprocket_scan_to_shipment`
+/// uses for forward shipments), automatically proceeds exactly as if admin had clicked
+/// "Mark received" — restoring stock and creating the replacement order — per the decision that
+/// courier confirmation is trusted without a separate manual click.
+pub async fn sync_exchange_pickup(
+    db: &DatabaseConnection,
+    request: Request<SyncExchangePickupRequest>,
+) -> Result<Response<ExchangeRequestsResponse>, Status> {
+    let req = request.into_inner();
+
+    let row = exchange_requests::Entity::find_by_id(req.exchange_id)
+        .one(db)
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| Status::not_found("Exchange request not found"))?;
+
+    let Some(awb) = row.pickup_awb_code.clone() else {
+        return Err(Status::failed_precondition(
+            "No pickup has been scheduled for this exchange yet",
+        ));
+    };
+
+    // Already past the point where tracking matters — nothing to sync.
+    if row.replacement_order_id.is_some() {
+        return Ok(Response::new(ExchangeRequestsResponse {
+            items: vec![exchange_response(&row)],
+        }));
+    }
+
+    let snapshot = shiprocket::track_shipment_by_awb(&awb)
+        .await
+        .map_err(map_shiprocket_error)?;
+
+    let txn = db
+        .begin()
+        .await
+        .map_err(|e| Status::internal(format!("failed to begin sync_exchange_pickup txn: {e}")))?;
+    let current_status = normalize_status(&row.status);
+    let label = snapshot
+        .status_label
+        .clone()
+        .or_else(|| snapshot.status_id.map(shiprocket_status_label_for_id));
+    let mut active = row.clone().into_active_model();
+    active.pickup_status = ActiveValue::Set(label);
+    if let Some(events) = snapshot.scan_events.clone() {
+        if events.is_array() {
+            active.pickup_tracking_events = ActiveValue::Set(Some(events));
+        }
+    }
+    active
+        .update(&txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+    txn.commit().await.map_err(map_db_error_to_status)?;
+
+    let delivered_to_warehouse = matches!(snapshot.status_id, Some(7) | Some(23));
+    if delivered_to_warehouse && status_allows_mark_received(&current_status) {
+        return admin_mark_exchange_received(
+            db,
+            Request::new(AdminMarkExchangeReceivedRequest {
+                exchange_id: req.exchange_id,
+            }),
+        )
+        .await;
+    }
+
+    let updated = exchange_requests::Entity::find_by_id(req.exchange_id)
         .one(db)
         .await
         .map_err(map_db_error_to_status)?

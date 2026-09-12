@@ -140,6 +140,18 @@ function resolveAdminRoute(query: string): string {
 
   if (
     containsAny(query, [
+      "searchExchangeRequests",
+      "adminMarkExchangeReceived",
+      "adminUpdateExchangeStatus",
+      "scheduleExchangePickup",
+      "syncExchangePickup",
+    ])
+  ) {
+    return "/api/admin/exchanges";
+  }
+
+  if (
+    containsAny(query, [
       "getRefunds",
       "createRefund",
       "searchRefundAttempts",

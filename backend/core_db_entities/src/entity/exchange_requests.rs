@@ -18,6 +18,13 @@ pub struct Model {
     pub replacement_order_id: Option<i64>,
     pub created_at: DateTimeUtc,
     pub received_at: Option<DateTimeUtc>,
+    pub pickup_shiprocket_order_id: Option<String>,
+    pub pickup_shiprocket_shipment_id: Option<String>,
+    pub pickup_awb_code: Option<String>,
+    pub pickup_courier_name: Option<String>,
+    pub pickup_status: Option<String>,
+    pub pickup_scheduled_at: Option<DateTimeUtc>,
+    pub pickup_tracking_events: Option<Json>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -995,6 +995,27 @@ pub struct AdminUpdateExchangeStatusRequest {
     #[prost(string, optional, tag = "3")]
     pub note: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// Books the reverse-pickup leg (courier collects the original item from the customer,
+/// delivers it to the registered warehouse) via Shiprocket's return-order API. Deliberately
+/// separate from AdminUpdateExchangeStatus so approving an exchange never itself dispatches a
+/// real courier request.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ScheduleExchangePickupRequest {
+    #[prost(int64, tag = "1")]
+    pub exchange_id: i64,
+}
+/// Refreshes the reverse-pickup shipment's tracking from Shiprocket; auto-transitions the
+/// exchange to "received" (restoring stock and creating the replacement order, same as
+/// AdminMarkExchangeReceived) once the courier reports it delivered to the warehouse.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncExchangePickupRequest {
+    #[prost(int64, tag = "1")]
+    pub exchange_id: i64,
+}
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1022,6 +1043,28 @@ pub struct ExchangeRequestResponse {
     /// Set once the admin marks the exchange received and the replacement order is created.
     #[prost(int64, optional, tag = "11")]
     pub replacement_order_id: ::core::option::Option<i64>,
+    /// Reverse-pickup shipment (courier collects the original item from the customer) — set once
+    /// an admin schedules the pickup; distinct from replacement_order_id's forward shipment.
+    #[prost(string, optional, tag = "12")]
+    pub pickup_shiprocket_order_id: ::core::option::Option<
+        ::prost::alloc::string::String,
+    >,
+    #[prost(string, optional, tag = "13")]
+    pub pickup_shiprocket_shipment_id: ::core::option::Option<
+        ::prost::alloc::string::String,
+    >,
+    #[prost(string, optional, tag = "14")]
+    pub pickup_awb_code: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "15")]
+    pub pickup_courier_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "16")]
+    pub pickup_status: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "17")]
+    pub pickup_scheduled_at: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "18")]
+    pub pickup_tracking_events_json: ::core::option::Option<
+        ::prost::alloc::string::String,
+    >,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -4562,6 +4605,63 @@ pub mod grpc_services_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn schedule_exchange_pickup(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ScheduleExchangePickupRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/ScheduleExchangePickup",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "grpc_services.GRPCServices",
+                        "ScheduleExchangePickup",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn sync_exchange_pickup(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SyncExchangePickupRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/grpc_services.GRPCServices/SyncExchangePickup",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("grpc_services.GRPCServices", "SyncExchangePickup"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn place_order(
             &mut self,
             request: impl tonic::IntoRequest<super::PlaceOrderRequest>,
@@ -8081,6 +8181,20 @@ pub mod grpc_services_server {
             tonic::Response<super::ExchangeRequestsResponse>,
             tonic::Status,
         >;
+        async fn schedule_exchange_pickup(
+            &self,
+            request: tonic::Request<super::ScheduleExchangePickupRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        >;
+        async fn sync_exchange_pickup(
+            &self,
+            request: tonic::Request<super::SyncExchangePickupRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExchangeRequestsResponse>,
+            tonic::Status,
+        >;
         async fn place_order(
             &self,
             request: tonic::Request<super::PlaceOrderRequest>,
@@ -11030,6 +11144,103 @@ pub mod grpc_services_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = AdminUpdateExchangeStatusSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/ScheduleExchangePickup" => {
+                    #[allow(non_camel_case_types)]
+                    struct ScheduleExchangePickupSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::ScheduleExchangePickupRequest>
+                    for ScheduleExchangePickupSvc<T> {
+                        type Response = super::ExchangeRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ScheduleExchangePickupRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::schedule_exchange_pickup(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = ScheduleExchangePickupSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/grpc_services.GRPCServices/SyncExchangePickup" => {
+                    #[allow(non_camel_case_types)]
+                    struct SyncExchangePickupSvc<T: GrpcServices>(pub Arc<T>);
+                    impl<
+                        T: GrpcServices,
+                    > tonic::server::UnaryService<super::SyncExchangePickupRequest>
+                    for SyncExchangePickupSvc<T> {
+                        type Response = super::ExchangeRequestsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SyncExchangePickupRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GrpcServices>::sync_exchange_pickup(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SyncExchangePickupSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

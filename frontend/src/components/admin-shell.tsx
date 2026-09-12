@@ -44,7 +44,7 @@ const NAV: NavItem[] = [
     href: `${ADMIN_BASE}/orders`,
     icon: ShoppingCart,
     label: "Orders",
-    match: [`${ADMIN_BASE}/shipments`, `${ADMIN_BASE}/returns`],
+    match: [`${ADMIN_BASE}/shipments`, `${ADMIN_BASE}/returns`, `${ADMIN_BASE}/exchanges`],
   },
   {
     href: `${ADMIN_BASE}/products`,
@@ -81,6 +81,7 @@ function getTitle(pathname: string): string {
     customers: "Customers",
     reviews: "Reviews",
     returns: "Returns",
+    exchanges: "Exchanges",
     refunds: "Refunds",
     payments: "Payments",
     transactions: "Transactions",

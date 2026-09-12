@@ -13,6 +13,13 @@ pub struct ExchangeRequest {
     pub created_at: String,
     pub received_at: Option<String>,
     pub replacement_order_id: Option<String>,
+    pub pickup_shiprocket_order_id: Option<String>,
+    pub pickup_shiprocket_shipment_id: Option<String>,
+    pub pickup_awb_code: Option<String>,
+    pub pickup_courier_name: Option<String>,
+    pub pickup_status: Option<String>,
+    pub pickup_scheduled_at: Option<String>,
+    pub pickup_tracking_events_json: Option<String>,
 }
 
 #[graphql_object]
@@ -53,6 +60,27 @@ impl ExchangeRequest {
     async fn replacement_order_id(&self) -> &Option<String> {
         &self.replacement_order_id
     }
+    async fn pickup_shiprocket_order_id(&self) -> &Option<String> {
+        &self.pickup_shiprocket_order_id
+    }
+    async fn pickup_shiprocket_shipment_id(&self) -> &Option<String> {
+        &self.pickup_shiprocket_shipment_id
+    }
+    async fn pickup_awb_code(&self) -> &Option<String> {
+        &self.pickup_awb_code
+    }
+    async fn pickup_courier_name(&self) -> &Option<String> {
+        &self.pickup_courier_name
+    }
+    async fn pickup_status(&self) -> &Option<String> {
+        &self.pickup_status
+    }
+    async fn pickup_scheduled_at(&self) -> &Option<String> {
+        &self.pickup_scheduled_at
+    }
+    async fn pickup_tracking_events_json(&self) -> &Option<String> {
+        &self.pickup_tracking_events_json
+    }
 }
 
 #[derive(GraphQLInputObject, Default, Debug, Clone)]
@@ -85,4 +113,20 @@ pub struct AdminUpdateExchangeStatusInput {
     pub exchange_id: String,
     pub status: String,
     pub note: Option<String>,
+}
+
+#[derive(GraphQLInputObject, Default, Debug, Clone)]
+#[graphql(
+    description = "Admin: book the reverse-pickup shipment (courier collects from the customer, delivers to the warehouse) via Shiprocket"
+)]
+pub struct ScheduleExchangePickupInput {
+    pub exchange_id: String,
+}
+
+#[derive(GraphQLInputObject, Default, Debug, Clone)]
+#[graphql(
+    description = "Admin: refresh the reverse-pickup shipment's tracking; auto-completes the exchange once Shiprocket reports it delivered to the warehouse"
+)]
+pub struct SyncExchangePickupInput {
+    pub exchange_id: String,
 }
