@@ -13,6 +13,7 @@ use crate::money::{paise_checked_add, paise_checked_mul};
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
     orders::order_response, payment_intents::create_payment_intent, products::get_products_by_id,
+    transactions::create_transaction,
 };
 use crate::order_state_machine;
 
@@ -23,8 +24,8 @@ use core_db_entities::entity::{
 };
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
-    CreateOrderRequest, CreatePaymentIntentRequest, GetCartItemsRequest, GetProductsByIdRequest,
-    OrdersResponse, PlaceOrderRequest,
+    CreateOrderRequest, CreatePaymentIntentRequest, CreateTransactionRequest, GetCartItemsRequest,
+    GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
 };
 use sea_orm::DbBackend;
 use sea_orm::{
@@ -1074,6 +1075,21 @@ async fn place_order_write(
             txn,
             create_order_result.order_id,
             "cod_confirmed",
+        )
+        .await?;
+
+        // Record the COD acceptance as a real transaction — COD orders never get a
+        // payment_intents row (that table is Razorpay-gateway-specific), so this is the
+        // only automatic ledger entry a COD order ever gets. Safe to insert unconditionally
+        // here: this branch only runs once, on the order's initial creation (a replayed
+        // idempotency-key request returns the stored response before reaching this code).
+        let _ = create_transaction(
+            txn,
+            tonic::Request::new(CreateTransactionRequest {
+                user_id: req.user_id,
+                amount_paise: grand_total_paise,
+                r#type: "cod_payment".to_string(),
+            }),
         )
         .await?;
     }

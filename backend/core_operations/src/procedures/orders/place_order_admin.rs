@@ -15,11 +15,12 @@ use crate::handlers::invoices::ensure_invoice_for_order;
 use crate::handlers::order_details::create_order_details;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::orders::create_order;
+use crate::handlers::transactions::create_transaction;
 use crate::order_state_machine::{self, OrderState};
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
-    CreateOrderRequest, OrdersResponse, PlaceOrderAdminRequest,
+    CreateOrderRequest, CreateTransactionRequest, OrdersResponse, PlaceOrderAdminRequest,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement, TransactionTrait};
 use std::collections::HashMap;
@@ -77,7 +78,7 @@ pub async fn place_order_admin(
             applied_coupon_id: req.applied_coupon_id,
             applied_coupon_code: req.applied_coupon_code.clone(),
             applied_discount_paise: req.applied_discount_paise,
-            payment_method: normalized_payment_method,
+            payment_method: normalized_payment_method.clone(),
         }),
     )
     .await?
@@ -175,6 +176,21 @@ pub async fn place_order_admin(
     .await?;
 
     let _ = ensure_invoice_for_order(&txn, order_id, "admin_order_confirmed").await?;
+
+    // Admin-placed orders are treated as already-settled immediately above (never go through
+    // place_order's COD branch or the Razorpay finalize_order_paid path), so they need their
+    // own transaction entry too — otherwise this ledger would silently miss every admin sale.
+    // Safe unconditionally: order_id is freshly created a few lines above, so this can't run
+    // twice for the same order.
+    let _ = create_transaction(
+        &txn,
+        Request::new(CreateTransactionRequest {
+            user_id: req.user_id,
+            amount_paise: grand_total_paise,
+            r#type: format!("admin_{normalized_payment_method}_payment"),
+        }),
+    )
+    .await?;
 
     let _ = create_order_event(
         &txn,
