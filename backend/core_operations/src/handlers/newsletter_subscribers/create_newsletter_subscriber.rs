@@ -25,6 +25,10 @@ pub async fn create_newsletter_subscriber(
                 subscriber_id: inserted.subscriber_id,
                 email: inserted.email,
                 subscription_date: inserted.subscription_date.to_rfc3339(),
+                unsubscribed_at: inserted
+                    .unsubscribed_at
+                    .map(|v| v.to_rfc3339())
+                    .unwrap_or_default(),
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

@@ -1,5 +1,38 @@
 // @vitest-environment node
 
+vi.mock("@/lib/server-guest-session", () => ({
+  mintGuestSessionIdSingleFlight: vi.fn().mockResolvedValue("guest-session"),
+  withRecoveredGuestSession: vi.fn(async (sessionId: string, _headers: unknown, operation: (id: string) => unknown) => ({
+    value: await operation(sessionId),
+    sessionIdUsed: sessionId,
+    refreshedSessionId: null,
+  })),
+}));
+
+vi.mock("@/lib/forwarded-ip", () => ({
+  forwardedIpHeadersFromCurrentRequest: vi.fn().mockResolvedValue({}),
+}));
+
+vi.mock("@/lib/storefront-queries", () => ({
+  fetchCategoriesWithSession: vi.fn().mockResolvedValue([{ categoryId: "1", name: "Sarees" }]),
+}));
+
+// Mirrors the real pure helpers without pulling in storefront-collection-page.ts's
+// `import "server-only"`, which throws when loaded outside a real Next.js server context.
+vi.mock("@/lib/storefront-collection-page", () => ({
+  slugifyCategoryName: (name: string) =>
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, ""),
+  isPublicCatalogName: (name: string) => {
+    const normalized = name.trim().toLowerCase();
+    if (!normalized) return false;
+    return !/^(itest|test|e2e|mock|seed)[_-]/.test(normalized);
+  },
+}));
+
 describe("sitemap", () => {
   const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   const fetchMock = vi.fn();
@@ -44,6 +77,8 @@ describe("sitemap", () => {
     expect(urls).toContain("https://launch.sudattas.com/payment-guide");
     expect(urls).toContain("https://launch.sudattas.com/size-fit-guide");
     expect(urls).toContain("https://launch.sudattas.com/product/amber-saree");
+    expect(urls).toContain("https://launch.sudattas.com/journal");
+    expect(urls).toContain("https://launch.sudattas.com/collections/sarees");
 
     expect(urls).not.toContain("https://launch.sudattas.com/bag");
     expect(urls).not.toContain("https://launch.sudattas.com/wishlist");

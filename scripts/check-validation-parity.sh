@@ -30,11 +30,15 @@ extract_frontend_const() {
 backend_sku="$(extract_backend_const "MAX_SKU_SLUG_LEN")"
 backend_qty="$(extract_backend_const "MAX_QUANTITY_PER_ITEM")"
 backend_addr="$(extract_backend_const "MAX_ADDRESS_LINE_LEN")"
+backend_meta_title="$(extract_backend_const "MAX_META_TITLE_LEN")"
+backend_meta_desc="$(extract_backend_const "MAX_META_DESCRIPTION_LEN")"
 
 frontend_sku="$(extract_frontend_const "BACKEND_MAX_SKU_SLUG_LEN")"
 frontend_qty="$(extract_frontend_const "BACKEND_MAX_QUANTITY_PER_ITEM")"
 frontend_addr="$(extract_frontend_const "BACKEND_MAX_ADDRESS_LINE_LEN")"
 frontend_postal="$(extract_frontend_const "BACKEND_POSTAL_CODE_LEN")"
+frontend_meta_title="$(extract_frontend_const "BACKEND_MAX_META_TITLE_LEN")"
+frontend_meta_desc="$(extract_frontend_const "BACKEND_MAX_META_DESCRIPTION_LEN")"
 
 status=0
 
@@ -55,6 +59,16 @@ fi
 
 if [[ "$frontend_postal" != "6" ]]; then
   echo "Mismatch: postal code length frontend=$frontend_postal expected=6" >&2
+  status=1
+fi
+
+if [[ "$backend_meta_title" != "$frontend_meta_title" ]]; then
+  echo "Mismatch: meta title length backend=$backend_meta_title frontend=$frontend_meta_title" >&2
+  status=1
+fi
+
+if [[ "$backend_meta_desc" != "$frontend_meta_desc" ]]; then
+  echo "Mismatch: meta description length backend=$backend_meta_desc frontend=$frontend_meta_desc" >&2
   status=1
 fi
 

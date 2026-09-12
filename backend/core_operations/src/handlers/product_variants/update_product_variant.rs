@@ -1,3 +1,4 @@
+use super::ensure_no_duplicate_variant;
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::product_variants;
 use proto::proto::core::{
@@ -23,6 +24,18 @@ pub async fn update_product_variant(
             ))
         })?;
 
+    let resolved_product_id = req.product_id.unwrap_or(existing.product_id);
+    let resolved_size_id = req.size_id.or(existing.size_id);
+    let resolved_color_id = req.color_id.or(existing.color_id);
+    ensure_no_duplicate_variant(
+        txn,
+        resolved_product_id,
+        resolved_size_id,
+        resolved_color_id,
+        Some(existing.variant_id),
+    )
+    .await?;
+
     let additional_price = req
         .additional_price_paise
         .map(|p| p as i32)
@@ -30,9 +43,9 @@ pub async fn update_product_variant(
 
     let model = product_variants::ActiveModel {
         variant_id: ActiveValue::Set(existing.variant_id),
-        product_id: ActiveValue::Set(req.product_id.unwrap_or(existing.product_id)),
-        size_id: ActiveValue::Set(req.size_id.or(existing.size_id)),
-        color_id: ActiveValue::Set(req.color_id.or(existing.color_id)),
+        product_id: ActiveValue::Set(resolved_product_id),
+        size_id: ActiveValue::Set(resolved_size_id),
+        color_id: ActiveValue::Set(resolved_color_id),
         additional_price: ActiveValue::Set(additional_price),
     };
 

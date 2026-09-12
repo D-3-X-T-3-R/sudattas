@@ -26,6 +26,7 @@ pub async fn search_category(
                 .map(|model| CategoryResponse {
                     name: model.name,
                     category_id: model.category_id,
+                    exchange_eligible: model.exchange_eligible != 0,
                 })
                 .collect();
 

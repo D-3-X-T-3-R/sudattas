@@ -6,7 +6,7 @@ use crate::handlers::orders::public_order_ref::{
 use crate::money::paise_to_decimal;
 use chrono::Utc;
 use core_db_entities::entity::orders;
-use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
+use core_db_entities::entity::sea_orm_active_enums::{FulfillmentStatus, PaymentStatus};
 use proto::proto::core::{CreateOrderRequest, OrdersResponse};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ConnectionTrait, DatabaseTransaction, DbBackend, Statement,
@@ -30,7 +30,23 @@ pub async fn create_order(
         applied_coupon_id,
         applied_coupon_code,
         applied_discount_paise,
+        payment_method,
     } = request.into_inner();
+
+    // Same values real checkout accepts. "prepaid" here means the caller (an admin) is asserting
+    // payment already happened outside this system — recorded as captured immediately, with no
+    // live payment flow — rather than "collect payment now" the way storefront checkout uses it.
+    let normalized_payment_method = payment_method.trim().to_lowercase();
+    if normalized_payment_method != "cod" && normalized_payment_method != "prepaid" {
+        return Err(Status::invalid_argument(
+            "payment_method must be \"cod\" or \"prepaid\"",
+        ));
+    }
+    let payment_status = if normalized_payment_method == "prepaid" {
+        PaymentStatus::Captured
+    } else {
+        PaymentStatus::Pending
+    };
 
     let order_date = Utc::now();
 
@@ -52,8 +68,8 @@ pub async fn create_order(
             status_id: ActiveValue::Set(status_id),
             order_number: ActiveValue::NotSet,
             public_order_ref: ActiveValue::Set(public_order_ref),
-            payment_status: ActiveValue::NotSet,
-            payment_method: ActiveValue::NotSet,
+            payment_status: ActiveValue::Set(Some(payment_status.clone())),
+            payment_method: ActiveValue::Set(Some(normalized_payment_method.clone())),
             currency: ActiveValue::NotSet,
             updated_at: ActiveValue::NotSet,
             subtotal_minor: subtotal_minor

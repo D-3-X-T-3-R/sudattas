@@ -3,6 +3,7 @@ import { INR } from "@/lib/constants";
 type BagMobileCheckoutBarProps = {
   selectedSubtotal: number;
   shippingAmount: number;
+  discountAmount?: number;
   selectedCount: number;
   checkoutLoading?: boolean;
   visible?: boolean;
@@ -12,12 +13,13 @@ type BagMobileCheckoutBarProps = {
 export function BagMobileCheckoutBar({
   selectedSubtotal,
   shippingAmount,
+  discountAmount = 0,
   selectedCount,
   checkoutLoading = false,
   visible = true,
   onCheckout,
 }: BagMobileCheckoutBarProps) {
-  const total = selectedSubtotal + shippingAmount;
+  const total = Math.max(0, selectedSubtotal - discountAmount + shippingAmount);
   return (
     <div
       aria-hidden={!visible}

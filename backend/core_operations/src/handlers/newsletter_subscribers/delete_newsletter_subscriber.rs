@@ -27,6 +27,10 @@ pub async fn delete_newsletter_subscriber(
                         subscriber_id: model.subscriber_id,
                         email: model.email,
                         subscription_date: model.subscription_date.to_rfc3339(),
+                        unsubscribed_at: model
+                            .unsubscribed_at
+                            .map(|v| v.to_rfc3339())
+                            .unwrap_or_default(),
                     }],
                 })),
                 Err(e) => Err(map_db_error_to_status(e)),

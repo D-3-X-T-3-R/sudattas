@@ -1,3 +1,4 @@
+use crate::money::format_inr_paise;
 use chrono::Utc;
 use core_db_entities::entity::coupons;
 use core_db_entities::entity::sea_orm_active_enums::{CouponStatus, DiscountType};
@@ -90,7 +91,10 @@ pub async fn check_coupon(
             return Ok(coupon_invalid(
                 coupon,
                 order_amount_paise,
-                &format!("Order value too low; minimum is {} paise", min),
+                &format!(
+                    "Order value too low; minimum is {}",
+                    format_inr_paise(min as i64)
+                ),
             ));
         }
     }

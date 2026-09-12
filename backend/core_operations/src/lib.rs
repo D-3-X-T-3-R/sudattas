@@ -10,6 +10,7 @@ pub mod cancellation_saga;
 pub mod money;
 pub mod observability;
 pub mod order_policy;
+pub mod product_state;
 pub mod razorpay;
 pub mod services;
 
@@ -17,11 +18,13 @@ static DOTENV_LOADED: OnceLock<()> = OnceLock::new();
 static GRPC_AUTH_RELAXED_WARNED: OnceLock<()> = OnceLock::new();
 
 /// How many times to retry a transaction that failed with an InnoDB deadlock before giving up and
-/// returning the error to the caller. Applied only to the two gRPC methods identified as the known
-/// conflicting lock-order pair (see db_errors::is_deadlock_status doc comment) — not applied
+/// returning the error to the caller. Applied to the gRPC methods identified as taking part in a
+/// known conflicting lock-order pair (see db_errors::is_deadlock_status doc comment) — not applied
 /// codebase-wide, since retrofitting retry onto every transition_order_status call site would be a
-/// much larger, unaudited change (tracked separately as ISSUE-007 option A).
-const DEADLOCK_MAX_RETRIES: u32 = 3;
+/// much larger, unaudited change (tracked separately as ISSUE-007 option A). `pub(crate)` so
+/// `procedures::orders::place_order` (which owns its own deadlock-retry loop around its write
+/// phase) can reuse the same policy value instead of duplicating it.
+pub(crate) const DEADLOCK_MAX_RETRIES: u32 = 3;
 
 pub fn load_env_once() {
     DOTENV_LOADED.get_or_init(|| {
@@ -40,56 +43,71 @@ pub fn load_env_once() {
 }
 
 use proto::proto::core::{
-    grpc_services_server::GrpcServices, AddWishlistItemRequest, AdminMarkOrderDeliveredRequest,
+    grpc_services_server::GrpcServices, AbandonedCartSettingsResponse, ActivateProductRequest,
+    AddWishlistItemRequest,
+    AdminMarkExchangeReceivedRequest, AdminMarkOrderDeliveredRequest,
     AdminMarkOrderDeliveredResponse, AdminMarkOrderShippedRequest, AdminMarkOrderShippedResponse,
-    AdminMarkReturnReceivedRequest, AdminUpdateReturnStatusRequest, AdminUpdateReviewStatusRequest,
-    AdminUpdateReviewStatusResponse, ApplyCouponRequest, CancelOrderItemsRequest,
-    CapturePaymentRequest, CartItemsResponse, CategoriesResponse, ColorsResponse,
-    ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse, CreateCartItemRequest,
-    CreateCategoryRequest, CreateColorRequest, CreateCouponRequest, CreateEventLogRequest,
-    CreateFabricRequest, CreateInventoryItemRequest, CreateInventoryLogRequest,
-    CreateNewsletterSubscriberRequest, CreateOccasionRequest, CreateOrderDetailsRequest,
-    CreateOrderEventRequest, CreateOrderRequest, CreatePaymentIntentRequest,
-    CreateProductMoodMappingRequest, CreateProductMoodRequest, CreateProductRequest,
-    CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest, CreateShipmentRequest,
-    CreateShippingAddressRequest, CreateShippingMethodRequest, CreateSizeRequest,
-    CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest, CreateUserRoleRequest,
-    CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest, DeleteColorRequest,
-    DeleteEventLogRequest, DeleteFabricRequest, DeleteInventoryItemRequest,
-    DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest, DeleteOccasionRequest,
-    DeleteOrderRequest, DeleteProductImageRequest, DeleteProductMoodMappingRequest,
-    DeleteProductMoodRequest, DeleteProductRequest, DeleteProductVariantRequest,
-    DeleteReviewRequest, DeleteShippingAddressRequest, DeleteShippingMethodRequest,
-    DeleteSizeRequest, DeleteTransactionRequest, DeleteUserActivityRequest, DeleteUserRequest,
-    DeleteUserRoleRequest, DeleteWeaveRequest, DeleteWishlistItemRequest,
-    EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse, EstimateCheckoutShippingRequest,
-    EstimateCheckoutShippingResponse, EventLogsResponse, FabricsResponse, GetCartItemsRequest,
-    GetOrderEventsRequest, GetOrderInvoiceDownloadRequest, GetOrderInvoiceDownloadResponse,
-    GetOrderInvoiceRequest, GetOrderStatsRequest, GetOrderStatsResponse, GetPaymentIntentRequest,
+    AdminMarkReturnReceivedRequest, AdminUpdateExchangeStatusRequest,
+    AdminUpdateReturnStatusRequest, AdminUpdateReviewStatusRequest,
+    AdminUpdateReviewStatusResponse, ApplyCouponRequest, ArchiveProductRequest,
+    CancelOrderItemsRequest, CapturePaymentRequest, CartItemsResponse, CategoriesResponse,
+    ColorsResponse, ConfirmImageUploadRequest, CouponsAdminResponse, CouponsResponse,
+    CreateCartItemRequest, CreateCategoryRequest, CreateColorRequest, CreateCouponRequest,
+    CreateEventLogRequest, CreateFabricRequest, CreateInventoryItemRequest,
+    CreateInventoryLogRequest, CreateNewsletterSubscriberRequest, CreateOccasionRequest,
+    CreateOrderDetailsRequest, CreateOrderEventRequest, CreateOrderRequest,
+    CreatePaymentIntentRequest, CreateProductMoodMappingRequest, CreateProductMoodRequest,
+    CreateProductRequest, CreateProductVariantRequest, CreateRefundRequest, CreateReviewRequest,
+    CreateShipmentRequest, CreateShippingAddressRequest, CreateShippingMethodRequest,
+    CreateSizeRequest, CreateTransactionRequest, CreateUserActivityRequest, CreateUserRequest,
+    CreateUserRoleRequest, CreateWeaveRequest, DeleteCartItemRequest, DeleteCategoryRequest,
+    DeleteColorRequest, DeleteCouponAdminRequest, DeleteEventLogRequest, DeleteFabricRequest,
+    DeleteInventoryItemRequest, DeleteInventoryLogRequest, DeleteNewsletterSubscriberRequest,
+    DeleteOccasionRequest, DeleteOrderRequest, DeleteProductImageRequest,
+    DeleteProductMoodMappingRequest, DeleteProductMoodRequest, DeleteProductRequest,
+    DeleteProductVariantRequest, DeleteReviewRequest, DeleteShippingAddressRequest,
+    DeleteShippingMethodRequest, DeleteSizeRequest, DeleteTransactionRequest,
+    DeleteUserActivityRequest, DeleteUserRequest, DeleteUserRoleRequest, DeleteWeaveRequest,
+    DeleteWishlistItemRequest, EnqueueAbandonedCartRequest, EnqueueAbandonedCartResponse,
+    EstimateCheckoutShippingRequest, EstimateCheckoutShippingResponse, EventLogsResponse,
+    ExchangeRequestsResponse, FabricsResponse, GetAbandonedCartSettingsRequest,
+    GetCartItemsRequest, GetOrderEventsRequest,
+    GetOrderInvoiceDownloadRequest, GetOrderInvoiceDownloadResponse, GetOrderInvoiceRequest,
+    GetOrderStatsRequest, GetOrderStatsResponse, GetPaymentIntentRequest,
     GetPresignedUploadUrlRequest, GetProductsByIdRequest, GetRefundsRequest,
     GetRelatedProductsRequest, GetShipmentRequest, GetShippingAddressRequest,
     GetSitemapProductUrlsRequest, GetSitemapProductUrlsResponse, GetUserPiiExportRequest,
     GetUserPiiExportResponse, IngestWebhookRequest, InventoryItemsResponse, InventoryLogsResponse,
-    InvoiceResponse, MergeCartRequest, NewsletterSubscribersResponse, OccasionsResponse,
-    OrderDetailsResponse, OrderEventsResponse, OrderStatusesResponse, OrdersResponse,
-    PaymentIntentsResponse, PlaceOrderRequest, PresignedUploadUrlResponse, ProductImagesResponse,
-    ProductMoodMappingsResponse, ProductMoodsResponse, ProductVariantsResponse, ProductsResponse,
-    ReadinessRequest, ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
-    RefundsResponse, RequestReturnRequest, ResolveNeedsReviewRequest, ResolveNeedsReviewResponse,
-    ResolveRefundAttemptNeedsReviewRequest, ResolveRefundAttemptNeedsReviewResponse,
-    ReturnRequestsResponse, ReviewsResponse, SearchCategoryRequest, SearchColorRequest,
-    SearchEventLogRequest, SearchFabricRequest, SearchInventoryItemRequest,
-    SearchInventoryLogRequest, SearchNewsletterSubscriberRequest, SearchOccasionRequest,
-    SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
-    SearchOrderStatusRequest, SearchProductImageRequest, SearchProductMoodMappingRequest,
+    InvoiceResponse, ListActiveCouponsRequest, MergeCartRequest, NewsletterCampaignsResponse,
+    NewsletterSubscribersResponse, OccasionsResponse, OrderDetailsResponse, OrderEventsResponse,
+    OrderStatusesResponse, OrdersResponse, PaymentIntentsResponse, PermanentlyDeleteProductRequest,
+    PermanentlyDeleteProductResponse, PlaceOrderAdminRequest, PlaceOrderRequest,
+    PresignedUploadUrlResponse, ProductImagesResponse, ProductMoodMappingsResponse,
+    ProductMoodsResponse, ProductRatingSummaryRequest, ProductRatingSummaryResponse,
+    ProductVariantsResponse, ProductsResponse, PublicCouponsResponse, ReadinessRequest,
+    ReadinessResponse, RecordSecurityAuditRequest, RecordSecurityAuditResponse,
+    RefundAttemptsResponse, RefundsResponse, RequestExchangeRequest, RequestReturnRequest,
+    ResolveNeedsReviewRequest, ResolveNeedsReviewResponse, ResolveRefundAttemptNeedsReviewRequest,
+    ResolveRefundAttemptNeedsReviewResponse, ReturnRequestsResponse, ReviewsResponse,
+    ScheduleExchangePickupRequest, SearchCategoryRequest, SearchColorRequest,
+    SearchCouponAdminRequest, SearchEventLogRequest,
+    SearchExchangeRequestsRequest, SearchFabricRequest, SearchInventoryItemRequest,
+    SearchInventoryLogRequest, SearchNewsletterCampaignRequest, SearchNewsletterSubscriberRequest,
+    SearchOccasionRequest, SearchOrderDetailRequest, SearchOrderEventsRequest, SearchOrderRequest,
+    SearchOrderStatusRequest, SearchPaymentIntentRequest, SearchProductImageRequest,
+    SearchProductMoodMappingRequest,
     SearchProductMoodRequest, SearchProductRequest, SearchProductVariantRequest,
-    SearchReturnRequestsRequest, SearchReviewRequest, SearchShippingMethodRequest,
-    SearchSizeRequest, SearchTransactionRequest, SearchUserActivityRequest, SearchUserRequest,
-    SearchUserRoleRequest, SearchWeaveRequest, SearchWishlistItemRequest, ShipmentsResponse,
-    ShippingAddressesResponse, ShippingMethodsResponse, ShopHighlightMoodsRequest,
-    ShopHighlightMoodsResponse, SizesResponse, SyncOrderShipmentsFromShiprocketRequest,
-    SyncOrderShipmentsFromShiprocketResponse, SyncProductImagesRequest, TransactionsResponse,
-    UpdateCartItemRequest, UpdateCategoryRequest, UpdateColorRequest, UpdateCouponRequest,
+    SearchRefundAttemptsRequest, SearchReturnRequestsRequest, SearchReviewRequest,
+    SearchShippingMethodRequest, SearchSizeRequest, SearchTransactionRequest,
+    SearchUserActivityRequest, SearchUserRequest, SearchUserRoleRequest, SearchWeaveRequest,
+    SearchWishlistItemRequest, SendNewsletterCampaignRequest, SetUserStatusRequest,
+    ShipmentsResponse, ShippingAddressesResponse, ShippingMethodsResponse,
+    ShopHighlightMoodsRequest, ShopHighlightMoodsResponse, SizesResponse,
+    SyncExchangePickupRequest, SyncOrderShipmentsFromShiprocketRequest,
+    SyncOrderShipmentsFromShiprocketResponse,
+    SyncProductImagesRequest, TransactionsResponse, UnsubscribeNewsletterByTokenRequest,
+    UpdateAbandonedCartSettingsRequest, UpdateCartItemRequest, UpdateCategoryRequest,
+    UpdateColorRequest, UpdateCouponRequest,
     UpdateEventLogRequest, UpdateFabricRequest, UpdateInventoryItemRequest,
     UpdateInventoryLogRequest, UpdateNewsletterSubscriberRequest, UpdateOccasionRequest,
     UpdateOrderDetailRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
@@ -497,6 +515,52 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
+    async fn archive_product(
+        &self,
+        request: Request<ArchiveProductRequest>,
+    ) -> Result<Response<ProductsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::products::archive_product(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn activate_product(
+        &self,
+        request: Request<ActivateProductRequest>,
+    ) -> Result<Response<ProductsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::products::activate_product(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn permanently_delete_product(
+        &self,
+        request: Request<PermanentlyDeleteProductRequest>,
+    ) -> Result<Response<PermanentlyDeleteProductResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        // Manages its own transaction (commits the DB cascade first, then does a best-effort
+        // R2 purge afterward) — see procedures::products::permanently_delete_product's doc
+        // comment for why this isn't wrapped in the usual single begin/commit here.
+        procedures::products::permanently_delete_product(db, request).await
+    }
+
     async fn update_product(
         &self,
         request: Request<UpdateProductRequest>,
@@ -595,6 +659,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::users::delete_user(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn set_user_status(
+        &self,
+        request: Request<SetUserStatusRequest>,
+    ) -> Result<Response<UsersResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::users::set_user_status(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -722,13 +802,24 @@ impl GrpcServices for MyGRPCServices {
             .as_ref()
             .ok_or_else(|| Status::unavailable("Database not initialized"))?;
 
-        // Durable idempotency for place_order is implemented at the database
-        // layer via the idempotency_keys table. For now, we expect callers to
-        // handle idempotency at the gateway; core simply executes the request.
-        let txn = db.begin().await.map_err(map_db_error_to_status)?;
-        let res = procedures::orders::place_order(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
+        // Durable idempotency for place_order is implemented at the database layer via the
+        // idempotency_keys table. procedures::orders::place_order manages its own
+        // transactions internally (a short claim/prep transaction, then the Shiprocket and
+        // Razorpay calls with no DB connection held, then a write transaction with its own
+        // deadlock-retry loop around the inventory-locking step) so this checkout flow never
+        // holds a pooled connection open across either external round-trip.
+        procedures::orders::place_order(db, request).await
+    }
+
+    async fn place_order_admin(
+        &self,
+        request: Request<PlaceOrderAdminRequest>,
+    ) -> Result<Response<OrdersResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("Database not initialized"))?;
+        procedures::orders::place_order_admin(db, request).await
     }
 
     async fn estimate_checkout_shipping(
@@ -739,10 +830,10 @@ impl GrpcServices for MyGRPCServices {
             .db
             .as_ref()
             .ok_or_else(|| Status::unavailable("Database not initialized"))?;
-        let txn = db.begin().await.map_err(map_db_error_to_status)?;
-        let res = procedures::orders::estimate_checkout_shipping(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
+        // procedures::orders::estimate_checkout_shipping manages its own (read-only) transaction
+        // internally so it can commit before its Shiprocket call rather than holding a pooled
+        // connection open across that external round-trip.
+        procedures::orders::estimate_checkout_shipping(db, request).await
     }
 
     async fn search_order(
@@ -781,14 +872,12 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<AdminMarkOrderShippedRequest>,
     ) -> Result<Response<AdminMarkOrderShippedResponse>, Status> {
-        let txn = self
+        let db = self
             .db
             .as_ref()
-            .ok_or_else(|| Status::unavailable("database not initialized"))?
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::orders::admin_mark_order_shipped(&txn, request).await?;
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        let txn = db.begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::orders::admin_mark_order_shipped(&txn, db, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -893,16 +982,37 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CancelOrderItemsRequest>,
     ) -> Result<Response<OrdersResponse>, Status> {
-        let txn = self
-            .db
-            .as_ref()
-            .ok_or_else(|| Status::unavailable("database not initialized"))?
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::orders::cancel_order_items(&txn, request).await?;
-        txn.commit().await.map_err(map_db_error_to_status)?;
-        Ok(res)
+        let req = request.into_inner();
+        let mut attempt: u32 = 0;
+        loop {
+            let txn = self
+                .db
+                .as_ref()
+                .ok_or_else(|| Status::unavailable("database not initialized"))?
+                .begin()
+                .await
+                .map_err(map_db_error_to_status)?;
+            let result =
+                match handlers::orders::cancel_order_items(&txn, Request::new(req.clone())).await {
+                    Ok(res) => txn
+                        .commit()
+                        .await
+                        .map_err(map_db_error_to_status)
+                        .map(|_| res),
+                    Err(status) => Err(status),
+                };
+            match result {
+                Err(status) if attempt < DEADLOCK_MAX_RETRIES && is_deadlock_status(&status) => {
+                    attempt += 1;
+                    tracing::warn!(
+                        attempt,
+                        "cancel_order_items: retrying after InnoDB deadlock"
+                    );
+                    continue;
+                }
+                other => return other,
+            }
+        }
     }
 
     async fn request_return(
@@ -992,6 +1102,94 @@ impl GrpcServices for MyGRPCServices {
         let res = handlers::returns::admin_update_return_status(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
+    }
+
+    async fn request_exchange(
+        &self,
+        request: Request<RequestExchangeRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::exchanges::request_exchange(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_exchange_requests(
+        &self,
+        request: Request<SearchExchangeRequestsRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::exchanges::search_exchange_requests(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    // Unlike the other exchange endpoints, this one manages multiple transactions itself
+    // (restore stock, then place_order_admin's own transaction, then mark completed) — see the
+    // doc comment on handlers::exchanges::admin_mark_exchange_received.
+    async fn admin_mark_exchange_received(
+        &self,
+        request: Request<AdminMarkExchangeReceivedRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        handlers::exchanges::admin_mark_exchange_received(db, request).await
+    }
+
+    async fn admin_update_exchange_status(
+        &self,
+        request: Request<AdminUpdateExchangeStatusRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::exchanges::admin_update_exchange_status(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    // Manages its own transactions (precheck, then a real Shiprocket network call outside any
+    // transaction, then persist the booking) — see handlers::exchanges::schedule_exchange_pickup.
+    async fn schedule_exchange_pickup(
+        &self,
+        request: Request<ScheduleExchangePickupRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        handlers::exchanges::schedule_exchange_pickup(db, request).await
+    }
+
+    // May internally delegate into admin_mark_exchange_received (its own multi-transaction
+    // flow) once the courier reports delivery — see handlers::exchanges::sync_exchange_pickup.
+    async fn sync_exchange_pickup(
+        &self,
+        request: Request<SyncExchangePickupRequest>,
+    ) -> Result<Response<ExchangeRequestsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        handlers::exchanges::sync_exchange_pickup(db, request).await
     }
 
     // OrderDetails Services
@@ -1120,6 +1318,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::reviews::admin_update_review_status(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn get_product_rating_summary(
+        &self,
+        request: Request<ProductRatingSummaryRequest>,
+    ) -> Result<Response<ProductRatingSummaryResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::reviews::get_product_rating_summary(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -1630,6 +1844,52 @@ impl GrpcServices for MyGRPCServices {
             handlers::newsletter_subscribers::delete_newsletter_subscriber(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
+    }
+
+    async fn unsubscribe_newsletter_by_token(
+        &self,
+        request: Request<UnsubscribeNewsletterByTokenRequest>,
+    ) -> Result<Response<NewsletterSubscribersResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::newsletter_subscribers::unsubscribe_newsletter_by_token(&txn, request)
+            .await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_newsletter_campaign(
+        &self,
+        request: Request<SearchNewsletterCampaignRequest>,
+    ) -> Result<Response<NewsletterCampaignsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::newsletter_campaigns::search_newsletter_campaign(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn send_newsletter_campaign(
+        &self,
+        request: Request<SendNewsletterCampaignRequest>,
+    ) -> Result<Response<NewsletterCampaignsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        // Manages its own (short) transactions around a slow external-call loop — see
+        // procedures::newsletter_campaign's module doc for why this isn't wrapped in one txn.
+        procedures::newsletter_campaign::send_newsletter_campaign(db, request).await
     }
 
     // Sizes Services
@@ -2273,14 +2533,30 @@ impl GrpcServices for MyGRPCServices {
         &self,
         request: Request<CreatePaymentIntentRequest>,
     ) -> Result<Response<PaymentIntentsResponse>, Status> {
-        let txn = self
+        let db = self
             .db
             .as_ref()
-            .ok_or_else(|| Status::unavailable("database not initialized"))?
-            .begin()
-            .await
-            .map_err(map_db_error_to_status)?;
-        let res = handlers::payment_intents::create_payment_intent(&txn, request).await?;
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+
+        let mut req = request.into_inner();
+        let caller_supplied_order_id = req
+            .razorpay_order_id
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|v| !v.is_empty());
+        if !caller_supplied_order_id {
+            // Resolve the Razorpay order (external HTTP call, up to 15s) before opening the
+            // DB transaction below, so the round-trip doesn't hold a pooled connection idle.
+            let (razorpay_order_id, amount_paise, currency) =
+                handlers::payment_intents::resolve_server_created_razorpay_order(db, req.order_id)
+                    .await?;
+            req.razorpay_order_id = Some(razorpay_order_id);
+            req.amount_paise = amount_paise;
+            req.currency = Some(currency);
+        }
+
+        let txn = db.begin().await.map_err(map_db_error_to_status)?;
+        let res = handlers::payment_intents::create_payment_intent(&txn, Request::new(req)).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2313,6 +2589,22 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::payment_intents::get_payment_intent(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_payment_intent(
+        &self,
+        request: Request<SearchPaymentIntentRequest>,
+    ) -> Result<Response<PaymentIntentsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::payment_intents::search_payment_intent(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2425,6 +2717,22 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
+    async fn list_active_coupons(
+        &self,
+        request: Request<ListActiveCouponsRequest>,
+    ) -> Result<Response<PublicCouponsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::list_active_coupons(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
     async fn create_coupon(
         &self,
         request: Request<CreateCouponRequest>,
@@ -2453,6 +2761,38 @@ impl GrpcServices for MyGRPCServices {
             .await
             .map_err(map_db_error_to_status)?;
         let res = handlers::coupons::update_coupon(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn search_coupon_admin(
+        &self,
+        request: Request<SearchCouponAdminRequest>,
+    ) -> Result<Response<CouponsAdminResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::search_coupon_admin(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
+    async fn delete_coupon_admin(
+        &self,
+        request: Request<DeleteCouponAdminRequest>,
+    ) -> Result<Response<CouponsAdminResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::coupons::delete_coupon_admin(&txn, request).await?;
         txn.commit().await.map_err(map_db_error_to_status)?;
         Ok(res)
     }
@@ -2587,6 +2927,22 @@ impl GrpcServices for MyGRPCServices {
         Ok(res)
     }
 
+    async fn search_refund_attempts(
+        &self,
+        request: Request<SearchRefundAttemptsRequest>,
+    ) -> Result<Response<RefundAttemptsResponse>, Status> {
+        let txn = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?
+            .begin()
+            .await
+            .map_err(map_db_error_to_status)?;
+        let res = handlers::refunds::search_refund_attempts(&txn, request).await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        Ok(res)
+    }
+
     async fn get_order_stats(
         &self,
         request: Request<GetOrderStatsRequest>,
@@ -2676,6 +3032,45 @@ impl GrpcServices for MyGRPCServices {
         Ok(Response::new(ReadinessResponse {
             ok: true,
             error: None,
+        }))
+    }
+
+    async fn get_abandoned_cart_settings(
+        &self,
+        _request: Request<GetAbandonedCartSettingsRequest>,
+    ) -> Result<Response<AbandonedCartSettingsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        let settings = handlers::app_settings::get_abandoned_cart_settings(db.as_ref()).await?;
+        Ok(Response::new(AbandonedCartSettingsResponse {
+            enabled: settings.enabled,
+            delay_hours: settings.delay_hours,
+            poll_interval_sec: settings.poll_interval_sec,
+        }))
+    }
+
+    async fn update_abandoned_cart_settings(
+        &self,
+        request: Request<UpdateAbandonedCartSettingsRequest>,
+    ) -> Result<Response<AbandonedCartSettingsResponse>, Status> {
+        let db = self
+            .db
+            .as_ref()
+            .ok_or_else(|| Status::unavailable("database not initialized"))?;
+        let req = request.into_inner();
+        let settings = handlers::app_settings::update_abandoned_cart_settings(
+            db.as_ref(),
+            req.enabled,
+            req.delay_hours,
+            req.poll_interval_sec,
+        )
+        .await?;
+        Ok(Response::new(AbandonedCartSettingsResponse {
+            enabled: settings.enabled,
+            delay_hours: settings.delay_hours,
+            poll_interval_sec: settings.poll_interval_sec,
         }))
     }
 }

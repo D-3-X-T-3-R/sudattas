@@ -43,7 +43,7 @@ function QuickViewGallery({ product, images, selectedImageIndex, setSelectedImag
           </button>
         ))}
       </div>
-      <div className="relative min-h-0 flex-1 aspect-[3/4]">
+      <div className="relative min-h-0 flex-1 aspect-[2/3]">
         <Image src={mainImage} alt={product.imageAlt || product.name} fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" unoptimized={isExternalImage(mainImage)} />
       </div>
     </div>
@@ -121,14 +121,7 @@ function QuickViewActions({
               })}
             </div>
           </>
-        ) : (
-          <div className="rounded-sm border border-[var(--color-line)] bg-[var(--color-line)]/10 p-3 text-sm text-[var(--color-muted)]">
-            <p>This style does not use standard size variants. Fit can vary by fabric, cut, and drape.</p>
-            <Link href="/size-fit-guide" className="mt-2 inline-flex font-semibold text-[var(--color-ink)] underline">
-              View Size &amp; Fit Guide
-            </Link>
-          </div>
-        )}
+        ) : null}
       </div>
 
       <div className="mt-4">

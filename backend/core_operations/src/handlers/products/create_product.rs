@@ -47,6 +47,14 @@ pub async fn create_product(
             .product_status_id
             .map(|id| ActiveValue::Set(Some(id)))
             .unwrap_or(ActiveValue::NotSet),
+        meta_title: req
+            .meta_title
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
+        meta_description: req
+            .meta_description
+            .map(|s| ActiveValue::Set(Some(s)))
+            .unwrap_or(ActiveValue::NotSet),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };
@@ -68,6 +76,8 @@ pub async fn create_product(
                     has_blouse_piece: model.has_blouse_piece.map(|v| v != 0),
                     care_instructions: model.care_instructions,
                     product_status_id: model.product_status_id,
+                    meta_title: model.meta_title,
+                    meta_description: model.meta_description,
                 }],
             };
             Ok(Response::new(response))

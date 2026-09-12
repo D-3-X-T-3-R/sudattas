@@ -2,7 +2,7 @@
 
 mod integration_common;
 
-use core_db_entities::entity::{cart, products, reviews};
+use core_db_entities::entity::{cart, product_statuses, products, reviews};
 use proto::proto::core::{
     AdminUpdateReviewStatusRequest, GetRelatedProductsRequest, GetSitemapProductUrlsRequest,
     SearchReviewRequest,
@@ -154,10 +154,16 @@ async fn get_sitemap_product_urls_returns_slug_and_lastmod() {
         has_blouse_piece: None,
         care_instructions: None,
         product_status_id: None,
+        meta_title: None,
+        meta_description: None,
         created_at: Some(now),
         updated_at: Some(now),
     };
     let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![product_statuses::Model {
+            id: 2,
+            code: "active".to_string(),
+        }]])
         .append_query_results(vec![vec![product_row]])
         .into_connection();
     let txn = db.begin().await.expect("begin");

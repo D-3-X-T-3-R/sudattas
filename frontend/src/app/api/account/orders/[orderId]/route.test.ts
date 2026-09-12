@@ -110,6 +110,11 @@ describe("GET /api/account/orders/[orderId]", () => {
       })
       .mockResolvedValueOnce({
         data: {
+          searchExchangeRequests: [],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
           getShipment: [
             {
               shipmentId: "99",

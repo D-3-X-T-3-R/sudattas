@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 import { addressInputSchema } from "@/lib/validation-schemas";
@@ -82,7 +83,8 @@ export async function GET() {
     LIST_QUERY
   );
   if (result.errors?.length) {
-    return apiError(result.errors[0]?.message ?? "Failed to load addresses", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to load addresses");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   return Response.json({
     ok: true,
@@ -116,7 +118,8 @@ export async function POST(request: Request) {
     idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}
   );
   if (result.errors?.length) {
-    return apiError(result.errors[0]?.message ?? "Failed to create address", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to create address");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   return Response.json({
     ok: true,
@@ -161,7 +164,8 @@ export async function PATCH(request: Request) {
     { input: mutationInput }
   );
   if (result.errors?.length) {
-    return apiError(result.errors[0]?.message ?? "Failed to update address", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to update address");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   return Response.json({
     ok: true,
@@ -191,7 +195,8 @@ export async function DELETE(request: Request) {
     { shippingAddressId }
   );
   if (result.errors?.length) {
-    return apiError(result.errors[0]?.message ?? "Failed to delete address", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to delete address");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   return Response.json({
     ok: true,

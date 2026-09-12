@@ -60,13 +60,13 @@ export function BagLineCard({
       <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 md:grid-cols-[140px_minmax(0,1fr)] md:gap-4 md:pr-8">
         <Link
           href={`/product/${product.id}`}
-          className="block aspect-[4/5] w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]"
+          className="block aspect-[2/3] w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]"
         >
           {product.image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
           ) : (
-            <div className="aspect-[4/5] w-full" />
+            <div className="aspect-[2/3] w-full" />
           )}
         </Link>
 

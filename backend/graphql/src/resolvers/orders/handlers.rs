@@ -1,8 +1,9 @@
 use proto::proto::core::{
     AdminMarkOrderDeliveredRequest, AdminMarkOrderShippedRequest, CancelOrderItemsRequest,
     CreateOrderRequest, DeleteOrderRequest, EstimateCheckoutShippingRequest, GetOrderStatsRequest,
-    OrderStatusCount as ProtoOrderStatusCount, PlaceOrderRequest, SearchOrderRequest,
-    SearchOrderStatusRequest, UpdateOrderRequest, UpdatePickupTargetRequest,
+    OrderStatusCount as ProtoOrderStatusCount, PlaceOrderAdminLineItem, PlaceOrderAdminRequest,
+    PlaceOrderRequest, SearchOrderRequest, SearchOrderStatusRequest, UpdateOrderRequest,
+    UpdatePickupTargetRequest,
 };
 use tracing::instrument;
 
@@ -10,7 +11,7 @@ use super::schema::{
     AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
     CheckoutShippingEstimate, CreateOrderInput, EstimateCheckoutShippingInput, GetOrderStatsInput,
     NewOrder, Order, OrderMutation, OrderStats, OrderStatus, OrderStatusCount,
-    PickupTargetUpdateResult, SearchOrder, UpdatePickupTargetInput,
+    PickupTargetUpdateResult, PlaceOrderAdminInput, SearchOrder, UpdatePickupTargetInput,
 };
 use crate::resolvers::{
     convert,
@@ -243,6 +244,53 @@ pub(crate) async fn create_order_admin(input: CreateOrderInput) -> Result<Vec<Or
             tax_total_minor: to_option_i64(input.tax_total_minor),
             discount_total_minor: to_option_i64(input.discount_total_minor),
             grand_total_minor: to_option_i64(input.grand_total_minor),
+            applied_coupon_id: to_option_i64(input.applied_coupon_id),
+            applied_coupon_code: input.applied_coupon_code,
+            applied_discount_paise: input
+                .applied_discount_paise
+                .as_deref()
+                .map(|s| s.parse::<i32>())
+                .transpose()
+                .map_err(|_| {
+                    GqlError::new(
+                        "Failed to parse applied_discount_paise",
+                        crate::resolvers::error::Code::InvalidArgument,
+                    )
+                })?,
+            payment_method: input.payment_method,
+        })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(convert::order_response_to_gql)
+        .collect())
+}
+
+/// Admin: place a full order (order + line items + immediate confirm/capture/invoice/event) in
+/// one atomic call, mirroring real checkout's COD path exactly except for a live Razorpay step.
+#[instrument]
+pub(crate) async fn place_order_admin(input: PlaceOrderAdminInput) -> Result<Vec<Order>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let line_items = input
+        .line_items
+        .into_iter()
+        .map(|l| {
+            Ok(PlaceOrderAdminLineItem {
+                variant_id: parse_i64(&l.variant_id, "variant_id")?,
+                quantity: parse_i64(&l.quantity, "quantity")?,
+                price_paise: parse_i64(&l.price_paise, "price_paise")?,
+            })
+        })
+        .collect::<Result<Vec<_>, GqlError>>()?;
+    let response = client
+        .place_order_admin(PlaceOrderAdminRequest {
+            user_id: parse_i64(&input.user_id, "user_id")?,
+            shipping_address_id: parse_i64(&input.shipping_address_id, "shipping_address_id")?,
+            payment_method: input.payment_method,
+            line_items,
+            shipping_minor: to_option_i64(input.shipping_minor),
             applied_coupon_id: to_option_i64(input.applied_coupon_id),
             applied_coupon_code: input.applied_coupon_code,
             applied_discount_paise: input

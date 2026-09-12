@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 import { graphqlBaseUrl, serverEnv } from "@/lib/env/server";
@@ -65,7 +66,7 @@ export async function GET(
   }>(userId, ORDER_INVOICE_DOWNLOAD_QUERY, { orderId: trimmedOrderId });
 
   if (result.errors?.length) {
-    const message = result.errors[0]?.message ?? "Failed to fetch invoice";
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to fetch invoice");
     const normalized = message.toLowerCase();
     if (
       normalized.includes("forbidden") ||
@@ -76,7 +77,7 @@ export async function GET(
     if (normalized.includes("not found")) {
       return apiError("Invoice not found", 404, "NOT_FOUND");
     }
-    return apiError(message, 400, "GRAPHQL_ERROR");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   const invoice = result.data?.getOrderInvoiceDownload;

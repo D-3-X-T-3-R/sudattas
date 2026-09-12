@@ -1,3 +1,4 @@
+pub mod app_settings;
 pub mod cart;
 pub mod category;
 pub mod colors;
@@ -5,6 +6,7 @@ pub mod convert;
 pub mod coupons;
 pub mod error;
 pub mod event_logs;
+pub mod exchanges;
 pub mod fabrics;
 pub mod grpc_client;
 pub mod inventory;

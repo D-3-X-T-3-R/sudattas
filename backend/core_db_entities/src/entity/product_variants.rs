@@ -30,6 +30,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Colors,
+    #[sea_orm(has_many = "super::exchange_requests::Entity")]
+    ExchangeRequests,
     #[sea_orm(has_one = "super::inventory::Entity")]
     Inventory,
     #[sea_orm(has_many = "super::inventory_log::Entity")]
@@ -63,6 +65,12 @@ impl Related<super::cart::Entity> for Entity {
 impl Related<super::colors::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Colors.def()
+    }
+}
+
+impl Related<super::exchange_requests::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ExchangeRequests.def()
     }
 }
 

@@ -11,6 +11,9 @@ export interface ProductImageListItem {
 export interface CategoryRow {
   categoryId: string;
   name: string;
+  /** Whether products in this category can be exchanged (same product, different size/colour,
+   * same price) instead of only refunded via a return. */
+  exchangeEligible?: boolean;
 }
 
 export interface OccasionRow {
@@ -42,10 +45,20 @@ export interface ProductListRow {
   hasBlousePiece?: boolean | null;
   careInstructions?: string | null;
   productStatusId?: string | null;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
   images?: ProductImageListItem[] | null;
 }
 
 /** Product list row plus variant stock (for single-product fetch). */
 export interface ProductListRowWithVariantStock extends ProductListRow {
   variantStock?: ProductVariantStockRow[] | null;
+}
+
+/** Server-computed star rating aggregate for a product (backend's `productRatingSummary` query). */
+export interface ProductRatingSummary {
+  /** CEIL(AVG(Rating)) — a raw average of 3.2 or 3.8 both come back as 4; 0 when unrated. */
+  average: number;
+  /** Total number of ratings included in the average. */
+  count: number;
 }

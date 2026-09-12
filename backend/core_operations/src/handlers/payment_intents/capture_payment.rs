@@ -64,6 +64,8 @@ pub async fn capture_payment(
                     created_at: intent.created_at.map(|t| t.to_string()).unwrap_or_default(),
                     expires_at: intent.expires_at.to_string(),
                     razorpay_key_id: key_id,
+                    gateway_fee_paise: intent.gateway_fee_paise.map(i64::from),
+                    gateway_tax_paise: intent.gateway_tax_paise.map(i64::from),
                 }],
             }));
         } else {
@@ -126,6 +128,8 @@ pub async fn capture_payment(
                         .unwrap_or_default(),
                     expires_at: updated.expires_at.to_string(),
                     razorpay_key_id: key_id,
+                    gateway_fee_paise: updated.gateway_fee_paise.map(i64::from),
+                    gateway_tax_paise: updated.gateway_tax_paise.map(i64::from),
                 }],
             }))
         }

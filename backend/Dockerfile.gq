@@ -32,6 +32,11 @@ RUN cargo build --release --package graphql
 # Start a new stage (trixie has glibc 2.38+; bookworm has 2.36 and is too old for rust:slim-built binary)
 FROM debian:trixie-slim as graphql-runner
 
+# See the matching comment in Dockerfile.core_ops — any rustls client relying on the OS's
+# native root store has zero trusted CAs without this package installed.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 # Env comes from .env via docker-compose env_file (and overrides in docker-compose)
 
 # Copy the graphql binary from the builder stage

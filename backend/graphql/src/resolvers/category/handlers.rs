@@ -18,7 +18,10 @@ pub(crate) async fn create_category(category: NewCategory) -> Result<Vec<Categor
     let name = category.name;
 
     let response = client
-        .create_category(CreateCategoryRequest { name })
+        .create_category(CreateCategoryRequest {
+            name,
+            exchange_eligible: category.exchange_eligible,
+        })
         .await?;
 
     Ok(response
@@ -74,6 +77,7 @@ pub(crate) async fn update_category(category: CategoryMutation) -> Result<Vec<Ca
         .update_category(UpdateCategoryRequest {
             name: category.name,
             category_id: to_i64(category.category_id),
+            exchange_eligible: category.exchange_eligible,
         })
         .await?;
 

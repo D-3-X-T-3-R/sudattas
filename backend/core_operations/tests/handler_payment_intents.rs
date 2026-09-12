@@ -7,7 +7,7 @@ use core_db_entities::entity::sea_orm_active_enums::Status as PaymentStatus;
 use hmac::{Hmac, Mac};
 use proto::proto::core::{
     CapturePaymentRequest, CreatePaymentIntentRequest, GetPaymentIntentRequest,
-    VerifyRazorpayPaymentRequest,
+    SearchPaymentIntentRequest, VerifyRazorpayPaymentRequest,
 };
 use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, TransactionTrait};
 use sha2::Sha256;
@@ -753,4 +753,85 @@ async fn verify_razorpay_payment_duplicate_attempt_same_payload_is_idempotent() 
             );
         }
     }
+}
+
+#[tokio::test]
+async fn search_payment_intent_maps_results_including_gateway_fields() {
+    use core_operations::handlers::payment_intents::search_payment_intent;
+
+    let mut intent = make_intent(5, "order_search_1", Some("pay_search_1"), PaymentStatus::Processed);
+    intent.gateway_fee_paise = Some(118);
+    intent.gateway_tax_paise = Some(18);
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![intent]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchPaymentIntentRequest {
+        order_id: None,
+        user_id: None,
+        razorpay_order_id: None,
+        razorpay_payment_id: Some("pay_search_1".to_string()),
+        status: Some("processed".to_string()),
+        limit: None,
+        offset: None,
+    });
+
+    let result = search_payment_intent(&txn, req).await;
+    assert!(result.is_ok(), "search should succeed: {:?}", result.err());
+    let res = result.unwrap().into_inner();
+    assert_eq!(res.items.len(), 1);
+    let item = &res.items[0];
+    assert_eq!(item.intent_id, 5);
+    assert_eq!(item.status, "processed");
+    assert_eq!(item.gateway_fee_paise, Some(118));
+    assert_eq!(item.gateway_tax_paise, Some(18));
+}
+
+#[tokio::test]
+async fn search_payment_intent_returns_empty_when_no_matches() {
+    use core_operations::handlers::payment_intents::search_payment_intent;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![Vec::<payment_intents::Model>::new()])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchPaymentIntentRequest {
+        order_id: Some(999),
+        user_id: None,
+        razorpay_order_id: None,
+        razorpay_payment_id: None,
+        status: None,
+        limit: None,
+        offset: None,
+    });
+
+    let result = search_payment_intent(&txn, req).await;
+    assert!(result.is_ok());
+    assert!(result.unwrap().into_inner().items.is_empty());
+}
+
+#[tokio::test]
+async fn search_payment_intent_rejects_unknown_status_without_querying_db() {
+    use core_operations::handlers::payment_intents::search_payment_intent;
+
+    // No query results appended: an unknown status must fail before touching the DB.
+    let db = MockDatabase::new(DatabaseBackend::MySql).into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(SearchPaymentIntentRequest {
+        order_id: None,
+        user_id: None,
+        razorpay_order_id: None,
+        razorpay_payment_id: None,
+        status: Some("bogus_status".to_string()),
+        limit: None,
+        offset: None,
+    });
+
+    let result = search_payment_intent(&txn, req).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
 }

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+/* ── Phone/OTP sign-in — disabled for now, kept for a possible future re-enable ──
 import { graphqlBaseUrl } from "@/lib/env/server";
 import { publicEnv } from "@/lib/env/public";
 
@@ -48,4 +50,12 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true });
+}
+──────────────────────────────────────────────────────────────────────────── */
+
+export async function POST() {
+  return NextResponse.json(
+    { ok: false, error: "Phone sign-in is currently disabled" },
+    { status: 410 }
+  );
 }

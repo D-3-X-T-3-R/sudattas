@@ -2,7 +2,7 @@
 //! and cancellation.
 
 use crate::load_env_once;
-use core_db_entities::entity::{order_details, orders, shipping_addresses, users};
+use core_db_entities::entity::{exchange_requests, order_details, orders, shipping_addresses, users};
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -28,6 +28,12 @@ pub enum ShiprocketError {
     UserNotFound(i64),
     #[error("order {0} has no line items")]
     NoLineItems(i64),
+    #[error("exchange request {0} not found")]
+    ExchangeNotFound(i64),
+    #[error("exchange {0}'s order item no longer exists")]
+    ExchangeOrderDetailNotFound(i64),
+    #[error("no pickup location matching SHIPROCKET_PICKUP_LOCATION found on this Shiprocket account")]
+    PickupLocationNotFound,
     #[error("order {0} is missing PublicOrderRef (database migration required)")]
     MissingPublicOrderRef(i64),
     #[error(
@@ -701,6 +707,293 @@ where
         }
     };
     if let Some(cid) = selected_courier_id {
+        assign_map.insert("courier_id".to_string(), json!(cid));
+    }
+    let assign_body = Value::Object(assign_map);
+
+    let assign_url = format!("{}/courier/assign/awb", cfg.api_base);
+    let assign_res = client
+        .post(&assign_url)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .json(&assign_body)
+        .send()
+        .await?;
+    let assign_status = assign_res.status();
+    let assign_text = assign_res.text().await.unwrap_or_default();
+    if !assign_status.is_success() {
+        return Err(ShiprocketError::AssignAwbFailed(format!(
+            "HTTP {assign_status}: {assign_text}"
+        )));
+    }
+    let assign_json: Value = serde_json::from_str(&assign_text)
+        .map_err(|_| ShiprocketError::AssignAwbFailed(format!("invalid JSON: {assign_text}")))?;
+
+    let (awb_code, courier_name) = first_awb_and_courier(&assign_json).ok_or_else(|| {
+        ShiprocketError::AssignAwbFailed(format!("missing awb in response: {assign_text}"))
+    })?;
+
+    let (mut sr_id, mut sr_label) = extract_assign_shipment_status(&assign_json);
+    if sr_id.is_none() {
+        sr_id = Some(3);
+    }
+    if sr_label.is_none() {
+        if let Some(id) = sr_id {
+            sr_label = Some(shiprocket_status_label_for_id(id));
+        }
+    }
+
+    Ok(ShiprocketBooking {
+        awb_code,
+        courier_name,
+        shiprocket_order_id: first_order_id(&create_json),
+        shiprocket_shipment_id: shipment_id.to_string(),
+        shiprocket_status_id: sr_id,
+        shiprocket_status_label: sr_label,
+    })
+}
+
+/// Warehouse address as registered on the Shiprocket dashboard for `cfg.pickup_location` —
+/// fetched live rather than duplicated into env vars, so it can never drift out of sync with
+/// whatever's actually configured there.
+struct PickupWarehouseAddress {
+    name: String,
+    address: String,
+    address_2: String,
+    city: String,
+    state: String,
+    country: String,
+    pincode: String,
+    phone: String,
+    email: String,
+}
+
+async fn fetch_primary_pickup_address(
+    client: &reqwest::Client,
+    cfg: &Config,
+    token: &str,
+) -> Result<PickupWarehouseAddress, ShiprocketError> {
+    let url = format!("{}/settings/company/pickup", cfg.api_base);
+    let res = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await?;
+    let status = res.status();
+    let text = res.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(ShiprocketError::CreateOrderFailed(format!(
+            "fetching pickup locations failed HTTP {status}: {text}"
+        )));
+    }
+    let json: Value = serde_json::from_str(&text)
+        .map_err(|_| ShiprocketError::CreateOrderFailed(format!("invalid JSON: {text}")))?;
+    let addresses = json["data"]["shipping_address"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let matched = addresses
+        .iter()
+        .find(|a| {
+            a["pickup_location"].as_str().unwrap_or("").trim() == cfg.pickup_location.trim()
+        })
+        .ok_or(ShiprocketError::PickupLocationNotFound)?;
+
+    let as_str = |key: &str| matched[key].as_str().unwrap_or("").trim().to_string();
+    Ok(PickupWarehouseAddress {
+        name: as_str("name"),
+        address: as_str("address"),
+        address_2: as_str("address_2"),
+        city: as_str("city"),
+        state: as_str("state"),
+        country: as_str("country"),
+        pincode: as_str("pin_code"),
+        phone: as_str("phone"),
+        email: as_str("email"),
+    })
+}
+
+/// Books the reverse-pickup leg of an exchange: a Shiprocket "return order" that has the courier
+/// collect the original item from the customer and deliver it to the registered warehouse
+/// pickup location, mirroring `book_shipment_for_order_with_preferred_courier`'s create+assign-AWB
+/// shape but with pickup/shipping sides swapped (the customer is now the pickup point).
+/// Does NOT call `schedule_pickup_for_shipment` — that's a separate, explicit step so booking
+/// this doesn't itself dispatch a real courier visit.
+pub async fn create_reverse_pickup_for_exchange<C>(
+    db: &C,
+    exchange_id: i64,
+) -> Result<ShiprocketBooking, ShiprocketError>
+where
+    C: ConnectionTrait,
+{
+    let exchange = exchange_requests::Entity::find_by_id(exchange_id)
+        .one(db)
+        .await?
+        .ok_or(ShiprocketError::ExchangeNotFound(exchange_id))?;
+
+    let order = orders::Entity::find_by_id(exchange.order_id)
+        .one(db)
+        .await?
+        .ok_or(ShiprocketError::OrderNotFound(exchange.order_id))?;
+
+    let address = shipping_addresses::Entity::find_by_id(order.shipping_address_id)
+        .one(db)
+        .await?
+        .ok_or(ShiprocketError::AddressNotFound(exchange.order_id))?;
+
+    let user = users::Entity::find_by_id(exchange.user_id)
+        .one(db)
+        .await?
+        .ok_or(ShiprocketError::UserNotFound(exchange.user_id))?;
+
+    let detail = order_details::Entity::find_by_id(exchange.order_detail_id)
+        .one(db)
+        .await?
+        .ok_or(ShiprocketError::ExchangeOrderDetailNotFound(exchange_id))?;
+
+    let cfg = Config::from_env().ok_or(ShiprocketError::NotConfigured)?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(90))
+        .build()?;
+    let token = bearer_token(&client, &cfg).await?;
+
+    let address_phone = address.phone_number.as_deref().unwrap_or("").trim();
+    let user_phone = user.phone.as_deref().unwrap_or("").trim();
+    let source_phone = if !address_phone.is_empty() {
+        address_phone
+    } else {
+        user_phone
+    };
+    let phone_digits: String = source_phone
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect();
+    if phone_digits.len() < 10 {
+        return Err(ShiprocketError::MissingPhone(exchange.user_id));
+    }
+    let customer_phone = if phone_digits.len() > 10 {
+        phone_digits[phone_digits.len() - 10..].to_string()
+    } else {
+        phone_digits
+    };
+
+    let name_full = address
+        .recipient_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            user.full_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+        })
+        .unwrap_or(user.username.as_str())
+        .to_string();
+
+    let addr_line1 = [
+        address.apartment_no_or_name.as_deref(),
+        address.road.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .map(str::trim)
+    .filter(|s| !s.is_empty())
+    .collect::<Vec<_>>()
+    .join(", ");
+    let addr_line1 = if addr_line1.is_empty() {
+        address.city.clone()
+    } else {
+        addr_line1
+    };
+
+    let warehouse = fetch_primary_pickup_address(&client, &cfg, &token).await?;
+
+    let order_ref = order.public_order_ref.trim();
+    if order_ref.is_empty() {
+        return Err(ShiprocketError::MissingPublicOrderRef(exchange.order_id));
+    }
+    // Shiprocket order ids must be unique across the account; the original order's ref is
+    // already used by the forward shipment, so this leg gets its own derived reference.
+    let return_order_ref = format!("{order_ref}-RTN{exchange_id}");
+    let order_date = chrono::Utc::now().format("%Y-%m-%d %H:%M").to_string();
+
+    let sku = detail
+        .sku
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("OD-{}", detail.order_detail_id));
+    let item_name = detail.title.as_deref().unwrap_or("Item").to_string();
+    let qty = exchange.quantity.max(1);
+    let unit_price_rupees = (detail.unit_price_minor as f64) / 100.0;
+    let sub_total_rupees = unit_price_rupees * (qty as f64);
+
+    let body = json!({
+        "order_id": return_order_ref,
+        "order_date": order_date,
+        "pickup_customer_name": name_full,
+        "pickup_last_name": "",
+        "pickup_address": addr_line1,
+        "pickup_address_2": "",
+        "pickup_city": address.city,
+        "pickup_pincode": address.postal_code.trim(),
+        "pickup_state": address.state_region,
+        "pickup_country": address.country,
+        "pickup_email": user.email,
+        "pickup_phone": customer_phone,
+        "shipping_customer_name": warehouse.name,
+        "shipping_address": warehouse.address,
+        "shipping_address_2": warehouse.address_2,
+        "shipping_city": warehouse.city,
+        "shipping_pincode": warehouse.pincode,
+        "shipping_state": warehouse.state,
+        "shipping_country": warehouse.country,
+        "shipping_email": warehouse.email,
+        "shipping_phone": warehouse.phone,
+        "order_items": [json!({
+            "name": item_name,
+            "sku": sku,
+            "units": qty,
+            "selling_price": format!("{:.2}", unit_price_rupees),
+            "qc_enable": false,
+        })],
+        "payment_method": "Prepaid",
+        "sub_total": format!("{:.2}", sub_total_rupees),
+        "length": cfg.length_cm,
+        "breadth": cfg.breadth_cm,
+        "height": cfg.height_cm,
+        "weight": cfg.default_weight_kg.max(0.05) * (qty as f64),
+    });
+
+    let create_url = format!("{}/orders/create/return", cfg.api_base);
+    let create_res = client
+        .post(&create_url)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await?;
+    let create_status = create_res.status();
+    let create_text = create_res.text().await.unwrap_or_default();
+    if !create_status.is_success() {
+        return Err(ShiprocketError::CreateOrderFailed(format!(
+            "HTTP {create_status}: {create_text}"
+        )));
+    }
+    let create_json: Value = serde_json::from_str(&create_text)
+        .map_err(|_| ShiprocketError::CreateOrderFailed(format!("invalid JSON: {create_text}")))?;
+
+    let shipment_id = first_shipment_id(&create_json).ok_or_else(|| {
+        ShiprocketError::CreateOrderFailed(format!(
+            "missing shipment_id in response: {create_text}"
+        ))
+    })?;
+
+    let mut assign_map = serde_json::Map::new();
+    assign_map.insert("shipment_id".to_string(), json!(shipment_id));
+    if let Some(cid) = cfg.courier_id {
         assign_map.insert("courier_id".to_string(), json!(cid));
     }
     let assign_body = Value::Object(assign_map);

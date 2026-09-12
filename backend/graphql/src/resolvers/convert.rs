@@ -30,6 +30,8 @@ pub fn product_response_to_gql(p: ProductResponse) -> Product {
         has_blouse_piece: p.has_blouse_piece,
         care_instructions: p.care_instructions,
         product_status_id: p.product_status_id.map(|v| v.to_string()),
+        meta_title: p.meta_title,
+        meta_description: p.meta_description,
     }
 }
 
@@ -70,6 +72,7 @@ pub fn category_response_to_gql(c: CategoryResponse) -> Category {
     Category {
         category_id: c.category_id.to_string(),
         name: c.name,
+        exchange_eligible: c.exchange_eligible,
     }
 }
 

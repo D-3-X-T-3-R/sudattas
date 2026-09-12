@@ -17,11 +17,11 @@ import type {
 
 export type { CategoryRow, OccasionRow, ProductListRow, ProductListRowWithVariantStock, ProductImageListItem };
 
-const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { categoryId name } }`;
+const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { categoryId name exchangeEligible } }`;
 const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
-    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
+    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId metaTitle metaDescription
     images { imageId thumbnailUrl url }
     variantStock { variantId sizeId sizeName quantity }
   }
@@ -30,9 +30,9 @@ const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
 const PRODUCT_BY_ID_QUERY = `query ProductById($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
-    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId
+    sku slug fabric weave occasion hasBlousePiece careInstructions productStatusId metaTitle metaDescription
     images { imageId thumbnailUrl url }
-    variantStock { sizeId sizeName quantity }
+    variantStock { variantId sizeId sizeName quantity }
   }
 }`;
 
@@ -114,6 +114,65 @@ export async function deleteProduct(productId: string): Promise<void> {
   );
 }
 
+/** Soft delete: sets the product's status to archived server-side (resolved there, not a
+ * hardcoded id here) — hides it from the store but keeps everything else intact, unlike
+ * permanentlyDeleteProduct. Reversible via activateProduct below. */
+export async function archiveProduct(productId: string): Promise<void> {
+  await gqlAdmin<{ archiveProduct?: unknown[] }>(
+    `mutation ArchiveProduct($productId: String!) {
+      archiveProduct(productId: $productId) { productId }
+    }`,
+    { productId }
+  );
+}
+
+/** Reverses archiveProduct: sets the product's status back to active server-side (resolved
+ * there, not a hardcoded id here). Touches nothing else on the product. */
+export async function activateProduct(productId: string): Promise<void> {
+  await gqlAdmin<{ activateProduct?: unknown[] }>(
+    `mutation ActivateProduct($productId: String!) {
+      activateProduct(productId: $productId) { productId }
+    }`,
+    { productId }
+  );
+}
+
+export interface PermanentlyDeleteProductResult {
+  productId: string;
+  name: string;
+  variantsDeleted: string;
+  imagesDeleted: string;
+  /** Images whose R2 object couldn't be purged — the product is fully gone from the DB
+   * regardless; this is a storage-hygiene signal, not a failure indicator. */
+  imagesPurgeFailed: string;
+}
+
+/**
+ * Irreversible hard delete — cascades variants/inventory/cart/reviews/wishlist/images and
+ * purges images from R2. The backend refuses outright (FailedPrecondition) if the product has
+ * real order history; use Archive for that case instead.
+ */
+export async function permanentlyDeleteProduct(
+  productId: string
+): Promise<PermanentlyDeleteProductResult> {
+  const data = await gqlAdmin<{ permanentlyDeleteProduct?: PermanentlyDeleteProductResult }>(
+    `mutation PermanentlyDeleteProduct($productId: String!) {
+      permanentlyDeleteProduct(productId: $productId) {
+        productId
+        name
+        variantsDeleted
+        imagesDeleted
+        imagesPurgeFailed
+      }
+    }`,
+    { productId }
+  );
+  if (!data?.permanentlyDeleteProduct) {
+    throw new Error("permanentlyDeleteProduct returned empty payload");
+  }
+  return data.permanentlyDeleteProduct;
+}
+
 /** Search product images (one row per image). Filter by productId to load images for a product. */
 export async function searchProductImage(params: {
   productId?: string;
@@ -139,6 +198,23 @@ export async function deleteProductImage(imageId: string): Promise<void> {
   );
 }
 
+/** Re-parent an existing image to a different product — the only thing update_product_image
+ * actually does server-side (display_order/url are carried over unchanged; there's no alt-text
+ * column on ProductImages to edit despite the mutation accepting one). image_base64 is a required
+ * field on the input the handler never reads; sent empty, same pattern as reviews' unused
+ * `comment` field elsewhere in this codebase. */
+export async function moveProductImageToProduct(
+  imageId: string,
+  targetProductId: string
+): Promise<void> {
+  await gqlAdmin<{ updateProductImage?: unknown[] }>(
+    `mutation MoveProductImage($productImage: ProductImageMutation!) {
+      updateProductImage(productImage: $productImage) { imageId productId }
+    }`,
+    { productImage: { imageId, productId: targetProductId, imageBase64: "" } }
+  );
+}
+
 /** Size for variant dropdowns (id "0" returns all) */
 export interface SizeRow {
   sizeId: string;
@@ -150,6 +226,29 @@ export async function fetchSizes(): Promise<SizeRow[]> {
     `mutation Sizes { searchSize(input: { sizeId: "0" }) { sizeId sizeName } }`
   );
   return data?.searchSize ?? [];
+}
+
+export async function createSize(sizeName: string): Promise<SizeRow | null> {
+  const data = await gqlAdmin<{ createSize?: SizeRow[] }>(
+    `mutation CreateSize($input: NewSize!) { createSize(input: $input) { sizeId sizeName } }`,
+    { input: { sizeName: sizeName.trim() } }
+  );
+  return data?.createSize?.[0] ?? null;
+}
+
+export async function updateSize(sizeId: string, sizeName: string): Promise<SizeRow | null> {
+  const data = await gqlAdmin<{ updateSize?: SizeRow[] }>(
+    `mutation UpdateSize($input: SizeMutation!) { updateSize(input: $input) { sizeId sizeName } }`,
+    { input: { sizeId, sizeName: sizeName.trim() } }
+  );
+  return data?.updateSize?.[0] ?? null;
+}
+
+export async function deleteSize(sizeId: string): Promise<void> {
+  await gqlAdmin(
+    `mutation DeleteSize($input: DeleteSizeInput!) { deleteSize(input: $input) { sizeId } }`,
+    { input: { sizeId } }
+  );
 }
 
 /** Color for variant dropdowns (id "0" returns all) */
@@ -165,6 +264,29 @@ export async function fetchColors(): Promise<ColorRow[]> {
   return data?.searchColor ?? [];
 }
 
+export async function createColor(colorName: string): Promise<ColorRow | null> {
+  const data = await gqlAdmin<{ createColor?: ColorRow[] }>(
+    `mutation CreateColor($input: NewColor!) { createColor(input: $input) { colorId colorName } }`,
+    { input: { colorName: colorName.trim() } }
+  );
+  return data?.createColor?.[0] ?? null;
+}
+
+export async function updateColor(colorId: string, colorName: string): Promise<ColorRow | null> {
+  const data = await gqlAdmin<{ updateColor?: ColorRow[] }>(
+    `mutation UpdateColor($input: ColorMutation!) { updateColor(input: $input) { colorId colorName } }`,
+    { input: { colorId, colorName: colorName.trim() } }
+  );
+  return data?.updateColor?.[0] ?? null;
+}
+
+export async function deleteColor(colorId: string): Promise<void> {
+  await gqlAdmin(
+    `mutation DeleteColor($input: DeleteColorInput!) { deleteColor(input: $input) { colorId } }`,
+    { input: { colorId } }
+  );
+}
+
 /** Fabric options for products (id "0" returns all) */
 export interface FabricRow {
   fabricId: string;
@@ -176,6 +298,29 @@ export async function fetchFabrics(): Promise<FabricRow[]> {
     `mutation Fabrics { searchFabric(input: { fabricId: "0" }) { fabricId fabricName } }`
   );
   return data?.searchFabric ?? [];
+}
+
+export async function createFabric(fabricName: string): Promise<FabricRow | null> {
+  const data = await gqlAdmin<{ createFabric?: FabricRow[] }>(
+    `mutation CreateFabric($input: NewFabric!) { createFabric(input: $input) { fabricId fabricName } }`,
+    { input: { fabricName: fabricName.trim() } }
+  );
+  return data?.createFabric?.[0] ?? null;
+}
+
+export async function updateFabric(fabricId: string, fabricName: string): Promise<FabricRow | null> {
+  const data = await gqlAdmin<{ updateFabric?: FabricRow[] }>(
+    `mutation UpdateFabric($input: FabricMutation!) { updateFabric(input: $input) { fabricId fabricName } }`,
+    { input: { fabricId, fabricName: fabricName.trim() } }
+  );
+  return data?.updateFabric?.[0] ?? null;
+}
+
+export async function deleteFabric(fabricId: string): Promise<void> {
+  await gqlAdmin(
+    `mutation DeleteFabric($input: DeleteFabricInput!) { deleteFabric(input: $input) { fabricId } }`,
+    { input: { fabricId } }
+  );
 }
 
 /** Weave options for products (id "0" returns all) */
@@ -191,11 +336,60 @@ export async function fetchWeaves(): Promise<WeaveRow[]> {
   return data?.searchWeave ?? [];
 }
 
+export async function createWeave(weaveName: string): Promise<WeaveRow | null> {
+  const data = await gqlAdmin<{ createWeave?: WeaveRow[] }>(
+    `mutation CreateWeave($input: NewWeave!) { createWeave(input: $input) { weaveId weaveName } }`,
+    { input: { weaveName: weaveName.trim() } }
+  );
+  return data?.createWeave?.[0] ?? null;
+}
+
+export async function updateWeave(weaveId: string, weaveName: string): Promise<WeaveRow | null> {
+  const data = await gqlAdmin<{ updateWeave?: WeaveRow[] }>(
+    `mutation UpdateWeave($input: WeaveMutation!) { updateWeave(input: $input) { weaveId weaveName } }`,
+    { input: { weaveId, weaveName: weaveName.trim() } }
+  );
+  return data?.updateWeave?.[0] ?? null;
+}
+
+export async function deleteWeave(weaveId: string): Promise<void> {
+  await gqlAdmin(
+    `mutation DeleteWeave($input: DeleteWeaveInput!) { deleteWeave(input: $input) { weaveId } }`,
+    { input: { weaveId } }
+  );
+}
+
 const OCCASIONS_MUTATION = `mutation Occasions { searchOccasion(input: { occasionId: "0" }) { occasionId occasionName } }`;
 
 export async function fetchOccasions(): Promise<OccasionRow[]> {
   const data = await gqlAdmin<{ searchOccasion?: OccasionRow[] }>(OCCASIONS_MUTATION);
   return data?.searchOccasion ?? [];
+}
+
+export async function createOccasion(occasionName: string): Promise<OccasionRow | null> {
+  const data = await gqlAdmin<{ createOccasion?: OccasionRow[] }>(
+    `mutation CreateOccasion($input: NewOccasion!) { createOccasion(input: $input) { occasionId occasionName } }`,
+    { input: { occasionName: occasionName.trim() } }
+  );
+  return data?.createOccasion?.[0] ?? null;
+}
+
+export async function updateOccasion(
+  occasionId: string,
+  occasionName: string
+): Promise<OccasionRow | null> {
+  const data = await gqlAdmin<{ updateOccasion?: OccasionRow[] }>(
+    `mutation UpdateOccasion($input: OccasionMutation!) { updateOccasion(input: $input) { occasionId occasionName } }`,
+    { input: { occasionId, occasionName: occasionName.trim() } }
+  );
+  return data?.updateOccasion?.[0] ?? null;
+}
+
+export async function deleteOccasion(occasionId: string): Promise<void> {
+  await gqlAdmin(
+    `mutation DeleteOccasion($input: DeleteOccasionInput!) { deleteOccasion(input: $input) { occasionId } }`,
+    { input: { occasionId } }
+  );
 }
 
 /** Product mood (id + name) for linking to products */
@@ -251,6 +445,28 @@ export async function createProductMood(moodName: string): Promise<ProductMoodRo
   );
   const list = data?.createProductMood ?? [];
   return list.length > 0 ? list[0] : null;
+}
+
+export async function updateProductMood(
+  moodId: string,
+  moodName: string
+): Promise<ProductMoodRow | null> {
+  const data = await gqlAdmin<{ updateProductMood?: ProductMoodRow[] }>(
+    `mutation UpdateProductMood($input: ProductMoodMutation!) {
+      updateProductMood(input: $input) { moodId moodName }
+    }`,
+    { input: { moodId, moodName: moodName.trim() } }
+  );
+  return data?.updateProductMood?.[0] ?? null;
+}
+
+export async function deleteProductMood(moodId: string): Promise<void> {
+  await gqlAdmin(
+    `mutation DeleteProductMood($input: DeleteProductMoodInput!) {
+      deleteProductMood(input: $input) { moodId }
+    }`,
+    { input: { moodId } }
+  );
 }
 
 /** List mood mappings for a product (for edit form). Returns array of { productId, moodId }. */
@@ -422,5 +638,90 @@ export async function updateInventoryItem(params: {
       }
     }`,
     { input }
+  );
+}
+
+/** All inventory rows across every variant (search_inventory_item with no filters = no WHERE
+ * clause server-side, i.e. everything) — for the standalone stock/low-stock page. No pagination
+ * on this query server-side; fine at boutique catalog scale, would need a real limit/offset
+ * added backend-side before this scales further. */
+export async function fetchAllInventoryItems(): Promise<InventoryItemRow[]> {
+  const data = await gqlAdmin<{ searchInventoryItem?: InventoryItemRow[] }>(
+    `query SearchAllInventory($input: SearchInventoryItem!) {
+      searchInventoryItem(input: $input) {
+        inventoryId
+        variantId
+        quantityAvailable
+        reorderLevel
+      }
+    }`,
+    { input: {} }
+  );
+  return data?.searchInventoryItem ?? [];
+}
+
+export async function deleteInventoryItem(inventoryId: string): Promise<void> {
+  await gqlAdmin(
+    `mutation DeleteInventoryItem($inventoryId: String!) {
+      deleteInventoryItem(inventoryId: $inventoryId) { inventoryId }
+    }`,
+    { inventoryId }
+  );
+}
+
+export interface InventoryLogRow {
+  logId: string;
+  variantId: string;
+  changeQuantity: string;
+  logTime: string;
+  reason: string;
+}
+
+/** All inventory log entries, newest first. Note: nothing in the backend writes these
+ * automatically (no stock-changing operation — orders, cancellations, admin restocks — calls
+ * create_inventory_log) — this table only has rows if an admin manually adds them here. */
+export async function fetchAllInventoryLogs(): Promise<InventoryLogRow[]> {
+  const data = await gqlAdmin<{ searchInventoryLog?: InventoryLogRow[] }>(
+    `query SearchAllInventoryLogs($input: SearchInventoryLogInput!) {
+      searchInventoryLog(input: $input) {
+        logId
+        variantId
+        changeQuantity
+        logTime
+        reason
+      }
+    }`,
+    { input: {} }
+  );
+  const rows = data?.searchInventoryLog ?? [];
+  return [...rows].sort((a, b) => new Date(b.logTime).getTime() - new Date(a.logTime).getTime());
+}
+
+export async function createInventoryLog(params: {
+  variantId: string;
+  changeQuantity: string;
+  reason: string;
+}): Promise<InventoryLogRow | null> {
+  const data = await gqlAdmin<{ createInventoryLog?: InventoryLogRow[] }>(
+    `mutation CreateInventoryLog($input: NewInventoryLog!) {
+      createInventoryLog(input: $input) {
+        logId
+        variantId
+        changeQuantity
+        logTime
+        reason
+      }
+    }`,
+    { input: params }
+  );
+  return data?.createInventoryLog?.[0] ?? null;
+}
+
+export async function deleteInventoryLog(logId: string): Promise<void> {
+  await gqlAdmin(
+    `mutation DeleteInventoryLog($input: DeleteInventoryLogInput!) {
+      deleteInventoryLog(input: $input) { logId }
+    }`,
+    { input: { logId } }
   );
 }

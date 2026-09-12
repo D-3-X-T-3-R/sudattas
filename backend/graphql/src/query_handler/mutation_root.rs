@@ -1,6 +1,7 @@
 use super::query_root;
 use super::Context;
 use crate::resolvers::{
+    app_settings::{self, schema::{AbandonedCartSettings, UpdateAbandonedCartSettingsInput}},
     cart::{
         self,
         schema::{Cart, CartMutation, DeleteCartItem, NewCart},
@@ -15,12 +16,22 @@ use crate::resolvers::{
     },
     coupons::{
         self,
-        schema::{ApplyCoupon, Coupon, CreateCouponInput, UpdateCouponInput},
+        schema::{
+            ApplyCoupon, Coupon, CouponAdmin, CreateCouponInput, DeleteCouponAdminInput,
+            UpdateCouponInput,
+        },
     },
     event_logs::{
         self,
         schema::{
             DeleteEventLogInput, EventLog, EventLogMutation, NewEventLog, SearchEventLogInput,
+        },
+    },
+    exchanges::{
+        self,
+        schema::{
+            AdminMarkExchangeReceivedInput, AdminUpdateExchangeStatusInput, ExchangeRequest,
+            RequestExchangeInput, ScheduleExchangePickupInput, SyncExchangePickupInput,
         },
     },
     fabrics::{
@@ -38,8 +49,10 @@ use crate::resolvers::{
     newsletter_subscribers::{
         self,
         schema::{
-            DeleteNewsletterSubscriberInput, NewNewsletterSubscriber, NewsletterSubscriber,
-            NewsletterSubscriberMutation, SearchNewsletterSubscriberInput,
+            DeleteNewsletterSubscriberInput, NewNewsletterSubscriber, NewsletterCampaign,
+            NewsletterSubscriber, NewsletterSubscriberMutation, SearchNewsletterCampaignInput,
+            SearchNewsletterSubscriberInput, SendNewsletterCampaignInput,
+            UnsubscribeNewsletterInput,
         },
     },
     occasions::{
@@ -61,7 +74,7 @@ use crate::resolvers::{
         schema::{
             AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
             CreateOrderInput, NewOrder, Order, OrderMutation, PickupTargetUpdateResult,
-            UpdatePickupTargetInput,
+            PlaceOrderAdminInput, UpdatePickupTargetInput,
         },
     },
     payment_intents::{
@@ -73,7 +86,7 @@ use crate::resolvers::{
     },
     product::{
         self,
-        schema::{NewProduct, Product, ProductMutation},
+        schema::{NewProduct, PermanentlyDeleteProductResult, Product, ProductMutation},
     },
     product_images::{
         self,
@@ -102,13 +115,15 @@ use crate::resolvers::{
             NewRefund, Refund, ResolveNeedsReviewInput, ResolveRefundAttemptNeedsReviewInput,
         },
     },
-    returns::{
-        self,
-        schema::{
-            AdminMarkReturnReceivedInput, AdminUpdateReturnStatusInput, RequestReturnInput,
-            ReturnRequest,
-        },
-    },
+    // Unused while the request_return/admin_mark_return_received/admin_update_return_status
+    // mutations below are commented out — restore alongside them.
+    // returns::{
+    //     self,
+    //     schema::{
+    //         AdminMarkReturnReceivedInput, AdminUpdateReturnStatusInput, RequestReturnInput,
+    //         ReturnRequest,
+    //     },
+    // },
     reviews::{
         self,
         schema::{NewReview, Review, ReviewMutation},
@@ -151,7 +166,10 @@ use crate::resolvers::{
     },
     users::{
         self,
-        schema::{DeleteUserInput, NewUser, RecordSecurityAuditEventInput, UpdateUserInput, User},
+        schema::{
+            DeleteUserInput, NewUser, RecordSecurityAuditEventInput, SetUserStatusInput,
+            UpdateUserInput, User,
+        },
     },
     utils::parse_i64,
     weaves::{
@@ -169,19 +187,36 @@ use tracing::{info, warn};
 
 pub struct MutationRoot;
 
+/// Deactivated/suspended accounts (`setUserStatus`) are rejected here, ahead of the specific
+/// `jwt_user_id`/`is_admin` check each caller does — this is the one choke point every
+/// JWT-gated mutation goes through, so an admin turning off an account actually blocks it
+/// rather than just labeling it.
+fn require_not_deactivated(context: &Context) -> Result<(), juniper::FieldError> {
+    if context.account_deactivated() {
+        return Err(juniper::FieldError::new(
+            "This account has been deactivated. Contact support if you believe this is a mistake.",
+            juniper::Value::null(),
+        ));
+    }
+    Ok(())
+}
+
 fn require_jwt(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_customer_actor(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
+    require_not_deactivated(context)?;
     if context.is_admin() {
         Ok(())
     } else {
@@ -202,6 +237,7 @@ fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
 }
 
 fn require_admin_or_internal_service(context: &Context) -> Result<(), juniper::FieldError> {
+    require_not_deactivated(context)?;
     if context.is_admin() || matches!(&context.auth, Some(super::AuthSource::InternalService)) {
         Ok(())
     } else {
@@ -334,7 +370,11 @@ impl MutationRoot {
     /// P2 Abandoned cart: enqueue abandoned-cart events (typically from a cron/scheduler).
     /// Returns the number of events enqueued.
     #[instrument(err, ret)]
-    async fn enqueue_abandoned_cart(delay_hours: Option<String>) -> FieldResult<i32> {
+    async fn enqueue_abandoned_cart(
+        context: &Context,
+        delay_hours: Option<String>,
+    ) -> FieldResult<i32> {
+        require_admin_or_internal_service(context)?;
         let resp = cart::handlers::enqueue_abandoned_cart(delay_hours)
             .await
             .map_err(|e| e.into_field_error())?;
@@ -404,6 +444,21 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Admin-only: activate/deactivate/suspend a user account. A deactivated/suspended
+    /// account's future JWT-authenticated requests are rejected at the auth gate (see
+    /// `admin_roles::resolve_admin_from_db` and `require_jwt` below) — not just a cosmetic
+    /// label. No customer self-service path; account status is an admin action only.
+    #[instrument(err, ret)]
+    async fn set_user_status(
+        context: &Context,
+        input: SetUserStatusInput,
+    ) -> FieldResult<Vec<User>> {
+        require_admin(context)?;
+        users::handlers::set_user_status(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     /// P2 security audit hook (e.g. secrets rotation).
     #[instrument(err, ret)]
     async fn record_security_audit_event(
@@ -467,6 +522,41 @@ impl MutationRoot {
     async fn delete_product(context: &Context, product_id: String) -> FieldResult<Vec<Product>> {
         require_admin(context)?;
         product::handlers::delete_product(product_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Soft delete — sets the product's status to "archived" (resolved server-side, never a
+    /// hardcoded id). Reversible via `activateProduct` below.
+    #[instrument(err, ret)]
+    async fn archive_product(context: &Context, product_id: String) -> FieldResult<Vec<Product>> {
+        require_admin(context)?;
+        product::handlers::archive_product(product_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Reverses `archiveProduct` — sets the product's status back to "active" (resolved
+    /// server-side, never a hardcoded id). Touches nothing else on the product.
+    #[instrument(err, ret)]
+    async fn activate_product(context: &Context, product_id: String) -> FieldResult<Vec<Product>> {
+        require_admin(context)?;
+        product::handlers::activate_product(product_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin-only: irreversible hard delete — cascades variants/inventory/cart/reviews/
+    /// wishlist/images, purges images from R2, and refuses outright if the product has real
+    /// order history (archive it instead). Distinct from `deleteProduct` above, which is
+    /// unused today and would simply fail on any real product.
+    #[instrument(err, ret)]
+    async fn permanently_delete_product(
+        context: &Context,
+        product_id: String,
+    ) -> FieldResult<PermanentlyDeleteProductResult> {
+        require_admin(context)?;
+        product::handlers::permanently_delete_product(product_id)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -645,6 +735,11 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    // Temporarily disabled (2026-09-12) to test the new exchange flow in isolation — these
+    // three fields are removed from the schema entirely while disabled (not just gated at
+    // runtime), matching the frontend-side disable in profile-authenticated-content.tsx.
+    // Uncomment to re-enable; nothing else references these three methods.
+    /*
     #[instrument(err, ret)]
     async fn request_return(
         context: &Context,
@@ -678,6 +773,72 @@ impl MutationRoot {
             .await
             .map_err(|e| e.into_field_error())
     }
+    */
+
+    /// Category-scoped exchange (same product, different size/colour, exact same price) —
+    /// distinct from the refund-only `requestReturn` above.
+    #[instrument(err, ret)]
+    async fn request_exchange(
+        context: &Context,
+        input: RequestExchangeInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        let uid = require_jwt(context)?.to_string();
+        query_root::ensure_customer_can_access_order(context, &input.order_id).await?;
+        exchanges::handlers::request_exchange(input, uid)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: mark the original item received and create the $0 replacement order.
+    #[instrument(err, ret)]
+    async fn admin_mark_exchange_received(
+        context: &Context,
+        input: AdminMarkExchangeReceivedInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::admin_mark_exchange_received(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(err, ret)]
+    async fn admin_update_exchange_status(
+        context: &Context,
+        input: AdminUpdateExchangeStatusInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::admin_update_exchange_status(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: book the reverse-pickup shipment via Shiprocket. Deliberately separate from
+    /// adminUpdateExchangeStatus so approving an exchange never itself dispatches a real
+    /// courier request — a distinct explicit click.
+    #[instrument(err, ret)]
+    async fn schedule_exchange_pickup(
+        context: &Context,
+        input: ScheduleExchangePickupInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::schedule_exchange_pickup(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: refresh the reverse-pickup shipment's tracking; auto-completes the exchange
+    /// (restores stock, creates the replacement order) once Shiprocket reports it delivered
+    /// to the warehouse.
+    #[instrument(err, ret)]
+    async fn sync_exchange_pickup(
+        context: &Context,
+        input: SyncExchangePickupInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::sync_exchange_pickup(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
 
     #[instrument(err, ret)]
     async fn update_order(context: &Context, order: OrderMutation) -> FieldResult<Vec<Order>> {
@@ -695,6 +856,21 @@ impl MutationRoot {
     ) -> FieldResult<Vec<Order>> {
         require_admin(context)?;
         orders::handlers::create_order_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: place a full order on a customer's behalf (phone/in-person sale, etc.) in one call
+    /// — mirrors real checkout's COD path exactly (order + line items + immediate
+    /// confirm/capture/invoice/order_event). Never triggers a live Razorpay step for either
+    /// payment method.
+    #[instrument(err, ret)]
+    async fn place_order_admin(
+        context: &Context,
+        input: PlaceOrderAdminInput,
+    ) -> FieldResult<Vec<Order>> {
+        require_admin(context)?;
+        orders::handlers::place_order_admin(input)
             .await
             .map_err(|e| e.into_field_error())
     }
@@ -963,6 +1139,18 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Admin: delete a coupon.
+    #[instrument(err, ret)]
+    async fn delete_coupon_admin(
+        context: &Context,
+        input: DeleteCouponAdminInput,
+    ) -> FieldResult<Vec<CouponAdmin>> {
+        require_admin(context)?;
+        coupons::handlers::delete_coupon_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // User roles
     #[instrument(err, ret)]
     async fn create_user_role(context: &Context, input: NewUserRole) -> FieldResult<Vec<UserRole>> {
@@ -1095,6 +1283,66 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Public: storefront footer signup. Deliberately not `require_admin`/`require_jwt`-gated —
+    /// unlike every other newsletter mutation above, this one exists specifically for an
+    /// anonymous visitor who isn't logged in and has no guest session tied to the address.
+    /// A duplicate email surfaces as the DB's existing unique-constraint error
+    /// (`AlreadyExists`); the frontend maps that to a friendly "already subscribed" message.
+    #[instrument(err, ret)]
+    async fn subscribe_newsletter(_context: &Context, email: String) -> FieldResult<bool> {
+        let trimmed = email.trim();
+        if trimmed.is_empty() || !trimmed.contains('@') {
+            return Err(juniper::FieldError::new(
+                "A valid email address is required",
+                juniper::Value::null(),
+            ));
+        }
+        newsletter_subscribers::handlers::create_newsletter_subscriber(NewNewsletterSubscriber {
+            email: trimmed.to_string(),
+        })
+        .await
+        .map(|_| true)
+        .map_err(|e| e.into_field_error())
+    }
+
+    /// Public: the one-click unsubscribe link embedded in every campaign email. Verified by
+    /// signed token (see core_operations::handlers::newsletter_subscribers::unsubscribe_token),
+    /// not by auth — the whole point is that it works without logging in.
+    #[instrument(err, ret)]
+    async fn unsubscribe_newsletter(
+        _context: &Context,
+        input: UnsubscribeNewsletterInput,
+    ) -> FieldResult<bool> {
+        newsletter_subscribers::handlers::unsubscribe_newsletter(input)
+            .await
+            .map(|_| true)
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: compose and immediately send a campaign to every non-unsubscribed subscriber.
+    #[instrument(err, ret)]
+    async fn send_newsletter_campaign(
+        context: &Context,
+        input: SendNewsletterCampaignInput,
+    ) -> FieldResult<Vec<NewsletterCampaign>> {
+        require_admin(context)?;
+        newsletter_subscribers::handlers::send_newsletter_campaign(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: campaign history — omit campaignId to list every campaign ever sent.
+    #[instrument(err, ret)]
+    async fn search_newsletter_campaign(
+        context: &Context,
+        input: SearchNewsletterCampaignInput,
+    ) -> FieldResult<Vec<NewsletterCampaign>> {
+        require_admin(context)?;
+        newsletter_subscribers::handlers::search_newsletter_campaign(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Sizes
     #[instrument(err, ret)]
     async fn create_size(context: &Context, input: NewSize) -> FieldResult<Vec<Size>> {
@@ -1106,6 +1354,10 @@ impl MutationRoot {
 
     #[instrument(err, ret)]
     async fn search_size(context: &Context, input: SearchSizeInput) -> FieldResult<Vec<Size>> {
+        // Public: unlike its create/update/delete siblings, this is the live storefront's
+        // size-selector/reference-data read (fetchSizesWithSession, guest-session, no admin
+        // creds) — not just an admin-panel dropdown. Locking it to require_admin() broke the
+        // product detail page's size selector and /api/sizes for every signed-out customer.
         let _ = context;
         sizes::handlers::search_size(input)
             .await
@@ -1214,6 +1466,10 @@ impl MutationRoot {
         context: &Context,
         input: SearchOccasionInput,
     ) -> FieldResult<Vec<Occasion>> {
+        // Public: unlike its create/update/delete siblings, this is the live storefront's
+        // occasion-filter read (fetchOccasionsWithSession, guest-session, no admin creds) — not
+        // just an admin-panel dropdown. Locking it to require_admin() broke /api/storefront-filters
+        // for every signed-out customer.
         let _ = context;
         occasions::handlers::search_occasion(input)
             .await
@@ -1476,8 +1732,15 @@ impl MutationRoot {
     }
 
     #[instrument(err, ret)]
-    async fn update_review(context: &Context, input: ReviewMutation) -> FieldResult<Vec<Review>> {
+    async fn update_review(
+        context: &Context,
+        mut input: ReviewMutation,
+    ) -> FieldResult<Vec<Review>> {
         ensure_customer_owns_review(context, &input.review_id).await?;
+        if !context.is_admin() {
+            input.user_id = None;
+            input.product_id = None;
+        }
         reviews::handlers::update_review(input)
             .await
             .map_err(|e| e.into_field_error())
@@ -1635,6 +1898,19 @@ impl MutationRoot {
     ) -> FieldResult<Vec<ShippingMethod>> {
         require_admin(context)?;
         shipping_methods::handlers::delete_shipping_method(method_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: update the abandoned-cart worker's schedule. Only the fields provided are
+    /// changed; the worker picks up the new values on its next poll, no restart needed.
+    #[instrument(err, ret)]
+    async fn update_abandoned_cart_settings(
+        context: &Context,
+        input: UpdateAbandonedCartSettingsInput,
+    ) -> FieldResult<AbandonedCartSettings> {
+        require_admin(context)?;
+        app_settings::handlers::update_abandoned_cart_settings(input)
             .await
             .map_err(|e| e.into_field_error())
     }

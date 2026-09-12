@@ -28,6 +28,8 @@ pub struct Model {
     pub product_status_id: Option<i64>,
     pub created_at: Option<DateTimeUtc>,
     pub updated_at: Option<DateTimeUtc>,
+    pub meta_title: Option<String>,
+    pub meta_description: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

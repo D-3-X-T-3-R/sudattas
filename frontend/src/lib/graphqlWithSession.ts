@@ -9,8 +9,31 @@
 
 import { fetchWithResilience } from "@/lib/network-resilience";
 import { configuredStorefrontOrigin, publicGraphqlUrl } from "@/lib/env/public";
+import type { GraphqlErrorLike } from "@/lib/graphql-error-types";
 
 const GRAPHQL_URL = publicGraphqlUrl();
+
+/**
+ * The backend serializes `extensions: {code, grpc_code}` on every GraphQL error (see
+ * backend/graphql/src/resolvers/error.rs IntoFieldError) — `code` mirrors gRPC status names
+ * and should be preferred over substring-matching `message`. Defined locally (rather than
+ * imported from graphqlClient.ts) since this module runs server-side and graphqlClient.ts
+ * pulls in browser-only modules (authStore/session) at import time. Both classes implement
+ * GraphqlErrorLike so an `instanceof` check isn't required to read `code`/`grpcCode` generically.
+ */
+export class GraphqlRequestError extends Error implements GraphqlErrorLike {
+  code?: string;
+  grpcCode?: number;
+
+  constructor(message: string, code?: string, grpcCode?: number) {
+    super(message);
+    this.name = "GraphqlRequestError";
+    this.code = code;
+    this.grpcCode = grpcCode;
+  }
+}
+
+let warnedMissingOrigin = false;
 
 function sessionFetchHeaders(sessionId: string): Record<string, string> {
   const h: Record<string, string> = {
@@ -18,7 +41,20 @@ function sessionFetchHeaders(sessionId: string): Record<string, string> {
     "X-Session-Id": sessionId,
   };
   const origin = configuredStorefrontOrigin();
-  if (!origin) return h;
+  if (!origin) {
+    // If the backend's ALLOWED_ORIGINS CSRF check is configured but STOREFRONT_ORIGIN /
+    // NEXT_PUBLIC_SITE_URL isn't, every session-authenticated call through this client will
+    // 403 with no Origin header to explain why. Warn once (not per-request) so a missing
+    // config doesn't fail silently.
+    if (!warnedMissingOrigin) {
+      warnedMissingOrigin = true;
+      console.warn(
+        "[graphqlWithSession] STOREFRONT_ORIGIN/NEXT_PUBLIC_SITE_URL not configured — " +
+          "requests will omit Origin, which will 403 if the backend's ALLOWED_ORIGINS CSRF check is enabled."
+      );
+    }
+    return h;
+  }
   h.Origin = origin;
   return h;
 }
@@ -51,9 +87,15 @@ export async function gqlWithSession<T = unknown>(
   }
   if (!res.ok) {
     try {
-      const json = JSON.parse(text) as { message?: string; errors?: Array<{ message?: string }> };
-      throw new Error(
-        json.message || json.errors?.[0]?.message || `HTTP ${res.status}`
+      const json = JSON.parse(text) as {
+        message?: string;
+        errors?: Array<{ message?: string; extensions?: { code?: string; grpc_code?: number } }>;
+      };
+      const firstError = json.errors?.[0];
+      throw new GraphqlRequestError(
+        json.message || firstError?.message || `HTTP ${res.status}`,
+        firstError?.extensions?.code,
+        firstError?.extensions?.grpc_code
       );
     } catch (e) {
       if (e instanceof SyntaxError) throw new Error(text || `HTTP ${res.status}`);
@@ -61,9 +103,17 @@ export async function gqlWithSession<T = unknown>(
     }
   }
 
-  const json = JSON.parse(text) as { data?: T; errors?: Array<{ message: string }> };
+  const json = JSON.parse(text) as {
+    data?: T;
+    errors?: Array<{ message: string; extensions?: { code?: string; grpc_code?: number } }>;
+  };
   if (json.errors?.length) {
-    throw new Error(json.errors.map((e) => e.message).join("; "));
+    const firstError = json.errors[0];
+    throw new GraphqlRequestError(
+      json.errors.map((e) => e.message).join("; "),
+      firstError.extensions?.code,
+      firstError.extensions?.grpc_code
+    );
   }
   return json.data as T;
 }

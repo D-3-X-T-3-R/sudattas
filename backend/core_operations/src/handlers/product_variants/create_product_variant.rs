@@ -1,3 +1,4 @@
+use super::ensure_no_duplicate_variant;
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::product_variants;
 use proto::proto::core::{
@@ -11,6 +12,7 @@ pub async fn create_product_variant(
     request: Request<CreateProductVariantRequest>,
 ) -> Result<Response<ProductVariantsResponse>, Status> {
     let req = request.into_inner();
+    ensure_no_duplicate_variant(txn, req.product_id, req.size_id, req.color_id, None).await?;
     let additional_price = req.additional_price_paise.map(|p| p as i32);
     let model = product_variants::ActiveModel {
         variant_id: ActiveValue::NotSet,

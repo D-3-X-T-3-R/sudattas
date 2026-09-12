@@ -1,7 +1,7 @@
 //! Unit tests for user handlers using SeaORM MockDatabase.
 
 use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
-use core_db_entities::entity::users;
+use core_db_entities::entity::{user_statuses, users};
 use proto::proto::core::{
     CreateUserRequest, DeleteUserRequest, SearchUserRequest, UpdateUserRequest, UsersResponse,
 };
@@ -47,6 +47,9 @@ async fn create_user_inserts_and_returns_created_model() {
             rows_affected: 1,
         }])
         .append_query_results(vec![vec![model]])
+        // fetch_status_code_map (UserStatuses lookup) runs after the insert to resolve
+        // user_status on the response — empty is fine, this user's user_status_id is None.
+        .append_query_results(vec![Vec::<user_statuses::Model>::new()])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
@@ -83,6 +86,9 @@ async fn delete_user_deletes_existing_and_returns_response() {
             last_insert_id: 0,
             rows_affected: 1,
         }])
+        // fetch_status_code_map (UserStatuses lookup) runs after the delete to resolve
+        // user_status on the response snapshot.
+        .append_query_results(vec![Vec::<user_statuses::Model>::new()])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
@@ -159,6 +165,9 @@ async fn update_user_updates_fields_and_preserves_existing_when_missing() {
             rows_affected: 1,
         }])
         .append_query_results(vec![vec![updated]])
+        // fetch_status_code_map (UserStatuses lookup) runs after the update to resolve
+        // user_status on the response.
+        .append_query_results(vec![Vec::<user_statuses::Model>::new()])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
@@ -196,6 +205,9 @@ async fn search_user_by_user_id_filters_correctly() {
     let model = make_user(20);
     let db = MockDatabase::new(DatabaseBackend::MySql)
         .append_query_results(vec![vec![model]])
+        // fetch_status_code_map (UserStatuses lookup) runs after the search to resolve
+        // user_status on each result row.
+        .append_query_results(vec![Vec::<user_statuses::Model>::new()])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
