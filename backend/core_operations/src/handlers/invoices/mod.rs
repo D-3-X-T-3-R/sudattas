@@ -535,7 +535,7 @@ mod tests {
 
     #[test]
     fn does_not_flag_non_fallback_blob() {
-        let encoded = BASE64_STANDARD.encode(b"%PDF-1.4 TAX INVOICE /Subtype /Image");
+        let encoded = BASE64_STANDARD.encode(b"%PDF-1.4 INVOICE /Subtype /Image");
         assert!(!is_legacy_fallback_pdf_blob(&encoded));
     }
 }

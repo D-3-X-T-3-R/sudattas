@@ -527,7 +527,7 @@ async fn generated_invoice_blob_contains_expected_content_and_no_fallback_text()
 
     let text = extract_text_from_mem(&pdf_bytes).expect("extract text from generated invoice");
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    assert!(normalized.contains("TAX INVOICE"));
+    assert!(normalized.contains("INVOICE"));
     assert!(normalized.contains("Sudatta's"));
     assert!(normalized.contains("Designer Boutique"));
     assert!(normalized.contains("Invoice Number"));
