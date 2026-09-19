@@ -147,7 +147,7 @@ function QuickViewActions({
         <Accordion title="Delivery & Payment"><p>Shipping, COD/prepaid eligibility, and delivery timelines are confirmed during checkout for your order and location.</p></Accordion>
         <Accordion title="Returns & Exchange"><p>See our Returns &amp; Exchanges and Cancellation Policy pages for current eligibility and process details.</p></Accordion>
         <Accordion title="Care Instruction"><ul className="list-disc space-y-1 pl-5"><li>Hand wash in cold water</li><li>Dry clean recommended for Sarees</li><li>Wash inside out</li><li>Iron on low heat</li></ul></Accordion>
-        <Accordion title="Customer Care"><p className="font-semibold">Have a question? We can help.</p><p className="mt-2">Mon-Sat 10:00 AM to 6:00 PM IST</p><p className="mt-1">Sujana, Survey no 14/7, Hartola Hartas, Bavdhan Pune 411011, Maharashtra</p><p className="mt-1">+91 9411 XXXXXX</p></Accordion>
+        <Accordion title="Customer Care"><p className="font-semibold">Have a question? We can help.</p><p className="mt-2">Mon-Sat 10:00 AM to 6:00 PM IST</p></Accordion>
       </div>
     </div>
   );

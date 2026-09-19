@@ -5,27 +5,26 @@ export default function PaymentGuidePage() {
     <PolicyPageShell
       eyebrow="COD & Prepaid Guide"
       title="Choose the payment mode that fits your order."
-      intro="Sudatta's supports prepaid and Cash on Delivery (COD) paths where available. Availability can vary by product, delivery location, order value, and operational risk checks."
+      intro="You can pay online (Prepaid), or in cash when your order arrives (Cash on Delivery) — both options are available on every order, at no extra charge."
       sections={[
         {
-          heading: "Prepaid orders",
+          heading: "Paying online (Prepaid)",
           body: [
-            "Prepaid checkout confirms payment through gateway verification before the order moves forward to fulfillment.",
-            "If payment is pending or under review, do not place a second order immediately. Wait for the order status update or contact support.",
+            "We confirm your payment before your order moves to dispatch — this usually takes just a few seconds.",
+            "If your payment shows as pending, please wait for a status update rather than placing a second order. Contact support if it doesn't clear.",
           ],
         },
         {
           heading: "Cash on Delivery (COD)",
           body: [
-            "COD may be offered only for eligible products, locations, and order profiles at checkout.",
-            "If COD is unavailable for your combination, choose prepaid to complete the order.",
+            "Just select Cash on Delivery at checkout, and pay in cash when your order is delivered — there's no extra fee for choosing COD.",
           ],
         },
         {
-          heading: "Payment failures and retries",
+          heading: "If your payment doesn't go through",
           body: [
-            "If payment is not completed, you can retry safely from your bag or checkout path.",
-            "For bank debit concerns where status is unclear, share the order reference and payment reference with support for guided resolution.",
+            "You can try again right away from your bag — you're only charged once a payment actually succeeds.",
+            "If money was deducted from your bank but your order wasn't confirmed, contact us with your order and payment reference and we'll help sort it out.",
           ],
         },
       ]}
