@@ -42,6 +42,9 @@ fn return_response_to_gql(row: ReturnRequestResponse) -> ReturnRequest {
     }
 }
 
+// Unused while the matching mutation in mutation_root.rs is commented out — drop the
+// allow when re-enabling it.
+#[allow(dead_code)]
 #[instrument(skip(user_id))]
 pub(crate) async fn request_return(
     input: RequestReturnInput,
@@ -109,6 +112,7 @@ pub(crate) async fn search_return_requests(
         .collect())
 }
 
+#[allow(dead_code)] // see request_return
 #[instrument]
 pub(crate) async fn admin_mark_return_received(
     input: AdminMarkReturnReceivedInput,
@@ -127,6 +131,7 @@ pub(crate) async fn admin_mark_return_received(
         .collect())
 }
 
+#[allow(dead_code)] // see request_return
 #[instrument]
 pub(crate) async fn admin_update_return_status(
     input: AdminUpdateReturnStatusInput,

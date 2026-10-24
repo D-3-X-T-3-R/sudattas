@@ -94,6 +94,7 @@ async fn create_checkout_user(txn: &sea_orm::DatabaseTransaction, now_tag: i64) 
         recipient_name: ActiveValue::Set(Some("Test User".to_string())),
         phone_number: ActiveValue::Set(Some("+919876543210".to_string())),
         is_default: ActiveValue::Set(0),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
         city: ActiveValue::Set("City".to_string()),

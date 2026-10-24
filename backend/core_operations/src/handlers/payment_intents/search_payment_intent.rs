@@ -17,6 +17,7 @@ use tonic::{Request, Response, Status};
 const DEFAULT_LIMIT: u64 = 50;
 const MAX_LIMIT: u64 = 200;
 
+#[allow(clippy::result_large_err)]
 fn parse_status(code: &str) -> Result<PaymentIntentStatus, Status> {
     match code {
         "pending" => Ok(PaymentIntentStatus::Pending),

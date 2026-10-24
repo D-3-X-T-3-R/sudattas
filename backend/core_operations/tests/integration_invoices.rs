@@ -91,6 +91,7 @@ async fn seed_address(txn: &sea_orm::DatabaseTransaction, user_id: i64, tag: &st
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
         is_default: ActiveValue::Set(1),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("India".to_string()),
         state_region: ActiveValue::Set("Karnataka".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),

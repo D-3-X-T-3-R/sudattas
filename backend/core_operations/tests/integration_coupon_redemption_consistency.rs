@@ -127,6 +127,7 @@ async fn seed_coupon_checkout_order(db: &DatabaseConnection, now_tag: i64) -> Co
         recipient_name: ActiveValue::Set(Some("Coupon Consistency".to_string())),
         phone_number: ActiveValue::Set(Some("+919999999999".to_string())),
         is_default: ActiveValue::Set(1),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),

@@ -211,6 +211,7 @@ async fn place_order_fixture(
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
         is_default: ActiveValue::Set(0),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),

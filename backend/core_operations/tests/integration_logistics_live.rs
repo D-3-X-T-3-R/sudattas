@@ -680,6 +680,7 @@ async fn seed_checkout_user(txn: &sea_orm::DatabaseTransaction, tag: i64) -> (i6
         recipient_name: ActiveValue::Set(Some("Live Logistics Test".to_string())),
         phone_number: ActiveValue::Set(Some(phone)),
         is_default: ActiveValue::Set(1),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),

@@ -166,6 +166,7 @@ async fn seed_address(txn: &sea_orm::DatabaseTransaction, user_id: i64, tag: &st
         recipient_name: ActiveValue::Set(Some(format!("Recipient {tag}"))),
         phone_number: ActiveValue::Set(Some("+919999999999".to_string())),
         is_default: ActiveValue::Set(1),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),
