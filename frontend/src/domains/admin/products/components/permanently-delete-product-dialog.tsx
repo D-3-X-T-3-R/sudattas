@@ -39,7 +39,7 @@ export function PermanentlyDeleteProductDialog({
             {error}
           </p>
         )}
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={onClose} disabled={isPending}>
             Cancel
           </Button>

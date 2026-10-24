@@ -33,7 +33,7 @@ export function HeroSection() {
               <Button
                 size="lg"
                 onClick={() => goTo("shop")}
-                className="rounded-full border-[var(--color-gold)] bg-[var(--color-gold)] text-[var(--color-deep)] hover:border-[var(--color-gold-soft)] hover:bg-[var(--color-gold-soft)]"
+                className="h-auto min-h-12 max-w-full whitespace-normal rounded-full border-[var(--color-gold)] bg-[var(--color-gold)] py-3 text-center text-[var(--color-deep)] hover:border-[var(--color-gold-soft)] hover:bg-[var(--color-gold-soft)]"
               >
                 Shop New Arrivals
               </Button>
@@ -41,7 +41,7 @@ export function HeroSection() {
                 variant="outline"
                 size="lg"
                 onClick={() => goTo("collections")}
-                className="rounded-full border-white/30 bg-transparent text-[var(--color-on-deep)] hover:border-white hover:bg-white/10 hover:text-white"
+                className="h-auto min-h-12 max-w-full whitespace-normal rounded-full border-white/30 bg-transparent py-3 text-center text-[var(--color-on-deep)] hover:border-white hover:bg-white/10 hover:text-white"
               >
                 Explore Collections
                 <ArrowRight className="h-4 w-4" />

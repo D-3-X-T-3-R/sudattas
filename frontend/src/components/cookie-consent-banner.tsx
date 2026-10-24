@@ -38,7 +38,7 @@ export function CookieConsentBanner() {
           animate={{ opacity: 1, y: 0 }}
           exit={reduceMotion ? undefined : { opacity: 0, y: 24 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="fixed inset-x-3 bottom-[5.5rem] z-50 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)]/98 p-4 shadow-[0_10px_30px_rgba(45,42,38,0.18)] backdrop-blur lg:inset-x-auto lg:bottom-6 lg:left-6 lg:max-w-sm"
+          className="fixed left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] bottom-[5.5rem] z-50 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)]/98 p-4 shadow-[0_10px_30px_rgba(45,42,38,0.18)] backdrop-blur lg:left-6 lg:right-auto lg:bottom-6 lg:max-w-sm"
         >
           <p className="text-sm leading-relaxed text-[var(--color-ink)]">
             We use cookies to keep your cart, sign-in, and checkout working — nothing more today.

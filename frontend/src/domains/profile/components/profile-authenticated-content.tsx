@@ -1813,8 +1813,8 @@ export function ProfileAuthenticatedContent({
               <p className="text-sm text-[var(--color-muted)]">
                 Signed in as <span className="font-medium text-[var(--color-ink)]">{displayEmail}</span> via {loginMethodLabel}.
               </p>
-              <Button type="button" onClick={onSignOut} className="mt-6">
-                Sign out everywhere on this device
+              <Button type="button" onClick={onSignOut} className="mt-6 w-full sm:w-auto">
+                Sign Out of All Devices
               </Button>
             </AccountCard>
             <AccountCard>
@@ -1856,7 +1856,7 @@ export function ProfileAuthenticatedContent({
                   </Button>
                 </div>
                 <p className="mt-4 text-xs leading-6 text-[var(--color-muted)]">
-                  Cancellation is available only within the configured cancellation window after order creation. After the window closes, you can refuse delivery and support will assist with return/refund updates.
+                  You can cancel your order within 12 hours of placing it. After that, you can still refuse it at delivery, or contact us for help with a refund or exchange.
                 </p>
               </section>
 
@@ -1993,7 +1993,7 @@ export function ProfileAuthenticatedContent({
                 ) : null}
                 <Button
                   asChild
-                  className="mt-3 rounded-full border-[var(--color-gold)] bg-[var(--color-gold)] text-[var(--color-deep)] hover:border-[var(--color-gold-soft)] hover:bg-[var(--color-gold-soft)]"
+                  className="mt-3 h-auto min-h-11 max-w-full whitespace-normal rounded-full border-[var(--color-gold)] bg-[var(--color-gold)] py-3 text-center text-[var(--color-deep)] hover:border-[var(--color-gold-soft)] hover:bg-[var(--color-gold-soft)]"
                 >
                   <a href={supportEmailHref}>Create support email draft</a>
                 </Button>
@@ -2049,8 +2049,11 @@ export function ProfileAuthenticatedContent({
           <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
             <Button
               type="button"
-              className="flex-1"
-              onClick={() => setCancelDialogOrderId(null)}
+              className="h-auto min-h-11 min-w-0 flex-1 whitespace-normal py-3 text-center leading-snug"
+              onClick={() => {
+                setCancelDialogOrderId(null);
+                setCancelDialogItem(null);
+              }}
             >
               <Check className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />
               Keep My Selection
@@ -2058,7 +2061,7 @@ export function ProfileAuthenticatedContent({
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
+              className="h-auto min-h-11 min-w-0 flex-1 whitespace-normal py-3 text-center leading-snug"
               onClick={() => void confirmCancelOrder()}
               disabled={!cancelDialogOrderId && !cancelDialogItem}
             >
@@ -2141,14 +2144,14 @@ export function ProfileAuthenticatedContent({
                     <Button
                       type="button"
                       variant="outline"
-                      className="flex-1"
+                      className="h-auto min-h-11 min-w-0 flex-1 whitespace-normal py-3 text-center leading-snug"
                       onClick={() => setExchangeDialogContext(null)}
                     >
                       Cancel
                     </Button>
                     <Button
                       type="button"
-                      className="flex-1"
+                      className="h-auto min-h-11 min-w-0 flex-1 whitespace-normal py-3 text-center leading-snug"
                       onClick={() =>
                         void submitExchangeRequest(
                           exchangeDialogContext.orderId,
