@@ -2,7 +2,9 @@
 //! and cancellation.
 
 use crate::load_env_once;
-use core_db_entities::entity::{exchange_requests, order_details, orders, shipping_addresses, users};
+use core_db_entities::entity::{
+    exchange_requests, order_details, orders, shipping_addresses, users,
+};
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -32,7 +34,9 @@ pub enum ShiprocketError {
     ExchangeNotFound(i64),
     #[error("exchange {0}'s order item no longer exists")]
     ExchangeOrderDetailNotFound(i64),
-    #[error("no pickup location matching SHIPROCKET_PICKUP_LOCATION found on this Shiprocket account")]
+    #[error(
+        "no pickup location matching SHIPROCKET_PICKUP_LOCATION found on this Shiprocket account"
+    )]
     PickupLocationNotFound,
     #[error("order {0} is missing PublicOrderRef (database migration required)")]
     MissingPublicOrderRef(i64),
@@ -794,9 +798,7 @@ async fn fetch_primary_pickup_address(
         .unwrap_or_default();
     let matched = addresses
         .iter()
-        .find(|a| {
-            a["pickup_location"].as_str().unwrap_or("").trim() == cfg.pickup_location.trim()
-        })
+        .find(|a| a["pickup_location"].as_str().unwrap_or("").trim() == cfg.pickup_location.trim())
         .ok_or(ShiprocketError::PickupLocationNotFound)?;
 
     let as_str = |key: &str| matched[key].as_str().unwrap_or("").trim().to_string();

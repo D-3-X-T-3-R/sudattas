@@ -1,7 +1,10 @@
 use super::query_root;
 use super::Context;
 use crate::resolvers::{
-    app_settings::{self, schema::{AbandonedCartSettings, UpdateAbandonedCartSettingsInput}},
+    app_settings::{
+        self,
+        schema::{AbandonedCartSettings, UpdateAbandonedCartSettingsInput},
+    },
     cart::{
         self,
         schema::{Cart, CartMutation, DeleteCartItem, NewCart},

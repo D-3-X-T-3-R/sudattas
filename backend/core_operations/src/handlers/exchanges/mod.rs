@@ -578,7 +578,10 @@ pub async fn schedule_exchange_pickup(
     if row.pickup_awb_code.is_some() {
         // Already booked — idempotent no-op, same shape as admin_mark_exchange_received's
         // "already done" early return.
-        precheck_txn.commit().await.map_err(map_db_error_to_status)?;
+        precheck_txn
+            .commit()
+            .await
+            .map_err(map_db_error_to_status)?;
         return Ok(Response::new(ExchangeRequestsResponse {
             items: vec![exchange_response(&row)],
         }));
@@ -589,7 +592,10 @@ pub async fn schedule_exchange_pickup(
             "Pickup can only be scheduled once the exchange has been approved",
         ));
     }
-    precheck_txn.commit().await.map_err(map_db_error_to_status)?;
+    precheck_txn
+        .commit()
+        .await
+        .map_err(map_db_error_to_status)?;
 
     // Real network call, deliberately outside any open transaction — mirrors how place_order.rs
     // never holds a DB transaction across an outbound Razorpay/Shiprocket call.
@@ -690,10 +696,7 @@ pub async fn sync_exchange_pickup(
             active.pickup_tracking_events = ActiveValue::Set(Some(events));
         }
     }
-    active
-        .update(&txn)
-        .await
-        .map_err(map_db_error_to_status)?;
+    active.update(&txn).await.map_err(map_db_error_to_status)?;
     txn.commit().await.map_err(map_db_error_to_status)?;
 
     let delivered_to_warehouse = matches!(snapshot.status_id, Some(7) | Some(23));

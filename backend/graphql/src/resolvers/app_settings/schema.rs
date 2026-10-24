@@ -11,7 +11,9 @@ pub struct AbandonedCartSettings {
 }
 
 #[derive(GraphQLInputObject, Default, Debug, Clone)]
-#[graphql(description = "Update one or more abandoned-cart worker settings; omitted fields are left unchanged")]
+#[graphql(
+    description = "Update one or more abandoned-cart worker settings; omitted fields are left unchanged"
+)]
 pub struct UpdateAbandonedCartSettingsInput {
     pub enabled: Option<bool>,
     pub delay_hours: Option<String>,

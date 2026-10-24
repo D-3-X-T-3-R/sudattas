@@ -6,7 +6,9 @@ use crate::handlers::db_errors::map_db_error_to_status;
 use crate::razorpay;
 use core_db_entities::entity::payment_intents;
 use core_db_entities::entity::sea_orm_active_enums::Status as PaymentIntentStatus;
-use proto::proto::core::{PaymentIntentResponse, PaymentIntentsResponse, SearchPaymentIntentRequest};
+use proto::proto::core::{
+    PaymentIntentResponse, PaymentIntentsResponse, SearchPaymentIntentRequest,
+};
 use sea_orm::{
     ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
 };

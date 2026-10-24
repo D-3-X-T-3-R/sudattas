@@ -90,7 +90,9 @@ pub async fn get_abandoned_cart_settings<C: ConnectionTrait>(
         None => env_default_enabled(),
     };
     let delay_hours = match get_setting(db, ABANDONED_CART_DELAY_HOURS_KEY).await? {
-        Some(v) => v.parse::<i64>().unwrap_or_else(|_| env_default_delay_hours()),
+        Some(v) => v
+            .parse::<i64>()
+            .unwrap_or_else(|_| env_default_delay_hours()),
         None => env_default_delay_hours(),
     };
     let poll_interval_sec = match get_setting(db, ABANDONED_CART_POLL_INTERVAL_SEC_KEY).await? {
@@ -133,7 +135,9 @@ pub async fn update_abandoned_cart_settings<C: ConnectionTrait>(
     }
     if let Some(v) = poll_interval_sec {
         if v <= 0 {
-            return Err(Status::invalid_argument("poll_interval_sec must be positive"));
+            return Err(Status::invalid_argument(
+                "poll_interval_sec must be positive",
+            ));
         }
         set_setting(db, ABANDONED_CART_POLL_INTERVAL_SEC_KEY, v.to_string()).await?;
     }

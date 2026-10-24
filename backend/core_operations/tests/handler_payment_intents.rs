@@ -759,7 +759,12 @@ async fn verify_razorpay_payment_duplicate_attempt_same_payload_is_idempotent() 
 async fn search_payment_intent_maps_results_including_gateway_fields() {
     use core_operations::handlers::payment_intents::search_payment_intent;
 
-    let mut intent = make_intent(5, "order_search_1", Some("pay_search_1"), PaymentStatus::Processed);
+    let mut intent = make_intent(
+        5,
+        "order_search_1",
+        Some("pay_search_1"),
+        PaymentStatus::Processed,
+    );
     intent.gateway_fee_paise = Some(118);
     intent.gateway_tax_paise = Some(18);
 
