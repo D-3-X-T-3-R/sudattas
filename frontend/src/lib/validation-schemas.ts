@@ -13,6 +13,8 @@ export const BACKEND_MAX_SKU_SLUG_LEN = 128;
 export const BACKEND_MAX_QUANTITY_PER_ITEM = 999;
 export const BACKEND_MAX_ADDRESS_LINE_LEN = 500;
 export const BACKEND_POSTAL_CODE_LEN = 6;
+export const BACKEND_MAX_META_TITLE_LEN = 70;
+export const BACKEND_MAX_META_DESCRIPTION_LEN = 160;
 
 export const PINCODE_REGEX = new RegExp(`^\\d{${BACKEND_POSTAL_CODE_LEN}}$`);
 export const PHONE_ALLOWED_REGEX = /^[0-9+\-()\s]+$/;
@@ -69,9 +71,15 @@ export const addressInputSchema = z.object({
       BACKEND_MAX_ADDRESS_LINE_LEN,
       `Road/street must be at most ${BACKEND_MAX_ADDRESS_LINE_LEN} characters`
     ),
+  // Apartment/house is the one genuinely optional line — everything else on an address is
+  // required to actually get a courier to the right door.
   apartmentNoOrName: z.string().trim().nullable().optional(),
-  recipientName: z.string().trim().nullable().optional(),
-  phoneNumber: phoneSchema.nullable().optional(),
+  recipientName: z
+    .string()
+    .trim()
+    .min(1, "Recipient name is required")
+    .max(255, "Recipient name must be at most 255 characters"),
+  phoneNumber: requiredPhoneSchema,
 });
 
 // Accept positive rupee amount with up to 2 decimal places.

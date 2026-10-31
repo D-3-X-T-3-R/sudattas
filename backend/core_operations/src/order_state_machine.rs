@@ -6,8 +6,9 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::outbox::{
-    enqueue_outbox_event, DELIVERED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
+    enqueue_admin_alert, enqueue_outbox_event, DELIVERED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
 };
+use crate::notifications::admin_alert::AdminAlert;
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use core_db_entities::entity::{order_status, orders};
 use proto::proto::core::CreateOrderEventRequest;
@@ -297,6 +298,10 @@ pub async fn transition_order_status(
                 "order_state_machine: failed to enqueue customer notification outbox event"
             );
         }
+    }
+
+    if to_state == OrderState::Paid {
+        enqueue_admin_alert(txn, order_id, user_id, &AdminAlert::Placed).await;
     }
 
     Ok(())

@@ -2,17 +2,20 @@
 
 pub mod prelude;
 
+pub mod app_settings;
 pub mod cart;
 pub mod colors;
 pub mod coupon_redemptions;
 pub mod coupon_scope;
 pub mod coupons;
 pub mod event_logs;
+pub mod exchange_requests;
 pub mod fabrics;
 pub mod idempotency_keys;
 pub mod inventory;
 pub mod inventory_log;
 pub mod invoices;
+pub mod newsletter_campaigns;
 pub mod newsletter_subscribers;
 pub mod occasions;
 pub mod order_details;

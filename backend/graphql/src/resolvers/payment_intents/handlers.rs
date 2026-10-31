@@ -1,17 +1,18 @@
 use proto::proto::core::{
     CapturePaymentRequest, CreatePaymentIntentRequest, GetPaymentIntentRequest,
-    PaymentIntentResponse, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
+    PaymentIntentResponse, SearchPaymentIntentRequest, VerifyRazorpayPaymentRequest,
+    VerifyRazorpayPaymentResponse,
 };
 use tracing::instrument;
 
 use super::schema::{
-    CapturePayment, GetPaymentIntent, NewPaymentIntent, PaymentIntent, VerifyRazorpayPaymentInput,
-    VerifyRazorpayPaymentResult,
+    CapturePayment, GetPaymentIntent, NewPaymentIntent, PaymentIntent, SearchPaymentIntent,
+    VerifyRazorpayPaymentInput, VerifyRazorpayPaymentResult,
 };
 use crate::resolvers::{
     error::GqlError,
     grpc_client,
-    utils::{connect_grpc_client, parse_i64},
+    utils::{connect_grpc_client, parse_i64, to_option_i64},
 };
 
 fn payment_intent_response_to_gql(p: PaymentIntentResponse) -> PaymentIntent {
@@ -27,6 +28,8 @@ fn payment_intent_response_to_gql(p: PaymentIntentResponse) -> PaymentIntent {
         razorpay_payment_id: p.razorpay_payment_id,
         created_at: p.created_at,
         expires_at: p.expires_at,
+        gateway_fee_paise: p.gateway_fee_paise.map(|v| v.to_string()),
+        gateway_tax_paise: p.gateway_tax_paise.map(|v| v.to_string()),
     }
 }
 
@@ -82,6 +85,30 @@ pub(crate) async fn get_payment_intent(
         .get_payment_intent(GetPaymentIntentRequest {
             intent_id: input.intent_id.as_deref().and_then(|s| s.parse().ok()),
             order_id: input.order_id.as_deref().and_then(|s| s.parse().ok()),
+        })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(payment_intent_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn search_payment_intent(
+    input: SearchPaymentIntent,
+) -> Result<Vec<PaymentIntent>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .search_payment_intent(SearchPaymentIntentRequest {
+            order_id: to_option_i64(input.order_id),
+            user_id: to_option_i64(input.user_id),
+            razorpay_order_id: input.razorpay_order_id.filter(|s| !s.is_empty()),
+            razorpay_payment_id: input.razorpay_payment_id.filter(|s| !s.is_empty()),
+            status: input.status.filter(|s| !s.is_empty()),
+            limit: to_option_i64(input.limit),
+            offset: to_option_i64(input.offset),
         })
         .await?;
     Ok(response

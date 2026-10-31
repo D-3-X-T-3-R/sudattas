@@ -63,7 +63,7 @@ export function ProductPreviewDialog({
       <DialogContent className="sm:max-w-2xl">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div
-            className="relative overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)]"
+            className="relative aspect-[2/3] overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)]"
             onTouchStart={(e) => setTouchStartX(e.changedTouches[0]?.clientX ?? null)}
             onTouchEnd={(e) => {
               if (!hasImages || imageUrls.length <= 1 || touchStartX == null) return;
@@ -89,7 +89,7 @@ export function ProductPreviewDialog({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="flex aspect-square items-center justify-center text-sm text-[var(--color-muted)]">
+              <div className="flex h-full items-center justify-center text-sm text-[var(--color-muted)]">
                 No image
               </div>
             )}
@@ -157,28 +157,32 @@ export function ProductPreviewDialog({
               </div>
             </div>
             {imageUrls.length > 1 && (
-              <div className="flex gap-2 pt-1">
+              <div className="grid grid-cols-2 gap-2 pt-1">
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
+                  className="w-full"
                   onClick={() =>
                     setSelectedImageIndex((prev) =>
                       prev === 0 ? imageUrls.length - 1 : prev - 1
                     )
                   }
                 >
-                  Previous photo
+                  Previous
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
+                  className="w-full"
                   onClick={() =>
                     setSelectedImageIndex((prev) =>
                       prev === imageUrls.length - 1 ? 0 : prev + 1
                     )
                   }
                 >
-                  Next photo
+                  Next
                 </Button>
               </div>
             )}

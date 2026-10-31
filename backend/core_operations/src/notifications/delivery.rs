@@ -3,7 +3,11 @@
 //! Returns Err on transport failure so the worker leaves the event Pending for retry.
 
 use crate::handlers::outbox::{
-    ABANDONED_CART, DELIVERED, INVOICE_GENERATED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
+    ABANDONED_CART, ADMIN_ORDER_EMAIL, ADMIN_ORDER_PUSH, DELIVERED, INVOICE_GENERATED,
+    ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
+};
+use crate::notifications::admin_alert::{
+    admin_notify_emails, build_admin_email, ntfy_topic, send_ntfy, AdminAlert,
 };
 use crate::notifications::email_provider::{
     send_transactional_email, send_transactional_email_with_attachments, EmailAttachment,
@@ -11,7 +15,7 @@ use crate::notifications::email_provider::{
 use crate::notifications::order_mail::{
     build_abandoned_cart_email, build_delivered_email, build_payment_captured_email,
     build_refunded_email, build_shipped_email, load_order_mail_snapshot,
-    parse_abandoned_cart_email, parse_payload_order_id,
+    parse_abandoned_cart_email, parse_payload_order_id, OrderMailSnapshot,
 };
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
@@ -19,14 +23,6 @@ use core_db_entities::entity::{invoices, outbox_events};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use tonic::Status;
 use tracing::{info, warn};
-
-fn payment_mode_label(raw: &str) -> &'static str {
-    if raw.eq_ignore_ascii_case("cod") {
-        "Cash on Delivery"
-    } else {
-        "Prepaid"
-    }
-}
 
 /// Deliver one outbox event. Uses `db` for read-only enrichment (no long-held txn during HTTP).
 /// Set env `OUTBOX_DELIVER_FAIL=1` to simulate delivery failure (for retry-path tests).
@@ -53,6 +49,8 @@ pub async fn deliver_event(
         REFUNDED => deliver_order_typed(db, event, OrderEmailKind::Refunded).await,
         INVOICE_GENERATED => deliver_invoice_generated(db, event).await,
         ABANDONED_CART => deliver_abandoned_cart(event).await,
+        ADMIN_ORDER_EMAIL => deliver_admin_order_email(db, event).await,
+        ADMIN_ORDER_PUSH => deliver_admin_order_push(db, event).await,
         other => {
             info!(
                 event_type = other,
@@ -101,7 +99,64 @@ async fn deliver_order_typed(
         OrderEmailKind::Refunded => build_refunded_email(&snap),
     };
 
+    // The order-received email doubles as the invoice email — attach the PDF here instead of
+    // InvoiceGenerated sending its own separate email (see deliver_invoice_generated's doc
+    // comment). Generation normally finishes, in the same procedure, just before this
+    // PaymentCaptured event is even enqueued, so by outbox-delivery time the invoice row
+    // should already exist; if it genuinely doesn't (race, or generation failed), send the
+    // confirmation without an attachment rather than blocking it on the invoice.
+    if matches!(kind, OrderEmailKind::PaymentCaptured) {
+        if let Some(attachment) = load_invoice_attachment(db, order_id).await? {
+            return send_transactional_email_with_attachments(
+                &snap.customer_email,
+                &subject,
+                &text,
+                &html,
+                &[attachment],
+            )
+            .await;
+        }
+    }
+
     send_transactional_email(&snap.customer_email, &subject, &text, &html).await
+}
+
+/// Load an order's invoice PDF as an email attachment, if one exists and decodes cleanly.
+/// Returns `Ok(None)` (not an error) for any of "no invoice yet" / "malformed payload" — those
+/// are reasons to send the confirmation without an attachment, not to fail delivery outright.
+async fn load_invoice_attachment(
+    db: &DatabaseConnection,
+    order_id: i64,
+) -> Result<Option<EmailAttachment>, Status> {
+    let Some(invoice) = invoices::Entity::find()
+        .filter(invoices::Column::OrderId.eq(order_id))
+        .one(db)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?
+    else {
+        return Ok(None);
+    };
+
+    let Ok(pdf_bytes) = BASE64_STANDARD.decode(invoice.pdf_blob.as_bytes()) else {
+        warn!(
+            order_id,
+            "outbox: invoice PDF payload decode failed; sending confirmation without attachment"
+        );
+        return Ok(None);
+    };
+    if !pdf_bytes.starts_with(b"%PDF-") {
+        warn!(
+            order_id,
+            "outbox: invoice PDF payload malformed; sending confirmation without attachment"
+        );
+        return Ok(None);
+    }
+
+    Ok(Some(EmailAttachment {
+        filename: format!("Invoice_{}.pdf", invoice.invoice_number),
+        content_base64: BASE64_STANDARD.encode(&pdf_bytes),
+        mime_type: "application/pdf".to_string(),
+    }))
 }
 
 async fn deliver_abandoned_cart(event: &outbox_events::Model) -> Result<(), Status> {
@@ -117,99 +172,82 @@ async fn deliver_abandoned_cart(event: &outbox_events::Model) -> Result<(), Stat
     send_transactional_email(&to, &subject, &text, &html).await
 }
 
-async fn deliver_invoice_generated(
+/// Admin alert email to every `ADMIN_NOTIFY_EMAILS` recipient; skipped when unset.
+async fn deliver_admin_order_email(
     db: &DatabaseConnection,
     event: &outbox_events::Model,
 ) -> Result<(), Status> {
+    let recipients = admin_notify_emails();
+    if recipients.is_empty() {
+        info!(
+            event_id = event.event_id,
+            "outbox: AdminOrderEmail skipped (ADMIN_NOTIFY_EMAILS not set)"
+        );
+        return Ok(());
+    }
+    let Some(snap) = load_admin_alert_snapshot(db, event).await? else {
+        return Ok(());
+    };
+    let (subject, text, html) = build_admin_email(&snap, &AdminAlert::from_payload(&event.payload));
+    for to in &recipients {
+        send_transactional_email(to, &subject, &text, &html).await?;
+    }
+    Ok(())
+}
+
+/// Admin alert push via ntfy; skipped when `NTFY_TOPIC` is unset.
+async fn deliver_admin_order_push(
+    db: &DatabaseConnection,
+    event: &outbox_events::Model,
+) -> Result<(), Status> {
+    let Some(topic) = ntfy_topic() else {
+        info!(
+            event_id = event.event_id,
+            "outbox: AdminOrderPush skipped (NTFY_TOPIC not set)"
+        );
+        return Ok(());
+    };
+    let Some(snap) = load_admin_alert_snapshot(db, event).await? else {
+        return Ok(());
+    };
+    send_ntfy(&topic, &snap, &AdminAlert::from_payload(&event.payload)).await
+}
+
+async fn load_admin_alert_snapshot(
+    db: &DatabaseConnection,
+    event: &outbox_events::Model,
+) -> Result<Option<OrderMailSnapshot>, Status> {
     let Some(order_id) = parse_payload_order_id(&event.payload) else {
         warn!(
             event_id = event.event_id,
-            "outbox: InvoiceGenerated missing order_id; skip"
+            event_type = %event.event_type,
+            "outbox: missing order_id in payload; skip admin alert"
         );
-        return Ok(());
+        return Ok(None);
     };
-
-    let Some(invoice) = invoices::Entity::find()
-        .filter(invoices::Column::OrderId.eq(order_id))
-        .one(db)
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?
-    else {
+    let snap = load_order_mail_snapshot(db, order_id).await?;
+    if snap.is_none() {
         warn!(
             event_id = event.event_id,
-            order_id, "outbox: invoice row not found; skip"
+            order_id, "outbox: order or user not found; skip admin alert"
         );
-        return Ok(());
-    };
-
-    let snapshot: crate::handlers::invoices::InvoiceDocumentSnapshot =
-        match serde_json::from_value(invoice.snapshot_json.clone()) {
-            Ok(v) => v,
-            Err(e) => {
-                warn!(
-                    event_id = event.event_id,
-                    order_id,
-                    error = %e,
-                    "outbox: invoice snapshot parse failed; skip"
-                );
-                return Ok(());
-            }
-        };
-
-    let recipient = snapshot.customer_email.trim().to_string();
-    if recipient.is_empty() {
-        warn!(
-            event_id = event.event_id,
-            order_id, "outbox: invoice recipient missing email; skip"
-        );
-        return Ok(());
     }
+    Ok(snap)
+}
 
-    let pdf_bytes = match BASE64_STANDARD.decode(invoice.pdf_blob.as_bytes()) {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            warn!(
-                event_id = event.event_id,
-                order_id,
-                error = %e,
-                "outbox: invoice PDF payload decode failed; skip"
-            );
-            return Ok(());
-        }
-    };
-    if !pdf_bytes.starts_with(b"%PDF-") {
-        warn!(
-            event_id = event.event_id,
-            order_id, "outbox: invoice PDF payload malformed; skip"
-        );
-        return Ok(());
-    }
-
-    let attachment = EmailAttachment {
-        filename: format!("Invoice_{}.pdf", snapshot.invoice_number),
-        content_base64: BASE64_STANDARD.encode(&pdf_bytes),
-        mime_type: "application/pdf".to_string(),
-    };
-    let attachments = vec![attachment];
-
-    let subject = format!("Your Sudatta's invoice for order #{}", order_id);
-    let text = format!(
-        "Hi {},\n\nYour invoice is ready.\nOrder number: {}\nInvoice number: {}\nTotal amount: {}\nPayment mode: {}\n\nPlease find the invoice attached as a PDF.\n",
-        snapshot.customer_name,
-        order_id,
-        snapshot.invoice_number,
-        snapshot.grand_total_formatted,
-        payment_mode_label(&snapshot.payment_mode),
+/// InvoiceGenerated no longer sends its own email — the PaymentCaptured handler above now
+/// attaches the invoice PDF to the order-received email directly, so a customer gets one
+/// email per order instead of two (a plain "your invoice is ready" email arriving seconds
+/// after the branded order-confirmation email, both for the same event). The outbox event is
+/// still enqueued by `ensure_invoice_for_order` (unrelated bookkeeping may depend on its
+/// existence), so it's consumed here rather than left to retry forever with nothing to do.
+async fn deliver_invoice_generated(
+    _db: &DatabaseConnection,
+    event: &outbox_events::Model,
+) -> Result<(), Status> {
+    info!(
+        event_id = event.event_id,
+        "outbox: InvoiceGenerated — no separate email sent; invoice is attached to the PaymentCaptured email instead"
     );
-    let html = format!(
-        "<p>Hi {},</p><p>Your invoice is ready.</p><ul><li>Order number: <strong>{}</strong></li><li>Invoice number: <strong>{}</strong></li><li>Total amount: <strong>{}</strong></li><li>Payment mode: <strong>{}</strong></li></ul><p>Please find your invoice attached as a PDF.</p>",
-        snapshot.customer_name,
-        order_id,
-        snapshot.invoice_number,
-        snapshot.grand_total_formatted,
-        payment_mode_label(&snapshot.payment_mode)
-    );
-
-    send_transactional_email_with_attachments(&recipient, &subject, &text, &html, &attachments)
-        .await
+    Ok(())
 }

@@ -1,3 +1,4 @@
+use super::user_status::{fetch_status_code_map, resolve_status_code};
 use super::{gender_to_string, parse_date_of_birth, parse_gender};
 use crate::auth;
 use crate::handlers::db_errors::{map_auth_error_to_status, map_db_error_to_status};
@@ -99,25 +100,29 @@ pub async fn update_user(
     };
 
     match model.update(txn).await {
-        Ok(updated) => Ok(Response::new(UsersResponse {
-            items: vec![UserResponse {
-                user_id: updated.user_id,
-                username: updated.username,
-                email: updated.email,
-                auth_provider: auth_provider_str.to_string(),
-                full_name: updated.full_name,
-                address: updated.address,
-                phone: updated.phone,
-                create_date: updated.create_date.to_rfc3339(),
-                session_id: None,
-                role_id: updated.role_id,
-                user_status_id: updated.user_status_id,
-                first_name: updated.first_name,
-                last_name: updated.last_name,
-                gender: updated.gender.as_ref().map(gender_to_string),
-                date_of_birth: updated.date_of_birth.map(|d| d.to_string()),
-            }],
-        })),
+        Ok(updated) => {
+            let status_map = fetch_status_code_map(txn).await?;
+            Ok(Response::new(UsersResponse {
+                items: vec![UserResponse {
+                    user_id: updated.user_id,
+                    username: updated.username,
+                    email: updated.email,
+                    auth_provider: auth_provider_str.to_string(),
+                    full_name: updated.full_name,
+                    address: updated.address,
+                    phone: updated.phone,
+                    create_date: updated.create_date.to_rfc3339(),
+                    session_id: None,
+                    role_id: updated.role_id,
+                    user_status_id: updated.user_status_id,
+                    first_name: updated.first_name,
+                    last_name: updated.last_name,
+                    gender: updated.gender.as_ref().map(gender_to_string),
+                    date_of_birth: updated.date_of_birth.map(|d| d.to_string()),
+                    user_status: resolve_status_code(&status_map, updated.user_status_id),
+                }],
+            }))
+        }
         Err(e) => Err(map_db_error_to_status(e)),
     }
 }

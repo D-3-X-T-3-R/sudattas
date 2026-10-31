@@ -273,11 +273,16 @@ pub async fn expire_stale_pending_orders(
         return Ok(0);
     }
 
-    let expired_intents = payment_intents::Entity::find()
+    let mut expired_intents = payment_intents::Entity::find()
         .filter(payment_intents::Column::IntentId.is_in(claimed_intent_ids))
         .all(&txn)
         .await
         .map_err(map_db_error_to_status)?;
+    // Process in sorted OrderID order (not DB return order, which is unspecified without an
+    // ORDER BY) so that if this batch ever overlaps with another transaction locking multiple
+    // Orders rows, the per-order `FOR UPDATE` locks taken below are always acquired in the same
+    // order, avoiding an InnoDB deadlock (error 1213).
+    expired_intents.sort_by_key(|intent| intent.order_id);
 
     for intent in expired_intents {
         match system_expire_stale_unpaid_order(&txn, &intent).await {

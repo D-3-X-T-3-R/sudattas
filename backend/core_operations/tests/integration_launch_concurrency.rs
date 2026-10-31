@@ -99,6 +99,7 @@ async fn seed_variant(
 ) -> i64 {
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!(
             "launch_concurrency_cat_{}_{}",
             tag,
@@ -123,6 +124,8 @@ async fn seed_variant(
         has_blouse_piece: ActiveValue::Set(None),
         care_instructions: ActiveValue::Set(None),
         product_status_id: ActiveValue::Set(None),
+        meta_title: ActiveValue::Set(None),
+        meta_description: ActiveValue::Set(None),
         created_at: ActiveValue::Set(Some(Utc::now())),
         updated_at: ActiveValue::Set(None),
     }
@@ -163,6 +166,7 @@ async fn seed_address(txn: &sea_orm::DatabaseTransaction, user_id: i64, tag: &st
         recipient_name: ActiveValue::Set(Some(format!("Recipient {tag}"))),
         phone_number: ActiveValue::Set(Some("+919999999999".to_string())),
         is_default: ActiveValue::Set(1),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),

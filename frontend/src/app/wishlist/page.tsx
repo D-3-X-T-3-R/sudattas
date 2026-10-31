@@ -113,7 +113,7 @@ export default function WishlistPage() {
                   key={i}
                   className="animate-pulse overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]"
                 >
-                  <div className="aspect-[4/5] bg-[var(--color-line)]/60" />
+                  <div className="aspect-[2/3] bg-[var(--color-line)]/60" />
                   <div className="space-y-2 p-4">
                     <div className="h-5 w-3/4 rounded bg-[var(--color-line)]/80" />
                     <div className="h-4 w-1/2 rounded bg-[var(--color-line)]/60" />

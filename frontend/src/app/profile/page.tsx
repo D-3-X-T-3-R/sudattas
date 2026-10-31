@@ -25,6 +25,7 @@ type AuthenticatedSectionProps = {
   displayName: string;
   displayEmail: string;
   loginMethodLabel: string;
+  accountProfile: AccountProfileRow | null;
   error: string | null;
   loadingData: boolean;
   addresses: ShippingAddressRow[];
@@ -48,6 +49,12 @@ type AuthenticatedSectionProps = {
   cancelOrder: (orderId: string) => Promise<void>;
   cancelOrderItems: (orderId: string, orderDetailIds: string[]) => Promise<void>;
   requestReturn: (orderId: string, orderDetailIds: string[], reason: string) => Promise<void>;
+  requestExchange: (
+    orderId: string,
+    orderDetailId: string,
+    desiredVariantId: string,
+    reason: string
+  ) => Promise<void>;
 };
 
 type UseAccountDataLoaderArgs = {
@@ -134,6 +141,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     displayName,
     displayEmail,
     loginMethodLabel,
+    accountProfile,
     error,
     loadingData,
     addresses,
@@ -157,6 +165,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     cancelOrder,
     cancelOrderItems,
     requestReturn,
+    requestExchange,
   } = props;
 
   return (
@@ -173,6 +182,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         displayName={displayName}
         displayEmail={displayEmail}
         loginMethodLabel={loginMethodLabel}
+        accountProfile={accountProfile}
         error={error}
         loadingData={loadingData}
         addresses={addresses}
@@ -196,6 +206,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
         cancelOrder={cancelOrder}
         cancelOrderItems={cancelOrderItems}
         requestReturn={requestReturn}
+        requestExchange={requestExchange}
         onSignOut={() => void signOut({ callbackUrl: "/" })}
       />
     </>
@@ -387,6 +398,28 @@ export default function ProfilePage() {
         });
         await loadAccountData();
         announce("Return request submitted.");
+      } catch (e) {
+        const ui = toRouteFailureUi("account", e);
+        setRouteFailure(ui);
+        announce(ui.message, "assertive");
+      }
+    },
+    [announce, loadAccountData]
+  );
+
+  const requestExchange = useCallback(
+    async (orderId: string, orderDetailId: string, desiredVariantId: string, reason: string) => {
+      const trimmedReason = reason.trim();
+      if (!orderDetailId || !desiredVariantId || !trimmedReason) return;
+      setRouteFailure(null);
+      try {
+        await fetchApiEnvelope(`/api/account/orders/${encodeURIComponent(orderId)}/exchanges`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderDetailId, desiredVariantId, reason: trimmedReason }),
+        });
+        await loadAccountData();
+        announce("Exchange request submitted.");
       } catch (e) {
         const ui = toRouteFailureUi("account", e);
         setRouteFailure(ui);
@@ -589,6 +622,7 @@ export default function ProfilePage() {
             displayName={displayName}
             displayEmail={displayEmail}
             loginMethodLabel={loginMethodLabel}
+            accountProfile={accountProfile}
             error={error}
             loadingData={loadingData}
             addresses={addresses}
@@ -612,6 +646,7 @@ export default function ProfilePage() {
             cancelOrder={cancelOrder}
             cancelOrderItems={cancelOrderItems}
             requestReturn={requestReturn}
+            requestExchange={requestExchange}
           />
         )}
       </PageShell>

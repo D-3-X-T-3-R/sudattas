@@ -45,10 +45,31 @@ pub fn paise_checked_mul(price_paise: i64, quantity: i64) -> Result<i64, &'stati
         .ok_or("paise multiplication overflow")
 }
 
+/// Format paise as a rupee string for user-facing messages (e.g. "₹2,000.00" is NOT produced —
+/// no thousands separator, just "₹2000.00"). Never surface raw paise counts in customer-facing
+/// text; this is the one place callers should reach for when building such a message.
+pub fn format_inr_paise(paise: i64) -> String {
+    let sign = if paise < 0 { "-" } else { "" };
+    let abs = paise.unsigned_abs();
+    let rupees = abs / 100;
+    let sub = abs % 100;
+    format!("{sign}₹{rupees}.{sub:02}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    /// format_inr_paise: whole rupees, sub-rupee paise, and negative amounts all render correctly.
+    #[test]
+    fn format_inr_paise_renders_rupees_not_paise() {
+        assert_eq!(format_inr_paise(200000), "₹2000.00");
+        assert_eq!(format_inr_paise(5000), "₹50.00");
+        assert_eq!(format_inr_paise(50), "₹0.50");
+        assert_eq!(format_inr_paise(0), "₹0.00");
+        assert_eq!(format_inr_paise(-1500), "-₹15.00");
+    }
 
     /// Rounding: round-trip paise -> major f64 -> paise recovers exact paise for in-range values.
     #[test]

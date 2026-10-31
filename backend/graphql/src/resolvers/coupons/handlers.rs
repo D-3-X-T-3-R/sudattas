@@ -1,10 +1,14 @@
 use proto::proto::core::{
-    ApplyCouponRequest, CouponResponse, CreateCouponRequest, UpdateCouponRequest,
-    ValidateCouponRequest,
+    ApplyCouponRequest, CouponAdminResponse, CouponResponse, CreateCouponRequest,
+    DeleteCouponAdminRequest, ListActiveCouponsRequest, PublicCouponResponse,
+    SearchCouponAdminRequest, UpdateCouponRequest, ValidateCouponRequest,
 };
 use tracing::instrument;
 
-use super::schema::{ApplyCoupon, Coupon, CreateCouponInput, UpdateCouponInput, ValidateCoupon};
+use super::schema::{
+    ApplyCoupon, Coupon, CouponAdmin, CreateCouponInput, DeleteCouponAdminInput, PublicCoupon,
+    SearchCouponAdminInput, UpdateCouponInput, ValidateCoupon,
+};
 use crate::resolvers::{
     error::GqlError,
     utils::{connect_grpc_client, parse_i64},
@@ -57,6 +61,31 @@ pub(crate) async fn apply_coupon(input: ApplyCoupon) -> Result<Vec<Coupon>, GqlE
         .collect())
 }
 
+fn public_coupon_response_to_gql(c: PublicCouponResponse) -> PublicCoupon {
+    PublicCoupon {
+        coupon_id: c.coupon_id.to_string(),
+        code: c.code,
+        discount_type: c.discount_type,
+        discount_value: c.discount_value,
+        min_order_value_paise: c.min_order_value_paise,
+        ends_at: c.ends_at,
+    }
+}
+
+#[instrument]
+pub(crate) async fn list_active_coupons() -> Result<Vec<PublicCoupon>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .list_active_coupons(ListActiveCouponsRequest {})
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(public_coupon_response_to_gql)
+        .collect())
+}
+
 #[instrument]
 pub(crate) async fn create_coupon_admin(input: CreateCouponInput) -> Result<bool, GqlError> {
     let mut client = connect_grpc_client().await?;
@@ -87,4 +116,60 @@ pub(crate) async fn update_coupon_admin(input: UpdateCouponInput) -> Result<bool
         })
         .await?;
     Ok(true)
+}
+
+fn coupon_admin_response_to_gql(c: CouponAdminResponse) -> CouponAdmin {
+    CouponAdmin {
+        coupon_id: c.coupon_id.to_string(),
+        code: c.code,
+        discount_type: c.discount_type,
+        discount_value: c.discount_value,
+        min_order_value_paise: c.min_order_value_paise,
+        usage_limit: c.usage_limit,
+        usage_count: c.usage_count,
+        max_uses_per_customer: c.max_uses_per_customer,
+        status: c.status,
+        starts_at: c.starts_at,
+        ends_at: c.ends_at,
+    }
+}
+
+#[instrument]
+pub(crate) async fn search_coupon_admin(
+    input: SearchCouponAdminInput,
+) -> Result<Vec<CouponAdmin>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let coupon_id = input
+        .coupon_id
+        .as_deref()
+        .map(|s| parse_i64(s, "coupon id"))
+        .transpose()?
+        .unwrap_or(0);
+    let response = client
+        .search_coupon_admin(SearchCouponAdminRequest { coupon_id })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(coupon_admin_response_to_gql)
+        .collect())
+}
+
+#[instrument]
+pub(crate) async fn delete_coupon_admin(
+    input: DeleteCouponAdminInput,
+) -> Result<Vec<CouponAdmin>, GqlError> {
+    let mut client = connect_grpc_client().await?;
+    let response = client
+        .delete_coupon_admin(DeleteCouponAdminRequest {
+            coupon_id: parse_i64(&input.coupon_id, "coupon id")?,
+        })
+        .await?;
+    Ok(response
+        .into_inner()
+        .items
+        .into_iter()
+        .map(coupon_admin_response_to_gql)
+        .collect())
 }

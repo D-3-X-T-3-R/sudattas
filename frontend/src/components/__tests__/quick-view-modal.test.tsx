@@ -25,6 +25,14 @@ const product: Product = {
   description: "Test quick view description",
   image: "/quick.jpg",
   imageAlt: "Quick View Saree",
+  variantStock: [
+    { sizeId: "s", sizeName: "S", quantity: 2 },
+    { sizeId: "m", sizeName: "M", quantity: 5 },
+  ],
+};
+
+const freeSizeProduct: Product = {
+  ...product,
   variantStock: [{ sizeId: "free", sizeName: "Free Size", quantity: 2 }],
 };
 
@@ -41,10 +49,25 @@ describe("QuickViewModal", () => {
       />
     );
 
-    expect(screen.getByRole("link", { name: /view size & fit guide/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /size & fit guide/i })).toHaveAttribute(
       "href",
       "/size-fit-guide"
     );
-    expect(screen.getByText(/does not use standard size variants/i)).toBeInTheDocument();
+  });
+
+  it("shows no size selector or fit guidance copy for free-size products", () => {
+    render(
+      <QuickViewModal
+        product={freeSizeProduct}
+        open
+        onClose={vi.fn()}
+        wished={false}
+        onToggleWish={vi.fn()}
+        onAddToCart={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/does not use standard size variants/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /size & fit guide/i })).not.toBeInTheDocument();
   });
 });

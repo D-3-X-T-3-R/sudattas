@@ -20,12 +20,14 @@ async fn create_category_inserts_and_returns_created_model() {
         .append_query_results(vec![vec![product_categories::Model {
             category_id: 1,
             name: "Shoes".to_string(),
+            exchange_eligible: 0,
         }]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
 
     let req = Request::new(CreateCategoryRequest {
         name: "Shoes".to_string(),
+        exchange_eligible: None,
     });
     let result = create_category(&txn, req).await;
     assert!(result.is_ok());
@@ -47,6 +49,7 @@ async fn update_category_updates_existing_row() {
         .append_query_results(vec![vec![product_categories::Model {
             category_id: 2,
             name: "Apparel".to_string(),
+            exchange_eligible: 0,
         }]])
         .into_connection();
     let txn = db.begin().await.expect("begin");
@@ -54,6 +57,7 @@ async fn update_category_updates_existing_row() {
     let req = Request::new(UpdateCategoryRequest {
         category_id: 2,
         name: "Clothing".to_string(),
+        exchange_eligible: None,
     });
     let result = update_category(&txn, req).await;
     assert!(result.is_ok());
@@ -84,6 +88,7 @@ async fn search_category_filters_by_id_when_provided() {
     let model = product_categories::Model {
         category_id: 5,
         name: "Accessories".to_string(),
+        exchange_eligible: 0,
     };
     let db = MockDatabase::new(DatabaseBackend::MySql)
         .append_query_results(vec![vec![model]])

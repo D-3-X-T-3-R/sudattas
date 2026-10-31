@@ -26,8 +26,12 @@ export function MobileBottomBar({
 
   return (
     <nav
-      className="mobile-bottom-bar fixed inset-x-3 z-40 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)]/98 shadow-[0_10px_30px_rgba(45,42,38,0.18)] backdrop-blur lg:hidden"
-      style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+      className="mobile-bottom-bar fixed z-40 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)]/98 shadow-[0_10px_30px_rgba(45,42,38,0.18)] backdrop-blur will-change-transform [backface-visibility:hidden] [transform:translateZ(0)] lg:hidden"
+      style={{
+        bottom: "calc(0.75rem + env(safe-area-inset-bottom))",
+        left: "max(0.75rem, env(safe-area-inset-left))",
+        right: "max(0.75rem, env(safe-area-inset-right))",
+      }}
       aria-label="Mobile utilities"
     >
       <div className="mx-auto grid w-full grid-cols-4 gap-1 px-2 py-1.5">

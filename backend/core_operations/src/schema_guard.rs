@@ -9,6 +9,7 @@ pub const REQUIRED_TABLES: &[&str] = &[
     "OrderInventoryRestores",
     "OrderInventoryRestoreItems",
     "Invoices",
+    "ExchangeRequests",
     "SchemaMigrations",
 ];
 
@@ -150,6 +151,7 @@ mod tests {
             "order_inventory_restores".to_string(),
             "order_inventory_restore_items".to_string(),
             "invoices".to_string(),
+            "exchange_requests".to_string(),
             "schema_migrations".to_string(),
         ];
         assert!(validate_required_tables_from_found(found).is_ok());

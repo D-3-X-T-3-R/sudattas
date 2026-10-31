@@ -29,6 +29,7 @@ pub async fn update_shipping_address(
                 .filter(shipping_addresses::Column::UserId.eq(user_id))
                 .filter(shipping_addresses::Column::ShippingAddressId.ne(req.shipping_address_id))
                 .filter(shipping_addresses::Column::IsDefault.eq(1))
+                .filter(shipping_addresses::Column::IsDeleted.eq(0))
                 .one(txn)
                 .await
                 .map_err(map_db_error_to_status)?
@@ -58,6 +59,7 @@ pub async fn update_shipping_address(
         apartment_no_or_name: ActiveValue::Set(req.apartment_no_or_name),
         recipient_name: ActiveValue::Set(req.recipient_name),
         phone_number: ActiveValue::Set(req.phone_number),
+        is_deleted: ActiveValue::NotSet,
     };
 
     match model.update(txn).await {

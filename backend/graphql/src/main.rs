@@ -483,12 +483,16 @@ async fn main() {
                 }
 
                 // --- Admin role resolution (JWT only): DB/cache lookup by JWT sub ---
+                // Same lookup also resolves account_status (active/inactive/suspended), which
+                // require_jwt uses to reject deactivated accounts outright.
+                let mut account_status: Option<String> = None;
                 if matches!(auth, Some(AuthSource::Jwt(_))) {
                     if let Some(sub) = jwt_subject.as_deref() {
                         match admin_roles::resolve_admin_from_db(sub, request_id.as_deref()).await {
                             Ok(resolution) => {
                                 admin_authorized = Some(resolution.is_admin);
                                 admin_resolution_source = Some(resolution.source.to_string());
+                                account_status = resolution.account_status;
                                 graphql::metrics::record_admin_role_resolution_total(
                                     resolution.source,
                                     "success",
@@ -531,6 +535,22 @@ async fn main() {
                                         "Request authenticated via internal customer auth"
                                     );
                                     auth = Some(AuthSource::InternalCustomer(uid.to_string()));
+                                    // No JWT sub to key the admin-role cache on here — resolve
+                                    // account_status directly by the already-trusted user_id so
+                                    // this path enforces deactivation too, not just the JWT path.
+                                    if let Ok(parsed_uid) = uid.parse::<i64>() {
+                                        match admin_roles::resolve_account_status_by_user_id(
+                                            parsed_uid,
+                                            request_id.as_deref(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(status) => account_status = status,
+                                            Err(err) => {
+                                                warn!(error = %err, "Internal-customer account status lookup failed");
+                                            }
+                                        }
+                                    }
                                 } else {
                                     warn!("Internal auth rejected: non-numeric x-customer-user-id");
                                 }
@@ -607,6 +627,7 @@ async fn main() {
                     jwt_subject,
                     admin_authorized,
                     admin_resolution_source,
+                    account_status,
                 })
             },
         );

@@ -30,22 +30,25 @@ impl WishlistItem {
     }
 
     async fn product_details(&self) -> FieldResult<Vec<Product>> {
-        crate::resolvers::product::handlers::search_product(SearchProduct {
-            product_id: Some(self.product_id.to_string()),
-            name: None,
-            description: None,
-            starting_price_paise: None,
-            ending_price_paise: None,
-            stock_quantity: None,
-            category_id: None,
-            fabric: None,
-            weave: None,
-            occasion: None,
-            product_status_id: None,
-            mood_id: None,
-            limit: None,
-            offset: None,
-        })
+        crate::resolvers::product::handlers::search_product(
+            SearchProduct {
+                product_id: Some(self.product_id.to_string()),
+                name: None,
+                description: None,
+                starting_price_paise: None,
+                ending_price_paise: None,
+                stock_quantity: None,
+                category_id: None,
+                fabric: None,
+                weave: None,
+                occasion: None,
+                product_status_id: None,
+                mood_id: None,
+                limit: None,
+                offset: None,
+            },
+            None,
+        )
         .await
         .map_err(|e| e.into())
     }

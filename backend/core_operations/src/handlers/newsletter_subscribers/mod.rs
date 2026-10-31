@@ -9,3 +9,9 @@ pub use update_newsletter_subscriber::*;
 
 pub mod delete_newsletter_subscriber;
 pub use delete_newsletter_subscriber::*;
+
+pub mod unsubscribe_token;
+pub use unsubscribe_token::*;
+
+pub mod unsubscribe_newsletter_by_token;
+pub use unsubscribe_newsletter_by_token::*;

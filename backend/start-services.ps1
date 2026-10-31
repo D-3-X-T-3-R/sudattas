@@ -2,7 +2,7 @@
 Start backend services with DB-first bootstrap and explicit DB mode:
 1) Backup current DB (if container is running)
 2) Stop existing sudattas* containers
-3) Start MySQL + Redis only
+3) Start MySQL + Redis + ntfy (admin push) only
 4) DB mode:
    - -PreserveData (default): restore latest backup, then apply forward migrations
    - -Fresh: load schema from database/sql_dump/01_schema.sql, then apply forward migrations
@@ -131,9 +131,9 @@ if ($containers) {
     Write-Host "No existing sudattas containers found." -ForegroundColor Gray
 }
 
-Write-Host "Starting database dependencies (MySQL, Redis)..." -ForegroundColor Cyan
-$composeStatus = Invoke-Compose -Args @("up", "-d", "mysql", "redis")
-if ($composeStatus -ne 0) { throw "docker compose mysql/redis failed" }
+Write-Host "Starting dependencies (MySQL, Redis, ntfy)..." -ForegroundColor Cyan
+$composeStatus = Invoke-Compose -Args @("up", "-d", "mysql", "redis", "ntfy")
+if ($composeStatus -ne 0) { throw "docker compose mysql/redis/ntfy failed" }
 
 if ($DbMode -eq "fresh") {
     Load-FreshSchema
@@ -195,11 +195,11 @@ if (Test-Path -Path $BackupDirForPrune -PathType Container) {
 
 Write-Host ""
 if ($Orm) {
-    Write-Host "Done (ORM-only). MySQL + Redis are running; SeaORM entities were regenerated." -ForegroundColor Green
-    Write-Host "  MySQL (3306), Redis (6379) - Core Operations / GraphQL were not started." -ForegroundColor Gray
+    Write-Host "Done (ORM-only). MySQL + Redis + ntfy are running; SeaORM entities were regenerated." -ForegroundColor Green
+    Write-Host "  MySQL (3306), Redis (6379), ntfy (8090) - Core Operations / GraphQL were not started." -ForegroundColor Gray
 } else {
     Write-Host "Done. All services running in Docker:" -ForegroundColor Green
-    Write-Host "  MySQL (3306), Redis (6379), Core Operations (50051), GraphQL (8080)" -ForegroundColor Gray
+    Write-Host "  MySQL (3306), Redis (6379), ntfy (8090), Core Operations (50051), GraphQL (8080)" -ForegroundColor Gray
 }
 Write-Host "  DB mode: $DbMode" -ForegroundColor Gray
 Write-Host "  SeaORM entities refreshed from current DB schema" -ForegroundColor Gray

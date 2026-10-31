@@ -10,7 +10,12 @@ import {
   fetchCategoriesWithSession,
   fetchSizesWithSession,
   fetchProductsListWithSession,
+  // Reviews/ratings are disabled in the frontend for now (backend + query kept intact — see
+  // storefront-queries.ts and product-rating-widget.tsx — uncomment this and its usage below to
+  // re-enable).
+  // fetchProductRatingSummaryWithSession,
 } from "@/lib/storefront-queries";
+import type { ProductRatingSummary } from "@/lib/graphql-types";
 import {
   mintGuestSessionIdSingleFlight,
   withRecoveredGuestSession,
@@ -33,7 +38,8 @@ function absoluteImageUrl(base: string, image: string | undefined): string {
 
 function mapToStorefrontProduct(
   row: ProductListRowWithVariantStock,
-  categoryNameById: Record<string, string>
+  categoryNameById: Record<string, string>,
+  ratingSummary?: ProductRatingSummary
 ): Product {
   const pricePaise = parsePaise(row.amountPaise);
   const priceRupees = paiseToRupeesNumber(pricePaise);
@@ -54,11 +60,16 @@ function mapToStorefrontProduct(
     price: priceRupees,
     pricePaise,
     priceFormatted,
-    rating: 4.5,
-    reviews: 0,
+    // Related-product cards don't render a rating, so we only fetch a real summary for the
+    // primary product on this page and leave related ones at 0/0 rather than pay for N extra
+    // rating queries per page load.
+    rating: ratingSummary?.average ?? 0,
+    reviews: ratingSummary?.count ?? 0,
     fabric: row.fabric ?? "",
     occasion: row.occasion ?? "",
     description: row.description ?? "",
+    metaTitle: row.metaTitle ?? undefined,
+    metaDescription: row.metaDescription ?? undefined,
     image: imageUrl,
     hoverImage: hoverUrl || undefined,
     images: allUrls.length > 0 ? allUrls : undefined,
@@ -87,7 +98,12 @@ const getProductPageData = cache(async (id: string): Promise<ProductPageData | n
             forwardedHeaders
           )
         : [];
-      return { row, categories, sizes, relatedRows };
+      // Reviews/ratings disabled in the frontend for now — see the import comment above.
+      // const ratingSummary = row
+      //   ? await fetchProductRatingSummaryWithSession(activeSessionId, id, forwardedHeaders)
+      //   : undefined;
+      const ratingSummary: ProductRatingSummary | undefined = undefined;
+      return { row, categories, sizes, relatedRows, ratingSummary };
     }
   );
 
@@ -102,7 +118,7 @@ const getProductPageData = cache(async (id: string): Promise<ProductPageData | n
     .slice(0, 6)
     .map((r) => mapToStorefrontProduct(r, categoryNameById));
   return {
-    product: mapToStorefrontProduct(row, categoryNameById),
+    product: mapToStorefrontProduct(row, categoryNameById, recovered.value.ratingSummary),
     sizes: recovered.value.sizes,
     relatedProducts,
   };
@@ -126,14 +142,19 @@ export async function generateMetadata({
   const base = siteUrl();
   const canonical = `${base}/product/${encodeURIComponent(product.id)}`;
   const image = absoluteImageUrl(base, product.image);
+  const title = product.metaTitle?.trim() || `${product.name} | Sudatta's Designer Boutique`;
+  const description =
+    product.metaDescription?.trim() ||
+    product.description ||
+    `Buy ${product.name} online from Sudatta's.`;
 
   return {
-    title: `${product.name} | Sudatta's`,
-    description: product.description || `Buy ${product.name} online from Sudatta's.`,
+    title,
+    description,
     alternates: { canonical },
     openGraph: {
-      title: `${product.name} | Sudatta's`,
-      description: product.description || `Buy ${product.name} online from Sudatta's.`,
+      title,
+      description,
       type: "website",
       url: canonical,
       images: [{ url: image, alt: product.imageAlt || product.name }],

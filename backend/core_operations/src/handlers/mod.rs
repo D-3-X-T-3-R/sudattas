@@ -1,14 +1,17 @@
+pub mod app_settings;
 pub mod cart;
 pub mod categories;
 pub mod colors;
 pub mod coupons;
 pub mod db_errors;
 pub mod event_logs;
+pub mod exchanges;
 pub mod fabrics;
 pub mod idempotency;
 pub mod inventory;
 pub mod inventory_logs;
 pub mod invoices;
+pub mod newsletter_campaigns;
 pub mod newsletter_subscribers;
 pub mod occasions;
 pub mod order_details;
@@ -38,15 +41,18 @@ pub mod webhooks;
 pub mod wishlist;
 
 // Re-export all handlers (used by gRPC server and other crates)
+pub use app_settings::*;
 pub use cart::*;
 pub use categories::*;
 pub use colors::*;
 pub use coupons::*;
 pub use event_logs::*;
+pub use exchanges::*;
 pub use fabrics::*;
 pub use inventory::*;
 pub use inventory_logs::*;
 pub use invoices::*;
+pub use newsletter_campaigns::*;
 pub use newsletter_subscribers::*;
 pub use occasions::*;
 pub use order_details::*;

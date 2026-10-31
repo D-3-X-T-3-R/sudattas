@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { ProductImageListItem } from "@/lib/admin-queries";
 import type { AdminReorderableImage } from "@/domains/admin/products/components/product-images-dialogs";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { X, UploadCloud } from "lucide-react";
+import { X, UploadCloud, FolderInput } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ProductImagesSectionProps = {
@@ -28,6 +28,7 @@ type ProductImagesSectionProps = {
   productImagesLoadKey: string;
   getImageUrlWithCacheBuster: (img: ProductImageListItem | undefined, loadKey?: string) => string;
   setExistingProductImages: Dispatch<SetStateAction<ProductImageListItem[]>>;
+  onRequestMoveImage: (img: ProductImageListItem) => void;
 };
 
 function ImagesToolbar({
@@ -109,6 +110,7 @@ function ExistingOrNewImageGrid({
   setImageError,
   productImagesLoadKey,
   getImageUrlWithCacheBuster,
+  onRequestMoveImage,
 }: Pick<
   ProductImagesSectionProps,
   | "editingProductId"
@@ -122,6 +124,7 @@ function ExistingOrNewImageGrid({
   | "setImageError"
   | "productImagesLoadKey"
   | "getImageUrlWithCacheBuster"
+  | "onRequestMoveImage"
 >) {
   if (orderedProductImages != null) {
     return (
@@ -129,7 +132,7 @@ function ExistingOrNewImageGrid({
         {orderedProductImages.map((item, idx) => (
           <div
             key={item.type === "existing" ? `existing-${idx}-${item.image.imageId ?? item.image.url ?? ""}` : `new-${idx}-${item.previewUrl}`}
-            className={`relative aspect-square w-28 shrink-0 overflow-hidden rounded-lg border bg-[var(--color-ivory)] ${
+            className={`relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-lg border bg-[var(--color-ivory)] ${
               item.type === "existing" ? "border-[var(--color-line)]" : "border-dashed border-[var(--color-line)]"
             }`}
           >
@@ -166,7 +169,7 @@ function ExistingOrNewImageGrid({
       {existingProductImages.map((img, idx) => (
         <div
           key={`existing-${idx}-${img.imageId ?? img.url ?? img.thumbnailUrl ?? ""}`}
-          className="relative aspect-square w-28 shrink-0 overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-ivory)]"
+          className="relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-ivory)]"
         >
           {getImageUrlWithCacheBuster(img, productImagesLoadKey) ? <img src={getImageUrlWithCacheBuster(img, productImagesLoadKey)} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-[var(--color-line)]/30 text-[10px] text-[var(--color-muted)]">No image</div>}
           {editingProductId && <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">Existing</span>}
@@ -188,10 +191,20 @@ function ExistingOrNewImageGrid({
               <X className="h-3.5 w-3.5" />
             </button>
           )}
+          {editingProductId && img.imageId && (
+            <button
+              type="button"
+              aria-label="Move this image to a different product"
+              className="absolute left-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+              onClick={() => onRequestMoveImage(img)}
+            >
+              <FolderInput className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       ))}
       {imagePreviews.map((url, idx) => (
-        <div key={`new-${idx}-${url}`} className="relative aspect-square w-28 shrink-0 overflow-hidden rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-ivory)]">
+        <div key={`new-${idx}-${url}`} className="relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-ivory)]">
           <img src={url} alt="" className="h-full w-full object-cover" />
           <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[10px] text-white">New</span>
           <button

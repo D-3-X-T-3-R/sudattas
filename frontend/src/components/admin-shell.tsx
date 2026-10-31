@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Package,
@@ -15,6 +16,11 @@ import {
   X,
   LogOut,
   ExternalLink,
+  MessageSquareText,
+  ScrollText,
+  Mail,
+  Tag,
+  IndianRupee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -23,13 +29,42 @@ import { publicEnv } from "@/lib/env/public";
 const ADMIN_BASE = "/imtheboss";
 const STORE_URL = publicEnv.NEXT_PUBLIC_STORE_URL || "/";
 
-const NAV = [
+interface NavItem {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  /** Other routes that should also highlight this item — grouped pages reached via its
+   * in-page tab bar (see AdminGroupTabs) rather than a sidebar entry of their own. */
+  match?: string[];
+}
+
+const NAV: NavItem[] = [
   { href: `${ADMIN_BASE}`, icon: LayoutDashboard, label: "Dashboard" },
-  { href: `${ADMIN_BASE}/orders`, icon: ShoppingCart, label: "Orders" },
-  { href: `${ADMIN_BASE}/products`, icon: Package, label: "Products" },
+  {
+    href: `${ADMIN_BASE}/orders`,
+    icon: ShoppingCart,
+    label: "Orders",
+    match: [`${ADMIN_BASE}/shipments`, `${ADMIN_BASE}/returns`, `${ADMIN_BASE}/exchanges`],
+  },
+  {
+    href: `${ADMIN_BASE}/products`,
+    icon: Package,
+    label: "Products",
+    match: [`${ADMIN_BASE}/inventory`],
+  },
+  { href: `${ADMIN_BASE}/coupons`, icon: Tag, label: "Coupons" },
   { href: `${ADMIN_BASE}/customers`, icon: Users, label: "Customers" },
+  { href: `${ADMIN_BASE}/reviews`, icon: MessageSquareText, label: "Reviews" },
+  {
+    href: `${ADMIN_BASE}/payments`,
+    icon: IndianRupee,
+    label: "Payments",
+    match: [`${ADMIN_BASE}/refunds`, `${ADMIN_BASE}/transactions`],
+  },
+  { href: `${ADMIN_BASE}/newsletter`, icon: Mail, label: "Newsletter" },
+  { href: `${ADMIN_BASE}/activity-log`, icon: ScrollText, label: "Activity log" },
   { href: `${ADMIN_BASE}/settings`, icon: Settings, label: "Settings" },
-] as const;
+];
 
 function getTitle(pathname: string): string {
   const segment =
@@ -39,8 +74,19 @@ function getTitle(pathname: string): string {
   const titles: Record<string, string> = {
     dashboard: "Dashboard",
     orders: "Orders",
+    shipments: "Shipments",
     products: "Products",
+    coupons: "Coupons",
+    inventory: "Inventory",
     customers: "Customers",
+    reviews: "Reviews",
+    returns: "Returns",
+    exchanges: "Exchanges",
+    refunds: "Refunds",
+    payments: "Payments",
+    transactions: "Transactions",
+    newsletter: "Newsletter",
+    "activity-log": "Activity log",
     settings: "Settings",
   };
   return titles[segment] ?? "Admin";
@@ -98,11 +144,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-1.5 p-4" aria-label="Admin navigation">
-          {NAV.map(({ href, icon: Icon, label }) => {
+          {NAV.map(({ href, icon: Icon, label, match }) => {
             const isActive =
               href === ADMIN_BASE
                 ? pathname === ADMIN_BASE || pathname === `${ADMIN_BASE}/`
-                : pathname.startsWith(href);
+                : pathname.startsWith(href) || (match ?? []).some((m) => pathname.startsWith(m));
 
             return (
               <Link
@@ -124,23 +170,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="space-y-1.5 border-t border-[var(--admin-border-subtle)] p-4">
-          <Link
-            href={STORE_URL}
-            className="flex items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Back to store
-          </Link>
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
-            className="flex w-full items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-left text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
-        </div>
       </aside>
 
       <main id="admin-main-content" className="flex min-w-0 flex-1 flex-col md:ml-[288px]">
@@ -157,6 +186,24 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div>
             <p className="text-sm font-medium text-[var(--color-muted)]">Sudatta&apos;s Admin</p>
             <h1 className="font-display text-2xl leading-none text-[var(--color-ink)] md:text-[1.7rem]">{title}</h1>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <Link
+              href={STORE_URL}
+              className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span className="hidden sm:inline">Back to store</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/imtheboss/login" })}
+              className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-semibold text-[var(--admin-sidebar-text-muted)] hover:bg-[var(--admin-sidebar-hover)] hover:text-[var(--admin-sidebar-text)]"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           </div>
         </header>
 

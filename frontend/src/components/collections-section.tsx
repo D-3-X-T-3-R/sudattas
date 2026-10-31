@@ -165,7 +165,7 @@ export function CollectionsSection({
         />
       </ScrollReveal>
 
-      <div className="mx-auto mt-4 grid max-w-[1300px] grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:gap-5">
+      <div className="mx-auto mt-4 grid max-w-[1300px] grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
         <AnimatePresence initial={false}>
           {displayCollections.map((item, idx) => (
             <motion.div

@@ -3,14 +3,18 @@ use core_db_entities::entity::shipping_addresses;
 use proto::proto::core::{
     GetShippingAddressRequest, ShippingAddressResponse, ShippingAddressesResponse,
 };
-use sea_orm::{DatabaseTransaction, EntityTrait};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use tonic::{Request, Response, Status};
 
 pub async fn get_shipping_address(
     txn: &DatabaseTransaction,
     _request: Request<GetShippingAddressRequest>,
 ) -> Result<Response<ShippingAddressesResponse>, Status> {
-    match shipping_addresses::Entity::find().all(txn).await {
+    match shipping_addresses::Entity::find()
+        .filter(shipping_addresses::Column::IsDeleted.eq(0))
+        .all(txn)
+        .await
+    {
         Ok(models) => {
             let items = models
                 .into_iter()

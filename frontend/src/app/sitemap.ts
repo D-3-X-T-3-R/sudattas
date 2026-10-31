@@ -1,6 +1,13 @@
 import type { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/site-url";
 import { graphqlBaseUrl } from "@/lib/env/server";
+import { fetchCategoriesWithSession } from "@/lib/storefront-queries";
+import { isPublicCatalogName, slugifyCategoryName } from "@/lib/storefront-collection-page";
+import {
+  mintGuestSessionIdSingleFlight,
+  withRecoveredGuestSession,
+} from "@/lib/server-guest-session";
+import { forwardedIpHeadersFromCurrentRequest } from "@/lib/forwarded-ip";
 
 type BackendSitemapUrl = { loc: string; lastmod: string | null };
 
@@ -17,6 +24,7 @@ const PRIVATE_PREFIXES = [
 const STATIC_PUBLIC_ROUTES = [
   "/",
   "/collections",
+  "/journal",
   "/shipping-policy",
   "/returns-exchanges",
   "/privacy-policy",
@@ -27,6 +35,31 @@ const STATIC_PUBLIC_ROUTES = [
   "/payment-guide",
   "/size-fit-guide",
 ];
+
+/** Category/collection pages — the canonical URL is /collections/{slug}; /category/{id}
+ * redirects there permanently (see app/category/[categoryId]/page.tsx), so only the
+ * collections form is submitted here. */
+async function fetchCategorySitemapUrls(): Promise<{ slug: string }[]> {
+  try {
+    const forwardedHeaders = await forwardedIpHeadersFromCurrentRequest();
+    const sessionId = await mintGuestSessionIdSingleFlight(forwardedHeaders);
+    const recovered = await withRecoveredGuestSession(sessionId, forwardedHeaders, async (activeSessionId) =>
+      fetchCategoriesWithSession(activeSessionId, forwardedHeaders)
+    );
+    const seen = new Set<string>();
+    const slugs: { slug: string }[] = [];
+    for (const category of recovered.value) {
+      if (!isPublicCatalogName(category.name)) continue;
+      const slug = slugifyCategoryName(category.name);
+      if (!slug || seen.has(slug)) continue;
+      seen.add(slug);
+      slugs.push({ slug });
+    }
+    return slugs;
+  } catch {
+    return [];
+  }
+}
 
 function isIndexablePath(pathname: string): boolean {
   if (!pathname.startsWith("/")) return false;
@@ -79,6 +112,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: route === "/" ? 1 : 0.7,
   }));
 
+  const categorySlugs = await fetchCategorySitemapUrls();
+  const categoryUrls: MetadataRoute.Sitemap = categorySlugs.map(({ slug }) => ({
+    url: `${base}/collections/${encodeURIComponent(slug)}`,
+    lastModified: now,
+    changeFrequency: "weekly" as const,
+    priority: 0.8,
+  }));
+
   const backendUrls = await fetchBackendSitemapUrls();
   const productUrls: MetadataRoute.Sitemap = backendUrls
     .map((entry) => ({
@@ -95,7 +136,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
 
   const deduped = new Map<string, MetadataRoute.Sitemap[number]>();
-  for (const row of [...staticUrls, ...productUrls]) {
+  for (const row of [...staticUrls, ...categoryUrls, ...productUrls]) {
     deduped.set(row.url, row);
   }
 

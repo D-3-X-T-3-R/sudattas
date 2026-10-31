@@ -192,6 +192,54 @@ export async function callGraphqlAsInternalService<T = unknown>(
   );
 }
 
+/**
+ * Maps a GraphQL error's extensions.code (falling back to substring-matching message, same
+ * heuristic already used in account/orders/[orderId]/cancel and .../returns) to an HTTP
+ * status, so callers get a distinguishable status instead of always 400. Reused across the
+ * checkout and account routes so PermissionDenied/Unauthenticated/backend-unavailable failures
+ * surface as distinguishable statuses rather than being indistinguishable from a plain
+ * validation error.
+ *
+ * Unauthenticated maps to 401 (not 403, alongside PermissionDenied) so that
+ * `fetchApiEnvelope`'s session-refresh-and-retry logic — gated on exactly
+ * `response.status === 401` — actually fires on a stale/expired token, the most common
+ * real-world trigger for this code.
+ */
+export function graphqlErrorToApiStatus(
+  errors: GraphqlErrorEntry[] | undefined,
+  fallbackMessage: string
+): { status: number; message: string } {
+  const firstError = errors?.[0];
+  const message = firstError?.message?.trim() || fallbackMessage;
+  const code = firstError?.extensions?.code;
+  const lower = message.toLowerCase();
+  const status =
+    code === "Unauthenticated"
+      ? 401
+      : code === "PermissionDenied"
+        ? 403
+        : code === "NotFound" || lower.includes("not found")
+          ? 404
+          : code === "FailedPrecondition" || lower.includes("failed_precondition")
+            ? 409
+            : code === "Aborted"
+              ? 409
+              : code === "OutOfRange"
+                ? 400
+                : code === "Unimplemented"
+                  ? 501
+                  : code === "Unavailable"
+                    ? 503
+                    : code === "DeadlineExceeded"
+                      ? 504
+                      : code === "Cancelled"
+                        ? 503
+                        : lower.includes("illegal") || lower.includes("invalid")
+                          ? 400
+                          : 400;
+  return { status, message };
+}
+
 export function apiError(message: string, status: number, errorCode: string) {
   return Response.json(
     {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Filter } from "lucide-react";
+import { Download, Filter } from "lucide-react";
 import { DATE_PRESETS, type DatePreset } from "@/domains/admin/orders/types";
 import { formatOrderStatusName } from "@/domains/admin/orders/utils";
 import { AdminFilterCard } from "@/components/admin/admin-cards";
@@ -19,6 +19,8 @@ type OrdersFiltersCardProps = {
   statuses: { statusId: string; statusName: string }[];
   userIdFromUrl?: string;
   onRefresh: () => void;
+  onExportCsv: () => void;
+  exportDisabled: boolean;
 };
 
 export function OrdersFiltersCard({
@@ -32,6 +34,8 @@ export function OrdersFiltersCard({
   statuses,
   userIdFromUrl,
   onRefresh,
+  onExportCsv,
+  exportDisabled,
 }: OrdersFiltersCardProps) {
   return (
     <AdminFilterCard title="Filters" icon={<Filter className="h-4 w-4 text-[var(--color-green)]" />}>
@@ -114,6 +118,11 @@ export function OrdersFiltersCard({
 
         <Button type="button" variant="outline" onClick={onRefresh}>
           Refresh
+        </Button>
+
+        <Button type="button" variant="outline" onClick={onExportCsv} disabled={exportDisabled}>
+          <Download className="mr-1.5 h-4 w-4" />
+          Export CSV
         </Button>
       </div>
     </AdminFilterCard>

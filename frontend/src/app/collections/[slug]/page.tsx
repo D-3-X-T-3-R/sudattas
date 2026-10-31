@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { StorefrontCollectionPageContent } from "@/components/storefront-collection-page-content";
 import { siteUrl } from "@/lib/site-url";
 import { loadCollectionByCategorySlug } from "@/lib/storefront-collection-page";
+import { safeJsonLd } from "@/lib/json-ld";
 
 export const dynamic = "force-dynamic";
 
@@ -42,5 +43,45 @@ export default async function CollectionSlugPage({
   const { slug } = await params;
   const data = await loadCollectionByCategorySlug(slug).catch(() => null);
   if (!data) notFound();
-  return <StorefrontCollectionPageContent data={data} />;
+
+  const base = siteUrl();
+  const collectionUrl = `${base}/collections/${encodeURIComponent(data.categorySlug)}`;
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${base}/` },
+      { "@type": "ListItem", position: 2, name: "Collections", item: `${base}/collections` },
+      { "@type": "ListItem", position: 3, name: data.categoryName, item: collectionUrl },
+    ],
+  };
+  const collectionJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: `${data.categoryName} Collection`,
+    url: collectionUrl,
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: data.products.map((product, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: `${base}/product/${encodeURIComponent(product.id)}`,
+        name: product.name,
+      })),
+    },
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(collectionJsonLd) }}
+      />
+      <StorefrontCollectionPageContent data={data} />
+    </>
+  );
 }

@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 
@@ -51,11 +52,8 @@ export async function GET() {
     { search: { userId, productId: null, wishlistId: null } }
   );
   if (result.errors?.length) {
-    return apiError(
-      result.errors[0]?.message ?? "Failed to load wishlist",
-      400,
-      "GRAPHQL_ERROR"
-    );
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to load wishlist");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   const ids = (result.data?.searchWishlistItem ?? []).map((w) => w.productId);
   return Response.json({
@@ -86,11 +84,8 @@ export async function POST(request: Request) {
     { wishlist: { userId, productId } }
   );
   if (add.errors?.length) {
-    return apiError(
-      add.errors[0]?.message ?? "Failed to add wishlist item",
-      400,
-      "GRAPHQL_ERROR"
-    );
+    const { status, message } = graphqlErrorToApiStatus(add.errors, "Failed to add wishlist item");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   return Response.json({
     ok: true,
@@ -120,11 +115,11 @@ export async function DELETE(request: Request) {
     { search: { userId, productId, wishlistId: null } }
   );
   if (list.errors?.length) {
-    return apiError(
-      list.errors[0]?.message ?? "Failed to resolve wishlist item",
-      400,
-      "GRAPHQL_ERROR"
+    const { status, message } = graphqlErrorToApiStatus(
+      list.errors,
+      "Failed to resolve wishlist item"
     );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   const hit = list.data?.searchWishlistItem?.[0];
   if (!hit?.wishlistId) {
@@ -144,11 +139,11 @@ export async function DELETE(request: Request) {
     { delete: { userId, wishlistId: hit.wishlistId } }
   );
   if (del.errors?.length) {
-    return apiError(
-      del.errors[0]?.message ?? "Failed to remove wishlist item",
-      400,
-      "GRAPHQL_ERROR"
+    const { status, message } = graphqlErrorToApiStatus(
+      del.errors,
+      "Failed to remove wishlist item"
     );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   return Response.json({

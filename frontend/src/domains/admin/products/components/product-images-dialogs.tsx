@@ -100,7 +100,7 @@ function ReviewImagesDialog(props: ProductImagesDialogsProps) {
                 <div
                   key={item.type === "existing" ? `existing-${item.image.imageId ?? item.image.url ?? idx}` : `new-${idx}-${item.previewUrl}`}
                   className={cn(
-                    "relative aspect-square cursor-move overflow-hidden rounded border bg-[var(--color-ivory)] transition-transform duration-150",
+                    "relative aspect-[2/3] cursor-move overflow-hidden rounded border bg-[var(--color-ivory)] transition-transform duration-150",
                     item.type === "existing" ? "border border-[var(--color-line)]" : "border border-dashed border-[var(--color-line)]",
                     reviewDragIndex === idx && "scale-[1.03] border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]"
                   )}
@@ -133,7 +133,7 @@ function ReviewImagesDialog(props: ProductImagesDialogsProps) {
                     <div
                       key={imageFiles[idx]?.name ?? idx}
                       className={cn(
-                        "relative aspect-square overflow-hidden rounded border border-dashed border-[var(--color-line)] bg-white cursor-move transition-transform duration-150",
+                        "relative aspect-[2/3] overflow-hidden rounded border border-dashed border-[var(--color-line)] bg-white cursor-move transition-transform duration-150",
                         dragIndex === idx && "scale-[1.03] border-[var(--color-ink)]"
                       )}
                       draggable
@@ -155,7 +155,7 @@ function ReviewImagesDialog(props: ProductImagesDialogsProps) {
                       {idx === 0 && <div className="absolute left-1 top-1 rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-medium text-white">Thumbnail</div>}
                     </div>
                   ))
-                : Array.from({ length: 6 }).map((_, idx) => <div key={idx} className="aspect-square rounded border border-dashed border-[var(--color-line)] bg-white" />)}
+                : Array.from({ length: 6 }).map((_, idx) => <div key={idx} className="aspect-[2/3] rounded border border-dashed border-[var(--color-line)] bg-white" />)}
             </div>
           )}
           {!editingProductId && imagePreviews.length > 0 && <p className="text-[11px] text-[var(--color-muted)]">{imageFiles.length} image{imageFiles.length === 1 ? "" : "s"} selected.</p>}
@@ -206,7 +206,7 @@ function ReorderImagesDialog(props: ProductImagesDialogsProps) {
             <div
               key={item.type === "existing" ? `existing-${item.image.imageId ?? item.image.url ?? idx}` : `new-${idx}-${item.previewUrl}`}
               className={cn(
-                "relative aspect-square cursor-move overflow-hidden rounded border bg-[var(--color-ivory)] transition-transform duration-150",
+                "relative aspect-[2/3] cursor-move overflow-hidden rounded border bg-[var(--color-ivory)] transition-transform duration-150",
                 item.type === "existing" ? "border border-[var(--color-line)]" : "border border-dashed border-[var(--color-line)]",
                 reorderDragIndex === idx && "scale-[1.03] border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]"
               )}

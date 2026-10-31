@@ -1,7 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useStorefrontLogin, StorefrontLoginProvider } from "@/context/storefront-login-context";
-import { LiveAnnouncerProvider } from "@/components/ui/live-announcer";
 
 const signInMock = vi.fn();
 
@@ -16,7 +15,7 @@ vi.mock("@/lib/client-telemetry", () => ({
 function OpenDialogButton() {
   const { openLogin } = useStorefrontLogin();
   return (
-    <button type="button" onClick={() => openLogin()}>
+    <button type="button" onClick={() => openLogin("/checkout")}>
       Open Login
     </button>
   );
@@ -25,51 +24,40 @@ function OpenDialogButton() {
 describe("StorefrontLoginProvider", () => {
   beforeEach(() => {
     signInMock.mockReset();
-    vi.spyOn(window, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true }),
-    } as Response);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("supports OTP send and verify sign-in flow", async () => {
+  it("signs in with Google, forwarding the callback URL from openLogin", async () => {
     const user = userEvent.setup();
-    signInMock.mockResolvedValue({ error: "OTP verification failed" });
+    signInMock.mockResolvedValue(undefined);
 
     render(
-      <LiveAnnouncerProvider>
-        <StorefrontLoginProvider>
-          <OpenDialogButton />
-        </StorefrontLoginProvider>
-      </LiveAnnouncerProvider>
+      <StorefrontLoginProvider>
+        <OpenDialogButton />
+      </StorefrontLoginProvider>
     );
 
     await user.click(screen.getByRole("button", { name: "Open Login" }));
-    await user.type(screen.getByLabelText("Phone number"), "9876543210");
-    await user.click(screen.getByRole("button", { name: "Send OTP" }));
+    await user.click(screen.getByRole("button", { name: "Continue with Google" }));
 
-    await waitFor(() =>
-      expect(window.fetch).toHaveBeenCalledWith(
-        "/api/auth/phone-otp/request",
-        expect.objectContaining({ method: "POST" })
-      )
+    expect(signInMock).toHaveBeenCalledWith("google", { callbackUrl: "/checkout" });
+  });
+
+  it("does not offer a phone/OTP sign-in option", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <StorefrontLoginProvider>
+        <OpenDialogButton />
+      </StorefrontLoginProvider>
     );
 
-    await user.type(screen.getByLabelText("One-time password"), "123456");
-    await user.click(screen.getByRole("button", { name: "Verify OTP and sign in" }));
+    await user.click(screen.getByRole("button", { name: "Open Login" }));
 
-    await waitFor(() =>
-      expect(signInMock).toHaveBeenCalledWith(
-        "phone-otp",
-        expect.objectContaining({
-          phone: "9876543210",
-          otp: "123456",
-          redirect: false,
-        })
-      )
-    );
+    expect(screen.queryByLabelText(/phone number/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/one-time password/i)).not.toBeInTheDocument();
   });
 });

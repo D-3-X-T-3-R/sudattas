@@ -205,6 +205,8 @@ describe("ProfilePage", () => {
       expect(screen.getByRole("heading", { name: /saved addresses/i })).toBeInTheDocument();
     });
 
+    fireEvent.input(screen.getByLabelText("Recipient name"), { target: { value: "Test User" } });
+    fireEvent.input(screen.getByLabelText("Phone number"), { target: { value: "9876543210" } });
     fireEvent.input(screen.getByLabelText("Road / street"), { target: { value: "MG Road" } });
     fireEvent.input(screen.getByLabelText("Apartment / house (optional)"), { target: { value: "Test Apt" } });
     fireEvent.input(screen.getByLabelText("City"), { target: { value: "Bengaluru" } });
@@ -287,7 +289,10 @@ describe("ProfilePage", () => {
     });
   });
 
-  it("shows return selection controls only for eligible prepaid delivered orders within window", async () => {
+  // Skipped while RETURNS_ENABLED = false in profile-authenticated-content.tsx (2026-09-12,
+  // testing the exchange flow in isolation) — all four assert on return UI that's currently
+  // gated off. Re-enable alongside that flag.
+  it.skip("shows return selection controls only for eligible prepaid delivered orders within window", async () => {
     await renderOrdersWithDetail(makeOrderDetailPayload());
     await waitFor(() => {
       expect(screen.getByText("Select for return")).toBeInTheDocument();
@@ -295,7 +300,7 @@ describe("ProfilePage", () => {
     });
   });
 
-  it("does not show return selection for COD orders and shows prepaid-only copy", async () => {
+  it.skip("does not show return selection for COD orders and shows prepaid-only copy", async () => {
     await renderOrdersWithDetail(
       makeOrderDetailPayload({ paymentMethod: "cod" }),
       { paymentMethod: "cod" }
@@ -308,7 +313,7 @@ describe("ProfilePage", () => {
     });
   });
 
-  it("does not show return selection after return window closes", async () => {
+  it.skip("does not show return selection after return window closes", async () => {
     await renderOrdersWithDetail(
       makeOrderDetailPayload({
         deliveredAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -322,7 +327,7 @@ describe("ProfilePage", () => {
     });
   });
 
-  it("renders return/refund status labels from return request state", async () => {
+  it.skip("renders return/refund status labels from return request state", async () => {
     await renderOrdersWithDetail(
       makeOrderDetailPayload({
         returnRequests: [

@@ -1,3 +1,4 @@
+use super::user_status::{fetch_status_code_map, resolve_status_code};
 use crate::auth;
 use crate::handlers::db_errors::{map_auth_error_to_status, map_db_error_to_status};
 use chrono::Utc;
@@ -7,9 +8,10 @@ use proto::proto::core::{CreateUserRequest, UserResponse, UsersResponse};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter,
 };
+use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
-fn user_to_response(user: users::Model) -> UserResponse {
+fn user_to_response(user: users::Model, status_map: &HashMap<i64, String>) -> UserResponse {
     let auth_provider_str = match user.auth_provider {
         AuthProvider::Email => "email",
         AuthProvider::Google => "google",
@@ -30,6 +32,7 @@ fn user_to_response(user: users::Model) -> UserResponse {
         last_name: user.last_name,
         gender: user.gender.as_ref().map(super::gender_to_string),
         date_of_birth: user.date_of_birth.map(|d| d.to_string()),
+        user_status: resolve_status_code(status_map, user.user_status_id),
     }
 }
 
@@ -133,9 +136,12 @@ pub async fn create_user(
     };
 
     match model.insert(txn).await {
-        Ok(inserted) => Ok(Response::new(UsersResponse {
-            items: vec![user_to_response(inserted)],
-        })),
+        Ok(inserted) => {
+            let status_map = fetch_status_code_map(txn).await?;
+            Ok(Response::new(UsersResponse {
+                items: vec![user_to_response(inserted, &status_map)],
+            }))
+        }
         Err(e) => {
             // Google sign-in provisioning must be idempotent across retries and
             // mixed auth attempts (same email/phone/google_sub). On uniqueness
@@ -150,8 +156,9 @@ pub async fn create_user(
                 )
                 .await?;
                 if let Some(user) = existing {
+                    let status_map = fetch_status_code_map(txn).await?;
                     return Ok(Response::new(UsersResponse {
-                        items: vec![user_to_response(user)],
+                        items: vec![user_to_response(user, &status_map)],
                     }));
                 }
             }

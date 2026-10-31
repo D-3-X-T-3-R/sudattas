@@ -27,6 +27,13 @@ export default function PrivacyPolicyPage() {
             "Order support is restricted to the authenticated account that owns the order or to authorized internal staff. Protected operations derive customer identity from verified session or internal service context.",
           ],
         },
+        {
+          heading: "Cookies",
+          body: [
+            "We currently use only strictly necessary cookies and local storage — to keep your bag, sign you in, and carry you through checkout. We do not set analytics or advertising cookies today.",
+            "If that ever changes, the cookie notice you see on your first visit lets you choose before anything beyond these necessary cookies is set.",
+          ],
+        },
       ]}
     />
   );
