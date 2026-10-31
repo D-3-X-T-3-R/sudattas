@@ -2,8 +2,10 @@ use crate::cancellation_saga;
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::orders::update_order;
+use crate::handlers::outbox::enqueue_admin_alert;
 use crate::integrations::shiprocket;
 use crate::money::paise_to_decimal;
+use crate::notifications::admin_alert::AdminAlert;
 use crate::order_state_machine;
 use chrono::{DateTime, Duration, Utc};
 use core_db_entities::entity::orders;
@@ -855,10 +857,23 @@ pub async fn process_booking_intent(
             .await
             .map_err(map_db_error_to_status)?;
 
-        let public_order_ref_for_log = orders::Entity::find_by_id(order_id)
+        let booked_order = orders::Entity::find_by_id(order_id)
             .one(&persist_txn)
             .await
-            .map_err(map_db_error_to_status)?
+            .map_err(map_db_error_to_status)?;
+        if let Some(order) = booked_order.as_ref() {
+            let alert = AdminAlert::ShipmentBooked {
+                courier: booking.courier_name.clone(),
+                awb: booking.awb_code.clone(),
+                shiprocket_order_id: booking
+                    .shiprocket_order_id
+                    .clone()
+                    .filter(|id| !id.trim().is_empty()),
+                pickup: pickup_for_db.map(format_pickup_ist),
+            };
+            enqueue_admin_alert(&persist_txn, order_id, order.user_id, &alert).await;
+        }
+        let public_order_ref_for_log = booked_order
             .map(|o| o.public_order_ref)
             .unwrap_or_default();
         crate::observability::log_operational_event(
@@ -943,6 +958,14 @@ pub async fn process_booking_intent(
             Err(err)
         }
     }
+}
+
+/// Pickup time as the admin reads it, e.g. "03 Nov 2026, 10:00 AM IST".
+fn format_pickup_ist(at: DateTime<Utc>) -> String {
+    let ist = chrono::FixedOffset::east_opt(5 * 3600 + 30 * 60).expect("valid IST offset");
+    at.with_timezone(&ist)
+        .format("%d %b %Y, %I:%M %p IST")
+        .to_string()
 }
 
 pub async fn update_cancelability_from_webhook(

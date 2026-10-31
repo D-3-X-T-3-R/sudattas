@@ -1,4 +1,4 @@
-# Local development: MySQL, Redis, Core Operations (gRPC), GraphQL
+# Local development: MySQL, Redis, ntfy (admin push), Core Operations (gRPC), GraphQL
 # Run from backend/: docker-compose up -d --build
 # Or use: .\start-services.ps1 / ./start-services.sh
 
@@ -31,6 +31,29 @@ services:
       timeout: 3s
       retries: 5
 
+  # Self-hosted push server for admin new-order alerts (see NTFY_* in .env.example).
+  # Auth is on and anonymous access is denied; users/tokens live in the ntfy-data volume.
+  ntfy:
+    image: binwiederhier/ntfy:v2.11.0
+    container_name: sudattas-ntfy
+    command: serve
+    ports:
+      - "8090:80"
+    environment:
+      NTFY_BASE_URL: "${NTFY_BASE_URL:-http://localhost:8090}"
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_AUTH_FILE: /var/lib/ntfy/user.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      # Relays a wake-up to ntfy.sh so the iOS app gets instant pushes (message body stays here).
+      NTFY_UPSTREAM_BASE_URL: https://ntfy.sh
+    volumes:
+      - ntfy-data:/var/lib/ntfy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 http://localhost:80/v1/health -O - | grep -Eo '\"healthy\"\\s*:\\s*true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   core_operations:
     build:
       context: .
@@ -44,6 +67,8 @@ services:
       DATABASE_URL: "mysql://root:${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}@mysql:3306/SUDATTAS"
       REDIS_URL: redis://redis:6379
       GRPC_SERVER: "0.0.0.0:50051"
+      # Publish to the bundled ntfy container unless .env points elsewhere (e.g. https://ntfy.sh).
+      NTFY_URL: "${NTFY_URL:-http://ntfy}"
     depends_on:
       mysql:
         condition: service_healthy
@@ -67,3 +92,6 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+
+volumes:
+  ntfy-data:

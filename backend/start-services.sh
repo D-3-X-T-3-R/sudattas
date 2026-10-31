@@ -118,7 +118,7 @@ if ! docker compose version &>/dev/null; then
 fi
 
 echo "Starting database dependencies (MySQL, Redis)..."
-(cd "$BACKEND_ROOT" && $COMPOSE_CMD up -d mysql redis) || { echo "Docker Compose (mysql/redis) failed." >&2; exit 1; }
+(cd "$BACKEND_ROOT" && $COMPOSE_CMD up -d mysql redis ntfy) || { echo "Docker Compose (mysql/redis/ntfy) failed." >&2; exit 1; }
 
 if [[ "$DB_MODE" == "fresh" ]]; then
   load_fresh_schema

@@ -3,7 +3,11 @@
 //! Returns Err on transport failure so the worker leaves the event Pending for retry.
 
 use crate::handlers::outbox::{
-    ABANDONED_CART, DELIVERED, INVOICE_GENERATED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
+    ABANDONED_CART, ADMIN_ORDER_EMAIL, ADMIN_ORDER_PUSH, DELIVERED, INVOICE_GENERATED,
+    ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
+};
+use crate::notifications::admin_alert::{
+    admin_notify_emails, build_admin_email, ntfy_topic, send_ntfy, AdminAlert,
 };
 use crate::notifications::email_provider::{
     send_transactional_email, send_transactional_email_with_attachments, EmailAttachment,
@@ -11,7 +15,7 @@ use crate::notifications::email_provider::{
 use crate::notifications::order_mail::{
     build_abandoned_cart_email, build_delivered_email, build_payment_captured_email,
     build_refunded_email, build_shipped_email, load_order_mail_snapshot,
-    parse_abandoned_cart_email, parse_payload_order_id,
+    parse_abandoned_cart_email, parse_payload_order_id, OrderMailSnapshot,
 };
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
@@ -45,6 +49,8 @@ pub async fn deliver_event(
         REFUNDED => deliver_order_typed(db, event, OrderEmailKind::Refunded).await,
         INVOICE_GENERATED => deliver_invoice_generated(db, event).await,
         ABANDONED_CART => deliver_abandoned_cart(event).await,
+        ADMIN_ORDER_EMAIL => deliver_admin_order_email(db, event).await,
+        ADMIN_ORDER_PUSH => deliver_admin_order_push(db, event).await,
         other => {
             info!(
                 event_type = other,
@@ -164,6 +170,69 @@ async fn deliver_abandoned_cart(event: &outbox_events::Model) -> Result<(), Stat
     let name = "there";
     let (subject, text, html) = build_abandoned_cart_email(name);
     send_transactional_email(&to, &subject, &text, &html).await
+}
+
+/// Admin alert email to every `ADMIN_NOTIFY_EMAILS` recipient; skipped when unset.
+async fn deliver_admin_order_email(
+    db: &DatabaseConnection,
+    event: &outbox_events::Model,
+) -> Result<(), Status> {
+    let recipients = admin_notify_emails();
+    if recipients.is_empty() {
+        info!(
+            event_id = event.event_id,
+            "outbox: AdminOrderEmail skipped (ADMIN_NOTIFY_EMAILS not set)"
+        );
+        return Ok(());
+    }
+    let Some(snap) = load_admin_alert_snapshot(db, event).await? else {
+        return Ok(());
+    };
+    let (subject, text, html) = build_admin_email(&snap, &AdminAlert::from_payload(&event.payload));
+    for to in &recipients {
+        send_transactional_email(to, &subject, &text, &html).await?;
+    }
+    Ok(())
+}
+
+/// Admin alert push via ntfy; skipped when `NTFY_TOPIC` is unset.
+async fn deliver_admin_order_push(
+    db: &DatabaseConnection,
+    event: &outbox_events::Model,
+) -> Result<(), Status> {
+    let Some(topic) = ntfy_topic() else {
+        info!(
+            event_id = event.event_id,
+            "outbox: AdminOrderPush skipped (NTFY_TOPIC not set)"
+        );
+        return Ok(());
+    };
+    let Some(snap) = load_admin_alert_snapshot(db, event).await? else {
+        return Ok(());
+    };
+    send_ntfy(&topic, &snap, &AdminAlert::from_payload(&event.payload)).await
+}
+
+async fn load_admin_alert_snapshot(
+    db: &DatabaseConnection,
+    event: &outbox_events::Model,
+) -> Result<Option<OrderMailSnapshot>, Status> {
+    let Some(order_id) = parse_payload_order_id(&event.payload) else {
+        warn!(
+            event_id = event.event_id,
+            event_type = %event.event_type,
+            "outbox: missing order_id in payload; skip admin alert"
+        );
+        return Ok(None);
+    };
+    let snap = load_order_mail_snapshot(db, order_id).await?;
+    if snap.is_none() {
+        warn!(
+            event_id = event.event_id,
+            order_id, "outbox: order or user not found; skip admin alert"
+        );
+    }
+    Ok(snap)
 }
 
 /// InvoiceGenerated no longer sends its own email — the PaymentCaptured handler above now

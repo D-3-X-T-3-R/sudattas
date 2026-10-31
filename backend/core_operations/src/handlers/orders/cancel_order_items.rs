@@ -1,7 +1,9 @@
 use crate::cancellation_saga;
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::orders::order_response;
+use crate::handlers::outbox::enqueue_admin_alert;
 use crate::handlers::shipments::logistics_workflow;
+use crate::notifications::admin_alert::AdminAlert;
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::FulfillmentStatus;
 use core_db_entities::entity::{
@@ -223,6 +225,32 @@ pub async fn cancel_order_items(
     .map_err(map_db_error_to_status)?;
 
     cancellation_saga::run_order_settlement(txn, req.order_id).await?;
+
+    // Tell the admin about customer cancellations of orders they were already alerted about
+    // (paid/COD-confirmed). Admin-initiated cancels and never-paid orders don't need one.
+    let was_unpaid = matches!(
+        order_status_name.to_ascii_lowercase().as_str(),
+        "pending" | "active_sale"
+    );
+    if !is_admin_override && !was_unpaid {
+        let alert = AdminAlert::Cancelled {
+            full: active_count == 0,
+            items: items
+                .iter()
+                .map(|row| {
+                    let title = row
+                        .title
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(String::from)
+                        .unwrap_or_else(|| format!("Item (variant {})", row.variant_id));
+                    format!("{} x{}", title, row.quantity)
+                })
+                .collect(),
+        };
+        enqueue_admin_alert(txn, req.order_id, order.user_id, &alert).await;
+    }
 
     let updated_order = orders::Entity::find_by_id(req.order_id)
         .one(txn)

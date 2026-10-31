@@ -9,14 +9,17 @@
 
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
+use crate::handlers::outbox::enqueue_admin_alert;
 use crate::handlers::returns::load_delivered_at;
 use crate::integrations::shiprocket::{self, ShiprocketError};
 use crate::integrations::shiprocket_status::shiprocket_status_label_for_id;
+use crate::notifications::admin_alert::AdminAlert;
 use crate::order_policy;
 use crate::procedures::orders::place_order_admin;
 use chrono::Utc;
 use core_db_entities::entity::{
-    exchange_requests, order_details, orders, product_categories, product_variants, products,
+    colors, exchange_requests, order_details, orders, product_categories, product_variants,
+    products, sizes,
 };
 use proto::proto::core::{
     AdminMarkExchangeReceivedRequest, AdminUpdateExchangeStatusRequest, CreateOrderEventRequest,
@@ -267,9 +270,53 @@ pub async fn request_exchange(
     )
     .await;
 
+    let item_title = detail
+        .title
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(product.name.as_str());
+    let alert = AdminAlert::ExchangeRequested {
+        item: format!("{item_title} x{quantity}"),
+        from: variant_label(txn, &variant).await?,
+        to: variant_label(txn, &desired_variant).await?,
+        reason: reason.to_string(),
+    };
+    enqueue_admin_alert(txn, req.order_id, req.user_id, &alert).await;
+
     Ok(Response::new(ExchangeRequestsResponse {
         items: vec![exchange_response(&inserted)],
     }))
+}
+
+/// Human label for a variant in admin alerts: "M / Red", "M", or "variant 12" as a fallback.
+async fn variant_label(
+    txn: &DatabaseTransaction,
+    variant: &product_variants::Model,
+) -> Result<String, Status> {
+    let mut parts = Vec::new();
+    if let Some(size_id) = variant.size_id {
+        if let Some(size) = sizes::Entity::find_by_id(size_id)
+            .one(txn)
+            .await
+            .map_err(map_db_error_to_status)?
+        {
+            parts.push(size.size_name);
+        }
+    }
+    if let Some(color_id) = variant.color_id {
+        if let Some(color) = colors::Entity::find_by_id(color_id)
+            .one(txn)
+            .await
+            .map_err(map_db_error_to_status)?
+        {
+            parts.push(color.color_name);
+        }
+    }
+    if parts.is_empty() {
+        return Ok(format!("variant {}", variant.variant_id));
+    }
+    Ok(parts.join(" / "))
 }
 
 pub async fn search_exchange_requests(
