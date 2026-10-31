@@ -25,9 +25,11 @@ export function isStorefrontReady(value = process.env.IS_STOREFRONT_READY): bool
 }
 
 function configuredGraphqlUrl(): string {
+  // A relative NEXT_PUBLIC_GRAPHQL_URL ("/v2", browser-only) has no host to health-check.
+  const publicUrl = process.env.NEXT_PUBLIC_GRAPHQL_URL;
   return (
     process.env.GRAPHQL_URL ??
-    process.env.NEXT_PUBLIC_GRAPHQL_URL ??
+    (publicUrl && !publicUrl.startsWith("/") ? publicUrl : undefined) ??
     DEFAULT_GRAPHQL_URL
   );
 }

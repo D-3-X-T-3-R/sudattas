@@ -52,7 +52,13 @@ const ACCOUNT_STATUS_CACHE_TTL_MS = 10_000;
 const accountStatusCache = new Map<string, { deactivated: boolean; expiresAt: number }>();
 
 function graphqlBaseUrlForMiddleware(): string {
-  return process.env.GRAPHQL_URL ?? process.env.NEXT_PUBLIC_GRAPHQL_URL ?? "http://localhost:8080/v2";
+  // A relative NEXT_PUBLIC_GRAPHQL_URL ("/v2", browser-only) can't be fetched from here.
+  const publicUrl = process.env.NEXT_PUBLIC_GRAPHQL_URL;
+  return (
+    process.env.GRAPHQL_URL ??
+    (publicUrl && !publicUrl.startsWith("/") ? publicUrl : undefined) ??
+    "http://localhost:8080/v2"
+  );
 }
 
 /// Live check via internal-service auth (never the customer's own Google idToken, which has its

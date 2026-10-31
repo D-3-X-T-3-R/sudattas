@@ -1,4 +1,4 @@
-# Local development: MySQL, Redis, ntfy (admin push), Core Operations (gRPC), GraphQL
+# Local development and VPS: MySQL, Redis, ntfy (admin push), Core Operations (gRPC), GraphQL, Caddy (reverse proxy)
 # Run from backend/: docker-compose up -d --build
 # Or use: .\start-services.ps1 / ./start-services.sh
 
@@ -10,7 +10,7 @@ services:
     # Large mysqldump lines (e.g. BLOBs) exceed default packet size; restore/import needs this.
     command: --max_allowed_packet=1073741824
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}"
       MYSQL_DATABASE: SUDATTAS
@@ -24,7 +24,7 @@ services:
     image: redis:7-alpine
     container_name: sudattas-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -61,7 +61,7 @@ services:
     image: sudattas-core-operations:local
     container_name: sudattas-core-operations
     ports:
-      - "50051:50051"
+      - "127.0.0.1:50051:50051"
     env_file: .env
     environment:
       DATABASE_URL: "mysql://root:${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}@mysql:3306/SUDATTAS"
@@ -81,17 +81,43 @@ services:
       dockerfile: Dockerfile.gq
     image: sudattas-graphql:local
     container_name: sudattas-graphql
+    # Localhost only: the public reaches GraphQL through Caddy. That's also what makes trusting
+    # X-Real-IP / X-Forwarded-For below safe — nobody outside can call :8080 with forged headers.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     env_file: .env
     environment:
       GRPC_URL: http://core_operations:50051
       REDIS_URL: redis://redis:6379
+      RATE_LIMIT_TRUST_PROXY_HEADERS: "true"
     depends_on:
       core_operations:
         condition: service_started
       redis:
         condition: service_healthy
 
+  # Reverse proxy / single public entry point (see Caddyfile): backend paths -> graphql,
+  # everything else -> the Next.js frontend running on the host.
+  # Local:  http://localhost:8000 (point `cloudflared tunnel --url` here).
+  # VPS:    SITE_ADDRESS=<domain>, CADDY_HTTP_PUBLISH=80:80, CADDY_HTTPS_PUBLISH=443:443.
+  caddy:
+    image: caddy:2.8.4-alpine
+    container_name: sudattas-caddy
+    ports:
+      - "${CADDY_HTTP_PUBLISH:-8000:80}"
+      - "${CADDY_HTTPS_PUBLISH:-127.0.0.1:8443:443}"
+    environment:
+      SITE_ADDRESS: "${SITE_ADDRESS:-:80}"
+      FRONTEND_UPSTREAM: "${FRONTEND_UPSTREAM:-host.docker.internal:3000}"
+    extra_hosts:
+      # Docker Desktop provides host.docker.internal; Linux (the VPS) needs this mapping.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
 volumes:
   ntfy-data:
+  caddy-data:
+  caddy-config:

@@ -52,6 +52,9 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // `next dev` blocks /_next/* dev assets requested from non-localhost origins. Allow quick
+  // Cloudflare tunnels (cloudflared -> Caddy -> here, see docs/WEBHOOK_SETUP.md). Dev-only.
+  allowedDevOrigins: ["*.trycloudflare.com"],
   async headers() {
     return [
       {

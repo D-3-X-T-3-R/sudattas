@@ -7,7 +7,7 @@ Start backend services with DB-first bootstrap and explicit DB mode:
    - -PreserveData (default): restore latest backup, then apply forward migrations
    - -Fresh: load schema from database/sql_dump/01_schema.sql, then apply forward migrations
 5) Regenerate SeaORM entities
-6) Build and start Core Operations + GraphQL (skipped with -Orm)
+6) Build and start Core Operations + GraphQL + Caddy reverse proxy (skipped with -Orm)
 
 Run from backend/: .\start-services.ps1 [-Fresh | -PreserveData] [-Orm]
 #>
@@ -176,9 +176,9 @@ docker exec -i -e MYSQL_PWD=$($cloneCreds.Password) $DbContainerName sh -c "mysq
 if ($Orm) {
     Write-Host "ORM-only mode (-Orm): skipping Core Operations and GraphQL." -ForegroundColor Yellow
 } else {
-    Write-Host "Building and starting app services (Core Operations, GraphQL)..." -ForegroundColor Cyan
-    $composeStatus = Invoke-Compose -Args @("up", "-d", "--build", "core_operations", "graphql")
-    if ($composeStatus -ne 0) { throw "docker compose core_operations/graphql failed" }
+    Write-Host "Building and starting app services (Core Operations, GraphQL, Caddy)..." -ForegroundColor Cyan
+    $composeStatus = Invoke-Compose -Args @("up", "-d", "--build", "core_operations", "graphql", "caddy")
+    if ($composeStatus -ne 0) { throw "docker compose core_operations/graphql/caddy failed" }
 }
 
 Write-Host "Pruning old DB backups (keeping latest 50)..." -ForegroundColor Yellow
@@ -200,6 +200,7 @@ if ($Orm) {
 } else {
     Write-Host "Done. All services running in Docker:" -ForegroundColor Green
     Write-Host "  MySQL (3306), Redis (6379), ntfy (8090), Core Operations (50051), GraphQL (8080)" -ForegroundColor Gray
+    Write-Host "  Caddy (8000) -> site entry point; run the frontend (npm run dev) and tunnel to http://localhost:8000" -ForegroundColor Gray
 }
 Write-Host "  DB mode: $DbMode" -ForegroundColor Gray
 Write-Host "  SeaORM entities refreshed from current DB schema" -ForegroundColor Gray
