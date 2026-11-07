@@ -88,7 +88,7 @@ async fn refresh_backlog_metrics(db: &core_db_entities::CoreDatabaseConnection) 
 
     let webhook_failed_backlog = query_count(
         db,
-        "SELECT COUNT(*) AS count FROM WebhookEvents WHERE status = 'failed'",
+        "SELECT COUNT(*) AS count FROM WebhookEvents WHERE status IN ('failed','needs_review')",
     )
     .await
     .unwrap_or(0.0);
@@ -219,6 +219,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init(shared_db.clone())
         .await
         .map_err(|e| format!("service initialization failed: {}", e.message()))?;
+
+    // Runs in the existing backend process after deployment, not a new service.
+    // Authenticated inbox failures must have a working retry consumer before ACK.
+    {
+        let db = shared_db.clone();
+        let worker = tokio::spawn(async move {
+            loop {
+                if let Err(e) =
+                    core_operations::procedures::commerce_reconciliation::process(&db).await
+                {
+                    tracing::error!(error=%e,"commerce reconciliation pass failed");
+                }
+                tokio::time::sleep(Duration::from_secs(60)).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = worker.await {
+                tracing::error!(error=%e,"commerce reconciliation worker stopped");
+                observability::record_worker_died_total("commerce_reconciliation");
+            }
+        });
+    }
 
     let outbox_disabled = std::env::var("OUTBOX_DISABLE_WORKER")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))

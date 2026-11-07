@@ -30,15 +30,28 @@ pub async fn finalize_order_paid(
     message: &str,
 ) -> Result<(), TonicStatus> {
     let order = orders::Entity::find_by_id(order_id)
+        .lock(LockType::Update)
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| TonicStatus::not_found(format!("Order {} not found", order_id)))?;
     let coupon_id = order.applied_coupon_id;
-    // Captured before the (possibly no-op) transition below, so a duplicate finalize call —
-    // a later `payment.captured` webhook arriving after verify_razorpay_payment already
-    // finalized this order, or a retried webhook — doesn't insert a second transaction row.
+    // Read while holding the order lock. A duplicate captured webhook, provider
+    // lookup, or legacy already-paid order cannot insert another transaction row.
     let already_captured = matches!(order.payment_status, Some(PaymentStatus::Captured));
+    // Unique business-effect marker is committed with all financial effects. It
+    // also guards different provider events describing the same capture.
+    let effect = txn
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "INSERT IGNORE INTO CommerceEffects(order_id,effect,provider_id) VALUES (?,'paid',?)",
+            [order_id.into(), format!("order:{order_id}").into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?;
+    if effect.rows_affected() == 0 {
+        return Ok(());
+    }
 
     if let Some(coupon_id) = coupon_id {
         coupons::Entity::find_by_id(coupon_id)

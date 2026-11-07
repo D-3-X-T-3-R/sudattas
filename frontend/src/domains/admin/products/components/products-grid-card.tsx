@@ -10,6 +10,10 @@ import { StatusBadge } from "@/components/admin/status-badge";
 /** ProductStatuses.id for "archived" — matches the admin status dropdown's own hardcoded values. */
 const ARCHIVED_STATUS_ID = "3";
 
+/** Cards are ~110px wide in the two-column phone grid, too narrow for the default button padding and tracking. */
+const CARD_ACTION_CLASS =
+  "w-full justify-center gap-1.5 px-2 text-[11px] tracking-[0.06em] [&_svg]:hidden min-[360px]:[&_svg]:block sm:text-xs";
+
 interface ProductsGridCardProps {
   products: ProductListRow[];
   productsLoading: boolean;
@@ -105,7 +109,7 @@ export function ProductsGridCard({
                     <Button
                       type="button"
                       variant="outline"
-                      className="w-full justify-center gap-2"
+                      className={CARD_ACTION_CLASS}
                       aria-label={`Edit ${p.name}`}
                       onClick={() => onEditProduct(p)}
                     >
@@ -116,7 +120,7 @@ export function ProductsGridCard({
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full justify-center gap-2 border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+                        className={`${CARD_ACTION_CLASS} border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50`}
                         aria-label={`Activate ${p.name}`}
                         onClick={() => onActivateProduct(p)}
                       >
@@ -127,7 +131,7 @@ export function ProductsGridCard({
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full justify-center gap-2 border-[#D8B2A7] text-[#7A5348] hover:border-[#D8B2A7]"
+                        className={`${CARD_ACTION_CLASS} border-[#D8B2A7] text-[#7A5348] hover:border-[#D8B2A7]`}
                         aria-label={`Archive ${p.name}`}
                         onClick={() => onArchiveProduct(p)}
                       >
@@ -138,12 +142,13 @@ export function ProductsGridCard({
                     <Button
                       type="button"
                       variant="outline"
-                      className="w-full justify-center gap-2 border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50"
+                      className={`${CARD_ACTION_CLASS} border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50`}
                       aria-label={`Permanently delete ${p.name}`}
+                      title="Permanently remove"
                       onClick={() => onPermanentlyDeleteProduct(p)}
                     >
                       <Ban className="h-4 w-4" />
-                      Permanently remove
+                      Delete
                     </Button>
                   </div>
                 </div>

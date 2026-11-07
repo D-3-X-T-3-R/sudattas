@@ -312,7 +312,7 @@ pub async fn validate_order_can_be_booked(
         ));
     }
 
-    if payment_method.eq_ignore_ascii_case("prepaid")
+    if !payment_method.eq_ignore_ascii_case("cod")
         && !payment_status.eq_ignore_ascii_case("captured")
     {
         return Err(TonicStatus::failed_precondition(

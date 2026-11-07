@@ -11,7 +11,7 @@ use proto::proto::core::{
 };
 use sea_orm::{
     sea_query::LockType, ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait,
-    QueryFilter, QuerySelect,
+    IntoActiveModel, QueryFilter, QuerySelect,
 };
 use tonic::{Request, Response, Status};
 
@@ -35,6 +35,37 @@ pub async fn create_refund(
         .map_err(|e| Status::internal(e.to_string()))?
         .ok_or_else(|| Status::not_found(format!("Order {} not found", req.order_id)))?;
 
+    let currency = req.currency.clone().unwrap_or_else(|| "INR".into());
+    if req.amount_paise > i32::MAX as i64 || order.currency.as_deref() != Some(currency.as_str()) {
+        return Err(Status::invalid_argument("Refund amount/currency mismatch"));
+    }
+    let existing = refunds::Entity::find()
+        .filter(refunds::Column::GatewayRefundId.eq(&req.gateway_refund_id))
+        .lock(LockType::Update)
+        .one(txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+    if let Some(ex) = existing.as_ref() {
+        if ex.order_id != req.order_id
+            || i64::from(ex.amount_paise) != req.amount_paise
+            || ex.currency.as_deref() != Some(currency.as_str())
+        {
+            return Err(Status::failed_precondition(
+                "Conflicting refund association; reconciliation required",
+            ));
+        }
+        // Exact duplicate resolves before the already-refunded order-state guard.
+        if ex.status == Some(RefundStatus::Processed) {
+            return Ok(Response::new(RefundsResponse {
+                items: vec![model_to_response(ex)],
+            }));
+        }
+        if ex.status == Some(RefundStatus::Failed) {
+            return Err(Status::failed_precondition(
+                "Conflicting terminal refund evidence; reconciliation required",
+            ));
+        }
+    }
     let status_row = order_status::Entity::find_by_id(order.status_id)
         .one(txn)
         .await
@@ -53,18 +84,6 @@ pub async fn create_refund(
         )));
     }
 
-    let existing = refunds::Entity::find()
-        .filter(refunds::Column::GatewayRefundId.eq(&req.gateway_refund_id))
-        .one(txn)
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
-
-    if let Some(ex) = existing {
-        return Ok(Response::new(RefundsResponse {
-            items: vec![model_to_response(&ex)],
-        }));
-    }
-
     // Server-side backstop against over-refunding: callers (cancellation_saga, returns) already cap
     // their requested amount to the order total, but the webhook-driven caller forwards whatever
     // amount the gateway reports. Reject rather than silently recording a refund that would push
@@ -74,6 +93,7 @@ pub async fn create_refund(
         let already_refunded: i64 = refunds::Entity::find()
             .filter(refunds::Column::OrderId.eq(req.order_id))
             .filter(refunds::Column::Status.eq(RefundStatus::Processed))
+            .lock(LockType::Update)
             .all(txn)
             .await
             .map_err(|e| Status::internal(e.to_string()))?
@@ -105,12 +125,19 @@ pub async fn create_refund(
         created_at: sea_orm::ActiveValue::Set(Some(Utc::now())),
     };
 
-    let inserted = refund.insert(txn).await.map_err(map_db_error_to_status)?;
+    let inserted = if let Some(existing) = existing {
+        let mut active = existing.into_active_model();
+        active.status = sea_orm::ActiveValue::Set(Some(RefundStatus::Processed));
+        active.update(txn).await.map_err(map_db_error_to_status)?
+    } else {
+        refund.insert(txn).await.map_err(map_db_error_to_status)?
+    };
 
     let grand_total = order.grand_total_minor;
     let total_refunded: i64 = refunds::Entity::find()
         .filter(refunds::Column::OrderId.eq(req.order_id))
         .filter(refunds::Column::Status.eq(RefundStatus::Processed))
+        .lock(LockType::Update)
         .all(txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?

@@ -9,6 +9,42 @@ use std::sync::OnceLock;
 use std::time::Duration;
 use tracing::{info, warn};
 
+#[derive(Debug, Deserialize)]
+pub struct PaymentEvidence {
+    pub id: String,
+    pub order_id: String,
+    pub amount: i64,
+    pub currency: String,
+    pub status: String,
+    pub captured: bool,
+}
+
+/// Read-only evidence lookup. Never infer capture from a browser signature.
+pub async fn fetch_payment(payment_id: &str) -> Result<PaymentEvidence, String> {
+    load_env_once();
+    if !payment_id.starts_with("pay_")
+        || !payment_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err("Invalid payment ID".into());
+    }
+    http_client()
+        .get(format!("{}/{}", razorpay_payments_url(), payment_id))
+        .basic_auth(
+            std::env::var("RAZORPAY_KEY_ID").map_err(|_| "Missing provider key")?,
+            Some(std::env::var("RAZORPAY_KEY_SECRET").map_err(|_| "Missing provider secret")?),
+        )
+        .send()
+        .await
+        .map_err(|_| "Payment lookup unavailable")?
+        .error_for_status()
+        .map_err(|_| "Payment lookup rejected")?
+        .json()
+        .await
+        .map_err(|_| "Invalid payment evidence".into())
+}
+
 /// Shared HTTP client for all Razorpay calls. `reqwest`'s defaults have no timeout,
 /// so a hung/slow Razorpay endpoint would otherwise block checkout/refund/verification
 /// flows indefinitely.
@@ -71,6 +107,37 @@ struct RazorpayRefundResponse {
 pub struct RazorpayRefundResult {
     pub refund_id: String,
     pub status: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RefundEvidence {
+    pub id: String,
+    pub payment_id: String,
+    pub amount: i64,
+    pub currency: String,
+    pub status: String,
+}
+
+/// GET a known refund. Never substitute a new POST when its outcome is unknown.
+pub async fn fetch_refund(id: &str) -> Result<RefundEvidence, String> {
+    load_env_once();
+    if !id.starts_with("rfnd_") || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err("Invalid refund ID".into());
+    }
+    http_client()
+        .get(format!("{}/refunds/{id}", razorpay_api_base()))
+        .basic_auth(
+            std::env::var("RAZORPAY_KEY_ID").map_err(|_| "Missing provider key")?,
+            Some(std::env::var("RAZORPAY_KEY_SECRET").map_err(|_| "Missing provider secret")?),
+        )
+        .send()
+        .await
+        .map_err(|_| "Refund lookup unavailable")?
+        .error_for_status()
+        .map_err(|_| "Refund lookup rejected")?
+        .json()
+        .await
+        .map_err(|_| "Invalid refund evidence".into())
 }
 
 /// Create a Razorpay order; returns the Razorpay order ID (e.g. "order_xxx").

@@ -5,10 +5,8 @@
 use crate::handlers::db_errors::map_db_error_to_status;
 use crate::handlers::order_events::create_order_event;
 use crate::handlers::refunds::create_refund;
-use crate::handlers::returns::{find_return_by_refund_attempt, set_return_status_and_items};
-use crate::handlers::shipments::logistics_workflow::load_shipment_for_order;
+
 use crate::money::paise_to_decimal;
-use crate::observability;
 use crate::razorpay;
 use chrono::{DateTime, Duration, Utc};
 use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status as DbStatus};
@@ -89,6 +87,7 @@ fn refund_attempt_is_claimable(
         || refund_attempt_is_stale_submitting(status, updated_at, stale_before)
 }
 
+#[cfg(test)]
 fn should_call_gateway_refund(gateway_refund_id: Option<&str>) -> bool {
     gateway_refund_id
         .map(|id| id.trim().is_empty())
@@ -197,26 +196,6 @@ async fn insert_refund_attempt_pending_external(
         .await
         .map_err(map_db_error_to_status)?;
     Ok(ins.last_insert_id() as i64)
-}
-
-async fn mark_refund_attempt_processed(
-    txn: &DatabaseTransaction,
-    attempt_id: i64,
-    gateway_refund_id: &str,
-) -> Result<(), TonicStatus> {
-    txn.execute(Statement::from_sql_and_values(
-        DbBackend::MySql,
-        r#"UPDATE RefundAttempts
-           SET status = 'processed',
-               gateway_refund_id = ?,
-               provider_error = NULL,
-               updated_at = UTC_TIMESTAMP()
-           WHERE attempt_id = ?"#,
-        [gateway_refund_id.into(), attempt_id.into()],
-    ))
-    .await
-    .map_err(map_db_error_to_status)?;
-    Ok(())
 }
 
 async fn mark_refund_attempt_submitted_with_gateway(
@@ -708,7 +687,7 @@ async fn claim_refund_attempt_ids(
                       status = 'submitting'
                       AND updated_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)
                   )
-               ORDER BY attempt_id ASC
+               ORDER BY updated_at ASC, attempt_id ASC
                LIMIT ?
                FOR UPDATE SKIP LOCKED"#,
             [
@@ -772,433 +751,161 @@ async fn claim_refund_attempt_ids(
     Ok(ids)
 }
 
-async fn settle_refund_after_gateway_success(
-    txn: &DatabaseTransaction,
-    attempt: &refund_attempts::Model,
-    gateway_refund_id: &str,
-) -> Result<(), TonicStatus> {
-    let order = orders::Entity::find_by_id(attempt.order_id)
-        .lock(LockType::Update)
-        .one(txn)
-        .await
-        .map_err(map_db_error_to_status)?
-        .ok_or_else(|| TonicStatus::not_found("order not found"))?;
-
-    let details = order_details::Entity::find()
-        .filter(order_details::Column::OrderId.eq(order.order_id))
-        .all(txn)
-        .await
-        .map_err(map_db_error_to_status)?;
-    let target_refund_minor = compute_target_refund_minor(&details, order.grand_total_minor);
-    let settled_before: i64 = refunds::Entity::find()
-        .filter(refunds::Column::OrderId.eq(order.order_id))
-        .filter(refunds::Column::Status.eq(DbStatus::Processed))
-        .all(txn)
-        .await
-        .map_err(map_db_error_to_status)?
-        .iter()
-        .map(|r| r.amount_paise as i64)
-        .sum();
-    let remaining = remaining_after_processed_refunds(target_refund_minor, settled_before);
-    if remaining <= 0 {
-        set_order_refund_settlement_status(txn, order.order_id, "refund_processed").await?;
-        mark_refund_attempt_processed(txn, attempt.attempt_id, gateway_refund_id).await?;
-        return Ok(());
-    }
-
-    let amount_to_record = attempt.amount_sent_to_gateway_paise.max(0).min(remaining);
-    if amount_to_record <= 0 {
-        set_order_refund_settlement_status(txn, order.order_id, "refund_not_applicable").await?;
-        mark_refund_attempt_processed(txn, attempt.attempt_id, gateway_refund_id).await?;
-        return Ok(());
-    }
-
-    let status_hint = "processed".to_string();
-    if let Some(shipment) = load_shipment_for_order(txn, order.order_id, true).await? {
-        txn.execute(Statement::from_sql_and_values(
-            DbBackend::MySql,
-            r#"UPDATE Shipments
-               SET razorpay_refund_id = ?,
-                   refund_status = ?,
-                   refund_initiated_at = COALESCE(refund_initiated_at, UTC_TIMESTAMP())
-               WHERE shipment_id = ?"#,
-            [
-                gateway_refund_id.into(),
-                status_hint.into(),
-                shipment.shipment_id.into(),
-            ],
-        ))
-        .await
-        .map_err(map_db_error_to_status)?;
-    }
-
-    create_refund(
-        txn,
-        Request::new(CreateRefundRequest {
-            order_id: order.order_id,
-            gateway_refund_id: gateway_refund_id.to_string(),
-            amount_paise: amount_to_record,
-            currency: order.currency.clone(),
-            line_items_refunded_json: None,
-        }),
-    )
-    .await?;
-
-    mark_refund_attempt_processed(txn, attempt.attempt_id, gateway_refund_id).await?;
-
-    let settled_after: i64 = refunds::Entity::find()
-        .filter(refunds::Column::OrderId.eq(order.order_id))
-        .filter(refunds::Column::Status.eq(DbStatus::Processed))
-        .all(txn)
-        .await
-        .map_err(map_db_error_to_status)?
-        .iter()
-        .map(|r| r.amount_paise as i64)
-        .sum();
-    if settled_after >= target_refund_minor {
-        set_order_refund_settlement_status(txn, order.order_id, "refund_processed").await?;
-    } else {
-        set_order_refund_settlement_status(txn, order.order_id, "refund_pending").await?;
-    }
-
-    let _ = create_order_event(
-        txn,
-        Request::new(CreateOrderEventRequest {
-            order_id: order.order_id,
-            event_type: "refund_initiated".to_string(),
-            from_status: None,
-            to_status: None,
-            actor_type: "system".to_string(),
-            message: Some(format!(
-                "Refund gateway response persisted for {} paise",
-                amount_to_record
-            )),
-        }),
-    )
-    .await;
-
-    Ok(())
-}
-
-async fn settle_return_refund_after_gateway_success(
-    txn: &DatabaseTransaction,
-    attempt: &refund_attempts::Model,
-    return_id: i64,
-    gateway_refund_id: &str,
-) -> Result<(), TonicStatus> {
-    let order = orders::Entity::find_by_id(attempt.order_id)
-        .lock(LockType::Update)
-        .one(txn)
-        .await
-        .map_err(map_db_error_to_status)?
-        .ok_or_else(|| TonicStatus::not_found("order not found"))?;
-
-    let amount_to_record = attempt.amount_sent_to_gateway_paise.max(0);
-    if amount_to_record <= 0 {
-        return Err(TonicStatus::failed_precondition(
-            "return refund attempt amount is not positive",
-        ));
-    }
-
-    create_refund(
-        txn,
-        Request::new(CreateRefundRequest {
-            order_id: order.order_id,
-            gateway_refund_id: gateway_refund_id.to_string(),
-            amount_paise: amount_to_record,
-            currency: order.currency.clone(),
-            line_items_refunded_json: None,
-        }),
-    )
-    .await?;
-
-    mark_refund_attempt_processed(txn, attempt.attempt_id, gateway_refund_id).await?;
-    set_return_status_and_items(txn, return_id, "refunded").await?;
-
-    let _ = create_order_event(
-        txn,
-        Request::new(CreateOrderEventRequest {
-            order_id: order.order_id,
-            event_type: "return_refunded".to_string(),
-            from_status: Some("refund_pending".to_string()),
-            to_status: Some("refunded".to_string()),
-            actor_type: "system".to_string(),
-            message: Some(format!(
-                "Return {} refunded for {} paise",
-                return_id, amount_to_record
-            )),
-        }),
-    )
-    .await;
-
-    Ok(())
-}
-
 async fn process_claimed_refund_attempt(
     db: &DatabaseConnection,
     attempt_id: i64,
 ) -> Result<bool, TonicStatus> {
-    let prep_txn = db.begin().await.map_err(map_db_error_to_status)?;
-    let Some(attempt) = refund_attempts::Entity::find_by_id(attempt_id)
-        .lock(LockType::Update)
-        .one(&prep_txn)
+    let discovered = refund_attempts::Entity::find_by_id(attempt_id)
+        .one(db)
         .await
         .map_err(map_db_error_to_status)?
-    else {
-        prep_txn.rollback().await.ok();
-        return Ok(false);
-    };
-
-    if !matches!(attempt.status.as_str(), "submitting" | "submitted") {
-        prep_txn.rollback().await.ok();
-        return Ok(false);
-    }
-
-    let order = orders::Entity::find_by_id(attempt.order_id)
+        .ok_or_else(|| TonicStatus::not_found("Refund attempt missing"))?;
+    let txn = db.begin().await.map_err(map_db_error_to_status)?;
+    // Same order -> intent/attempt lock ordering as authenticated webhook application.
+    let order = orders::Entity::find_by_id(discovered.order_id)
         .lock(LockType::Update)
-        .one(&prep_txn)
+        .one(&txn)
         .await
         .map_err(map_db_error_to_status)?
-        .ok_or_else(|| TonicStatus::not_found("order not found"))?;
-    let linked_return = find_return_by_refund_attempt(&prep_txn, attempt.attempt_id).await?;
-    let linked_return_id = linked_return.as_ref().map(|r| r.return_id);
-    if let Some(return_row) = linked_return.as_ref() {
-        if !return_row.status.eq_ignore_ascii_case("refunded") {
-            set_return_status_and_items(&prep_txn, return_row.return_id, "refund_pending").await?;
-        }
-    }
-
-    if order
-        .payment_method
-        .as_deref()
-        .is_some_and(|m| m.eq_ignore_ascii_case("cod"))
-    {
-        mark_refund_attempt_failed(
-            &prep_txn,
-            attempt.attempt_id,
-            "COD orders must not create gateway refund attempts",
-        )
-        .await?;
-        if let Some(return_id) = linked_return_id {
-            set_return_status_and_items(&prep_txn, return_id, "rejected").await?;
-        } else {
-            set_order_refund_settlement_status(&prep_txn, order.order_id, "refund_not_applicable")
-                .await?;
-        }
-        prep_txn.commit().await.map_err(map_db_error_to_status)?;
+        .ok_or_else(|| TonicStatus::not_found("Refund order missing"))?;
+    let attempt = refund_attempts::Entity::find_by_id(attempt_id)
+        .lock(LockType::Update)
+        .one(&txn)
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| TonicStatus::not_found("Refund attempt missing"))?;
+    if attempt.status != "submitting" {
+        txn.rollback().await.ok();
         return Ok(false);
     }
-
-    let payment_id = attempt
+    let payment = attempt
         .razorpay_payment_id
-        .as_deref()
-        .filter(|s| !s.trim().is_empty())
-        .ok_or_else(|| TonicStatus::internal("razorpay_payment_id missing on refund attempt"))?
-        .to_string();
-    let idempotency_key = attempt.idempotency_key.clone();
-    let amount_to_send = attempt.amount_sent_to_gateway_paise.max(0);
-    let known_gateway_refund_id = attempt.gateway_refund_id.clone();
-    prep_txn.commit().await.map_err(map_db_error_to_status)?;
-
-    let gateway_refund_id = if should_call_gateway_refund(known_gateway_refund_id.as_deref()) {
-        match razorpay::create_refund(&payment_id, amount_to_send, &idempotency_key).await {
-            Ok(gateway_refund) => {
-                observability::log_operational_event(
-                    "refund_created",
-                    &[
-                        ("order_id", attempt.order_id.to_string()),
-                        ("refund_id", gateway_refund.refund_id.clone()),
-                        (
-                            "refund_status",
-                            gateway_refund
-                                .status
-                                .clone()
-                                .unwrap_or_else(|| "pending".to_string()),
-                        ),
-                    ],
-                );
-                gateway_refund.refund_id
-            }
-            Err(err) => {
-                observability::record_refund_failure_total("gateway_error");
-                let fail_txn = db.begin().await.map_err(map_db_error_to_status)?;
-                let max_attempts = crate::order_policy::refund_max_attempts();
-                if i64::from(attempt.attempt_count) >= max_attempts {
-                    // Retry budget exhausted (e.g. permanently bad payment_id): stop retrying
-                    // forever and hand off to a terminal state that needs manual review.
-                    fail_txn
-                        .execute(Statement::from_sql_and_values(
-                            DbBackend::MySql,
-                            r#"UPDATE RefundAttempts
-                               SET status = 'needs_review',
-                                   provider_error = ?,
-                                   updated_at = UTC_TIMESTAMP()
-                               WHERE attempt_id = ?"#,
-                            [err.clone().into(), attempt_id.into()],
-                        ))
-                        .await
-                        .map_err(map_db_error_to_status)?;
-                    warn!(
-                        order_id = attempt.order_id,
-                        attempt_id,
-                        attempt_count = attempt.attempt_count,
-                        max_attempts,
-                        error = %err,
-                        "refund worker: gateway refund exhausted retry budget, marking needs_review"
-                    );
-                    if let Some(return_id) = linked_return_id {
-                        set_return_status_and_items(&fail_txn, return_id, "refund_pending").await?;
-                        let _ = create_order_event(
-                            &fail_txn,
-                            Request::new(CreateOrderEventRequest {
-                                order_id: attempt.order_id,
-                                event_type: "return_refund_needs_manual_review".to_string(),
-                                from_status: None,
-                                to_status: None,
-                                actor_type: "system".to_string(),
-                                message: Some(format!(
-                                    "Return {} refund gateway call failed {} times, needs manual review: {}",
-                                    return_id, attempt.attempt_count, err
-                                )),
-                            }),
-                        )
-                        .await;
-                    } else {
-                        set_order_refund_settlement_status(
-                            &fail_txn,
-                            attempt.order_id,
-                            "refund_failed",
-                        )
-                        .await?;
-                        let _ = create_order_event(
-                            &fail_txn,
-                            Request::new(CreateOrderEventRequest {
-                                order_id: attempt.order_id,
-                                event_type: "refund_needs_manual_review".to_string(),
-                                from_status: None,
-                                to_status: None,
-                                actor_type: "system".to_string(),
-                                message: Some(format!(
-                                    "Refund gateway call failed {} times, needs manual review: {err}",
-                                    attempt.attempt_count
-                                )),
-                            }),
-                        )
-                        .await;
-                    }
-                    fail_txn.commit().await.map_err(map_db_error_to_status)?;
-                    return Ok(false);
-                }
-                fail_txn
-                    .execute(Statement::from_sql_and_values(
-                        DbBackend::MySql,
-                        r#"UPDATE RefundAttempts
-                           SET status = 'pending_external',
-                               provider_error = ?,
-                               updated_at = UTC_TIMESTAMP()
-                           WHERE attempt_id = ?"#,
-                        [err.clone().into(), attempt_id.into()],
-                    ))
-                    .await
-                    .map_err(map_db_error_to_status)?;
-                if let Some(return_id) = linked_return_id {
-                    set_return_status_and_items(&fail_txn, return_id, "refund_pending").await?;
-                    let _ = create_order_event(
-                        &fail_txn,
-                        Request::new(CreateOrderEventRequest {
-                            order_id: attempt.order_id,
-                            event_type: "return_refund_retry_scheduled".to_string(),
-                            from_status: None,
-                            to_status: None,
-                            actor_type: "system".to_string(),
-                            message: Some(format!(
-                                "Return {} refund gateway call failed: {}",
-                                return_id, err
-                            )),
-                        }),
-                    )
-                    .await;
-                } else {
-                    set_order_refund_settlement_status(
-                        &fail_txn,
-                        attempt.order_id,
-                        "refund_pending",
-                    )
-                    .await?;
-                    let _ = create_order_event(
-                        &fail_txn,
-                        Request::new(CreateOrderEventRequest {
-                            order_id: attempt.order_id,
-                            event_type: "refund_retry_scheduled".to_string(),
-                            from_status: None,
-                            to_status: None,
-                            actor_type: "system".to_string(),
-                            message: Some(format!("Refund gateway call failed: {err}")),
-                        }),
-                    )
-                    .await;
-                }
-                fail_txn.commit().await.map_err(map_db_error_to_status)?;
-                return Ok(false);
-            }
-        }
-    } else {
-        known_gateway_refund_id.unwrap_or_default()
-    };
-
-    let persist_txn = db.begin().await.map_err(map_db_error_to_status)?;
-    let persist_attempt = refund_attempts::Entity::find_by_id(attempt_id)
-        .lock(LockType::Update)
-        .one(&persist_txn)
-        .await
-        .map_err(map_db_error_to_status)?
-        .ok_or_else(|| TonicStatus::not_found("refund attempt not found while persisting"))?;
-    let persist_result = if let Some(return_id) = linked_return_id {
-        settle_return_refund_after_gateway_success(
-            &persist_txn,
-            &persist_attempt,
-            return_id,
-            &gateway_refund_id,
-        )
-        .await
-    } else {
-        settle_refund_after_gateway_success(&persist_txn, &persist_attempt, &gateway_refund_id)
+        .clone()
+        .ok_or_else(|| TonicStatus::failed_precondition("Refund payment missing"))?;
+    let currency = order.currency.clone().unwrap_or_default();
+    if order.payment_method.as_deref() == Some("cod") {
+        mark_refund_attempt_failed(&txn, attempt_id, "COD cannot have provider refunds").await?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        return Ok(false);
+    }
+    let known = attempt
+        .gateway_refund_id
+        .clone()
+        .filter(|id| !id.is_empty());
+    if known.is_none() {
+        let claim = txn
+            .execute(Statement::from_sql_and_values(
+                DbBackend::MySql,
+                "INSERT IGNORE INTO RefundSubmissionsV2(attempt_id,state) VALUES (?,'submitting')",
+                [attempt_id.into()],
+            ))
             .await
-    };
-    match persist_result {
-        Ok(()) => {
-            persist_txn.commit().await.map_err(map_db_error_to_status)?;
-            Ok(true)
-        }
-        Err(err) => {
-            persist_txn.rollback().await.ok();
-            let fallback_txn = db.begin().await.map_err(map_db_error_to_status)?;
-            mark_refund_attempt_submitted_with_gateway(
-                &fallback_txn,
-                attempt_id,
-                &gateway_refund_id,
-                Some("Gateway refund succeeded; local persistence pending retry"),
-            )
-            .await?;
-            if let Some(return_id) = linked_return_id {
-                set_return_status_and_items(&fallback_txn, return_id, "refund_pending").await?;
-            } else {
-                set_order_refund_settlement_status(
-                    &fallback_txn,
-                    attempt.order_id,
-                    "refund_pending",
-                )
-                .await?;
-            }
-            fallback_txn
-                .commit()
-                .await
-                .map_err(map_db_error_to_status)?;
-            Err(err)
+            .map_err(map_db_error_to_status)?;
+        if claim.rows_affected() != 1 {
+            txn.execute(Statement::from_sql_and_values(DbBackend::MySql,
+                "UPDATE RefundAttempts SET status='needs_review',provider_error='Previous provider submission outcome unknown; reconcile before any new submission' WHERE attempt_id=?",[attempt_id.into()])).await.map_err(map_db_error_to_status)?;
+            txn.commit().await.map_err(map_db_error_to_status)?;
+            return Ok(false);
         }
     }
+    txn.commit().await.map_err(map_db_error_to_status)?;
+    // No transaction is held during provider I/O. Known IDs are GET-only.
+    let evidence = if let Some(ref id) = known {
+        razorpay::fetch_refund(id).await
+    } else {
+        razorpay::create_refund(
+            &payment,
+            attempt.amount_sent_to_gateway_paise,
+            &attempt.idempotency_key,
+        )
+        .await
+        .map(|r| razorpay::RefundEvidence {
+            id: r.refund_id,
+            payment_id: payment.clone(),
+            amount: attempt.amount_sent_to_gateway_paise,
+            currency: currency.clone(),
+            status: r.status.unwrap_or_else(|| "pending".into()),
+        })
+    };
+    let txn = db.begin().await.map_err(map_db_error_to_status)?;
+    orders::Entity::find_by_id(order.order_id)
+        .lock(LockType::Update)
+        .one(&txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+    let current = refund_attempts::Entity::find_by_id(attempt_id)
+        .lock(LockType::Update)
+        .one(&txn)
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| TonicStatus::not_found("Refund attempt disappeared"))?;
+    if current.attempt_count != attempt.attempt_count || current.status != "submitting" {
+        txn.rollback().await.ok();
+        return Ok(false); // expired/reclaimed claimant is fenced
+    }
+    let evidence = match evidence {
+        Ok(e) => e,
+        Err(_) => {
+            let next = if known.is_some()
+                && current.attempt_count < crate::order_policy::refund_max_attempts() as i32
+            {
+                "submitted"
+            } else {
+                "needs_review"
+            };
+            txn.execute(Statement::from_sql_and_values(DbBackend::MySql,
+                "UPDATE RefundAttempts SET status=?,provider_error='Provider outcome unavailable; GET/reconciliation only, never blind resubmission',updated_at=UTC_TIMESTAMP() WHERE attempt_id=?",
+                [next.into(),attempt_id.into()])).await.map_err(map_db_error_to_status)?;
+            txn.commit().await.map_err(map_db_error_to_status)?;
+            return Ok(false);
+        }
+    };
+    if evidence.id.is_empty()
+        || evidence.payment_id != payment
+        || evidence.amount != attempt.amount_sent_to_gateway_paise
+        || evidence.currency != currency
+        || known.as_deref().is_some_and(|id| id != evidence.id)
+    {
+        txn.execute(Statement::from_sql_and_values(DbBackend::MySql,
+            "UPDATE RefundAttempts SET status='needs_review',provider_error='Provider refund association mismatch' WHERE attempt_id=?",[attempt_id.into()])).await.map_err(map_db_error_to_status)?;
+        txn.commit().await.map_err(map_db_error_to_status)?;
+        return Ok(false);
+    }
+    // Persist acceptance outside the business savepoint. Even a local accounting
+    // failure must retain the provider ID and must never cause another POST.
+    mark_refund_attempt_submitted_with_gateway(&txn, attempt_id, &evidence.id, None).await?;
+    txn.execute(Statement::from_sql_and_values(DbBackend::MySql,
+        "UPDATE RefundSubmissionsV2 SET state='accepted',updated_at=UTC_TIMESTAMP(6) WHERE attempt_id=?",
+        [attempt_id.into()])).await.map_err(map_db_error_to_status)?;
+    let business = txn.begin().await.map_err(map_db_error_to_status)?;
+    let result = crate::handlers::refunds::evidence::apply(
+        &business,
+        order.order_id,
+        &payment,
+        &evidence.id,
+        evidence.amount,
+        &evidence.currency,
+        &evidence.status,
+    )
+    .await;
+    let processed = match result {
+        Ok(outcome) => {
+            business.commit().await.map_err(map_db_error_to_status)?;
+            outcome == crate::handlers::refunds::evidence::Outcome::Processed
+        }
+        Err(e) => {
+            business.rollback().await.map_err(map_db_error_to_status)?;
+            if current.attempt_count >= crate::order_policy::refund_max_attempts() as i32 {
+                txn.execute(Statement::from_sql_and_values(DbBackend::MySql,
+                    "UPDATE RefundAttempts SET status='needs_review',provider_error='Local refund application exhausted retries' WHERE attempt_id=?",[attempt_id.into()])).await.map_err(map_db_error_to_status)?;
+            }
+            tracing::warn!(attempt_id,error=%e,"refund accepted; local application deferred");
+            false
+        }
+    };
+    txn.commit().await.map_err(map_db_error_to_status)?;
+    Ok(processed)
 }
-
 pub async fn process_pending_refund_attempts(
     db: &DatabaseConnection,
     batch_limit: u64,

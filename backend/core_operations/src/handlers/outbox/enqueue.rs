@@ -68,3 +68,17 @@ pub async fn enqueue_admin_alert(
         }
     }
 }
+
+/// Financial transitions must commit their notification instructions atomically.
+pub async fn enqueue_admin_alert_required(
+    txn: &DatabaseTransaction,
+    order_id: i64,
+    user_id: i64,
+    alert: &AdminAlert,
+) -> Result<(), Status> {
+    let payload = alert.to_payload(order_id, user_id);
+    for event in [ADMIN_ORDER_EMAIL, ADMIN_ORDER_PUSH] {
+        enqueue_outbox_event(txn, event, "order", &order_id.to_string(), payload.clone()).await?;
+    }
+    Ok(())
+}

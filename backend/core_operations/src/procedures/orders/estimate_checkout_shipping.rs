@@ -3,7 +3,7 @@ use crate::handlers::coupons::{
     validate_coupon::check_coupon,
 };
 use crate::handlers::{cart::get_cart_items, products::get_products_by_id};
-use crate::integrations::shiprocket::{best_courier_quote_for_checkout, ShiprocketError};
+use crate::integrations::shiprocket::best_courier_quote_for_checkout;
 use crate::money::{paise_checked_add, paise_checked_mul};
 
 use core_db_entities::entity::{product_variants, shipping_addresses};
@@ -15,14 +15,21 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Transac
 use tonic::{Request, Response, Status};
 use tracing::warn;
 
-fn map_shipping_quote_error(error: ShiprocketError) -> Status {
-    let message = match error {
-        ShiprocketError::NotConfigured => {
-            "Live shipping quote is unavailable because shipping is not configured"
-        }
-        _ => "Live shipping quote is unavailable for this checkout",
-    };
-    Status::unavailable(message)
+/// Free shipping changes price, not destination eligibility.
+pub(super) async fn eligible_shipping_quote(
+    pin: &str,
+    amount: i64,
+    units: i64,
+) -> Result<crate::integrations::shiprocket::ShiprocketCourierQuote, Status> {
+    match best_courier_quote_for_checkout(pin, amount, units).await {
+        Ok(Some(quote)) => Ok(quote),
+        Ok(None) => Err(Status::failed_precondition(
+            "Delivery is unavailable for this PIN code",
+        )),
+        Err(_) => Err(Status::unavailable(
+            "Unable to confirm delivery eligibility; please retry before paying",
+        )),
+    }
 }
 
 #[allow(clippy::result_large_err)]
@@ -208,36 +215,15 @@ pub async fn estimate_checkout_shipping(
 
     let free_shipping_threshold_minor = crate::order_policy::free_shipping_threshold_minor();
     let qualifies_free_shipping = total_paise >= free_shipping_threshold_minor;
-    let quote = if qualifies_free_shipping {
-        None
+    let quote = Some(eligible_shipping_quote(&delivery_postcode, total_paise, total_units).await?);
+    let shipping_amount_paise = if qualifies_free_shipping {
+        0
     } else {
-        Some(
-            match best_courier_quote_for_checkout(
-                delivery_postcode.as_str(),
-                total_paise,
-                total_units,
-            )
-            .await
-            {
-                Ok(Some(value)) => value,
-                Ok(None) => {
-                    warn!("checkout shipping estimate quote unavailable without courier result");
-                    return Err(Status::unavailable(
-                        "Live shipping quote is unavailable for this checkout",
-                    ));
-                }
-                Err(error) => {
-                    warn!("checkout shipping estimate quote failed: {}", error);
-                    return Err(map_shipping_quote_error(error));
-                }
-            },
-        )
+        quote
+            .as_ref()
+            .map(|q| q.shipping_amount_minor.max(0))
+            .unwrap_or(0)
     };
-
-    let shipping_amount_paise = quote
-        .as_ref()
-        .map(|q| q.shipping_amount_minor.max(0))
-        .unwrap_or(0);
     let order_total_paise = paise_checked_add(total_paise, shipping_amount_paise)
         .map_err(|e| Status::internal(format!("Overflow computing order total: {}", e)))?;
 

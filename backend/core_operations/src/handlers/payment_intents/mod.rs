@@ -11,3 +11,4 @@ pub use get_payment_intent::get_payment_intent;
 pub use order_paid::finalize_order_paid;
 pub use search_payment_intent::search_payment_intent;
 pub use verify_razorpay_payment::verify_razorpay_payment;
+pub mod capture_evidence;
