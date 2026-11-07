@@ -31,6 +31,29 @@ use warp::Filter;
 
 type RefundEvidenceFixture = Arc<Mutex<HashMap<String, (String, i64)>>>;
 
+struct ScopedEnvVar {
+    key: &'static str,
+    previous: Option<String>,
+}
+
+impl ScopedEnvVar {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var(key).ok();
+        std::env::set_var(key, value);
+        Self { key, previous }
+    }
+}
+
+impl Drop for ScopedEnvVar {
+    fn drop(&mut self) {
+        if let Some(value) = &self.previous {
+            std::env::set_var(self.key, value);
+        } else {
+            std::env::remove_var(self.key);
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct OrderFixture {
     order_id: i64,
@@ -1201,6 +1224,9 @@ async fn admin_mark_received_is_idempotent_for_refund_pending_returns() {
 async fn full_return_reaches_refunded_state_without_cancellation_side_effects() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
+    // Keep a paid shipping charge in both CI and local runs. Returning every
+    // item refunds its line total while the captured shipping charge remains.
+    let _paid_shipping = ScopedEnvVar::set("FREE_SHIPPING_THRESHOLD_MINOR", "100000000");
     let tag = Utc::now().timestamp_millis();
     let fx = place_order_fixture(&db, tag, None, 1).await;
 
