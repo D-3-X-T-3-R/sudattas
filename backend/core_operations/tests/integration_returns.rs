@@ -24,8 +24,12 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DatabaseBackend,
     DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, Statement, TransactionTrait,
 };
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tonic::{Code, Request};
 use warp::Filter;
+
+type RefundEvidenceFixture = Arc<Mutex<HashMap<String, (String, i64)>>>;
 
 #[derive(Debug, Clone)]
 struct OrderFixture {
@@ -40,6 +44,7 @@ struct OrderFixture {
     // Needed only for `cleanup_return_test_rows` -- see `place_order_fixture`.
     role_id: i64,
     category_id: i64,
+    refund_evidence: RefundEvidenceFixture,
 }
 
 async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
@@ -124,11 +129,11 @@ async fn make_order_booking_eligible(txn: &sea_orm::DatabaseTransaction, order_i
     .expect("make order booking eligible");
 }
 
-/// `place_order_fixture` always defaults to prepaid (payment_mode: None -> "prepaid" inside
-/// place_order), so it always calls Razorpay's create_order. Without real creds (e.g. in CI),
-/// that fails before the fixture can finish. Mirrors the mock pattern already established in
-/// integration_place_order_atomicity.rs and razorpay_connectivity.rs.
-async fn ensure_razorpay_mock() {
+/// Checkout must confirm Shiprocket serviceability even when shipping is free.
+/// Keep both provider calls on a local fixture before any return assertions run.
+async fn ensure_checkout_provider_mocks() -> RefundEvidenceFixture {
+    let refund_evidence: RefundEvidenceFixture = Arc::new(Mutex::new(HashMap::new()));
+    let refund_lookup = Arc::clone(&refund_evidence);
     // `payment_intents.razorpay_order_id` is unique, and every place_order call generates a
     // fresh receipt (chk_{user_id}_{timestamp_millis}); echoing it back keeps the mocked id
     // unique per call so concurrent/sequential fixtures across this shared dev DB never collide.
@@ -144,11 +149,46 @@ async fn ensure_razorpay_mock() {
                 &serde_json::json!({ "id": format!("order_itest_returns_{receipt}") }),
             )
         });
-    let (addr, server) = warp::serve(orders).bind_ephemeral(([127, 0, 0, 1], 0));
+    let login = warp::path!("v1" / "external" / "auth" / "login")
+        .and(warp::post())
+        .map(|| warp::reply::json(&serde_json::json!({ "token": "itest-returns-token" })));
+    let serviceability = warp::path!("v1" / "external" / "courier" / "serviceability")
+        .and(warp::get())
+        .map(|| {
+            warp::reply::json(&serde_json::json!({ "data": {
+            "available_courier_companies": [
+                { "courier_company_id": 777, "courier_name": "Fixture", "freight_charge": 1 }
+            ]
+        } }))
+        });
+    let refund = warp::path!("v1" / "refunds" / String)
+        .and(warp::get())
+        .map(move |id: String| {
+            let (payment_id, amount) = refund_lookup
+                .lock()
+                .unwrap()
+                .get(&id)
+                .cloned()
+                .expect("unexpected refund evidence request");
+            warp::reply::json(&serde_json::json!({
+                "id": id, "payment_id": payment_id, "amount": amount,
+                "currency": "INR", "status": "processed"
+            }))
+        });
+    let (addr, server) = warp::serve(orders.or(login).or(serviceability).or(refund))
+        .bind_ephemeral(([127, 0, 0, 1], 0));
     tokio::task::spawn(server);
     std::env::set_var("RAZORPAY_KEY_ID", "rzp_test_itest_returns");
     std::env::set_var("RAZORPAY_KEY_SECRET", "itest_returns_secret");
     std::env::set_var("RAZORPAY_API_BASE", format!("http://{}/v1", addr));
+    std::env::set_var(
+        "SHIPROCKET_API_BASE",
+        format!("http://{}/v1/external", addr),
+    );
+    std::env::set_var("SHIPROCKET_EMAIL", "fixture@example.invalid");
+    std::env::set_var("SHIPROCKET_PASSWORD", "fixture-only");
+    std::env::set_var("SHIPROCKET_PICKUP_POSTCODE", "110001");
+    refund_evidence
 }
 
 /// Sets up a user + shipping address + product/variant/inventory + cart item, then calls
@@ -171,7 +211,7 @@ async fn place_order_fixture(
     payment_mode: Option<&str>,
     quantity: i64,
 ) -> OrderFixture {
-    ensure_razorpay_mock().await;
+    let refund_evidence = ensure_checkout_provider_mocks().await;
 
     let txn = db.begin().await.expect("begin setup transaction");
     let _ = ensure_order_status(&txn, "pending").await;
@@ -340,6 +380,7 @@ async fn place_order_fixture(
         variant_id: detail.variant_id,
         role_id: role.role_id,
         category_id: category.category_id,
+        refund_evidence,
     }
 }
 
@@ -484,6 +525,24 @@ async fn ensure_captured_payment_intent(
     .await
     .expect("mark order payment captured");
     row.intent_id
+}
+
+async fn register_processed_refund_evidence(
+    txn: &sea_orm::DatabaseTransaction,
+    fx: &OrderFixture,
+    attempt_id: i64,
+    gateway_refund_id: &str,
+) {
+    let attempt = refund_attempts::Entity::find_by_id(attempt_id)
+        .one(txn)
+        .await
+        .expect("query refund attempt")
+        .expect("refund attempt exists");
+    let payment_id = attempt.razorpay_payment_id.expect("refund payment ID");
+    fx.refund_evidence.lock().unwrap().insert(
+        gateway_refund_id.to_string(),
+        (payment_id, attempt.amount_sent_to_gateway_paise),
+    );
 }
 
 async fn request_return_for_fixture(
@@ -824,7 +883,7 @@ async fn refund_worker_processes_return_refund_exactly_once() {
     .next()
     .expect("received row");
     let attempt_id = received.refund_attempt_id.expect("attempt id");
-    let gateway_refund_id = format!("gw_ret_once_{tag}");
+    let gateway_refund_id = format!("rfnd_ret_once_{tag}");
     setup_txn
         .execute(Statement::from_sql_and_values(
             DatabaseBackend::MySql,
@@ -836,6 +895,7 @@ async fn refund_worker_processes_return_refund_exactly_once() {
         ))
         .await
         .expect("prepare submitted attempt");
+    register_processed_refund_evidence(&setup_txn, &fx, attempt_id, &gateway_refund_id).await;
     setup_txn.commit().await.expect("commit setup");
 
     let first_processed = cancellation_saga::process_pending_refund_attempts(&db, 25)
@@ -1166,7 +1226,7 @@ async fn full_return_reaches_refunded_state_without_cancellation_side_effects() 
     .next()
     .expect("received row");
     let attempt_id = received.refund_attempt_id.expect("attempt id");
-    let gateway_refund_id = format!("gw_ret_final_{tag}");
+    let gateway_refund_id = format!("rfnd_ret_final_{tag}");
     setup_txn
         .execute(Statement::from_sql_and_values(
             DatabaseBackend::MySql,
@@ -1174,10 +1234,11 @@ async fn full_return_reaches_refunded_state_without_cancellation_side_effects() 
                SET status = 'submitted',
                    gateway_refund_id = ?
                WHERE attempt_id = ?"#,
-            [gateway_refund_id.into(), attempt_id.into()],
+            [gateway_refund_id.clone().into(), attempt_id.into()],
         ))
         .await
         .expect("prepare attempt");
+    register_processed_refund_evidence(&setup_txn, &fx, attempt_id, &gateway_refund_id).await;
     setup_txn.commit().await.expect("commit setup");
 
     let _ = cancellation_saga::process_pending_refund_attempts(&db, 25)
@@ -1207,10 +1268,24 @@ async fn full_return_reaches_refunded_state_without_cancellation_side_effects() 
         .await
         .expect("query order")
         .expect("order exists");
+    let recorded_refund = refunds::Entity::find()
+        .filter(refunds::Column::OrderId.eq(fx.order_id))
+        .all(&verify_txn)
+        .await
+        .expect("query recorded refunds");
+    assert_eq!(recorded_refund.len(), 1);
+    assert_eq!(
+        i64::from(recorded_refund[0].amount_paise),
+        fx.line_total_minor
+    );
+    assert!(
+        fx.line_total_minor < order_row.grand_total_minor,
+        "the retained shipping charge makes this a partial payment refund"
+    );
     assert_eq!(
         order_row.payment_status,
-        Some(PaymentStatus::Failed),
-        "refund recording should follow existing refund handler behavior"
+        Some(PaymentStatus::Captured),
+        "returning every item must not mark the captured payment failed while shipping is retained"
     );
     let detail_row = order_details::Entity::find_by_id(fx.order_detail_id)
         .one(&verify_txn)
