@@ -3,15 +3,12 @@
 //! Run:
 //! `cargo test --test integration_place_order_atomicity integration_place_order_fails_on_partial_order_details_insert -- --ignored --nocapture`
 
-mod integration_common;
-
 use chrono::Utc;
 use core_db_entities::entity::{
     cart, inventory, order_status, product_categories, product_variants, products,
     shipping_addresses, user_roles,
 };
 use core_operations::procedures::orders::place_order;
-use integration_common::test_db_url;
 use proto::proto::core::{CreateCartItemRequest, CreateUserRequest, PlaceOrderRequest};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DatabaseConnection,
@@ -23,23 +20,76 @@ use warp::Filter;
 
 const FORCED_FAIL_TITLE: &str = "__itest_force_order_details_insert_failure__";
 
-/// Prepaid `place_order` calls out to Razorpay to create the order before OrderDetails is
-/// inserted. CI (and any environment without real Razorpay creds) has no RAZORPAY_KEY_ID, so
-/// without this, prepaid runs fail on "Unable to create Razorpay order" instead of exercising
-/// the OrderDetails-insert-failure path this test is actually about. Mirrors the local mock
-/// server pattern from `razorpay_connectivity.rs` so this test never depends on real credentials.
-async fn ensure_razorpay_mock_for_prepaid(payment_mode: &str) {
-    if payment_mode != "prepaid" {
-        return;
+fn isolated_test_db_url() -> String {
+    core_operations::load_env_once();
+    let url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL is required");
+    assert!(url.starts_with("mysql://"), "atomicity tests require MySQL");
+    let schema = |value: &str| {
+        value
+            .rsplit('/')
+            .next()
+            .unwrap_or("")
+            .split('?')
+            .next()
+            .unwrap_or("")
+            .to_owned()
+    };
+    if let Ok(live) = std::env::var("DATABASE_URL") {
+        assert_ne!(
+            schema(&url),
+            schema(&live),
+            "test database must use a separate schema"
+        );
     }
-    let orders = warp::path!("v1" / "orders")
-        .and(warp::post())
-        .map(|| warp::reply::json(&serde_json::json!({ "id": "order_itest_atomicity" })));
-    let (addr, server) = warp::serve(orders).bind_ephemeral(([127, 0, 0, 1], 0));
+    let github_ci = std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
+        && std::env::var("CI").as_deref() == Ok("true");
+    let local_test_schema = schema(&url).to_ascii_uppercase();
+    assert!(
+        local_test_schema.contains("TEST")
+            || local_test_schema.contains("CLONED")
+            || (github_ci
+                && url
+                    .split('/')
+                    .nth(2)
+                    .unwrap_or("")
+                    .ends_with("@127.0.0.1:3306")),
+        "atomicity tests require an isolated test schema or ephemeral CI MySQL"
+    );
+    url
+}
+
+/// Both providers are loopback fakes. COD still needs a Shiprocket serviceability
+/// quote; prepaid additionally creates a Razorpay order before the forced DB error.
+async fn ensure_provider_mocks() {
+    let routes = warp::path::full().and(warp::method()).map(
+        |path: warp::path::FullPath, method: warp::http::Method| {
+            let path = path.as_str().trim_end_matches('/');
+            let body = match (method, path) {
+                (warp::http::Method::POST, "/v1/orders") =>
+                    serde_json::json!({ "id": "order_itest_atomicity" }),
+                (warp::http::Method::POST, "/v1/external/auth/login") =>
+                    serde_json::json!({ "token": "itest-only-token" }),
+                (warp::http::Method::GET, "/v1/external/courier/serviceability") =>
+                    serde_json::json!({ "data": { "available_courier_companies": [
+                        { "courier_company_id": 777, "courier_name": "Fixture", "freight_charge": 1 }
+                    ] } }),
+                _ => panic!("unexpected provider request in atomicity test"),
+            };
+            warp::reply::json(&body)
+        },
+    );
+    let (addr, server) = warp::serve(routes).bind_ephemeral(([127, 0, 0, 1], 0));
     tokio::task::spawn(server);
     std::env::set_var("RAZORPAY_KEY_ID", "rzp_test_itest_atomicity");
     std::env::set_var("RAZORPAY_KEY_SECRET", "itest_atomicity_secret");
     std::env::set_var("RAZORPAY_API_BASE", format!("http://{}/v1", addr));
+    std::env::set_var(
+        "SHIPROCKET_API_BASE",
+        format!("http://{}/v1/external", addr),
+    );
+    std::env::set_var("SHIPROCKET_EMAIL", "fixture@example.invalid");
+    std::env::set_var("SHIPROCKET_PASSWORD", "fixture-only");
+    std::env::set_var("SHIPROCKET_PICKUP_POSTCODE", "110001");
 }
 
 async fn ensure_order_status(txn: &DatabaseTransaction, name: &str) -> Result<i64, String> {
@@ -238,7 +288,7 @@ async fn inventory_snapshot(
 }
 
 async fn run_atomicity_scenario(db: &DatabaseConnection, payment_mode: &str) -> Result<(), String> {
-    ensure_razorpay_mock_for_prepaid(payment_mode).await;
+    ensure_provider_mocks().await;
 
     // Setup runs in its own transaction, committed before calling place_order. place_order now
     // manages its own transactions internally (a short claim/prep transaction, then the
@@ -634,7 +684,7 @@ async fn cleanup_scenario_rows(
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_place_order_fails_on_partial_order_details_insert() {
-    let db = Database::connect(&test_db_url())
+    let db = Database::connect(&isolated_test_db_url())
         .await
         .expect("connect to test DB");
 
@@ -658,7 +708,7 @@ async fn integration_place_order_fails_on_partial_order_details_insert() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_prepaid_order_does_not_create_payment_intent_on_order_details_failure() {
-    let db = Database::connect(&test_db_url())
+    let db = Database::connect(&isolated_test_db_url())
         .await
         .expect("connect to test DB");
 
