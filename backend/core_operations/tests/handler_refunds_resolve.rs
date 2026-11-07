@@ -120,12 +120,10 @@ async fn create_refund_idempotent_returns_existing() {
     use core_operations::handlers::refunds::create_refund;
 
     let order = order_confirmed(10, 2, 10_000);
-    let status = status_row(2, "confirmed");
     let existing_refund = refund_model(1, 10, "gw_refund_123", 5_000);
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
         .append_query_results(vec![vec![order]])
-        .append_query_results(vec![vec![status]])
         .append_query_results(vec![vec![existing_refund.clone()]])
         .into_connection();
 
@@ -160,6 +158,7 @@ async fn create_refund_rejects_non_refundable_state() {
 
     let db = MockDatabase::new(DatabaseBackend::MySql)
         .append_query_results(vec![vec![order]])
+        .append_query_results(vec![Vec::<refunds::Model>::new()])
         .append_query_results(vec![vec![status]])
         .into_connection();
 
