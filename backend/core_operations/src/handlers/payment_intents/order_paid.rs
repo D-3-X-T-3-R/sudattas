@@ -1,8 +1,10 @@
 use crate::handlers::db_errors::map_db_error_to_status;
+use crate::handlers::transactions::create_transaction;
 use crate::order_state_machine::{self, OrderState};
 use chrono::Utc;
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use core_db_entities::entity::{coupon_redemptions, coupons, orders};
+use proto::proto::core::CreateTransactionRequest;
 use sea_orm::DbErr;
 use sea_orm::{
     sea_query::LockType, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait,
@@ -28,11 +30,28 @@ pub async fn finalize_order_paid(
     message: &str,
 ) -> Result<(), TonicStatus> {
     let order = orders::Entity::find_by_id(order_id)
+        .lock(LockType::Update)
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
         .ok_or_else(|| TonicStatus::not_found(format!("Order {} not found", order_id)))?;
     let coupon_id = order.applied_coupon_id;
+    // Read while holding the order lock. A duplicate captured webhook, provider
+    // lookup, or legacy already-paid order cannot insert another transaction row.
+    let already_captured = matches!(order.payment_status, Some(PaymentStatus::Captured));
+    // Unique business-effect marker is committed with all financial effects. It
+    // also guards different provider events describing the same capture.
+    let effect = txn
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "INSERT IGNORE INTO CommerceEffects(order_id,effect,provider_id) VALUES (?,'paid',?)",
+            [order_id.into(), format!("order:{order_id}").into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?;
+    if effect.rows_affected() == 0 {
+        return Ok(());
+    }
 
     if let Some(coupon_id) = coupon_id {
         coupons::Entity::find_by_id(coupon_id)
@@ -105,6 +124,18 @@ pub async fn finalize_order_paid(
 
     let _ = crate::handlers::invoices::ensure_invoice_for_order(txn, order_id, "payment_captured")
         .await?;
+
+    if !already_captured {
+        let _ = create_transaction(
+            txn,
+            tonic::Request::new(CreateTransactionRequest {
+                user_id: order.user_id,
+                amount_paise: order.grand_total_minor,
+                r#type: "razorpay_payment".to_string(),
+            }),
+        )
+        .await?;
+    }
 
     crate::observability::log_operational_event(
         "payment_finalized_paid",

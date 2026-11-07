@@ -21,11 +21,15 @@ function Get-FrontendConst([string]$name) {
 $backendSku = Get-BackendConst "MAX_SKU_SLUG_LEN"
 $backendQty = Get-BackendConst "MAX_QUANTITY_PER_ITEM"
 $backendAddr = Get-BackendConst "MAX_ADDRESS_LINE_LEN"
+$backendMetaTitle = Get-BackendConst "MAX_META_TITLE_LEN"
+$backendMetaDesc = Get-BackendConst "MAX_META_DESCRIPTION_LEN"
 
 $frontendSku = Get-FrontendConst "BACKEND_MAX_SKU_SLUG_LEN"
 $frontendQty = Get-FrontendConst "BACKEND_MAX_QUANTITY_PER_ITEM"
 $frontendAddr = Get-FrontendConst "BACKEND_MAX_ADDRESS_LINE_LEN"
 $frontendPostal = Get-FrontendConst "BACKEND_POSTAL_CODE_LEN"
+$frontendMetaTitle = Get-FrontendConst "BACKEND_MAX_META_TITLE_LEN"
+$frontendMetaDesc = Get-FrontendConst "BACKEND_MAX_META_DESCRIPTION_LEN"
 
 $failed = $false
 
@@ -43,6 +47,14 @@ if ($backendAddr -ne $frontendAddr) {
 }
 if ($frontendPostal -ne 6) {
     Write-Host "Mismatch: postal code length frontend=$frontendPostal expected=6" -ForegroundColor Red
+    $failed = $true
+}
+if ($backendMetaTitle -ne $frontendMetaTitle) {
+    Write-Host "Mismatch: meta title length backend=$backendMetaTitle frontend=$frontendMetaTitle" -ForegroundColor Red
+    $failed = $true
+}
+if ($backendMetaDesc -ne $frontendMetaDesc) {
+    Write-Host "Mismatch: meta description length backend=$backendMetaDesc frontend=$frontendMetaDesc" -ForegroundColor Red
     $failed = $true
 }
 

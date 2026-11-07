@@ -3,12 +3,17 @@
 //! **Setup**
 //! - Set `TEST_DATABASE_URL` or `DATABASE_URL`.
 //! - Schema must be loaded first.
+//! - The commerce regressions and extended overlap test use stricter isolated-storage
+//!   gates and backend/.env:TEST_DATABASE_URL; see regressions/README.md.
 //!
 //! **Run**
 //! - `cargo test --test integration_launch_concurrency -- --ignored --test-threads=1`
 
 mod integration_common;
 mod provider_test_gate;
+
+#[path = "regressions/commerce.rs"]
+mod commerce_regressions;
 
 use chrono::{Duration, Utc};
 use core_db_entities::entity::sea_orm_active_enums::{
@@ -99,6 +104,7 @@ async fn seed_variant(
 ) -> i64 {
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!(
             "launch_concurrency_cat_{}_{}",
             tag,
@@ -123,6 +129,8 @@ async fn seed_variant(
         has_blouse_piece: ActiveValue::Set(None),
         care_instructions: ActiveValue::Set(None),
         product_status_id: ActiveValue::Set(None),
+        meta_title: ActiveValue::Set(None),
+        meta_description: ActiveValue::Set(None),
         created_at: ActiveValue::Set(Some(Utc::now())),
         updated_at: ActiveValue::Set(None),
     }
@@ -163,6 +171,7 @@ async fn seed_address(txn: &sea_orm::DatabaseTransaction, user_id: i64, tag: &st
         recipient_name: ActiveValue::Set(Some(format!("Recipient {tag}"))),
         phone_number: ActiveValue::Set(Some("+919999999999".to_string())),
         is_default: ActiveValue::Set(1),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),
@@ -668,130 +677,7 @@ async fn integration_coupon_final_slot_race_sets_second_order_needs_review() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL and migrated schema"]
 async fn integration_verify_and_webhook_overlap_finalize_once() {
-    if !provider_test_gate::should_run_provider_dependent_test(
-        "integration_verify_and_webhook_overlap_finalize_once",
-    ) {
-        return;
-    }
-
-    const SECRET: &str = "launch_concurrency_secret";
-
-    let db = Database::connect(&test_db_url()).await.expect("connect");
-    let setup = db.begin().await.expect("begin");
-    let unique = Utc::now().timestamp_micros();
-    let user_id = seed_user(&setup, "verify_webhook").await;
-    let confirmed = ensure_order_status_row(&setup, "confirmed").await;
-    let _ = ensure_order_status_row(&setup, "pending").await;
-    let variant_id = seed_variant(&setup, "verify_webhook", 1_000, 5).await;
-    let (order_id, _) =
-        seed_order_with_line(&setup, "verify_webhook", user_id, variant_id, 1, None).await;
-    let intent = payment_intents::ActiveModel {
-        intent_id: ActiveValue::NotSet,
-        razorpay_order_id: ActiveValue::Set(format!("order_verify_webhook_{unique}")),
-        order_id: ActiveValue::Set(Some(order_id)),
-        active_order_id: ActiveValue::NotSet,
-        user_id: ActiveValue::Set(Some(user_id)),
-        amount_paise: ActiveValue::Set(1_000),
-        currency: ActiveValue::Set(Some("INR".to_string())),
-        status: ActiveValue::Set(PaymentIntentStatus::Pending),
-        razorpay_payment_id: ActiveValue::Set(None),
-        metadata: ActiveValue::Set(None),
-        gateway_fee_paise: ActiveValue::Set(None),
-        gateway_tax_paise: ActiveValue::Set(None),
-        created_at: ActiveValue::Set(Some(Utc::now())),
-        expires_at: ActiveValue::Set(Utc::now() + Duration::hours(1)),
-    }
-    .insert(&setup)
-    .await
-    .expect("insert intent");
-    setup.commit().await.expect("commit");
-
-    std::env::set_var("RAZORPAY_KEY_SECRET", SECRET);
-    let payment_id = format!("pay_verify_webhook_overlap_{unique}");
-    let signature = compute_signature(&intent.razorpay_order_id, &payment_id, SECRET);
-    let payload = serde_json::json!({
-        "event": "payment.captured",
-        "payload": {
-            "payment": {
-                "entity": {
-                    "id": payment_id,
-                    "order_id": intent.razorpay_order_id,
-                    "amount": 1_000,
-                    "currency": "INR"
-                }
-            }
-        }
-    });
-
-    let db_a = Database::connect(&test_db_url()).await.expect("connect a");
-    let db_b = Database::connect(&test_db_url()).await.expect("connect b");
-    let (verify_res, webhook_res) = tokio::join!(
-        async {
-            let txn = db_a.begin().await.expect("txn a");
-            let res = core_operations::handlers::payment_intents::verify_razorpay_payment(
-                &txn,
-                Request::new(VerifyRazorpayPaymentRequest {
-                    order_id,
-                    razorpay_order_id: intent.razorpay_order_id.clone(),
-                    razorpay_payment_id: payment_id.clone(),
-                    razorpay_signature: signature,
-                }),
-            )
-            .await;
-            if res.is_ok() {
-                txn.commit().await.expect("commit a");
-            } else {
-                txn.rollback().await.ok();
-            }
-            res
-        },
-        async {
-            let txn = db_b.begin().await.expect("txn b");
-            let res = ingest_webhook(
-                &txn,
-                Request::new(IngestWebhookRequest {
-                    provider: "razorpay".to_string(),
-                    event_type: "payment.captured".to_string(),
-                    webhook_id: format!("razorpay:{payment_id}:overlap"),
-                    payload_json: payload.to_string(),
-                    signature_verified: true,
-                    provider_event_id: None,
-                    raw_signature: None,
-                }),
-            )
-            .await;
-            if res.is_ok() {
-                txn.commit().await.expect("commit b");
-            } else {
-                txn.rollback().await.ok();
-            }
-            res
-        }
-    );
-    assert!(verify_res.is_ok(), "verify should converge: {verify_res:?}");
-    assert!(
-        webhook_res.is_ok(),
-        "webhook should converge: {webhook_res:?}"
-    );
-
-    let verify = db.begin().await.expect("verify");
-    let refreshed_intent = payment_intents::Entity::find_by_id(intent.intent_id)
-        .one(&verify)
-        .await
-        .expect("query intent")
-        .expect("intent exists");
-    let refreshed_order = orders::Entity::find_by_id(order_id)
-        .one(&verify)
-        .await
-        .expect("query order")
-        .expect("order exists");
-    assert_eq!(
-        refreshed_intent.razorpay_payment_id.as_deref(),
-        Some(payment_id.as_str())
-    );
-    assert_eq!(refreshed_intent.status, PaymentIntentStatus::Processed);
-    assert_eq!(refreshed_order.status_id, confirmed.status_id);
-    verify.rollback().await.ok();
+    commerce_regressions::overlap(2).await;
 }
 
 #[tokio::test]

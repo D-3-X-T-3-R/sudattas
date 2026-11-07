@@ -5,6 +5,44 @@ const mocks = vi.hoisted(() => ({
   callGraphqlAsCustomer: vi.fn(),
 }));
 
+// Mirrors the real graphqlErrorToApiStatus (src/lib/server-session-auth.ts) rather than
+// partially mocking via importOriginal — the real module `import "server-only"`, which throws
+// outside a Server Component context, so the actual implementation can't be pulled in here.
+function mockGraphqlErrorToApiStatus(
+  errors: Array<{ message?: string; extensions?: { code?: string } }> | undefined,
+  fallbackMessage: string
+): { status: number; message: string } {
+  const firstError = errors?.[0];
+  const message = firstError?.message?.trim() || fallbackMessage;
+  const code = firstError?.extensions?.code;
+  const lower = message.toLowerCase();
+  const status =
+    code === "Unauthenticated"
+      ? 401
+      : code === "PermissionDenied"
+        ? 403
+        : code === "NotFound" || lower.includes("not found")
+          ? 404
+          : code === "FailedPrecondition" || lower.includes("failed_precondition")
+            ? 409
+            : code === "Aborted"
+              ? 409
+              : code === "OutOfRange"
+                ? 400
+                : code === "Unimplemented"
+                  ? 501
+                  : code === "Unavailable"
+                    ? 503
+                    : code === "DeadlineExceeded"
+                      ? 504
+                      : code === "Cancelled"
+                        ? 503
+                        : lower.includes("illegal") || lower.includes("invalid")
+                          ? 400
+                          : 400;
+  return { status, message };
+}
+
 vi.mock("@/lib/server-session-auth", () => ({
   apiError: (message: string, status: number, errorCode: string) =>
     Response.json(
@@ -18,6 +56,7 @@ vi.mock("@/lib/server-session-auth", () => ({
       },
       { status }
     ),
+  graphqlErrorToApiStatus: mockGraphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId: mocks.requireAuthenticatedCustomerUserId,
   callGraphqlAsCustomer: mocks.callGraphqlAsCustomer,
 }));

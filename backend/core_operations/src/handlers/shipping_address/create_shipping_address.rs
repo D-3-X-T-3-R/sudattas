@@ -21,6 +21,7 @@ pub async fn create_shipping_address(
         if !is_default {
             let existing_count = shipping_addresses::Entity::find()
                 .filter(shipping_addresses::Column::UserId.eq(user_id))
+                .filter(shipping_addresses::Column::IsDeleted.eq(0))
                 .count(txn)
                 .await
                 .map_err(map_db_error_to_status)?;
@@ -51,6 +52,7 @@ pub async fn create_shipping_address(
         apartment_no_or_name: ActiveValue::Set(req.apartment_no_or_name),
         recipient_name: ActiveValue::Set(req.recipient_name),
         phone_number: ActiveValue::Set(req.phone_number),
+        is_deleted: ActiveValue::Set(0),
     };
 
     match model.insert(txn).await {

@@ -6,6 +6,7 @@ import { Providers } from "@/components/providers";
 import { StorefrontProvider } from "@/context/storefront-context";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { SiteHeader } from "@/components/site-header";
+import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import { siteUrl } from "@/lib/site-url";
 import { STOREFRONT_GATE_HEADER } from "@/lib/storefront-readiness";
 import { safeJsonLd } from "@/lib/json-ld";
@@ -66,6 +67,7 @@ export default async function RootLayout({
                 <StorefrontProvider>
                   <SiteHeader />
                   {children}
+                  <CookieConsentBanner />
                 </StorefrontProvider>
               </AppErrorBoundary>
             </Providers>

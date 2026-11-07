@@ -226,6 +226,7 @@ async fn find_invoice_by_order_id(
 ) -> Result<Option<invoices::Model>, Status> {
     invoices::Entity::find()
         .filter(invoices::Column::OrderId.eq(order_id))
+        .lock(LockType::Update)
         .one(txn)
         .await
         .map_err(map_db_error_to_status)
@@ -243,6 +244,7 @@ async fn ensure_invoice_outbox_event(
         .filter(outbox_events::Column::EventType.eq(INVOICE_GENERATED))
         .filter(outbox_events::Column::AggregateType.eq("order"))
         .filter(outbox_events::Column::AggregateId.eq(aggregate_id.clone()))
+        .lock(LockType::Update)
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?;
@@ -277,6 +279,7 @@ pub async fn ensure_invoice_for_order(
 
     if let Some(existing_invoice_id) = order.invoice_id {
         let existing = invoices::Entity::find_by_id(existing_invoice_id)
+            .lock(LockType::Update)
             .one(txn)
             .await
             .map_err(map_db_error_to_status)?;
@@ -535,7 +538,7 @@ mod tests {
 
     #[test]
     fn does_not_flag_non_fallback_blob() {
-        let encoded = BASE64_STANDARD.encode(b"%PDF-1.4 TAX INVOICE /Subtype /Image");
+        let encoded = BASE64_STANDARD.encode(b"%PDF-1.4 INVOICE /Subtype /Image");
         assert!(!is_legacy_fallback_pdf_blob(&encoded));
     }
 }

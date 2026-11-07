@@ -13,6 +13,11 @@ pub async fn update_category(
     let categories = product_categories::ActiveModel {
         name: ActiveValue::Set(req.name),
         category_id: ActiveValue::Set(req.category_id),
+        // Unset leaves the existing value untouched — SeaORM only issues SET for fields marked Set.
+        exchange_eligible: match req.exchange_eligible {
+            Some(v) => ActiveValue::Set(i8::from(v)),
+            None => ActiveValue::NotSet,
+        },
     };
     match categories.update(txn).await {
         Ok(model) => {
@@ -20,6 +25,7 @@ pub async fn update_category(
                 items: vec![CategoryResponse {
                     name: model.name,
                     category_id: model.category_id,
+                    exchange_eligible: model.exchange_eligible != 0,
                 }],
             };
             Ok(Response::new(response))

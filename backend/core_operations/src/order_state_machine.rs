@@ -8,6 +8,7 @@ use crate::handlers::order_events::create_order_event;
 use crate::handlers::outbox::{
     enqueue_outbox_event, DELIVERED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
 };
+use crate::notifications::admin_alert::AdminAlert;
 use core_db_entities::entity::sea_orm_active_enums::PaymentStatus;
 use core_db_entities::entity::{order_status, orders};
 use proto::proto::core::CreateOrderEventRequest;
@@ -287,16 +288,17 @@ pub async fn transition_order_status(
     };
     if let Some(evt) = outbox_type {
         let payload = json!({ "order_id": order_id, "user_id": user_id });
-        if let Err(e) =
-            enqueue_outbox_event(txn, evt, "order", &order_id.to_string(), payload).await
-        {
-            tracing::error!(
-                order_id,
-                event = evt,
-                error = %e,
-                "order_state_machine: failed to enqueue customer notification outbox event"
-            );
-        }
+        enqueue_outbox_event(txn, evt, "order", &order_id.to_string(), payload).await?;
+    }
+
+    if to_state == OrderState::Paid {
+        crate::handlers::outbox::enqueue::enqueue_admin_alert_required(
+            txn,
+            order_id,
+            user_id,
+            &AdminAlert::Placed,
+        )
+        .await?;
     }
 
     Ok(())

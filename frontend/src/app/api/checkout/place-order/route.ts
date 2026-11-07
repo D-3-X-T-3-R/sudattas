@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 
@@ -128,11 +129,11 @@ export async function POST(request: Request) {
     { "Idempotency-Key": placeOrderKey }
   );
   if (placeOrderResult.errors?.length) {
-    return apiError(
-      placeOrderResult.errors[0]?.message ?? "Failed to place order",
-      400,
-      "GRAPHQL_ERROR"
+    const { status, message } = graphqlErrorToApiStatus(
+      placeOrderResult.errors,
+      "Failed to place order"
     );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   const order = placeOrderResult.data?.placeOrder?.[0];
   if (!order?.orderId) {
@@ -167,11 +168,11 @@ export async function POST(request: Request) {
     }
   );
   if (paymentResult.errors?.length) {
-    return apiError(
-      paymentResult.errors[0]?.message ?? "Failed to load payment intent",
-      400,
-      "GRAPHQL_ERROR"
+    const { status, message } = graphqlErrorToApiStatus(
+      paymentResult.errors,
+      "Failed to load payment intent"
     );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   const paymentIntent = pickCheckoutPaymentIntent(

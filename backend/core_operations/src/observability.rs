@@ -37,6 +37,14 @@ pub fn record_inventory_update_failure_total() {
     ::metrics::counter!("inventory_update_failure_total", 1);
 }
 
+/// A supervised background worker task (or the metrics/health server) died — panicked or was
+/// cancelled — and is not automatically restarted. Paired with a log::error! at each call site;
+/// this counter exists so the death is visible on a dashboard even if log-based alerting isn't
+/// wired up.
+pub fn record_worker_died_total(worker: &'static str) {
+    ::metrics::counter!("worker_died_total", 1, "worker" => worker);
+}
+
 /// Checkout/payment verification failed after the user returned from Razorpay.
 pub fn record_payment_verification_failed_total(reason: &'static str) {
     ::metrics::counter!("payment_verification_failed_total", 1, "reason" => reason);

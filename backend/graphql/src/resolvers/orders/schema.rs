@@ -302,6 +302,39 @@ pub struct CreateOrderInput {
     pub applied_coupon_id: Option<String>,
     pub applied_coupon_code: Option<String>,
     pub applied_discount_paise: Option<String>,
+    /// "cod" | "prepaid". "prepaid" here means payment was already collected outside this
+    /// system (cash/UPI/bank transfer) — it is recorded as captured immediately, with no live
+    /// payment flow triggered.
+    pub payment_method: String,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(description = "One line item for an admin-placed order")]
+pub struct PlaceOrderAdminLineItemInput {
+    pub variant_id: String,
+    pub quantity: String,
+    /// Line total in paise (unit price × quantity), not unit price.
+    pub price_paise: String,
+}
+
+#[derive(GraphQLInputObject, Default, Debug)]
+#[graphql(
+    description = "Admin: place a full order on a customer's behalf. Mirrors real checkout's \
+    COD path exactly (order creation, immediate confirm/capture, invoice, order_event) — the \
+    only differences are admin-specified line items instead of a cart, and no live Razorpay step \
+    for either payment method: \"prepaid\" here means payment already happened outside this \
+    system, not \"collect it now\"."
+)]
+pub struct PlaceOrderAdminInput {
+    pub user_id: String,
+    pub shipping_address_id: String,
+    /// "cod" | "prepaid"
+    pub payment_method: String,
+    pub line_items: Vec<PlaceOrderAdminLineItemInput>,
+    pub shipping_minor: Option<String>,
+    pub applied_coupon_id: Option<String>,
+    pub applied_coupon_code: Option<String>,
+    pub applied_discount_paise: Option<String>,
 }
 
 #[derive(GraphQLInputObject, Default, Debug)]

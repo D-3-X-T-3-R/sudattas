@@ -28,6 +28,7 @@ pub struct Model {
     pub recipient_name: Option<String>,
     #[sea_orm(column_name = "PhoneNumber")]
     pub phone_number: Option<String>,
+    pub is_deleted: i8,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

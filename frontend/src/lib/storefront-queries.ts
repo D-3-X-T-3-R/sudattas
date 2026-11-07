@@ -9,6 +9,7 @@ import type {
   OccasionRow,
   ProductListRow,
   ProductListRowWithVariantStock,
+  ProductRatingSummary,
 } from "./graphql-types";
 
 const CATEGORIES_QUERY = `query Categories { searchCategory(search: {}) { categoryId name } }`;
@@ -33,7 +34,7 @@ const PRODUCTS_QUERY = `query SearchProductsList($search: SearchProduct!) {
 const PRODUCT_BY_ID_QUERY = `query ProductById($search: SearchProduct!) {
   searchProduct(search: $search) {
     productId name description amountPaise formatted stockQuantity categoryId
-    fabric occasion
+    fabric occasion metaTitle metaDescription
     images { thumbnailUrl url }
     variantStock { variantId sizeId sizeName quantity }
   }
@@ -166,4 +167,27 @@ export async function fetchProductByIdWithVariantStock(
   );
   const list = data?.searchProduct ?? [];
   return list[0] ?? null;
+}
+
+/**
+ * Ratings are star-only (1-5), no written review text at this time. The average is computed
+ * server-side (real SQL AVG/COUNT via the `productRatingSummary` query) and pre-rounded up to a
+ * whole star: a raw average of 3.2 or 3.8 both come back as 4, per product decision. It includes
+ * ratings of every moderation status since there is currently no admin review-moderation UI to
+ * ever approve them.
+ */
+const PRODUCT_RATING_SUMMARY_QUERY = `query ProductRatingSummary($productId: String!) {
+  productRatingSummary(productId: $productId) { averageRating ratingCount }
+}`;
+
+export async function fetchProductRatingSummaryWithSession(
+  sessionId: string,
+  productId: string,
+  extraHeaders: Record<string, string> = {}
+): Promise<ProductRatingSummary> {
+  const data = await gqlWithSession<{
+    productRatingSummary?: { averageRating: number; ratingCount: number };
+  }>(sessionId, PRODUCT_RATING_SUMMARY_QUERY, { productId }, extraHeaders);
+  const summary = data?.productRatingSummary;
+  return { average: summary?.averageRating ?? 0, count: summary?.ratingCount ?? 0 };
 }

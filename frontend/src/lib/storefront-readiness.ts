@@ -25,9 +25,11 @@ export function isStorefrontReady(value = process.env.IS_STOREFRONT_READY): bool
 }
 
 function configuredGraphqlUrl(): string {
+  // A relative NEXT_PUBLIC_GRAPHQL_URL ("/v2", browser-only) has no host to health-check.
+  const publicUrl = process.env.NEXT_PUBLIC_GRAPHQL_URL;
   return (
     process.env.GRAPHQL_URL ??
-    process.env.NEXT_PUBLIC_GRAPHQL_URL ??
+    (publicUrl && !publicUrl.startsWith("/") ? publicUrl : undefined) ??
     DEFAULT_GRAPHQL_URL
   );
 }
@@ -87,8 +89,12 @@ export async function isStorefrontBackendAvailable({
   // Browser-only E2E suites (e.g. critical-browser-e2e) intentionally run with no real
   // backend, mocking every API call at the browser level via page.route(); this middleware
   // check runs server-side and can't be reached by those mocks. Explicit, narrowly-scoped
-  // opt-out for exactly that scenario.
-  if (process.env.SKIP_STOREFRONT_BACKEND_HEALTH_CHECK === "1") {
+  // opt-out for exactly that scenario. Gated to non-production so a stray copy of this env
+  // var into a prod config can never mask a real backend outage from customers.
+  if (
+    process.env.SKIP_STOREFRONT_BACKEND_HEALTH_CHECK === "1" &&
+    process.env.NODE_ENV !== "production"
+  ) {
     return true;
   }
 

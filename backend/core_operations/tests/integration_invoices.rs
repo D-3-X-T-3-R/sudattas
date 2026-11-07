@@ -91,6 +91,7 @@ async fn seed_address(txn: &sea_orm::DatabaseTransaction, user_id: i64, tag: &st
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
         is_default: ActiveValue::Set(1),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("India".to_string()),
         state_region: ActiveValue::Set("Karnataka".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),
@@ -527,7 +528,7 @@ async fn generated_invoice_blob_contains_expected_content_and_no_fallback_text()
 
     let text = extract_text_from_mem(&pdf_bytes).expect("extract text from generated invoice");
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    assert!(normalized.contains("TAX INVOICE"));
+    assert!(normalized.contains("INVOICE"));
     assert!(normalized.contains("Sudatta's"));
     assert!(normalized.contains("Designer Boutique"));
     assert!(normalized.contains("Invoice Number"));

@@ -23,11 +23,17 @@ pub async fn update_newsletter_subscriber(
             ))
         })?;
 
+    let unsubscribed_at = match req.unsubscribed {
+        Some(true) => Some(chrono::Utc::now()),
+        Some(false) => None,
+        None => existing.unsubscribed_at,
+    };
+
     let model = newsletter_subscribers::ActiveModel {
         subscriber_id: ActiveValue::Set(existing.subscriber_id),
         email: ActiveValue::Set(req.email),
         subscription_date: ActiveValue::Set(existing.subscription_date),
-        unsubscribed_at: ActiveValue::Set(existing.unsubscribed_at),
+        unsubscribed_at: ActiveValue::Set(unsubscribed_at),
     };
 
     match model.update(txn).await {
@@ -36,6 +42,10 @@ pub async fn update_newsletter_subscriber(
                 subscriber_id: updated.subscriber_id,
                 email: updated.email,
                 subscription_date: updated.subscription_date.to_rfc3339(),
+                unsubscribed_at: updated
+                    .unsubscribed_at
+                    .map(|v| v.to_rfc3339())
+                    .unwrap_or_default(),
             }],
         })),
         Err(e) => Err(map_db_error_to_status(e)),

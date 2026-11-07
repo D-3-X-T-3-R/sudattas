@@ -1,5 +1,6 @@
 "use client";
 
+import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,16 @@ type ProductMoodsSectionProps = {
     isPending: boolean;
     mutate: (name: string) => void;
   };
+  /** Rename/delete a mood — distinct from linking it to the current product (checkbox above). */
+  editingMoodId: string | null;
+  editingMoodName: string;
+  setEditingMoodName: Dispatch<SetStateAction<string>>;
+  moodManageError: string;
+  updateMoodMutation: { isPending: boolean };
+  onBeginEditMood: (mood: ProductMoodRow) => void;
+  onCancelEditMood: () => void;
+  onSaveEditMood: () => void;
+  onRequestDeleteMood: (mood: ProductMoodRow) => void;
 };
 
 export function ProductMoodsSection({
@@ -29,6 +40,15 @@ export function ProductMoodsSection({
   moodCreateError,
   setMoodCreateError,
   createMoodMutation,
+  editingMoodId,
+  editingMoodName,
+  setEditingMoodName,
+  moodManageError,
+  updateMoodMutation,
+  onBeginEditMood,
+  onCancelEditMood,
+  onSaveEditMood,
+  onRequestDeleteMood,
 }: ProductMoodsSectionProps) {
   const moodNameInputId = "product-new-mood-name";
   const moodNameErrorId = moodCreateError ? "product-new-mood-error" : undefined;
@@ -38,31 +58,77 @@ export function ProductMoodsSection({
         Moods (optional)
       </h3>
       <p className="mt-1.5 text-sm text-[var(--color-muted)]">
-        Select one or more moods to link to this product.
+        Select one or more moods to link to this product. Use the pencil/trash icons to rename or
+        remove a mood everywhere it&apos;s used.
       </p>
-      <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
-        {existingMoods.map((m) => (
-          <label
-            key={m.moodId}
-            className={cn(
-              "flex cursor-pointer items-center gap-2.5 text-[15px] text-[var(--color-ink)]",
-              "focus-within:outline-none focus-within:ring-2 focus-within:ring-[var(--color-accent-gold)]/50 focus-within:ring-offset-1 rounded"
-            )}
-          >
-            <input
-              type="checkbox"
-              checked={selectedMoodIds.includes(m.moodId)}
-              onChange={() => {
-                setSelectedMoodIds((prev) =>
-                  prev.includes(m.moodId) ? prev.filter((id) => id !== m.moodId) : [...prev, m.moodId]
-                );
-              }}
-              className="h-5 w-5 rounded border-[var(--color-line)] text-[var(--color-accent-gold)] focus:ring-[var(--color-accent-gold)]/50"
-            />
-            <span>{m.moodName}</span>
-          </label>
-        ))}
+      <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+        {existingMoods.map((m) =>
+          editingMoodId === m.moodId ? (
+            <div key={m.moodId} className="flex items-center gap-1.5">
+              <Input
+                value={editingMoodName}
+                onChange={(e) => setEditingMoodName(e.target.value)}
+                className="h-9 min-w-0 flex-1 rounded-lg text-[15px]"
+                autoFocus
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={updateMoodMutation.isPending}
+                onClick={onSaveEditMood}
+                className="rounded-lg bg-[var(--color-accent-brown)] hover:bg-[var(--color-accent-brown)]/90"
+              >
+                {updateMoodMutation.isPending ? "Saving…" : "Save"}
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={onCancelEditMood}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <div key={m.moodId} className="flex items-center gap-1.5">
+              <label
+                className={cn(
+                  "flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-[15px] text-[var(--color-ink)]",
+                  "focus-within:outline-none focus-within:ring-2 focus-within:ring-[var(--color-accent-gold)]/50 focus-within:ring-offset-1 rounded"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedMoodIds.includes(m.moodId)}
+                  onChange={() => {
+                    setSelectedMoodIds((prev) =>
+                      prev.includes(m.moodId) ? prev.filter((id) => id !== m.moodId) : [...prev, m.moodId]
+                    );
+                  }}
+                  className="h-5 w-5 shrink-0 rounded border-[var(--color-line)] text-[var(--color-accent-gold)] focus:ring-[var(--color-accent-gold)]/50"
+                />
+                <span className="truncate">{m.moodName}</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => onBeginEditMood(m)}
+                aria-label={`Rename ${m.moodName}`}
+                className="rounded-md p-1 text-[var(--color-muted)] hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-ink)]"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onRequestDeleteMood(m)}
+                aria-label={`Delete ${m.moodName}`}
+                className="rounded-md p-1 text-[var(--color-muted)] hover:bg-red-50 hover:text-red-600"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )
+        )}
       </div>
+      {moodManageError && (
+        <p className="mt-2 text-sm text-red-600" role="alert">
+          {moodManageError}
+        </p>
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         <label htmlFor={moodNameInputId} className="sr-only">
           New mood name

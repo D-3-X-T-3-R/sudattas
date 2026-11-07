@@ -1,7 +1,9 @@
 use core_db_entities::get_db;
 use core_operations::{
     check_auth,
+    handlers::app_settings::get_abandoned_cart_settings,
     procedures::{
+        abandoned_cart::enqueue_abandoned_cart_events,
         cancel_pending_logistics::process_cancel_pending_logistics,
         create_shipments_after_cancel_window::process_create_shipments_after_cancel_window,
         outbox_worker::process_pending_outbox_events,
@@ -86,7 +88,7 @@ async fn refresh_backlog_metrics(db: &core_db_entities::CoreDatabaseConnection) 
 
     let webhook_failed_backlog = query_count(
         db,
-        "SELECT COUNT(*) AS count FROM WebhookEvents WHERE status = 'failed'",
+        "SELECT COUNT(*) AS count FROM WebhookEvents WHERE status IN ('failed','needs_review')",
     )
     .await
     .unwrap_or(0.0);
@@ -199,10 +201,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         });
-    tokio::spawn(async move {
+    let metrics_server_handle = tokio::spawn(async move {
         warp::serve(metrics_route.or(health_route).or(readiness_route))
             .run(metrics_addr)
             .await;
+    });
+    tokio::spawn(async move {
+        if let Err(e) = metrics_server_handle.await {
+            log::error!("metrics/health server: task died unexpectedly: {e}");
+            observability::record_worker_died_total("metrics_health_server");
+        }
     });
 
     let addr = startup.grpc_server_addr;
@@ -211,6 +219,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init(shared_db.clone())
         .await
         .map_err(|e| format!("service initialization failed: {}", e.message()))?;
+
+    // Runs in the existing backend process after deployment, not a new service.
+    // Authenticated inbox failures must have a working retry consumer before ACK.
+    {
+        let db = shared_db.clone();
+        let worker = tokio::spawn(async move {
+            loop {
+                if let Err(e) =
+                    core_operations::procedures::commerce_reconciliation::process(&db).await
+                {
+                    tracing::error!(error=%e,"commerce reconciliation pass failed");
+                }
+                tokio::time::sleep(Duration::from_secs(60)).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = worker.await {
+                tracing::error!(error=%e,"commerce reconciliation worker stopped");
+                observability::record_worker_died_total("commerce_reconciliation");
+            }
+        });
+    }
 
     let outbox_disabled = std::env::var("OUTBOX_DISABLE_WORKER")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -232,7 +262,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "outbox worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
 
-        tokio::spawn(async move {
+        let outbox_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -250,6 +280,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 refresh_backlog_metrics(&db).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = outbox_worker_handle.await {
+                log::error!("outbox worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("outbox");
             }
         });
     } else {
@@ -276,7 +312,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "stale order expiry worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
 
-        tokio::spawn(async move {
+        let stale_order_expiry_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -291,6 +327,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 refresh_backlog_metrics(&db).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = stale_order_expiry_worker_handle.await {
+                log::error!("stale order expiry worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("stale_order_expiry");
             }
         });
     } else {
@@ -315,7 +357,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!(
             "cancel pending logistics worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
-        tokio::spawn(async move {
+        let cancel_pending_logistics_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -335,6 +377,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 refresh_backlog_metrics(&db).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = cancel_pending_logistics_worker_handle.await {
+                log::error!("cancel pending logistics worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("cancel_pending_logistics");
             }
         });
     } else {
@@ -362,7 +410,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!(
             "delayed shipment creation worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
-        tokio::spawn(async move {
+        let delayed_shipment_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -382,6 +430,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 refresh_backlog_metrics(&db).await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = delayed_shipment_worker_handle.await {
+                log::error!("delayed shipment creation worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("delayed_shipment_creation");
             }
         });
     } else {
@@ -408,7 +462,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!(
             "refund attempts worker: background task started (poll_interval_sec={poll_sec}, batch_limit={batch_limit})"
         );
-        tokio::spawn(async move {
+        let refund_attempts_worker_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(poll_sec));
             loop {
                 interval.tick().await;
@@ -425,14 +479,81 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 refresh_backlog_metrics(&db).await;
             }
         });
+        tokio::spawn(async move {
+            if let Err(e) = refund_attempts_worker_handle.await {
+                log::error!("refund attempts worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("refund_attempts");
+            }
+        });
     } else {
         log::info!("refund attempts worker: disabled via REFUND_ATTEMPTS_DISABLE_WORKER");
+    }
+
+    // Closes a real gap: enqueueAbandonedCart / enqueue_abandoned_cart_events (the template +
+    // outbox delivery path were already built and tested) had no caller anywhere — no cart was
+    // ever actually flagged as abandoned, no matter how long it sat. This is that trigger.
+    //
+    // Settings (enabled / delay_hours / poll_interval_sec) are re-read from AppSettings on
+    // every cycle rather than once at startup, so an admin changing them on the Settings page
+    // takes effect on the next tick — no restart needed. Env vars (ABANDONED_CART_*) remain the
+    // fallback default for whichever of these an admin has never actually set.
+    {
+        let db = shared_db.clone();
+        log::info!("abandoned cart worker: background task started (settings loaded from AppSettings, env-var defaults as fallback)");
+        let abandoned_cart_worker_handle = tokio::spawn(async move {
+            loop {
+                let settings = match get_abandoned_cart_settings(db.as_ref()).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::warn!(
+                            "abandoned cart worker: failed to load settings, retrying in 60s: {}",
+                            e.message()
+                        );
+                        tokio::time::sleep(Duration::from_secs(60)).await;
+                        continue;
+                    }
+                };
+                tokio::time::sleep(Duration::from_secs(settings.poll_interval_sec as u64)).await;
+                if !settings.enabled {
+                    continue;
+                }
+                match enqueue_abandoned_cart_events(&db, settings.delay_hours).await {
+                    Ok(n) if n > 0 => {
+                        log::info!("abandoned cart worker: enqueued {n} abandoned-cart email(s)");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::warn!("abandoned cart worker: sweep failed: {}", e.message());
+                    }
+                }
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(e) = abandoned_cart_worker_handle.await {
+                log::error!("abandoned cart worker: task died unexpectedly: {e}");
+                observability::record_worker_died_total("abandoned_cart");
+            }
+        });
     }
 
     Server::builder()
         .add_service(GrpcServicesServer::with_interceptor(service, check_auth))
         .serve_with_shutdown(addr, async {
-            let _ = tokio::signal::ctrl_c().await;
+            let ctrl_c = tokio::signal::ctrl_c();
+            #[cfg(unix)]
+            {
+                let mut terminate =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                        .expect("failed to install SIGTERM handler");
+                tokio::select! {
+                    _ = ctrl_c => {}
+                    _ = terminate.recv() => {}
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = ctrl_c.await;
+            }
             log::info!("core_operations shutdown signal received");
         })
         .await?;

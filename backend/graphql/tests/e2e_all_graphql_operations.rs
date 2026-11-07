@@ -867,6 +867,7 @@ async fn e2e_admin_order_and_events_extras() {
             shippingAddressId: "1"
             statusId: "1"
             totalAmountPaise: "1000"
+            paymentMethod: "cod"
           }) { orderId userId }
           markShipped: adminMarkOrderShipped(input: { orderId: "1" })
           markDelivered: adminMarkOrderDelivered(input: { orderId: "1" })
@@ -1069,6 +1070,7 @@ async fn e2e_mutation_create_order_admin_invalid_total_amount_returns_errors() {
             shippingAddressId: "1"
             statusId: "1"
             totalAmountPaise: "invalid-total"
+            paymentMethod: "cod"
           }) {
             orderId
           }

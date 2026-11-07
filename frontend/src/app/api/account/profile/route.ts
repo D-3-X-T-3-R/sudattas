@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 import { profileUpdateSchema } from "@/lib/validation-schemas";
@@ -57,11 +58,8 @@ export async function GET() {
     PROFILE_QUERY
   );
   if (result.errors?.length) {
-    return apiError(
-      result.errors[0]?.message ?? "Failed to load profile",
-      400,
-      "GRAPHQL_ERROR"
-    );
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to load profile");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   return Response.json({
@@ -103,7 +101,8 @@ export async function PATCH(request: Request) {
     }
   );
   if (result.errors?.length) {
-    return apiError(result.errors[0]?.message ?? "Failed to update profile", 400, "GRAPHQL_ERROR");
+    const { status, message } = graphqlErrorToApiStatus(result.errors, "Failed to update profile");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   return Response.json({

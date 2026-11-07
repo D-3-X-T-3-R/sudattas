@@ -10,6 +10,7 @@ pub struct Model {
     pub category_id: i64,
     #[sea_orm(column_name = "Name", unique)]
     pub name: String,
+    pub exchange_eligible: i8,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

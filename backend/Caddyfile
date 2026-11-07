@@ -1,0 +1,28 @@
+# Single entry point for the site: backend paths -> GraphQL, everything else -> Next.js.
+# Same file locally (behind `cloudflared tunnel --url http://localhost:8000`) and on the VPS
+# (SITE_ADDRESS=sudattasdesignerboutique.com, Caddy obtains HTTPS certificates itself).
+# See docs/WEBHOOK_SETUP.md.
+{
+	servers {
+		# cloudflared / docker reach Caddy from private addresses; trust their X-Forwarded-For so
+		# {client_ip} is the real visitor. Public clients' forwarded headers are ignored.
+		trusted_proxies static private_ranges
+	}
+}
+
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	# Only the backend paths the public needs. /metrics and /ready stay internal.
+	@backend path /v2 /v2/* /session/* /auth/phone-otp/* /invoices/* /wheresthemoney/* /blastoff/*
+	handle @backend {
+		reverse_proxy {$GRAPHQL_UPSTREAM:graphql:8080} {
+			# GraphQL's rate limiter reads X-Real-IP first (RATE_LIMIT_TRUST_PROXY_HEADERS=true).
+			header_up X-Real-IP {client_ip}
+		}
+	}
+
+	handle {
+		reverse_proxy {$FRONTEND_UPSTREAM:host.docker.internal:3000}
+	}
+}

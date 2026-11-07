@@ -37,6 +37,8 @@ pub async fn delete_product(
                                 has_blouse_piece: model.has_blouse_piece.map(|v| v != 0),
                                 care_instructions: model.care_instructions,
                                 product_status_id: model.product_status_id,
+                                meta_title: model.meta_title,
+                                meta_description: model.meta_description,
                             }],
                         };
                         Ok(Response::new(response))

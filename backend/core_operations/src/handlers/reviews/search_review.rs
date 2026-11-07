@@ -1,3 +1,4 @@
+use super::{created_at_to_string, is_verified_purchase_to_bool, review_status_to_string};
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::reviews;
 use proto::proto::core::{ReviewResponse, ReviewsResponse, SearchReviewRequest};
@@ -47,6 +48,9 @@ pub async fn search_review(
                     user_id: m.user_id.unwrap_or(0),
                     rating: m.rating as i32,
                     comment: m.comment.unwrap_or_default(),
+                    review_status: review_status_to_string(m.review_status),
+                    is_verified_purchase: is_verified_purchase_to_bool(m.is_verified_purchase),
+                    created_at: created_at_to_string(m.created_at),
                 })
                 .collect();
             Ok(Response::new(ReviewsResponse { items }))

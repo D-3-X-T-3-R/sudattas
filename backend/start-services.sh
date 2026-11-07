@@ -118,7 +118,7 @@ if ! docker compose version &>/dev/null; then
 fi
 
 echo "Starting database dependencies (MySQL, Redis)..."
-(cd "$BACKEND_ROOT" && $COMPOSE_CMD up -d mysql redis) || { echo "Docker Compose (mysql/redis) failed." >&2; exit 1; }
+(cd "$BACKEND_ROOT" && $COMPOSE_CMD up -d mysql redis ntfy) || { echo "Docker Compose (mysql/redis/ntfy) failed." >&2; exit 1; }
 
 if [[ "$DB_MODE" == "fresh" ]]; then
   load_fresh_schema
@@ -163,7 +163,7 @@ if [[ "$ORM_ONLY" == "true" ]]; then
   echo "ORM-only mode (--orm): skipping Core Operations and GraphQL."
 else
   echo "Building and starting app services (Core Operations, GraphQL)..."
-  (cd "$BACKEND_ROOT" && $COMPOSE_CMD up -d --build core_operations graphql) || { echo "Docker Compose (core services) failed." >&2; exit 1; }
+  (cd "$BACKEND_ROOT" && $COMPOSE_CMD up -d --build core_operations graphql caddy) || { echo "Docker Compose (core services) failed." >&2; exit 1; }
 fi
 
 # Keep only the latest 50 DB dumps under database/db-backups
@@ -187,7 +187,7 @@ if [[ "$ORM_ONLY" == "true" ]]; then
   echo "  MySQL (3306), Redis (6379) — Core Operations / GraphQL were not started."
 else
   echo "Done. All services running in Docker:"
-  echo "  MySQL (3306), Redis (6379), Core Operations (50051), GraphQL (8080)"
+  echo "  MySQL (3306), Redis (6379), ntfy (8090), Core Operations (50051), GraphQL (8080), Caddy (8000)"
 fi
 echo "  DB mode: $DB_MODE"
 echo "  SeaORM entities refreshed from current DB schema"

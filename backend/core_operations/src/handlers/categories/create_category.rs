@@ -12,6 +12,7 @@ pub async fn create_category(
     let product = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
         name: ActiveValue::Set(req.name.clone()),
+        exchange_eligible: ActiveValue::Set(i8::from(req.exchange_eligible.unwrap_or(false))),
     };
 
     match product.insert(txn).await {
@@ -20,6 +21,7 @@ pub async fn create_category(
                 items: vec![CategoryResponse {
                     name: model.name,
                     category_id: model.category_id,
+                    exchange_eligible: model.exchange_eligible != 0,
                 }],
             };
             Ok(Response::new(response))
