@@ -12,7 +12,8 @@ use core_db_entities::entity::sea_orm_active_enums::{
     AuthProvider, FulfillmentStatus, PaymentStatus, Status as OutboxStatus,
 };
 use core_db_entities::entity::{
-    invoices, order_details, order_status, orders, outbox_events, shipping_addresses, users,
+    invoices, order_details, order_status, orders, outbox_events, product_categories,
+    product_variants, products, shipping_addresses, users,
 };
 use core_operations::handlers::invoices::{ensure_invoice_for_order, InvoiceDocumentSnapshot};
 use core_operations::handlers::outbox::INVOICE_GENERATED;
@@ -143,6 +144,47 @@ async fn seed_order(
     let shipping_address_id = seed_address(txn, user_id, tag).await;
     let status_id = ensure_status(txn, status_name).await;
 
+    let category = product_categories::ActiveModel {
+        category_id: ActiveValue::NotSet,
+        exchange_eligible: ActiveValue::Set(0),
+        name: ActiveValue::Set(format!("invoice_category_{tag}")),
+    }
+    .insert(txn)
+    .await
+    .expect("insert invoice category");
+    let product = products::ActiveModel {
+        product_id: ActiveValue::NotSet,
+        sku: ActiveValue::Set(None),
+        name: ActiveValue::Set("Invoice Test Saree".to_string()),
+        slug: ActiveValue::Set(None),
+        description: ActiveValue::Set(None),
+        price_paise: ActiveValue::Set(12_500),
+        category_id: ActiveValue::Set(category.category_id),
+        fabric: ActiveValue::Set(None),
+        weave: ActiveValue::Set(None),
+        occasion: ActiveValue::Set(None),
+        has_blouse_piece: ActiveValue::Set(None),
+        care_instructions: ActiveValue::Set(None),
+        product_status_id: ActiveValue::Set(None),
+        meta_title: ActiveValue::Set(None),
+        meta_description: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(Some(Utc::now())),
+        updated_at: ActiveValue::Set(None),
+    }
+    .insert(txn)
+    .await
+    .expect("insert invoice product");
+    let variant = product_variants::ActiveModel {
+        variant_id: ActiveValue::NotSet,
+        product_id: ActiveValue::Set(product.product_id),
+        size_id: ActiveValue::Set(None),
+        color_id: ActiveValue::Set(None),
+        additional_price: ActiveValue::Set(Some(0)),
+    }
+    .insert(txn)
+    .await
+    .expect("insert invoice variant");
+
     let item_total_minor = 12_500;
     let discount_minor = 1_500;
     let shipping_minor = 500;
@@ -193,7 +235,7 @@ async fn seed_order(
     order_details::ActiveModel {
         order_detail_id: ActiveValue::NotSet,
         order_id: ActiveValue::Set(order.order_id),
-        variant_id: ActiveValue::Set(1),
+        variant_id: ActiveValue::Set(variant.variant_id),
         quantity: ActiveValue::Set(1),
         price: ActiveValue::Set(None),
         line_total_minor: ActiveValue::Set(item_total_minor - discount_minor),

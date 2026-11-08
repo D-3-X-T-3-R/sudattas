@@ -35,6 +35,7 @@ use sea_orm::{
 };
 use serde_json::json;
 use sha2::Sha256;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -57,6 +58,7 @@ struct MockState {
     refund_calls: usize,
     refund_amounts: Vec<i64>,
     refund_idempotency_keys: Vec<String>,
+    accepted_refunds: HashMap<String, (String, i64)>,
     assigned_courier_ids: Vec<i64>,
     create_order_item_counts: Vec<usize>,
     scheduled_pickup_dates: Vec<String>,
@@ -116,6 +118,31 @@ fn compute_signature(order_id: &str, payment_id: &str, secret: &str) -> String {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac");
     mac.update(payload.as_bytes());
     hex::encode(mac.finalize().into_bytes())
+}
+
+fn compute_webhook_signature(payload: &str) -> String {
+    let mut mac = HmacSha256::new_from_slice(b"test_webhook_secret").expect("hmac");
+    mac.update(payload.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
+fn captured_payment_payload(razorpay_order_id: &str, payment_id: &str, amount: i64) -> String {
+    json!({
+        "event": "payment.captured",
+        "payload": {
+            "payment": {
+                "entity": {
+                    "id": payment_id,
+                    "order_id": razorpay_order_id,
+                    "amount": amount,
+                    "currency": "INR",
+                    "status": "captured",
+                    "captured": true
+                }
+            }
+        }
+    })
+    .to_string()
 }
 
 fn unique_tag(port: u16) -> i64 {
@@ -262,7 +289,7 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
         .and(warp::header::optional::<String>("x-refund-idempotency"))
         .and(with_state.clone())
         .map(
-            |_payment_id: String,
+            |payment_id: String,
              body: serde_json::Value,
              idempotency: Option<String>,
              state: Arc<Mutex<MockState>>| {
@@ -290,9 +317,15 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
                         warp::http::StatusCode::BAD_REQUEST,
                     );
                 }
+                let refund_id = unique_string_id("rfnd_logistics");
+                if let Some(amount) = body.get("amount").and_then(|v| v.as_i64()) {
+                    guard
+                        .accepted_refunds
+                        .insert(refund_id.clone(), (payment_id, amount));
+                }
                 warp::reply::with_status(
                     json!({
-                        "id": unique_string_id("rfnd_logistics"),
+                        "id": refund_id,
                         "status": "processed"
                     })
                     .to_string(),
@@ -300,6 +333,27 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
                 )
             },
         );
+
+    let rzp_refund_get = warp::path!("v1" / "refunds" / String)
+        .and(warp::get())
+        .and(with_state.clone())
+        .map(|refund_id: String, state: Arc<Mutex<MockState>>| {
+            let guard = state.lock().expect("lock");
+            match guard.accepted_refunds.get(&refund_id) {
+                Some((payment_id, amount)) => warp::reply::with_status(
+                    json!({
+                        "id": refund_id,
+                        "payment_id": payment_id,
+                        "amount": amount,
+                        "currency": "INR",
+                        "status": "processed"
+                    })
+                    .to_string(),
+                    warp::http::StatusCode::OK,
+                ),
+                None => warp::reply::with_status(String::new(), warp::http::StatusCode::NOT_FOUND),
+            }
+        });
 
     let rzp_payment_get = warp::path!("v1" / "payments" / String)
         .and(warp::get())
@@ -319,6 +373,7 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
         .or(cancel)
         .or(rzp_order)
         .or(refund)
+        .or(rzp_refund_get)
         .or(rzp_payment_get);
 
     tokio::spawn(warp::serve(routes).run(([127, 0, 0, 1], port)))
@@ -491,6 +546,7 @@ fn configure_mock_provider_env(port: u16) {
     std::env::set_var("RAZORPAY_API_BASE", format!("http://127.0.0.1:{port}/v1"));
     std::env::set_var("RAZORPAY_KEY_ID", "test_key");
     std::env::set_var("RAZORPAY_KEY_SECRET", "test_secret");
+    std::env::set_var("RAZORPAY_WEBHOOK_SECRET", "test_webhook_secret");
 }
 
 async fn place_order_without_payment_verification(
@@ -568,13 +624,37 @@ async fn place_and_pay_order(
         Request::new(VerifyRazorpayPaymentRequest {
             order_id,
             razorpay_order_id: intent.razorpay_order_id.clone(),
-            razorpay_payment_id: payment_id,
+            razorpay_payment_id: payment_id.clone(),
             razorpay_signature: signature,
         }),
     )
     .await
     .expect("verify");
     verify_txn.commit().await.expect("commit verify");
+
+    let payload = captured_payment_payload(
+        &intent.razorpay_order_id,
+        &payment_id,
+        order_grand_total_minor(db, order_id).await,
+    );
+    let capture_txn = db.begin().await.expect("capture webhook txn");
+    let capture = ingest_webhook(
+        &capture_txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: format!("itest_capture_{tag}"),
+            payload_json: payload.clone(),
+            signature_verified: true,
+            provider_event_id: None,
+            raw_signature: Some(compute_webhook_signature(&payload)),
+        }),
+    )
+    .await
+    .expect("ingest captured payment");
+    assert_eq!(capture.get_ref().items[0].status, "processed");
+    capture_txn.commit().await.expect("commit capture webhook");
+    assert_eq!(order_payment_status(db, order_id).await, "captured");
 
     (order_id, user_id, inventory_marker)
 }
@@ -2034,6 +2114,11 @@ END"#
     .await;
 
     let webhook_id = format!("itest_mismatch_fail_{tag}");
+    let payload = captured_payment_payload(
+        &razorpay_order_id,
+        &format!("pay_mismatch_fail_{tag}"),
+        order_grand_total_minor(&db, order_id).await,
+    );
     let webhook_txn = db.begin().await.expect("webhook txn");
     let response = ingest_webhook(
         &webhook_txn,
@@ -2041,23 +2126,10 @@ END"#
             provider: "razorpay".to_string(),
             event_type: "payment.captured".to_string(),
             webhook_id: webhook_id.clone(),
-            payload_json: json!({
-                "event": "payment.captured",
-                "payload": {
-                    "payment": {
-                        "entity": {
-                            "id": format!("pay_mismatch_fail_{tag}"),
-                            "order_id": razorpay_order_id,
-                            "amount": 1,
-                            "currency": "INR"
-                        }
-                    }
-                }
-            })
-            .to_string(),
+            payload_json: payload.clone(),
             signature_verified: true,
             provider_event_id: None,
-            raw_signature: None,
+            raw_signature: Some(compute_webhook_signature(&payload)),
         }),
     )
     .await
