@@ -5,36 +5,36 @@
 
 /// Payment amount/currency mismatch (webhook vs intent/order) – order marked NeedsReview.
 pub fn record_payment_mismatch_total() {
-    ::metrics::counter!("payment_mismatch_total", 1);
+    ::metrics::counter!("payment_mismatch_total").increment(1);
 }
 
 /// Payment capture conflict (e.g. same intent different gateway id) – NeedsReview.
 pub fn record_payment_capture_conflict_total() {
-    ::metrics::counter!("payment_capture_conflict_total", 1);
+    ::metrics::counter!("payment_capture_conflict_total").increment(1);
 }
 
 /// Client-returned Razorpay signature verification failed (reject, log security event).
 pub fn record_payment_verify_invalid_signature_total() {
-    ::metrics::counter!("payment_verify_invalid_signature_total", 1);
+    ::metrics::counter!("payment_verify_invalid_signature_total").increment(1);
 }
 
 /// Webhook event processing failed (e.g. payment.captured handler error).
 pub fn record_webhook_processing_failed_total() {
-    ::metrics::counter!("webhook_processing_failed_total", 1);
+    ::metrics::counter!("webhook_processing_failed_total").increment(1);
 }
 
 /// Webhook event processing latency in seconds.
 pub fn record_webhook_processing_duration_seconds(duration_sec: f64, outcome: &'static str) {
     ::metrics::histogram!(
         "webhook_processing_duration_seconds",
-        duration_sec,
         "outcome" => outcome
-    );
+    )
+    .record(duration_sec);
 }
 
 /// Inventory decrement failed (insufficient stock) in place_order.
 pub fn record_inventory_update_failure_total() {
-    ::metrics::counter!("inventory_update_failure_total", 1);
+    ::metrics::counter!("inventory_update_failure_total").increment(1);
 }
 
 /// A supervised background worker task (or the metrics/health server) died — panicked or was
@@ -42,107 +42,107 @@ pub fn record_inventory_update_failure_total() {
 /// this counter exists so the death is visible on a dashboard even if log-based alerting isn't
 /// wired up.
 pub fn record_worker_died_total(worker: &'static str) {
-    ::metrics::counter!("worker_died_total", 1, "worker" => worker);
+    ::metrics::counter!("worker_died_total", "worker" => worker).increment(1);
 }
 
 /// Checkout/payment verification failed after the user returned from Razorpay.
 pub fn record_payment_verification_failed_total(reason: &'static str) {
-    ::metrics::counter!("payment_verification_failed_total", 1, "reason" => reason);
+    ::metrics::counter!("payment_verification_failed_total", "reason" => reason).increment(1);
 }
 
 /// Shiprocket booking failure while auto-fulfilling a paid order.
 pub fn record_shiprocket_booking_failure_total(reason: &'static str) {
-    ::metrics::counter!("shiprocket_booking_failed_total", 1, "reason" => reason);
+    ::metrics::counter!("shiprocket_booking_failed_total", "reason" => reason).increment(1);
 }
 
 /// Shiprocket cancellation attempt failed and the order moved to retry state.
 pub fn record_shiprocket_cancel_failure_total(reason: &'static str) {
-    ::metrics::counter!("shiprocket_cancel_failed_total", 1, "reason" => reason);
+    ::metrics::counter!("shiprocket_cancel_failed_total", "reason" => reason).increment(1);
 }
 
 /// Razorpay refund creation failed.
 pub fn record_refund_failure_total(reason: &'static str) {
-    ::metrics::counter!("refund_failure_total", 1, "reason" => reason);
+    ::metrics::counter!("refund_failure_total", "reason" => reason).increment(1);
 }
 
 /// Background stale-order expiry batch failed.
 pub fn record_stale_order_expiry_failure_total() {
-    ::metrics::counter!("stale_order_expiry_failure_total", 1);
+    ::metrics::counter!("stale_order_expiry_failure_total").increment(1);
 }
 
 /// Background cancel-pending-logistics batch failed.
 pub fn record_cancel_pending_logistics_failure_total() {
-    ::metrics::counter!("cancel_pending_logistics_failure_total", 1);
+    ::metrics::counter!("cancel_pending_logistics_failure_total").increment(1);
 }
 
 /// Background outbox/email backlog processing failed.
 pub fn record_outbox_worker_failure_total() {
-    ::metrics::counter!("outbox_worker_failure_total", 1);
+    ::metrics::counter!("outbox_worker_failure_total").increment(1);
 }
 
 /// Count of orders still stuck in pending beyond the operator threshold.
 pub fn record_stuck_pending_orders_gauge(count: f64) {
-    ::metrics::gauge!("stuck_pending_orders", count);
+    ::metrics::gauge!("stuck_pending_orders").set(count);
 }
 
 /// Count of orders waiting for logistics cancellation retries.
 pub fn record_cancel_pending_logistics_backlog_gauge(count: f64) {
-    ::metrics::gauge!("cancel_pending_logistics_backlog", count);
+    ::metrics::gauge!("cancel_pending_logistics_backlog").set(count);
 }
 
 /// Orders with recorded gateway refund failure (needs ops follow-up).
 pub fn record_refund_failed_orders_gauge(count: f64) {
-    ::metrics::gauge!("refund_failed_orders", count);
+    ::metrics::gauge!("refund_failed_orders").set(count);
 }
 
 /// Count of outbox/email events that are still pending delivery.
 pub fn record_outbox_backlog_gauge(count: f64) {
-    ::metrics::gauge!("outbox_backlog", count);
+    ::metrics::gauge!("outbox_backlog").set(count);
 }
 
 /// Oldest pending outbox age in seconds.
 pub fn record_outbox_pending_max_age_seconds_gauge(age_sec: f64) {
-    ::metrics::gauge!("outbox_pending_max_age_seconds", age_sec);
+    ::metrics::gauge!("outbox_pending_max_age_seconds").set(age_sec);
 }
 
 /// Number of pending outbox rows with at least one failed publish attempt.
 pub fn record_outbox_retry_backlog_gauge(count: f64) {
-    ::metrics::gauge!("outbox_retry_backlog", count);
+    ::metrics::gauge!("outbox_retry_backlog").set(count);
 }
 
 /// Number of webhook events that failed processing.
 pub fn record_webhook_failed_backlog_gauge(count: f64) {
-    ::metrics::gauge!("webhook_failed_backlog", count);
+    ::metrics::gauge!("webhook_failed_backlog").set(count);
 }
 
 /// Oldest pending webhook age in seconds.
 pub fn record_webhook_pending_max_age_seconds_gauge(age_sec: f64) {
-    ::metrics::gauge!("webhook_pending_max_age_seconds", age_sec);
+    ::metrics::gauge!("webhook_pending_max_age_seconds").set(age_sec);
 }
 
 /// Number of refund attempts that are still pending/submitted beyond expected processing time.
 pub fn record_refund_attempts_stuck_gauge(count: f64) {
-    ::metrics::gauge!("refund_attempts_stuck", count);
+    ::metrics::gauge!("refund_attempts_stuck").set(count);
 }
 
 /// Number of shipments in booking/cancel persistence retry states.
 pub fn record_shipments_retry_backlog_gauge(count: f64) {
-    ::metrics::gauge!("shipments_retry_backlog", count);
+    ::metrics::gauge!("shipments_retry_backlog").set(count);
 }
 
 /// Count of active payment intents that remain pending past the intended expiry window.
 pub fn record_stuck_payment_intents_gauge(count: f64) {
-    ::metrics::gauge!("stuck_payment_intents", count);
+    ::metrics::gauge!("stuck_payment_intents").set(count);
 }
 
 /// Count of stale idempotency keys that remained pending beyond retry timeout.
 pub fn record_stale_idempotency_pending_gauge(count: f64) {
-    ::metrics::gauge!("stale_idempotency_pending", count);
+    ::metrics::gauge!("stale_idempotency_pending").set(count);
 }
 
 /// Invoice existed but corresponding outbox event was missing and repaired.
 pub fn record_invoice_outbox_repair_total() {
-    ::metrics::counter!("invoice_outbox_repair_total", 1);
+    ::metrics::counter!("invoice_outbox_repair_total").increment(1);
 }
 
 /// Emit a structured operational event without secrets/tokens.

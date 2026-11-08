@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 # Tonic for gRPC
-tonic = "0.10.2"
-prost = "0.12.2"
+tonic = "0.12.3"
+prost = "0.13.1"
 
 # async runtime, Tonic depends on tokio
 tokio = { version = "1", features = ["full"] }
@@ -47,7 +47,7 @@ thiserror = "1.0"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 
 # HTTP server for GraphQL
-warp = "0.3"
+warp = { version = "0.4.3", features = ["server", "test"] }
 
 base64 = "0.21.7"
 
@@ -64,8 +64,8 @@ core_db_entities = {path = "../core_db_entities/"}
 proto = {path = "../protos/"}
 tracing = { version = "0.1.44", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "json"] }
-metrics = "0.21"
-metrics-exporter-prometheus = "0.13"
+metrics = "0.23"
+metrics-exporter-prometheus = "0.15.3"
 genpdf = "0.2"
 
 [dev-dependencies]
@@ -77,4 +77,4 @@ dotenvy = "0.15"
 pdf-extract = "0.10.0"
 
 [build-dependencies]
-tonic-build = "0.10.2"
+tonic-build = "0.12.3"

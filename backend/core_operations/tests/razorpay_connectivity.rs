@@ -31,7 +31,11 @@ async fn razorpay_connectivity() {
             warp::reply::json(&serde_json::json!({ "id": "order_test_123" }))
         });
 
-    let (addr, server) = warp::serve(orders).bind_ephemeral(([127, 0, 0, 1], 0));
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .expect("bind Razorpay fake");
+    let addr = listener.local_addr().expect("Razorpay fake address");
+    let server = warp::serve(orders).incoming(listener).run();
     tokio::task::spawn(server);
 
     std::env::set_var("RAZORPAY_KEY_ID", "rzp_test_key");

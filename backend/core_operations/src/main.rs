@@ -169,32 +169,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let metrics_addr = startup.grpc_metrics_addr;
     let metrics_route = warp::get()
-        .and(warp::path("metrics"))
+        .and(warp::path(String::from("metrics")))
         .and(warp::path::end())
         .map(move || {
             let body = prom_handle.render();
             warp::reply::with_header(body, "content-type", "text/plain; charset=utf-8")
         });
     let health_route = warp::get()
-        .and(warp::path("healthz"))
+        .and(warp::path(String::from("healthz")))
         .and(warp::path::end())
-        .map(|| warp::reply::with_status("ok", warp::http::StatusCode::OK));
+        .map(|| warp::reply::with_status(String::from("ok"), warp::http::StatusCode::OK));
     let readiness_db = shared_db.clone();
     let readiness_route = warp::get()
-        .and(warp::path("ready"))
+        .and(warp::path(String::from("ready")))
         .and(warp::path::end())
         .and_then(move || {
             let db = readiness_db.clone();
             async move {
                 match db.ping().await {
                     Ok(()) => Ok(warp::reply::with_status(
-                        "ready",
+                        String::from("ready"),
                         warp::http::StatusCode::OK,
                     )),
                     Err(e) => {
                         log::warn!("readiness check failed: DB ping error: {e}");
                         Ok::<_, std::convert::Infallible>(warp::reply::with_status(
-                            "database unavailable",
+                            String::from("database unavailable"),
                             warp::http::StatusCode::SERVICE_UNAVAILABLE,
                         ))
                     }

@@ -1060,7 +1060,7 @@ impl GrpcServices for MyGRPCServices {
                 .map_err(map_db_error_to_status)?;
             let result = match handlers::returns::admin_mark_return_received(
                 &txn,
-                Request::new(req.clone()),
+                Request::new(req),
             )
             .await
             {

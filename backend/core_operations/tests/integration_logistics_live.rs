@@ -778,8 +778,7 @@ async fn place_and_pay_live_order(
     .await
     .map_err(|e| e.to_string())?
     .into_inner()
-    .items[0]
-        .clone();
+    .items[0];
 
     // Commit setup before calling place_order: place_order now manages its own transactions
     // internally (a short claim/prep transaction, then the Shiprocket/Razorpay calls with no

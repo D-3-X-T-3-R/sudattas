@@ -32,6 +32,7 @@ target/
 backend/target-check-co/
 backend/target-outbox-test/
 Cargo.lock
+!backend/Cargo.lock
 **/*.rs.bk
 *.pdb
 

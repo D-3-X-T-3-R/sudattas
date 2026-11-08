@@ -53,6 +53,8 @@ pub struct Context {
     pub account_status: Option<String>,
 }
 
+impl juniper::Context for Context {}
+
 impl Context {
     fn admin_allowlist_user_ids() -> Vec<String> {
         std::env::var("ADMIN_ALLOWED_USER_IDS")

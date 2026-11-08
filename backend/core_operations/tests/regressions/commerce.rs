@@ -208,7 +208,11 @@ impl Provider {
                     }
                 },
             );
-        let (addr, server) = warp::serve(route).bind_ephemeral(([127, 0, 0, 1], 0));
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("bind provider fake");
+        let addr = listener.local_addr().expect("provider fake address");
+        let server = warp::serve(route).incoming(listener).run();
         let mut env = Env::new();
         env.set("RAZORPAY_KEY_ID", "rzp_test_regression");
         env.set("RAZORPAY_KEY_SECRET", SECRET);

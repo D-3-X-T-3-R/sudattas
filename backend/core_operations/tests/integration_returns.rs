@@ -198,8 +198,13 @@ async fn ensure_checkout_provider_mocks() -> RefundEvidenceFixture {
                 "currency": "INR", "status": "processed"
             }))
         });
-    let (addr, server) = warp::serve(orders.or(login).or(serviceability).or(refund))
-        .bind_ephemeral(([127, 0, 0, 1], 0));
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .expect("bind provider fake");
+    let addr = listener.local_addr().expect("provider fake address");
+    let server = warp::serve(orders.or(login).or(serviceability).or(refund))
+        .incoming(listener)
+        .run();
     tokio::task::spawn(server);
     std::env::set_var("RAZORPAY_KEY_ID", "rzp_test_itest_returns");
     std::env::set_var("RAZORPAY_KEY_SECRET", "itest_returns_secret");

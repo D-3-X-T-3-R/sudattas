@@ -78,7 +78,11 @@ async fn ensure_provider_mocks() {
             warp::reply::json(&body)
         },
     );
-    let (addr, server) = warp::serve(routes).bind_ephemeral(([127, 0, 0, 1], 0));
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .expect("bind provider fake");
+    let addr = listener.local_addr().expect("provider fake address");
+    let server = warp::serve(routes).incoming(listener).run();
     tokio::task::spawn(server);
     std::env::set_var("RAZORPAY_KEY_ID", "rzp_test_itest_atomicity");
     std::env::set_var("RAZORPAY_KEY_SECRET", "itest_atomicity_secret");

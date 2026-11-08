@@ -571,8 +571,7 @@ async fn place_order_without_payment_verification(
     .await
     .expect("cart")
     .into_inner()
-    .items[0]
-        .clone();
+    .items[0];
 
     // Commit setup before calling place_order: place_order now manages its own transactions
     // internally (a short claim/prep transaction, external Shiprocket/Razorpay calls with no

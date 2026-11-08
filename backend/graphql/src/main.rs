@@ -966,11 +966,15 @@ async fn main() {
 
     // Graceful shutdown: drain in-flight requests instead of dropping connections
     // immediately when the process receives SIGINT/SIGTERM (e.g. during a deploy).
-    let (_, server) = warp::serve(traced_routes).bind_with_graceful_shutdown(listen_addr, async {
-        shutdown_signal().await;
-        info!("graphql shutdown signal received; draining in-flight requests");
-    });
-    server.await
+    warp::serve(traced_routes)
+        .bind(listen_addr)
+        .await
+        .graceful(async {
+            shutdown_signal().await;
+            info!("graphql shutdown signal received; draining in-flight requests");
+        })
+        .run()
+        .await
 }
 
 async fn handle_auth_rejection(
