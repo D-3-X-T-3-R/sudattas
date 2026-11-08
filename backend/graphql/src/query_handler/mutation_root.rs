@@ -1,6 +1,10 @@
 use super::query_root;
 use super::Context;
 use crate::resolvers::{
+    app_settings::{
+        self,
+        schema::{AbandonedCartSettings, UpdateAbandonedCartSettingsInput},
+    },
     cart::{
         self,
         schema::{Cart, CartMutation, DeleteCartItem, NewCart},
@@ -15,12 +19,22 @@ use crate::resolvers::{
     },
     coupons::{
         self,
-        schema::{ApplyCoupon, Coupon, CreateCouponInput, UpdateCouponInput},
+        schema::{
+            ApplyCoupon, Coupon, CouponAdmin, CreateCouponInput, DeleteCouponAdminInput,
+            UpdateCouponInput,
+        },
     },
     event_logs::{
         self,
         schema::{
             DeleteEventLogInput, EventLog, EventLogMutation, NewEventLog, SearchEventLogInput,
+        },
+    },
+    exchanges::{
+        self,
+        schema::{
+            AdminMarkExchangeReceivedInput, AdminUpdateExchangeStatusInput, ExchangeRequest,
+            RequestExchangeInput, ScheduleExchangePickupInput, SyncExchangePickupInput,
         },
     },
     fabrics::{
@@ -38,8 +52,10 @@ use crate::resolvers::{
     newsletter_subscribers::{
         self,
         schema::{
-            DeleteNewsletterSubscriberInput, NewNewsletterSubscriber, NewsletterSubscriber,
-            NewsletterSubscriberMutation, SearchNewsletterSubscriberInput,
+            DeleteNewsletterSubscriberInput, NewNewsletterSubscriber, NewsletterCampaign,
+            NewsletterSubscriber, NewsletterSubscriberMutation, SearchNewsletterCampaignInput,
+            SearchNewsletterSubscriberInput, SendNewsletterCampaignInput,
+            UnsubscribeNewsletterInput,
         },
     },
     occasions::{
@@ -61,7 +77,7 @@ use crate::resolvers::{
         schema::{
             AdminMarkOrderDeliveredInput, AdminMarkOrderShippedInput, CancelOrderItemsInput,
             CreateOrderInput, NewOrder, Order, OrderMutation, PickupTargetUpdateResult,
-            UpdatePickupTargetInput,
+            PlaceOrderAdminInput, UpdatePickupTargetInput,
         },
     },
     payment_intents::{
@@ -73,7 +89,7 @@ use crate::resolvers::{
     },
     product::{
         self,
-        schema::{NewProduct, Product, ProductMutation},
+        schema::{NewProduct, PermanentlyDeleteProductResult, Product, ProductMutation},
     },
     product_images::{
         self,
@@ -102,13 +118,15 @@ use crate::resolvers::{
             NewRefund, Refund, ResolveNeedsReviewInput, ResolveRefundAttemptNeedsReviewInput,
         },
     },
-    returns::{
-        self,
-        schema::{
-            AdminMarkReturnReceivedInput, AdminUpdateReturnStatusInput, RequestReturnInput,
-            ReturnRequest,
-        },
-    },
+    // Unused while the request_return/admin_mark_return_received/admin_update_return_status
+    // mutations below are commented out — restore alongside them.
+    // returns::{
+    //     self,
+    //     schema::{
+    //         AdminMarkReturnReceivedInput, AdminUpdateReturnStatusInput, RequestReturnInput,
+    //         ReturnRequest,
+    //     },
+    // },
     reviews::{
         self,
         schema::{NewReview, Review, ReviewMutation},
@@ -151,7 +169,10 @@ use crate::resolvers::{
     },
     users::{
         self,
-        schema::{DeleteUserInput, NewUser, RecordSecurityAuditEventInput, UpdateUserInput, User},
+        schema::{
+            DeleteUserInput, NewUser, RecordSecurityAuditEventInput, SetUserStatusInput,
+            UpdateUserInput, User,
+        },
     },
     utils::parse_i64,
     weaves::{
@@ -165,23 +186,40 @@ use crate::resolvers::{
 };
 use juniper::FieldResult;
 use juniper::IntoFieldError;
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 
 pub struct MutationRoot;
 
+/// Deactivated/suspended accounts (`setUserStatus`) are rejected here, ahead of the specific
+/// `jwt_user_id`/`is_admin` check each caller does — this is the one choke point every
+/// JWT-gated mutation goes through, so an admin turning off an account actually blocks it
+/// rather than just labeling it.
+fn require_not_deactivated(context: &Context) -> Result<(), juniper::FieldError> {
+    if context.account_deactivated() {
+        return Err(juniper::FieldError::new(
+            "This account has been deactivated. Contact support if you believe this is a mistake.",
+            juniper::Value::null(),
+        ));
+    }
+    Ok(())
+}
+
 fn require_jwt(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_customer_actor(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
+    require_not_deactivated(context)?;
     if context.is_admin() {
         Ok(())
     } else {
@@ -202,6 +240,7 @@ fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
 }
 
 fn require_admin_or_internal_service(context: &Context) -> Result<(), juniper::FieldError> {
+    require_not_deactivated(context)?;
     if context.is_admin() || matches!(&context.auth, Some(super::AuthSource::InternalService)) {
         Ok(())
     } else {
@@ -303,7 +342,7 @@ fn bind_cart_scope(
 #[juniper::graphql_object(Context = Context)]
 impl MutationRoot {
     // Cart
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn add_cart_item(context: &Context, mut cart_item: NewCart) -> FieldResult<Vec<Cart>> {
         let (user_id, session_id) =
             bind_cart_scope(context, &cart_item.user_id, cart_item.session_id.clone())?;
@@ -323,7 +362,7 @@ impl MutationRoot {
     /// account — call right after login, passing the guest session id that was in
     /// use beforehand. Requires login; `user_id` is always taken from the JWT, not
     /// from client input.
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn merge_cart(context: &Context, session_id: String) -> FieldResult<Vec<Cart>> {
         let uid = require_jwt(context)?.to_string();
         cart::handlers::merge_cart(uid, session_id)
@@ -333,8 +372,12 @@ impl MutationRoot {
 
     /// P2 Abandoned cart: enqueue abandoned-cart events (typically from a cron/scheduler).
     /// Returns the number of events enqueued.
-    #[instrument(err, ret)]
-    async fn enqueue_abandoned_cart(delay_hours: Option<String>) -> FieldResult<i32> {
+    #[instrument(skip_all, err(Debug))]
+    async fn enqueue_abandoned_cart(
+        context: &Context,
+        delay_hours: Option<String>,
+    ) -> FieldResult<i32> {
+        require_admin_or_internal_service(context)?;
         let resp = cart::handlers::enqueue_abandoned_cart(delay_hours)
             .await
             .map_err(|e| e.into_field_error())?;
@@ -342,7 +385,7 @@ impl MutationRoot {
     }
 
     // Users
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_user(context: &Context, mut input: NewUser) -> FieldResult<Vec<User>> {
         if !context.is_admin() {
             match &context.auth {
@@ -364,7 +407,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_user(context: &Context, mut input: UpdateUserInput) -> FieldResult<Vec<User>> {
         if !context.is_admin() {
             let uid = require_customer_actor(context)?.to_string();
@@ -388,7 +431,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_user(context: &Context, input: DeleteUserInput) -> FieldResult<Vec<User>> {
         if !context.is_admin() {
             let uid = require_customer_actor(context)?;
@@ -404,8 +447,23 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Admin-only: activate/deactivate/suspend a user account. A deactivated/suspended
+    /// account's future JWT-authenticated requests are rejected at the auth gate (see
+    /// `admin_roles::resolve_admin_from_db` and `require_jwt` below) — not just a cosmetic
+    /// label. No customer self-service path; account status is an admin action only.
+    #[instrument(skip_all, err(Debug))]
+    async fn set_user_status(
+        context: &Context,
+        input: SetUserStatusInput,
+    ) -> FieldResult<Vec<User>> {
+        require_admin(context)?;
+        users::handlers::set_user_status(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     /// P2 security audit hook (e.g. secrets rotation).
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn record_security_audit_event(
         context: &Context,
         input: RecordSecurityAuditEventInput,
@@ -416,7 +474,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_cart_item(
         context: &Context,
         mut delete: DeleteCartItem,
@@ -435,7 +493,7 @@ impl MutationRoot {
         .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_cart_item(
         context: &Context,
         mut cart_item: CartMutation,
@@ -455,7 +513,7 @@ impl MutationRoot {
     }
 
     // Product
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_product(context: &Context, product: NewProduct) -> FieldResult<Vec<Product>> {
         require_admin(context)?;
         product::handlers::create_product(product)
@@ -463,7 +521,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_product(context: &Context, product_id: String) -> FieldResult<Vec<Product>> {
         require_admin(context)?;
         product::handlers::delete_product(product_id)
@@ -471,7 +529,42 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    /// Soft delete — sets the product's status to "archived" (resolved server-side, never a
+    /// hardcoded id). Reversible via `activateProduct` below.
+    #[instrument(skip_all, err(Debug))]
+    async fn archive_product(context: &Context, product_id: String) -> FieldResult<Vec<Product>> {
+        require_admin(context)?;
+        product::handlers::archive_product(product_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Reverses `archiveProduct` — sets the product's status back to "active" (resolved
+    /// server-side, never a hardcoded id). Touches nothing else on the product.
+    #[instrument(skip_all, err(Debug))]
+    async fn activate_product(context: &Context, product_id: String) -> FieldResult<Vec<Product>> {
+        require_admin(context)?;
+        product::handlers::activate_product(product_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin-only: irreversible hard delete — cascades variants/inventory/cart/reviews/
+    /// wishlist/images, purges images from R2, and refuses outright if the product has real
+    /// order history (archive it instead). Distinct from `deleteProduct` above, which is
+    /// unused today and would simply fail on any real product.
+    #[instrument(skip_all, err(Debug))]
+    async fn permanently_delete_product(
+        context: &Context,
+        product_id: String,
+    ) -> FieldResult<PermanentlyDeleteProductResult> {
+        require_admin(context)?;
+        product::handlers::permanently_delete_product(product_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(skip_all, err(Debug))]
     async fn update_product(
         context: &Context,
         product: ProductMutation,
@@ -483,7 +576,7 @@ impl MutationRoot {
     }
 
     // Category
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_category(
         context: &Context,
         category: NewCategory,
@@ -494,7 +587,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_category(context: &Context, category_id: String) -> FieldResult<Vec<Category>> {
         require_admin(context)?;
         category::handlers::delete_category(category_id)
@@ -502,7 +595,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_category(
         context: &Context,
         category: CategoryMutation,
@@ -514,7 +607,7 @@ impl MutationRoot {
     }
 
     // Order
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn place_order(context: &Context, order: NewOrder) -> FieldResult<Vec<Order>> {
         // Checkout requires a full login (JWT). Guest sessions (X-Session-Id only) are not
         // allowed to place orders — the client must authenticate first.
@@ -586,7 +679,7 @@ impl MutationRoot {
         result.map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_order_details(
         context: &Context,
         order_details: NewOrderDetails,
@@ -597,7 +690,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_order_detail(
         context: &Context,
         order_detail: OrderDetailsMutation,
@@ -609,7 +702,7 @@ impl MutationRoot {
     }
 
     /// Cancels the order (status → `cancelled`). Admins may cancel any order; customers only their own.
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_order(context: &Context, order_id: String) -> FieldResult<Vec<Order>> {
         let acting_user_id = if context.is_admin() {
             None
@@ -626,7 +719,7 @@ impl MutationRoot {
     }
 
     /// Cancels specific order lines. Updates order status to partially_cancelled/cancelled and runs unified settlement.
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn cancel_order_items(
         context: &Context,
         input: CancelOrderItemsInput,
@@ -645,7 +738,12 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    // Temporarily disabled (2026-09-12) to test the new exchange flow in isolation — these
+    // three fields are removed from the schema entirely while disabled (not just gated at
+    // runtime), matching the frontend-side disable in profile-authenticated-content.tsx.
+    // Uncomment to re-enable; nothing else references these three methods.
+    /*
+    #[instrument(skip_all, err(Debug))]
     async fn request_return(
         context: &Context,
         input: RequestReturnInput,
@@ -657,7 +755,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn admin_mark_return_received(
         context: &Context,
         input: AdminMarkReturnReceivedInput,
@@ -668,7 +766,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn admin_update_return_status(
         context: &Context,
         input: AdminUpdateReturnStatusInput,
@@ -678,8 +776,74 @@ impl MutationRoot {
             .await
             .map_err(|e| e.into_field_error())
     }
+    */
 
-    #[instrument(err, ret)]
+    /// Category-scoped exchange (same product, different size/colour, exact same price) —
+    /// distinct from the refund-only `requestReturn` above.
+    #[instrument(skip_all, err(Debug))]
+    async fn request_exchange(
+        context: &Context,
+        input: RequestExchangeInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        let uid = require_jwt(context)?.to_string();
+        query_root::ensure_customer_can_access_order(context, &input.order_id).await?;
+        exchanges::handlers::request_exchange(input, uid)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: mark the original item received and create the $0 replacement order.
+    #[instrument(skip_all, err(Debug))]
+    async fn admin_mark_exchange_received(
+        context: &Context,
+        input: AdminMarkExchangeReceivedInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::admin_mark_exchange_received(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(skip_all, err(Debug))]
+    async fn admin_update_exchange_status(
+        context: &Context,
+        input: AdminUpdateExchangeStatusInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::admin_update_exchange_status(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: book the reverse-pickup shipment via Shiprocket. Deliberately separate from
+    /// adminUpdateExchangeStatus so approving an exchange never itself dispatches a real
+    /// courier request — a distinct explicit click.
+    #[instrument(skip_all, err(Debug))]
+    async fn schedule_exchange_pickup(
+        context: &Context,
+        input: ScheduleExchangePickupInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::schedule_exchange_pickup(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: refresh the reverse-pickup shipment's tracking; auto-completes the exchange
+    /// (restores stock, creates the replacement order) once Shiprocket reports it delivered
+    /// to the warehouse.
+    #[instrument(skip_all, err(Debug))]
+    async fn sync_exchange_pickup(
+        context: &Context,
+        input: SyncExchangePickupInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        require_admin(context)?;
+        exchanges::handlers::sync_exchange_pickup(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(skip_all, err(Debug))]
     async fn update_order(context: &Context, order: OrderMutation) -> FieldResult<Vec<Order>> {
         require_admin(context)?;
         orders::handlers::update_order(order)
@@ -688,7 +852,7 @@ impl MutationRoot {
     }
 
     /// Low-level admin order creation (bypasses high-level checkout flow).
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_order_admin(
         context: &Context,
         input: CreateOrderInput,
@@ -699,8 +863,23 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Admin: place a full order on a customer's behalf (phone/in-person sale, etc.) in one call
+    /// — mirrors real checkout's COD path exactly (order + line items + immediate
+    /// confirm/capture/invoice/order_event). Never triggers a live Razorpay step for either
+    /// payment method.
+    #[instrument(skip_all, err(Debug))]
+    async fn place_order_admin(
+        context: &Context,
+        input: PlaceOrderAdminInput,
+    ) -> FieldResult<Vec<Order>> {
+        require_admin(context)?;
+        orders::handlers::place_order_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     /// Admin: mark order shipped (creates shipment and updates status with enforced transitions).
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn admin_mark_order_shipped(
         context: &Context,
         input: AdminMarkOrderShippedInput,
@@ -712,7 +891,7 @@ impl MutationRoot {
     }
 
     /// Admin: mark order delivered with enforced transitions.
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn admin_mark_order_delivered(
         context: &Context,
         input: AdminMarkOrderDeliveredInput,
@@ -724,7 +903,7 @@ impl MutationRoot {
     }
 
     /// Admin: adjust pickup target timestamp for operations planning.
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_pickup_target(
         context: &Context,
         input: UpdatePickupTargetInput,
@@ -737,7 +916,7 @@ impl MutationRoot {
     }
 
     // Wishlist
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn add_wishlist_item(
         context: &Context,
         mut wishlist: NewWishlistItem,
@@ -750,7 +929,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_wishlist_item(
         context: &Context,
         mut delete: DeleteWishlistItem,
@@ -764,7 +943,7 @@ impl MutationRoot {
     }
 
     // PaymentIntents
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_payment_intent(
         context: &Context,
         mut input: NewPaymentIntent,
@@ -808,7 +987,7 @@ impl MutationRoot {
         result.map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn capture_payment(
         context: &Context,
         input: CapturePayment,
@@ -828,7 +1007,7 @@ impl MutationRoot {
         result.map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn verify_razorpay_payment(
         context: &Context,
         input: VerifyRazorpayPaymentInput,
@@ -876,7 +1055,7 @@ impl MutationRoot {
     }
 
     // ProductImage
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_product_image(
         context: &Context,
         image_id: String,
@@ -887,7 +1066,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_product_image(
         context: &Context,
         product_image: ProductImageMutation,
@@ -899,7 +1078,7 @@ impl MutationRoot {
     }
 
     // Shipments
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_shipment(context: &Context, input: NewShipment) -> FieldResult<Vec<Shipment>> {
         require_admin(context)?;
         shipments::handlers::create_shipment(input)
@@ -907,7 +1086,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_shipment(
         context: &Context,
         input: UpdateShipment,
@@ -919,7 +1098,7 @@ impl MutationRoot {
     }
 
     /// Customer: refresh shipment rows from Shiprocket track-by-AWB (configure Shiprocket webhooks for automatic updates).
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn sync_order_shipments_from_shiprocket(
         context: &Context,
         order_id: String,
@@ -932,7 +1111,7 @@ impl MutationRoot {
     }
 
     // Coupons
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn apply_coupon(context: &Context, input: ApplyCoupon) -> FieldResult<Vec<Coupon>> {
         let _ = require_customer_actor(context)?;
         crate::idempotency::with_idempotency(
@@ -946,7 +1125,7 @@ impl MutationRoot {
     }
 
     /// Admin: create a coupon.
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_coupon_admin(context: &Context, input: CreateCouponInput) -> FieldResult<bool> {
         require_admin(context)?;
         coupons::handlers::create_coupon_admin(input)
@@ -955,7 +1134,7 @@ impl MutationRoot {
     }
 
     /// Admin: update a coupon.
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_coupon_admin(context: &Context, input: UpdateCouponInput) -> FieldResult<bool> {
         require_admin(context)?;
         coupons::handlers::update_coupon_admin(input)
@@ -963,8 +1142,20 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Admin: delete a coupon.
+    #[instrument(skip_all, err(Debug))]
+    async fn delete_coupon_admin(
+        context: &Context,
+        input: DeleteCouponAdminInput,
+    ) -> FieldResult<Vec<CouponAdmin>> {
+        require_admin(context)?;
+        coupons::handlers::delete_coupon_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // User roles
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_user_role(context: &Context, input: NewUserRole) -> FieldResult<Vec<UserRole>> {
         require_admin(context)?;
         user_roles::handlers::create_user_role(input)
@@ -972,7 +1163,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_user_role(
         context: &Context,
         input: SearchUserRoleInput,
@@ -983,7 +1174,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_user_role(
         context: &Context,
         input: UserRoleMutation,
@@ -994,7 +1185,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_user_role(
         context: &Context,
         input: DeleteUserRoleInput,
@@ -1006,7 +1197,7 @@ impl MutationRoot {
     }
 
     // Transactions
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_transaction(
         context: &Context,
         input: NewTransaction,
@@ -1017,7 +1208,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_transaction(
         context: &Context,
         input: SearchTransactionInput,
@@ -1028,7 +1219,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_transaction(
         context: &Context,
         input: TransactionMutation,
@@ -1039,7 +1230,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_transaction(
         context: &Context,
         input: DeleteTransactionInput,
@@ -1051,7 +1242,7 @@ impl MutationRoot {
     }
 
     // Newsletter subscribers
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_newsletter_subscriber(
         context: &Context,
         input: NewNewsletterSubscriber,
@@ -1062,7 +1253,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_newsletter_subscriber(
         context: &Context,
         input: SearchNewsletterSubscriberInput,
@@ -1073,7 +1264,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_newsletter_subscriber(
         context: &Context,
         input: NewsletterSubscriberMutation,
@@ -1084,7 +1275,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_newsletter_subscriber(
         context: &Context,
         input: DeleteNewsletterSubscriberInput,
@@ -1095,8 +1286,68 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Public: storefront footer signup. Deliberately not `require_admin`/`require_jwt`-gated —
+    /// unlike every other newsletter mutation above, this one exists specifically for an
+    /// anonymous visitor who isn't logged in and has no guest session tied to the address.
+    /// A duplicate email surfaces as the DB's existing unique-constraint error
+    /// (`AlreadyExists`); the frontend maps that to a friendly "already subscribed" message.
+    #[instrument(skip_all, err(Debug))]
+    async fn subscribe_newsletter(_context: &Context, email: String) -> FieldResult<bool> {
+        let trimmed = email.trim();
+        if trimmed.is_empty() || !trimmed.contains('@') {
+            return Err(juniper::FieldError::new(
+                "A valid email address is required",
+                juniper::Value::null(),
+            ));
+        }
+        newsletter_subscribers::handlers::create_newsletter_subscriber(NewNewsletterSubscriber {
+            email: trimmed.to_string(),
+        })
+        .await
+        .map(|_| true)
+        .map_err(|e| e.into_field_error())
+    }
+
+    /// Public: the one-click unsubscribe link embedded in every campaign email. Verified by
+    /// signed token (see core_operations::handlers::newsletter_subscribers::unsubscribe_token),
+    /// not by auth — the whole point is that it works without logging in.
+    #[instrument(skip_all, err(Debug))]
+    async fn unsubscribe_newsletter(
+        _context: &Context,
+        input: UnsubscribeNewsletterInput,
+    ) -> FieldResult<bool> {
+        newsletter_subscribers::handlers::unsubscribe_newsletter(input)
+            .await
+            .map(|_| true)
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: compose and immediately send a campaign to every non-unsubscribed subscriber.
+    #[instrument(skip_all, err(Debug))]
+    async fn send_newsletter_campaign(
+        context: &Context,
+        input: SendNewsletterCampaignInput,
+    ) -> FieldResult<Vec<NewsletterCampaign>> {
+        require_admin(context)?;
+        newsletter_subscribers::handlers::send_newsletter_campaign(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: campaign history — omit campaignId to list every campaign ever sent.
+    #[instrument(skip_all, err(Debug))]
+    async fn search_newsletter_campaign(
+        context: &Context,
+        input: SearchNewsletterCampaignInput,
+    ) -> FieldResult<Vec<NewsletterCampaign>> {
+        require_admin(context)?;
+        newsletter_subscribers::handlers::search_newsletter_campaign(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Sizes
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_size(context: &Context, input: NewSize) -> FieldResult<Vec<Size>> {
         require_admin(context)?;
         sizes::handlers::create_size(input)
@@ -1104,15 +1355,19 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_size(context: &Context, input: SearchSizeInput) -> FieldResult<Vec<Size>> {
+        // Public: unlike its create/update/delete siblings, this is the live storefront's
+        // size-selector/reference-data read (fetchSizesWithSession, guest-session, no admin
+        // creds) — not just an admin-panel dropdown. Locking it to require_admin() broke the
+        // product detail page's size selector and /api/sizes for every signed-out customer.
         let _ = context;
         sizes::handlers::search_size(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_size(context: &Context, input: SizeMutation) -> FieldResult<Vec<Size>> {
         require_admin(context)?;
         sizes::handlers::update_size(input)
@@ -1120,7 +1375,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_size(context: &Context, input: DeleteSizeInput) -> FieldResult<Vec<Size>> {
         require_admin(context)?;
         sizes::handlers::delete_size(input)
@@ -1129,7 +1384,7 @@ impl MutationRoot {
     }
 
     // Fabrics
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_fabric(context: &Context, input: NewFabric) -> FieldResult<Vec<Fabric>> {
         require_admin(context)?;
         fabrics::handlers::create_fabric(input)
@@ -1137,7 +1392,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_fabric(
         context: &Context,
         input: SearchFabricInput,
@@ -1148,7 +1403,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_fabric(context: &Context, input: FabricMutation) -> FieldResult<Vec<Fabric>> {
         require_admin(context)?;
         fabrics::handlers::update_fabric(input)
@@ -1156,7 +1411,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_fabric(
         context: &Context,
         input: DeleteFabricInput,
@@ -1168,7 +1423,7 @@ impl MutationRoot {
     }
 
     // Weaves
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_weave(context: &Context, input: NewWeave) -> FieldResult<Vec<Weave>> {
         require_admin(context)?;
         weaves::handlers::create_weave(input)
@@ -1176,7 +1431,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_weave(context: &Context, input: SearchWeaveInput) -> FieldResult<Vec<Weave>> {
         require_admin(context)?;
         weaves::handlers::search_weave(input)
@@ -1184,7 +1439,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_weave(context: &Context, input: WeaveMutation) -> FieldResult<Vec<Weave>> {
         require_admin(context)?;
         weaves::handlers::update_weave(input)
@@ -1192,7 +1447,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_weave(context: &Context, input: DeleteWeaveInput) -> FieldResult<Vec<Weave>> {
         require_admin(context)?;
         weaves::handlers::delete_weave(input)
@@ -1201,7 +1456,7 @@ impl MutationRoot {
     }
 
     // Occasions
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_occasion(context: &Context, input: NewOccasion) -> FieldResult<Vec<Occasion>> {
         require_admin(context)?;
         occasions::handlers::create_occasion(input)
@@ -1209,18 +1464,22 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_occasion(
         context: &Context,
         input: SearchOccasionInput,
     ) -> FieldResult<Vec<Occasion>> {
+        // Public: unlike its create/update/delete siblings, this is the live storefront's
+        // occasion-filter read (fetchOccasionsWithSession, guest-session, no admin creds) — not
+        // just an admin-panel dropdown. Locking it to require_admin() broke /api/storefront-filters
+        // for every signed-out customer.
         let _ = context;
         occasions::handlers::search_occasion(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_occasion(
         context: &Context,
         input: OccasionMutation,
@@ -1231,7 +1490,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_occasion(
         context: &Context,
         input: DeleteOccasionInput,
@@ -1243,7 +1502,7 @@ impl MutationRoot {
     }
 
     // Colors
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_color(context: &Context, input: NewColor) -> FieldResult<Vec<Color>> {
         require_admin(context)?;
         colors::handlers::create_color(input)
@@ -1251,7 +1510,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_color(context: &Context, input: SearchColorInput) -> FieldResult<Vec<Color>> {
         require_admin(context)?;
         colors::handlers::search_color(input)
@@ -1259,7 +1518,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_color(context: &Context, input: ColorMutation) -> FieldResult<Vec<Color>> {
         require_admin(context)?;
         colors::handlers::update_color(input)
@@ -1267,7 +1526,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_color(context: &Context, input: DeleteColorInput) -> FieldResult<Vec<Color>> {
         require_admin(context)?;
         colors::handlers::delete_color(input)
@@ -1276,7 +1535,7 @@ impl MutationRoot {
     }
 
     // Event logs
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_event_log(context: &Context, input: NewEventLog) -> FieldResult<Vec<EventLog>> {
         require_admin(context)?;
         event_logs::handlers::create_event_log(input)
@@ -1284,7 +1543,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_event_log(
         context: &Context,
         input: SearchEventLogInput,
@@ -1295,7 +1554,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_event_log(
         context: &Context,
         input: EventLogMutation,
@@ -1306,7 +1565,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_event_log(
         context: &Context,
         input: DeleteEventLogInput,
@@ -1318,7 +1577,7 @@ impl MutationRoot {
     }
 
     // User activities
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_user_activity(
         context: &Context,
         input: NewUserActivity,
@@ -1329,7 +1588,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_user_activity(
         context: &Context,
         input: SearchUserActivityInput,
@@ -1340,7 +1599,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_user_activity(
         context: &Context,
         input: UserActivityMutation,
@@ -1351,7 +1610,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_user_activity(
         context: &Context,
         input: DeleteUserActivityInput,
@@ -1363,7 +1622,7 @@ impl MutationRoot {
     }
 
     // Inventory logs
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_inventory_log(
         context: &Context,
         input: NewInventoryLog,
@@ -1374,7 +1633,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_inventory_log(
         context: &Context,
         input: InventoryLogMutation,
@@ -1385,7 +1644,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_inventory_log(
         context: &Context,
         input: DeleteInventoryLogInput,
@@ -1397,7 +1656,7 @@ impl MutationRoot {
     }
 
     // Product mood mappings
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_product_mood_mapping(
         context: &Context,
         input: NewProductMoodMapping,
@@ -1408,7 +1667,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_product_mood_mapping(
         context: &Context,
         input: SearchProductMoodMappingInput,
@@ -1419,7 +1678,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_product_mood_mapping(
         context: &Context,
         input: DeleteProductMoodMappingInput,
@@ -1431,7 +1690,7 @@ impl MutationRoot {
     }
 
     // Refunds
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_refund(context: &Context, input: NewRefund) -> FieldResult<Vec<Refund>> {
         require_admin(context)?;
         refunds::handlers::create_refund(input)
@@ -1440,7 +1699,7 @@ impl MutationRoot {
     }
 
     /// Resolve NeedsReview manually (paid / cancelled / refunded).
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn resolve_needs_review(
         context: &Context,
         input: ResolveNeedsReviewInput,
@@ -1452,7 +1711,7 @@ impl MutationRoot {
     }
 
     /// Resolve a RefundAttempt stuck in needs_review (retry / mark_settled).
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn resolve_refund_attempt_needs_review(
         context: &Context,
         input: ResolveRefundAttemptNeedsReviewInput,
@@ -1464,7 +1723,7 @@ impl MutationRoot {
     }
 
     // Reviews
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_review(context: &Context, mut input: NewReview) -> FieldResult<Vec<Review>> {
         let uid = require_jwt(context)?.to_string();
         if !context.is_admin() {
@@ -1475,15 +1734,22 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
-    async fn update_review(context: &Context, input: ReviewMutation) -> FieldResult<Vec<Review>> {
+    #[instrument(skip_all, err(Debug))]
+    async fn update_review(
+        context: &Context,
+        mut input: ReviewMutation,
+    ) -> FieldResult<Vec<Review>> {
         ensure_customer_owns_review(context, &input.review_id).await?;
+        if !context.is_admin() {
+            input.user_id = None;
+            input.product_id = None;
+        }
         reviews::handlers::update_review(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_review(context: &Context, review_id: String) -> FieldResult<Vec<Review>> {
         require_admin(context)?;
         reviews::handlers::delete_review(review_id)
@@ -1492,7 +1758,7 @@ impl MutationRoot {
     }
 
     /// Admin review moderation: approve/reject a review.
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn admin_update_review_status(
         context: &Context,
         input: crate::resolvers::reviews::schema::AdminUpdateReviewStatusInput,
@@ -1504,7 +1770,7 @@ impl MutationRoot {
     }
 
     // Inventory
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_inventory_item(
         context: &Context,
         input: NewInventoryItem,
@@ -1515,7 +1781,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_inventory_item(
         context: &Context,
         input: InventoryItemMutation,
@@ -1526,7 +1792,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_inventory_item(
         context: &Context,
         inventory_id: String,
@@ -1538,7 +1804,7 @@ impl MutationRoot {
     }
 
     // Product variants
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_product_variant(
         context: &Context,
         input: NewProductVariant,
@@ -1549,7 +1815,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_product_variant(
         context: &Context,
         input: ProductVariantMutation,
@@ -1560,7 +1826,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_product_variant(
         context: &Context,
         input: DeleteProductVariantInput,
@@ -1572,7 +1838,7 @@ impl MutationRoot {
     }
 
     // Product moods
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_product_mood(
         context: &Context,
         input: NewProductMood,
@@ -1583,7 +1849,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_product_mood(
         context: &Context,
         input: ProductMoodMutation,
@@ -1594,7 +1860,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_product_mood(
         context: &Context,
         input: DeleteProductMoodInput,
@@ -1606,7 +1872,7 @@ impl MutationRoot {
     }
 
     // Shipping methods
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_shipping_method(
         context: &Context,
         input: NewShippingMethod,
@@ -1617,7 +1883,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_shipping_method(
         context: &Context,
         input: ShippingMethodMutation,
@@ -1628,7 +1894,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_shipping_method(
         context: &Context,
         method_id: String,
@@ -1639,8 +1905,21 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Admin: update the abandoned-cart worker's schedule. Only the fields provided are
+    /// changed; the worker picks up the new values on its next poll, no restart needed.
+    #[instrument(skip_all, err(Debug))]
+    async fn update_abandoned_cart_settings(
+        context: &Context,
+        input: UpdateAbandonedCartSettingsInput,
+    ) -> FieldResult<AbandonedCartSettings> {
+        require_admin(context)?;
+        app_settings::handlers::update_abandoned_cart_settings(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Shipping addresses
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_shipping_address(
         context: &Context,
         mut input: NewShippingAddress,
@@ -1659,7 +1938,7 @@ impl MutationRoot {
         .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn update_shipping_address(
         context: &Context,
         mut input: ShippingAddressMutation,
@@ -1674,7 +1953,7 @@ impl MutationRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn delete_shipping_address(
         context: &Context,
         shipping_address_id: String,
@@ -1687,7 +1966,7 @@ impl MutationRoot {
     }
 
     // Order Events
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn create_order_event(
         context: &Context,
         input: NewOrderEvent,
@@ -1699,7 +1978,7 @@ impl MutationRoot {
     }
 
     // Product Images — R2 confirm upload
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn confirm_image_upload(
         context: &Context,
         input: ConfirmImageUpload,
@@ -1711,7 +1990,7 @@ impl MutationRoot {
     }
 
     // Product Images — sync order (update kept, bulk insert new, delete removed)
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn sync_product_images(
         context: &Context,
         input: SyncProductImagesInput,

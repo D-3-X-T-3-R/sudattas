@@ -35,6 +35,7 @@ use sea_orm::{
 };
 use serde_json::json;
 use sha2::Sha256;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -57,6 +58,7 @@ struct MockState {
     refund_calls: usize,
     refund_amounts: Vec<i64>,
     refund_idempotency_keys: Vec<String>,
+    accepted_refunds: HashMap<String, (String, i64)>,
     assigned_courier_ids: Vec<i64>,
     create_order_item_counts: Vec<usize>,
     scheduled_pickup_dates: Vec<String>,
@@ -116,6 +118,31 @@ fn compute_signature(order_id: &str, payment_id: &str, secret: &str) -> String {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac");
     mac.update(payload.as_bytes());
     hex::encode(mac.finalize().into_bytes())
+}
+
+fn compute_webhook_signature(payload: &str) -> String {
+    let mut mac = HmacSha256::new_from_slice(b"test_webhook_secret").expect("hmac");
+    mac.update(payload.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
+fn captured_payment_payload(razorpay_order_id: &str, payment_id: &str, amount: i64) -> String {
+    json!({
+        "event": "payment.captured",
+        "payload": {
+            "payment": {
+                "entity": {
+                    "id": payment_id,
+                    "order_id": razorpay_order_id,
+                    "amount": amount,
+                    "currency": "INR",
+                    "status": "captured",
+                    "captured": true
+                }
+            }
+        }
+    })
+    .to_string()
 }
 
 fn unique_tag(port: u16) -> i64 {
@@ -262,7 +289,7 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
         .and(warp::header::optional::<String>("x-refund-idempotency"))
         .and(with_state.clone())
         .map(
-            |_payment_id: String,
+            |payment_id: String,
              body: serde_json::Value,
              idempotency: Option<String>,
              state: Arc<Mutex<MockState>>| {
@@ -290,9 +317,15 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
                         warp::http::StatusCode::BAD_REQUEST,
                     );
                 }
+                let refund_id = unique_string_id("rfnd_logistics");
+                if let Some(amount) = body.get("amount").and_then(|v| v.as_i64()) {
+                    guard
+                        .accepted_refunds
+                        .insert(refund_id.clone(), (payment_id, amount));
+                }
                 warp::reply::with_status(
                     json!({
-                        "id": unique_string_id("rfnd_logistics"),
+                        "id": refund_id,
                         "status": "processed"
                     })
                     .to_string(),
@@ -300,6 +333,27 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
                 )
             },
         );
+
+    let rzp_refund_get = warp::path!("v1" / "refunds" / String)
+        .and(warp::get())
+        .and(with_state.clone())
+        .map(|refund_id: String, state: Arc<Mutex<MockState>>| {
+            let guard = state.lock().expect("lock");
+            match guard.accepted_refunds.get(&refund_id) {
+                Some((payment_id, amount)) => warp::reply::with_status(
+                    json!({
+                        "id": refund_id,
+                        "payment_id": payment_id,
+                        "amount": amount,
+                        "currency": "INR",
+                        "status": "processed"
+                    })
+                    .to_string(),
+                    warp::http::StatusCode::OK,
+                ),
+                None => warp::reply::with_status(String::new(), warp::http::StatusCode::NOT_FOUND),
+            }
+        });
 
     let rzp_payment_get = warp::path!("v1" / "payments" / String)
         .and(warp::get())
@@ -319,6 +373,7 @@ async fn spawn_mock_server(port: u16, state: Arc<Mutex<MockState>>) -> tokio::ta
         .or(cancel)
         .or(rzp_order)
         .or(refund)
+        .or(rzp_refund_get)
         .or(rzp_payment_get);
 
     tokio::spawn(warp::serve(routes).run(([127, 0, 0, 1], port)))
@@ -391,6 +446,7 @@ async fn seed_checkout_user(txn: &sea_orm::DatabaseTransaction, tag: i64) -> (i6
         recipient_name: ActiveValue::Set(Some("Logistics Test".to_string())),
         phone_number: ActiveValue::Set(Some(phone)),
         is_default: ActiveValue::Set(1),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),
@@ -404,6 +460,7 @@ async fn seed_checkout_user(txn: &sea_orm::DatabaseTransaction, tag: i64) -> (i6
 
     let category = product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_logistics_cat_{tag}")),
     }
     .insert(txn)
@@ -424,6 +481,8 @@ async fn seed_checkout_user(txn: &sea_orm::DatabaseTransaction, tag: i64) -> (i6
         has_blouse_piece: ActiveValue::Set(None),
         care_instructions: ActiveValue::Set(None),
         product_status_id: ActiveValue::Set(None),
+        meta_title: ActiveValue::Set(None),
+        meta_description: ActiveValue::Set(None),
         created_at: ActiveValue::Set(Some(Utc::now())),
         updated_at: ActiveValue::Set(None),
     }
@@ -487,6 +546,7 @@ fn configure_mock_provider_env(port: u16) {
     std::env::set_var("RAZORPAY_API_BASE", format!("http://127.0.0.1:{port}/v1"));
     std::env::set_var("RAZORPAY_KEY_ID", "test_key");
     std::env::set_var("RAZORPAY_KEY_SECRET", "test_secret");
+    std::env::set_var("RAZORPAY_WEBHOOK_SECRET", "test_webhook_secret");
 }
 
 async fn place_order_without_payment_verification(
@@ -511,11 +571,17 @@ async fn place_order_without_payment_verification(
     .await
     .expect("cart")
     .into_inner()
-    .items[0]
-        .clone();
+    .items[0];
+
+    // Commit setup before calling place_order: place_order now manages its own transactions
+    // internally (a short claim/prep transaction, external Shiprocket/Razorpay calls with no
+    // DB transaction held, then a write transaction) and can no longer run as a nested
+    // savepoint inside this still-open transaction. Setup fixtures must be committed so
+    // place_order's own (separately-opened) transactions can see them.
+    txn.commit().await.expect("commit setup");
 
     let order = place_order(
-        &txn,
+        db,
         Request::new(PlaceOrderRequest {
             shipping_address_id,
             user_id,
@@ -529,7 +595,6 @@ async fn place_order_without_payment_verification(
     .into_inner()
     .items[0]
         .clone();
-    txn.commit().await.expect("commit place");
 
     (order.order_id, user_id, inventory_marker)
 }
@@ -558,13 +623,37 @@ async fn place_and_pay_order(
         Request::new(VerifyRazorpayPaymentRequest {
             order_id,
             razorpay_order_id: intent.razorpay_order_id.clone(),
-            razorpay_payment_id: payment_id,
+            razorpay_payment_id: payment_id.clone(),
             razorpay_signature: signature,
         }),
     )
     .await
     .expect("verify");
     verify_txn.commit().await.expect("commit verify");
+
+    let payload = captured_payment_payload(
+        &intent.razorpay_order_id,
+        &payment_id,
+        order_grand_total_minor(db, order_id).await,
+    );
+    let capture_txn = db.begin().await.expect("capture webhook txn");
+    let capture = ingest_webhook(
+        &capture_txn,
+        Request::new(IngestWebhookRequest {
+            provider: "razorpay".to_string(),
+            event_type: "payment.captured".to_string(),
+            webhook_id: format!("itest_capture_{tag}"),
+            payload_json: payload.clone(),
+            signature_verified: true,
+            provider_event_id: None,
+            raw_signature: Some(compute_webhook_signature(&payload)),
+        }),
+    )
+    .await
+    .expect("ingest captured payment");
+    assert_eq!(capture.get_ref().items[0].status, "processed");
+    capture_txn.commit().await.expect("commit capture webhook");
+    assert_eq!(order_payment_status(db, order_id).await, "captured");
 
     (order_id, user_id, inventory_marker)
 }
@@ -1109,8 +1198,37 @@ async fn integration_place_order_fails_when_inventory_row_is_missing() {
     .await
     .expect("delete inventory row");
 
+    // Capture fixture ids for best-effort cleanup below, while the setup transaction (which
+    // is about to be committed) still has them in scope.
+    let variant_id = cart_item.variant_id;
+    let product_id = product_variants::Entity::find_by_id(variant_id)
+        .one(&txn)
+        .await
+        .expect("query variant for cleanup")
+        .map(|v| v.product_id);
+    let category_id = match product_id {
+        Some(pid) => products::Entity::find_by_id(pid)
+            .one(&txn)
+            .await
+            .expect("query product for cleanup")
+            .map(|p| p.category_id),
+        None => None,
+    };
+    let role_id = users::Entity::find_by_id(user_id)
+        .one(&txn)
+        .await
+        .expect("query user for cleanup")
+        .and_then(|u| u.role_id);
+
+    // Commit setup (including the inventory deletion) before calling place_order: place_order
+    // now manages its own transactions internally and can no longer run as a nested savepoint
+    // inside this still-open transaction — its own write-phase transaction needs to see the
+    // deleted inventory row, which requires it to already be committed rather than shared via
+    // an uncommitted transaction as before.
+    txn.commit().await.expect("commit setup");
+
     let err = place_order(
-        &txn,
+        &db,
         Request::new(PlaceOrderRequest {
             shipping_address_id,
             user_id,
@@ -1128,7 +1246,93 @@ async fn integration_place_order_fails_when_inventory_row_is_missing() {
         err.message()
     );
 
-    txn.rollback().await.ok();
+    // Best-effort cleanup of the committed setup fixtures (setup can no longer rely on an
+    // enclosing rollback for cleanup now that it must be committed for place_order to see it).
+    // The Inventory row was already deleted above; place_order failed before creating an
+    // Order/OrderDetails/cart deletion, so only the seed_checkout_user fixtures remain.
+    // Errors are logged, not fatal — they must never mask the assertions above.
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "DELETE FROM `Cart` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Cart for user_id={user_id} failed (non-fatal): {e}");
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "DELETE FROM `ProductVariants` WHERE `VariantID` = ?",
+            [variant_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ProductVariants for variant_id={variant_id} failed (non-fatal): {e}"
+        );
+    }
+    if let Some(pid) = product_id {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DbBackend::MySql,
+                "DELETE FROM `Products` WHERE `ProductID` = ?",
+                [pid.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup Products for product_id={pid} failed (non-fatal): {e}");
+        }
+    }
+    if let Some(cid) = category_id {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DbBackend::MySql,
+                "DELETE FROM `ProductCategories` WHERE `CategoryID` = ?",
+                [cid.into()],
+            ))
+            .await
+        {
+            eprintln!(
+                "warning: cleanup ProductCategories for category_id={cid} failed (non-fatal): {e}"
+            );
+        }
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "DELETE FROM `ShippingAddresses` WHERE `ShippingAddressID` = ?",
+            [shipping_address_id.into()],
+        ))
+        .await
+    {
+        eprintln!(
+            "warning: cleanup ShippingAddresses id={shipping_address_id} failed (non-fatal): {e}"
+        );
+    }
+    if let Err(e) = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::MySql,
+            "DELETE FROM `Users` WHERE `UserID` = ?",
+            [user_id.into()],
+        ))
+        .await
+    {
+        eprintln!("warning: cleanup Users for user_id={user_id} failed (non-fatal): {e}");
+    }
+    if let Some(rid) = role_id {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DbBackend::MySql,
+                "DELETE FROM `UserRoles` WHERE `RoleID` = ?",
+                [rid.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup UserRoles for role_id={rid} failed (non-fatal): {e}");
+        }
+    }
 }
 
 #[tokio::test]
@@ -1427,12 +1631,19 @@ async fn integration_booking_intent_is_persisted_before_external_call_and_worker
 
     make_order_eligible_for_delayed_booking(&db, order_id).await;
 
-    let txn = db.begin().await.expect("booking intent txn");
+    // book_order_after_validation now manages its own internal transactions (a short
+    // validate/commit, then — with no transaction open — an outbound Shiprocket call for COD
+    // orders, then a short write/commit for the booking intent itself); by the time it returns
+    // Ok, the intent row is already committed and durably visible, so there's no longer a
+    // separate "hold a transaction open, inspect the uncommitted intent, then commit" phase to
+    // exercise here. What this assertion actually verifies — that persisting the intent doesn't
+    // itself trigger the *external* Shiprocket booking call, which only happens later via
+    // `process_booking_intents_batch` — still holds and is checked directly below.
     let _shipment_id =
-        book_order_after_validation(&txn, order_id, Utc::now(), "itest_booking_intent")
+        book_order_after_validation(&db, order_id, Utc::now(), "itest_booking_intent")
             .await
             .expect("persist booking intent");
-    let row = txn
+    let row = db
         .query_one(Statement::from_sql_and_values(
             sea_orm::DbBackend::MySql,
             r#"SELECT logistics_status, shiprocket_order_id, awb_code
@@ -1456,9 +1667,8 @@ async fn integration_booking_intent_is_persisted_before_external_call_and_worker
     assert_eq!(
         state.lock().expect("lock").create_order_calls,
         0,
-        "external booking must not be called before commit"
+        "persisting the booking intent must not itself trigger the external booking call"
     );
-    txn.commit().await.expect("commit booking intent");
 
     let channel_order_id = orders::Entity::find_by_id(order_id)
         .one(&db)
@@ -1507,11 +1717,11 @@ async fn integration_booking_worker_failure_before_external_call_creates_no_ship
     let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18125, tag).await;
     make_order_eligible_for_delayed_booking(&db, order_id).await;
 
-    let claim_txn = db.begin().await.expect("claim txn");
-    book_order_after_validation(&claim_txn, order_id, Utc::now(), "itest_booking_claim")
+    // book_order_after_validation now commits its own writes internally; no wrapping
+    // transaction is needed (or usable) here anymore.
+    book_order_after_validation(&db, order_id, Utc::now(), "itest_booking_claim")
         .await
         .expect("persist booking intent");
-    claim_txn.commit().await.expect("commit claim");
 
     let trigger_name = format!("trg_itest_booking_pre_external_fail_{}", unique_tag(18125));
     create_trigger(
@@ -1636,16 +1846,11 @@ async fn integration_booking_worker_external_success_with_persistence_retry_is_r
     let (order_id, _user_id, _inventory_marker) = place_and_pay_order(&db, 18130, tag).await;
     make_order_eligible_for_delayed_booking(&db, order_id).await;
 
-    let claim_txn = db.begin().await.expect("claim txn");
-    book_order_after_validation(
-        &claim_txn,
-        order_id,
-        Utc::now(),
-        "itest_booking_persist_retry",
-    )
-    .await
-    .expect("persist booking intent");
-    claim_txn.commit().await.expect("commit booking intent");
+    // book_order_after_validation now commits its own writes internally; no wrapping
+    // transaction is needed (or usable) here anymore.
+    book_order_after_validation(&db, order_id, Utc::now(), "itest_booking_persist_retry")
+        .await
+        .expect("persist booking intent");
 
     let trigger_name = format!("trg_itest_booking_persist_fail_{}", unique_tag(18130));
     create_trigger(
@@ -1908,6 +2113,11 @@ END"#
     .await;
 
     let webhook_id = format!("itest_mismatch_fail_{tag}");
+    let payload = captured_payment_payload(
+        &razorpay_order_id,
+        &format!("pay_mismatch_fail_{tag}"),
+        order_grand_total_minor(&db, order_id).await,
+    );
     let webhook_txn = db.begin().await.expect("webhook txn");
     let response = ingest_webhook(
         &webhook_txn,
@@ -1915,23 +2125,10 @@ END"#
             provider: "razorpay".to_string(),
             event_type: "payment.captured".to_string(),
             webhook_id: webhook_id.clone(),
-            payload_json: json!({
-                "event": "payment.captured",
-                "payload": {
-                    "payment": {
-                        "entity": {
-                            "id": format!("pay_mismatch_fail_{tag}"),
-                            "order_id": razorpay_order_id,
-                            "amount": 1,
-                            "currency": "INR"
-                        }
-                    }
-                }
-            })
-            .to_string(),
+            payload_json: payload.clone(),
             signature_verified: true,
             provider_event_id: None,
-            raw_signature: None,
+            raw_signature: Some(compute_webhook_signature(&payload)),
         }),
     )
     .await
@@ -3293,6 +3490,7 @@ async fn integration_manual_shipment_paths_use_shared_booking_validation() {
     let prewindow_admin_txn = db.begin().await.expect("admin shipped prewindow txn");
     let prewindow_admin = admin_mark_order_shipped(
         &prewindow_admin_txn,
+        &db,
         Request::new(AdminMarkOrderShippedRequest {
             order_id,
             awb_code: None,

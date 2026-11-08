@@ -32,6 +32,14 @@ pub fn map_db_error_to_status(db_error: DbErr) -> Status {
             let msg = e.to_string();
             if msg.contains("Duplicate entry") || msg.contains("1062") {
                 Status::already_exists("Resource already exists (e.g. duplicate email or username)")
+            } else if msg.contains("foreign key constraint fails") || msg.contains("1451") {
+                // MySQL 1451 on DELETE: a child row (e.g. a Product still assigned to the
+                // category being deleted) references this row via a FK with no ON DELETE
+                // CASCADE — the DB correctly refused the delete. Surface that as a clear,
+                // actionable message instead of the raw SQL error text.
+                Status::failed_precondition(
+                    "Cannot delete: other records still reference this item. Remove or reassign them first.",
+                )
             } else {
                 Status::internal(format!("Database execution error: {}", msg))
             }

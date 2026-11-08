@@ -23,8 +23,18 @@ pub async fn get_sitemap_product_urls(
         .unwrap_or(DEFAULT_LIMIT)
         .min(10_000);
 
+    // Resolved against the DB rather than a hardcoded id — see product_state::get_status_id.
+    // If "active" doesn't resolve (e.g. a re-seed changed codes), fail closed with an empty
+    // sitemap rather than silently submitting every product, drafts included, to Google.
+    let Some(active_status_id) = crate::product_state::get_status_id(txn, "active").await? else {
+        return Ok(Response::new(GetSitemapProductUrlsResponse {
+            entries: vec![],
+        }));
+    };
+
     let rows = products::Entity::find()
         .filter(products::Column::Slug.is_not_null())
+        .filter(products::Column::ProductStatusId.eq(active_status_id))
         .order_by_desc(products::Column::UpdatedAt)
         .limit(limit)
         .all(txn)

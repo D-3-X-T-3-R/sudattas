@@ -1,5 +1,6 @@
 use super::Context;
 use crate::resolvers::{
+    app_settings::{self, schema::AbandonedCartSettings},
     cart::{self, schema::Cart},
     category::{
         self,
@@ -7,7 +8,11 @@ use crate::resolvers::{
     },
     coupons::{
         self,
-        schema::{Coupon, ValidateCoupon},
+        schema::{Coupon, CouponAdmin, PublicCoupon, SearchCouponAdminInput, ValidateCoupon},
+    },
+    exchanges::{
+        self,
+        schema::{ExchangeRequest, SearchExchangeRequestsInput},
     },
     inventory::{
         self,
@@ -28,7 +33,7 @@ use crate::resolvers::{
     },
     payment_intents::{
         self,
-        schema::{GetPaymentIntent, PaymentIntent},
+        schema::{GetPaymentIntent, PaymentIntent, SearchPaymentIntent},
     },
     product::{
         self,
@@ -44,7 +49,7 @@ use crate::resolvers::{
     },
     refunds::{
         self,
-        schema::{GetRefund, Refund},
+        schema::{GetRefund, Refund, RefundAttempt, SearchRefundAttemptsInput},
     },
     returns::{
         self,
@@ -52,7 +57,7 @@ use crate::resolvers::{
     },
     reviews::{
         self,
-        schema::{Review, SearchReview},
+        schema::{ProductRatingSummary, Review, SearchReview},
     },
     shipments::{
         self,
@@ -75,22 +80,39 @@ use crate::resolvers::{
 };
 use juniper::FieldResult;
 use juniper::IntoFieldError;
+use tracing::instrument;
 
 pub struct QueryRoot;
 
+/// Deactivated/suspended accounts (`setUserStatus`) are rejected here, ahead of the specific
+/// `jwt_user_id`/`is_admin` check each caller does — see the identical helper in
+/// `mutation_root.rs` for the full rationale.
+fn require_not_deactivated(context: &Context) -> Result<(), juniper::FieldError> {
+    if context.account_deactivated() {
+        return Err(juniper::FieldError::new(
+            "This account has been deactivated. Contact support if you believe this is a mistake.",
+            juniper::Value::null(),
+        ));
+    }
+    Ok(())
+}
+
 fn require_jwt(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_customer_actor(context: &Context) -> Result<&str, juniper::FieldError> {
+    require_not_deactivated(context)?;
     context.jwt_user_id().ok_or_else(|| {
         juniper::FieldError::new("Login required for this operation", juniper::Value::null())
     })
 }
 
 fn require_admin(context: &Context) -> Result<(), juniper::FieldError> {
+    require_not_deactivated(context)?;
     if context.is_admin() {
         Ok(())
     } else {
@@ -153,6 +175,11 @@ struct AuthInfo {
     jwks_key_count: i32,
     /// Current request’s user ID (JWT or session), if any.
     current_user_id: Option<String>,
+    /// True when the current JWT-authenticated identity's account is deactivated/suspended.
+    /// Deliberately readable even for a deactivated account — every other JWT-gated query/mutation
+    /// rejects them via `require_jwt`/`jwt_user_id()`, so the frontend needs one ungated way to
+    /// learn "you're deactivated" in order to show that message instead of a wall of errors.
+    account_deactivated: bool,
 }
 
 #[juniper::graphql_object(Context = Context)]
@@ -175,11 +202,12 @@ impl QueryRoot {
             session_enabled: context.redis_url.is_some(),
             jwks_key_count: context.jwks().keys.len() as i32,
             current_user_id: context.user_id().map(|s| s.to_string()),
+            account_deactivated: context.account_deactivated(),
         }
     }
 
     // Cart
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn get_cart_items(
         context: &Context,
         user_id: Option<String>,
@@ -201,15 +229,24 @@ impl QueryRoot {
     }
 
     // Product
-    #[instrument(err, ret)]
-    async fn search_product(search: SearchProduct) -> FieldResult<Vec<Product>> {
-        product::handlers::search_product(search)
+    /// Storefront and admin share this field. Non-admin callers (guest or customer) are
+    /// always forced to the "active" product status, regardless of what they pass — this
+    /// is the only place draft/archived products are kept off the live storefront, so it
+    /// must not be bypassable by a caller-supplied product_status_id.
+    #[instrument(skip_all, err(Debug))]
+    async fn search_product(context: &Context, search: SearchProduct) -> FieldResult<Vec<Product>> {
+        let restrict_to_status_code = if context.is_admin() {
+            None
+        } else {
+            Some("active")
+        };
+        product::handlers::search_product(search, restrict_to_status_code)
             .await
             .map_err(|e| e.into_field_error())
     }
 
     // Product moods (admin: list moods for dropdown)
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_product_mood(input: SearchProductMoodInput) -> FieldResult<Vec<ProductMood>> {
         product_moods::handlers::search_product_mood(input)
             .await
@@ -217,7 +254,7 @@ impl QueryRoot {
     }
 
     /// Distinct moods from the newest products (storefront Shop by mood).
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn shop_highlight_moods(
         recent_product_limit: Option<i32>,
         max_moods: Option<i32>,
@@ -228,7 +265,7 @@ impl QueryRoot {
     }
 
     /// P2 Recommendations: get related products for a given product.
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn get_related_products(input: GetRelatedProducts) -> FieldResult<Vec<Product>> {
         product::handlers::get_related_products(input)
             .await
@@ -236,7 +273,7 @@ impl QueryRoot {
     }
 
     // ProductImages
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_product_image(search: SearchProductImage) -> FieldResult<Vec<ProductImage>> {
         product_images::handlers::search_product_image(search)
             .await
@@ -244,7 +281,7 @@ impl QueryRoot {
     }
 
     // Category
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_category(search: SearchCategory) -> FieldResult<Vec<Category>> {
         category::handlers::search_category(search)
             .await
@@ -252,7 +289,7 @@ impl QueryRoot {
     }
 
     // Order
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_order(context: &Context, mut search: SearchOrder) -> FieldResult<Vec<Order>> {
         if !context.is_admin() {
             let uid = require_jwt(context)?.to_string();
@@ -270,7 +307,7 @@ impl QueryRoot {
     }
 
     /// Aggregated order/revenue/customer stats for the admin dashboard (admin-only).
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn order_stats(context: &Context, input: GetOrderStatsInput) -> FieldResult<OrderStats> {
         require_admin(context)?;
         orders::handlers::get_order_stats(input)
@@ -278,7 +315,7 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn get_order_invoice_download(
         context: &Context,
         order_id: String,
@@ -299,7 +336,7 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn estimate_checkout_shipping(
         context: &Context,
         input: EstimateCheckoutShippingInput,
@@ -311,7 +348,7 @@ impl QueryRoot {
     }
 
     // Wishlist
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_wishlist_item(
         context: &Context,
         mut search: SearchWishlistItem,
@@ -332,7 +369,7 @@ impl QueryRoot {
     }
 
     // PaymentIntents
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn get_payment_intent(
         context: &Context,
         input: GetPaymentIntent,
@@ -394,8 +431,22 @@ impl QueryRoot {
         }
     }
 
+    /// Admin-only: unlike getPaymentIntent (a single record by known id), this is a real
+    /// filtered/paginated browse so admin can find a payment intent without already knowing
+    /// its intent/order id.
+    #[instrument(skip_all, err(Debug))]
+    async fn search_payment_intent(
+        context: &Context,
+        input: SearchPaymentIntent,
+    ) -> FieldResult<Vec<PaymentIntent>> {
+        require_admin(context)?;
+        payment_intents::handlers::search_payment_intent(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Shipments
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn get_shipment(context: &Context, input: GetShipment) -> FieldResult<Vec<Shipment>> {
         if let Some(order_id) = input.order_id.as_deref() {
             ensure_customer_can_access_order(context, order_id).await?;
@@ -411,7 +462,7 @@ impl QueryRoot {
     }
 
     // Coupons
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn validate_coupon(context: &Context, input: ValidateCoupon) -> FieldResult<Vec<Coupon>> {
         let _ = require_customer_actor(context)?;
         coupons::handlers::validate_coupon(input)
@@ -419,16 +470,47 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    /// Currently-usable coupons (active, in date window, not exhausted) for a "available offers"
+    /// list — so customers aren't limited to codes they already know from elsewhere.
+    #[instrument(skip_all, err(Debug))]
+    async fn list_active_coupons(context: &Context) -> FieldResult<Vec<PublicCoupon>> {
+        let _ = require_customer_actor(context)?;
+        coupons::handlers::list_active_coupons()
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin: list/search coupons.
+    #[instrument(skip_all, err(Debug))]
+    async fn search_coupon_admin(
+        context: &Context,
+        input: SearchCouponAdminInput,
+    ) -> FieldResult<Vec<CouponAdmin>> {
+        require_admin(context)?;
+        coupons::handlers::search_coupon_admin(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Reviews
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_review(input: SearchReview) -> FieldResult<Vec<Review>> {
         reviews::handlers::search_review(input)
             .await
             .map_err(|e| e.into_field_error())
     }
 
+    /// Server-computed star rating aggregate for a product (ceil-rounded average + count).
+    /// Public, same as search_review — no auth required to view a product's rating.
+    #[instrument(skip_all, err(Debug))]
+    async fn product_rating_summary(product_id: String) -> FieldResult<ProductRatingSummary> {
+        reviews::handlers::get_product_rating_summary(product_id)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Inventory
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_inventory_item(
         context: &Context,
         input: SearchInventoryItem,
@@ -440,7 +522,7 @@ impl QueryRoot {
     }
 
     // Inventory logs
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_inventory_log(
         context: &Context,
         input: SearchInventoryLogInput,
@@ -452,7 +534,7 @@ impl QueryRoot {
     }
 
     // Product Images — R2 presigned upload
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn get_presigned_upload_url(
         context: &Context,
         input: GetPresignedUploadUrl,
@@ -464,7 +546,7 @@ impl QueryRoot {
     }
 
     // Order Events
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn get_order_events(context: &Context, order_id: String) -> FieldResult<Vec<OrderEvent>> {
         ensure_customer_can_access_order(context, order_id.as_str()).await?;
         order_events::handlers::get_order_events(order_id)
@@ -473,7 +555,7 @@ impl QueryRoot {
     }
 
     // Refunds
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn get_refunds(context: &Context, input: GetRefund) -> FieldResult<Vec<Refund>> {
         if let Some(order_id) = input.order_id.as_deref() {
             ensure_customer_can_access_order(context, order_id).await?;
@@ -488,7 +570,21 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
-    #[instrument(err, ret)]
+    /// Admin-only visibility into in-flight refund attempts — the row
+    /// `resolveRefundAttemptNeedsReview` acts on. Without this there was no way to discover
+    /// which attempt_ids exist or are stuck in `needs_review` from the admin UI.
+    #[instrument(skip_all, err(Debug))]
+    async fn search_refund_attempts(
+        context: &Context,
+        input: SearchRefundAttemptsInput,
+    ) -> FieldResult<Vec<RefundAttempt>> {
+        require_admin(context)?;
+        refunds::handlers::search_refund_attempts(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    #[instrument(skip_all, err(Debug))]
     async fn search_return_requests(
         context: &Context,
         mut input: SearchReturnRequestsInput,
@@ -512,8 +608,32 @@ impl QueryRoot {
             .map_err(|e| e.into_field_error())
     }
 
+    #[instrument(skip_all, err(Debug))]
+    async fn search_exchange_requests(
+        context: &Context,
+        mut input: SearchExchangeRequestsInput,
+    ) -> FieldResult<Vec<ExchangeRequest>> {
+        if !context.is_admin() {
+            let uid = require_customer_actor(context)?.to_string();
+            if input.user_id.as_deref().is_some_and(|v| v != uid) {
+                return Err(juniper::FieldError::new(
+                    "Customers can only query their own exchanges",
+                    juniper::Value::null(),
+                ));
+            }
+            input.user_id = Some(uid);
+            if let Some(order_id) = input.order_id.as_deref() {
+                ensure_customer_can_access_order(context, order_id).await?;
+            }
+        }
+
+        exchanges::handlers::search_exchange_requests(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // Order Events search (admin audit log)
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_order_events(
         context: &Context,
         order_id: Option<String>,
@@ -541,7 +661,7 @@ impl QueryRoot {
     }
 
     // Shipping methods
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_shipping_method(
         input: SearchShippingMethod,
     ) -> FieldResult<Vec<ShippingMethod>> {
@@ -551,7 +671,7 @@ impl QueryRoot {
     }
 
     // Shipping addresses
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn get_shipping_addresses(context: &Context) -> FieldResult<Vec<ShippingAddress>> {
         let uid = require_jwt(context)?.to_string();
         let rows = shipping_addresses::handlers::get_shipping_addresses()
@@ -567,8 +687,17 @@ impl QueryRoot {
             .collect())
     }
 
+    /// Admin: the abandoned-cart worker's live schedule (backed by AppSettings, not env vars).
+    #[instrument(skip_all, err(Debug))]
+    async fn abandoned_cart_settings(context: &Context) -> FieldResult<AbandonedCartSettings> {
+        require_admin(context)?;
+        app_settings::handlers::abandoned_cart_settings()
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
     // P2 Data retention: export current user's PII (no password)
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn export_my_pii(context: &Context) -> FieldResult<UserPiiExport> {
         user_pii::handlers::export_my_pii(context)
             .await
@@ -576,10 +705,23 @@ impl QueryRoot {
     }
 
     // Users (admin/user lookup)
-    #[instrument(err, ret)]
+    #[instrument(skip_all, err(Debug))]
     async fn search_user(context: &Context, input: SearchUserInput) -> FieldResult<Vec<User>> {
         require_admin(context)?;
         users::handlers::search_user(input)
+            .await
+            .map_err(|e| e.into_field_error())
+    }
+
+    /// Admin lookup of another customer's PII by id — the admin-facing counterpart to
+    /// `exportMyPii`, which is deliberately self-scoped and can't be reused for this.
+    #[instrument(skip_all, err(Debug))]
+    async fn admin_export_user_pii(
+        context: &Context,
+        user_id: String,
+    ) -> FieldResult<UserPiiExport> {
+        require_admin(context)?;
+        user_pii::handlers::admin_export_user_pii(context, user_id)
             .await
             .map_err(|e| e.into_field_error())
     }

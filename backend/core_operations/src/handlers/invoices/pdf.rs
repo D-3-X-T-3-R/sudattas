@@ -447,7 +447,7 @@ fn render_header(
 
     let mut right = LinearLayout::vertical();
     right.push(
-        Paragraph::new("TAX INVOICE")
+        Paragraph::new("INVOICE")
             .aligned(Alignment::Right)
             .styled(styles.title()),
     );
@@ -928,8 +928,8 @@ India
         let normalized = normalize_ws(&text);
 
         assert!(
-            normalized.contains("TAX INVOICE"),
-            "missing phrase TAX INVOICE in extracted text: {normalized}"
+            normalized.contains("INVOICE"),
+            "missing phrase INVOICE in extracted text: {normalized}"
         );
         assert!(
             normalized.contains("Invoice Number"),

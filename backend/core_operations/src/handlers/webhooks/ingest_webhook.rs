@@ -1,29 +1,102 @@
 use crate::cancellation_saga;
 use crate::handlers::db_errors::map_db_error_to_status;
-use crate::handlers::order_events::create_order_event;
-use crate::handlers::payment_intents::capture_payment;
-use crate::handlers::payment_intents::finalize_order_paid;
-use crate::handlers::refunds::create_refund;
+
 use crate::handlers::shipments::{ensure_local_order_cancelled, update_cancelability_from_webhook};
 use crate::order_state_machine;
 use chrono::{DateTime, Duration, Utc};
-use core_db_entities::entity::sea_orm_active_enums::{PaymentStatus, Status};
+use core_db_entities::entity::payment_intents;
+use core_db_entities::entity::sea_orm_active_enums::Status;
 use core_db_entities::entity::webhook_events;
-use core_db_entities::entity::{orders, payment_intents, refunds};
 use hmac::{Hmac, Mac};
-use proto::proto::core::{
-    CapturePaymentRequest, CreateOrderEventRequest, CreateRefundRequest, IngestWebhookRequest,
-    WebhookEventResponse, WebhookEventsResponse,
-};
+use proto::proto::core::{IngestWebhookRequest, WebhookEventResponse, WebhookEventsResponse};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend,
-    EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, Statement,
+    EntityTrait, IntoActiveModel, QueryFilter, QuerySelect, Statement, TransactionTrait,
 };
 use sha2::Sha256;
 use std::time::Instant;
 use subtle::ConstantTimeEq;
 use tonic::{Request, Response, Status as TonicStatus};
 use tracing::{info, warn};
+
+async fn persist_verified_body(
+    txn: &DatabaseTransaction,
+    event: &webhook_events::Model,
+    req: &IngestWebhookRequest,
+) -> Result<(), TonicStatus> {
+    if !event_identity_matches(event, req) {
+        return Err(TonicStatus::already_exists("Webhook identity conflict"));
+    }
+    let hash = crate::handlers::idempotency::compute_request_hash(&req.payload_json);
+    txn.execute(Statement::from_sql_and_values(DbBackend::MySql,
+        "INSERT INTO WebhookVerificationV2(event_id,raw_body,body_sha256,verified_at) VALUES (?,?,?,UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE event_id=event_id",
+        [event.event_id.into(),req.payload_json.clone().into(),hash.clone().into()])).await.map_err(map_db_error_to_status)?;
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "SELECT body_sha256 FROM WebhookVerificationV2 WHERE event_id=? FOR UPDATE",
+            [event.event_id.into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| TonicStatus::internal("Webhook provenance missing"))?;
+    let saved: String = row
+        .try_get("", "body_sha256")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    if saved != hash {
+        return Err(TonicStatus::already_exists(
+            "Webhook ID reused with different raw body",
+        ));
+    }
+    Ok(())
+}
+
+async fn apply_atomic(
+    txn: &DatabaseTransaction,
+    req: &IngestWebhookRequest,
+    payload: &serde_json::Value,
+    verified: bool,
+    event_id: i64,
+) -> Result<Status, TonicStatus> {
+    if !verified {
+        return Err(TonicStatus::permission_denied("Unverified webhook"));
+    }
+    let row = txn
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "SELECT attempts,exhausted FROM WebhookVerificationV2 WHERE event_id=? FOR UPDATE",
+            [event_id.into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| TonicStatus::permission_denied("No verification provenance"))?;
+    let attempts: i32 = row
+        .try_get("", "attempts")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    if attempts >= 5 {
+        txn.execute(Statement::from_sql_and_values(DbBackend::MySql,
+            "UPDATE WebhookVerificationV2 SET exhausted=TRUE,last_error='retry budget exhausted; operator review required' WHERE event_id=?",
+            [event_id.into()])).await.map_err(map_db_error_to_status)?;
+        tracing::error!(
+            event_id,
+            "webhook retry exhausted; operator reconciliation required"
+        );
+        return Ok(Status::NeedsReview);
+    }
+    txn.execute(Statement::from_sql_and_values(DbBackend::MySql,
+        "UPDATE WebhookVerificationV2 SET attempts=attempts+1,next_attempt_at=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 60 SECOND) WHERE event_id=?",
+        [event_id.into()])).await.map_err(map_db_error_to_status)?;
+    // Inbox/provenance are outside this savepoint. A failed business operation
+    // cannot commit its intent/order/invoice/ledger writes with a Failed inbox row.
+    let business = txn.begin().await.map_err(map_db_error_to_status)?;
+    let status = process_webhook_payload(&business, req, payload, true).await;
+    if status == Status::Processed {
+        business.commit().await.map_err(map_db_error_to_status)?;
+    } else {
+        business.rollback().await.map_err(map_db_error_to_status)?;
+    }
+    Ok(status)
+}
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -363,7 +436,8 @@ async fn handle_existing_webhook(
     }
 
     let replay_payload = choose_replay_payload(&existing, incoming_payload);
-    let replay_status = process_webhook_payload(txn, req, &replay_payload, verified).await;
+    let replay_status =
+        apply_atomic(txn, req, &replay_payload, verified, existing.event_id).await?;
     finalize_webhook_row(txn, existing, &replay_payload, replay_status).await
 }
 
@@ -371,23 +445,66 @@ pub async fn replay_webhook_by_id(
     txn: &DatabaseTransaction,
     webhook_id: &str,
 ) -> Result<Response<WebhookEventsResponse>, TonicStatus> {
-    let Some(existing) = webhook_events::Entity::find()
+    let mut rows = webhook_events::Entity::find()
         .filter(webhook_events::Column::WebhookId.eq(webhook_id))
+        .lock(sea_orm::sea_query::LockType::Update)
+        .all(txn)
+        .await
+        .map_err(map_db_error_to_status)?;
+    if rows.len() != 1 {
+        return Err(TonicStatus::failed_precondition(
+            "Webhook ID missing or ambiguous; use internal event ID",
+        ));
+    }
+    replay_verified_row(txn, rows.remove(0)).await
+}
+
+pub async fn replay_verified_event_by_id(
+    txn: &DatabaseTransaction,
+    event_id: i64,
+) -> Result<Response<WebhookEventsResponse>, TonicStatus> {
+    let existing = webhook_events::Entity::find_by_id(event_id)
+        .lock(sea_orm::sea_query::LockType::Update)
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
-    else {
-        return Err(TonicStatus::not_found(format!(
-            "Webhook {} not found",
-            webhook_id
-        )));
-    };
+        .ok_or_else(|| TonicStatus::not_found("Webhook event missing"))?;
+    replay_verified_row(txn, existing).await
+}
 
+async fn replay_verified_row(
+    txn: &DatabaseTransaction,
+    existing: webhook_events::Model,
+) -> Result<Response<WebhookEventsResponse>, TonicStatus> {
+    let proof = txn
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::MySql,
+            "SELECT raw_body,body_sha256 FROM WebhookVerificationV2 WHERE event_id=? FOR UPDATE",
+            [existing.event_id.into()],
+        ))
+        .await
+        .map_err(map_db_error_to_status)?
+        .ok_or_else(|| {
+            TonicStatus::permission_denied(
+                "Legacy or unverified event cannot be replayed; obtain an authenticated redelivery",
+            )
+        })?;
+    let raw: String = proof
+        .try_get("", "raw_body")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    let hash: String = proof
+        .try_get("", "body_sha256")
+        .map_err(|e| TonicStatus::internal(e.to_string()))?;
+    if crate::handlers::idempotency::compute_request_hash(&raw) != hash {
+        return Err(TonicStatus::permission_denied(
+            "Webhook provenance corrupted",
+        ));
+    }
     let req = IngestWebhookRequest {
         provider: existing.provider.clone(),
         event_type: existing.event_type.clone(),
         webhook_id: existing.webhook_id.clone(),
-        payload_json: existing.payload.to_string(),
+        payload_json: raw,
         signature_verified: true,
         provider_event_id: existing.provider_event_id.clone(),
         raw_signature: None,
@@ -432,15 +549,29 @@ pub async fn ingest_webhook(
     let stale_before = Utc::now() - Duration::minutes(reclaim_timeout_minutes);
     let payload_json = parse_payload_or_null(&req.payload_json);
     let verified = resolve_effective_verified(&req, false);
+    if !verified {
+        return Err(TonicStatus::permission_denied("Webhook signature rejected"));
+    }
+    if payload_json.is_null() {
+        return Err(TonicStatus::invalid_argument("Invalid webhook JSON"));
+    }
+    if req.provider == "razorpay" && payload_json["event"].as_str() != Some(req.event_type.as_str())
+    {
+        return Err(TonicStatus::invalid_argument(
+            "Webhook event type does not match signed body",
+        ));
+    }
 
     // Idempotency + replay by webhook_id.
     if let Some(existing) = webhook_events::Entity::find()
         .filter(webhook_events::Column::Provider.eq(&req.provider))
         .filter(webhook_events::Column::WebhookId.eq(&req.webhook_id))
+        .lock(sea_orm::sea_query::LockType::Update)
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
     {
+        persist_verified_body(txn, &existing, &req).await?;
         let updated = handle_existing_webhook(
             txn,
             &req,
@@ -468,10 +599,12 @@ pub async fn ingest_webhook(
     if let Some(peid) = normalize_provider_event_id(req.provider_event_id.as_deref()) {
         if let Some(existing) = webhook_events::Entity::find()
             .filter(webhook_events::Column::ProviderEventId.eq(peid.as_str()))
+            .lock(sea_orm::sea_query::LockType::Update)
             .one(txn)
             .await
             .map_err(map_db_error_to_status)?
         {
+            persist_verified_body(txn, &existing, &req).await?;
             let updated = handle_existing_webhook(
                 txn,
                 &req,
@@ -512,7 +645,8 @@ pub async fn ingest_webhook(
 
     let inserted = event.insert(txn).await.map_err(map_db_error_to_status)?;
 
-    let new_status = process_webhook_payload(txn, &req, &payload_json, verified).await;
+    persist_verified_body(txn, &inserted, &req).await?;
+    let new_status = apply_atomic(txn, &req, &payload_json, verified, inserted.event_id).await?;
     let updated = finalize_webhook_row(txn, inserted, &payload_json, new_status).await?;
 
     let duration_sec = started.elapsed().as_secs_f64();
@@ -540,201 +674,20 @@ async fn process_payment_captured(
     payload: &serde_json::Value,
 ) -> Result<(), TonicStatus> {
     let entity = &payload["payload"]["payment"]["entity"];
-    let payment_id = entity["id"]
-        .as_str()
-        .ok_or_else(|| TonicStatus::invalid_argument("Missing payment id in webhook payload"))?;
-
-    // Razorpay: amount is in smallest currency unit (paise for INR).
-    let webhook_amount_paise: i64 = entity["amount"].as_i64().unwrap_or(0);
-    let webhook_currency: String = entity["currency"].as_str().unwrap_or("").to_uppercase();
-
-    let razorpay_order_id = entity["order_id"].as_str().unwrap_or("");
-
-    let intent = payment_intents::Entity::find()
-        .filter(payment_intents::Column::RazorpayOrderId.eq(razorpay_order_id))
-        .one(txn)
-        .await
-        .map_err(|e| TonicStatus::internal(e.to_string()))?
-        .ok_or_else(|| {
-            TonicStatus::not_found(format!(
-                "No payment intent found for razorpay_order_id={}",
-                razorpay_order_id
-            ))
-        })?;
-
-    info!(
-        webhook_payment_id = %payment_id,
-        razorpay_order_id = %razorpay_order_id,
-        payment_intent_id = intent.intent_id,
-        "process_payment_captured resolved payment_intent for webhook"
-    );
-
-    if matches!(intent.status, Status::Failed) {
-        warn!(
-            payment_intent_id = intent.intent_id,
-            webhook_payment_id = %payment_id,
-            "payment.captured received for failed/expired intent; marking needs_review"
-        );
-        txn.execute(Statement::from_sql_and_values(
-            DbBackend::MySql,
-            "UPDATE PaymentIntents SET status = 'needs_review' WHERE intent_id = ?",
-            [intent.intent_id.into()],
-        ))
-        .await
-        .map_err(map_db_error_to_status)?;
-        if let Some(order_id) = intent.order_id {
-            let _ = create_order_event(
-                txn,
-                Request::new(CreateOrderEventRequest {
-                    order_id,
-                    event_type: "late_payment_capture_needs_review".to_string(),
-                    from_status: None,
-                    to_status: Some("needs_review".to_string()),
-                    actor_type: "system".to_string(),
-                    message: Some(
-                        "Captured payment arrived after system expiry; manual review required"
-                            .to_string(),
-                    ),
-                }),
-            )
-            .await;
-        }
-        return Ok(());
+    if entity["status"].as_str() != Some("captured") || entity["captured"].as_bool() != Some(true) {
+        return Err(TonicStatus::failed_precondition(
+            "Captured payment evidence is incomplete or contradictory",
+        ));
     }
-
-    // Phase 5: Verify amount and currency before treating as paid.
-    let intent_paise = intent.amount_paise as i64;
-    let order = match intent.order_id {
-        Some(oid) => Some(
-            orders::Entity::find_by_id(oid)
-                .one(txn)
-                .await
-                .map_err(map_db_error_to_status)?
-                .ok_or_else(|| {
-                    TonicStatus::not_found(format!(
-                        "Order {} referenced by payment intent {} was not found",
-                        oid, intent.intent_id
-                    ))
-                })?,
-        ),
-        None => None,
-    };
-    let order_grand_paise: Option<i64> = order.as_ref().map(|o| o.grand_total_minor);
-    let intent_currency = intent.currency.as_deref().unwrap_or("").to_uppercase();
-
-    if let Some(order_row) = order.as_ref() {
-        let status_name = order_state_machine::get_status_name(txn, order_row.status_id)
-            .await?
-            .unwrap_or_default();
-        if status_name.eq_ignore_ascii_case("cancelled")
-            || status_name.eq_ignore_ascii_case("refunded")
-        {
-            warn!(
-                order_id = order_row.order_id,
-                order_status = %status_name,
-                payment_intent_id = intent.intent_id,
-                webhook_payment_id = %payment_id,
-                "payment.captured arrived for terminal order; marking payment intent needs_review"
-            );
-            txn.execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                "UPDATE PaymentIntents SET status = 'needs_review' WHERE intent_id = ?",
-                [intent.intent_id.into()],
-            ))
-            .await
-            .map_err(map_db_error_to_status)?;
-            let _ = create_order_event(
-                txn,
-                Request::new(CreateOrderEventRequest {
-                    order_id: order_row.order_id,
-                    event_type: "late_payment_capture_needs_review".to_string(),
-                    from_status: Some(status_name),
-                    to_status: Some("needs_review".to_string()),
-                    actor_type: "system".to_string(),
-                    message: Some(
-                        "Captured payment arrived after order reached terminal state; manual review required"
-                            .to_string(),
-                    ),
-                }),
-            )
-            .await;
-            return Ok(());
-        }
-    }
-
-    // When intent has no order, verify only webhook vs intent; when it has an order, require order grand total to match too.
-    let amount_ok =
-        webhook_amount_paise == intent_paise && order_grand_paise.is_none_or(|g| g == intent_paise);
-    let currency_ok = !webhook_currency.is_empty() && webhook_currency == intent_currency;
-
-    if !amount_ok || !currency_ok {
-        crate::observability::record_payment_mismatch_total();
-        warn!(
-            payment_intent_id = intent.intent_id,
-            webhook_amount_paise = webhook_amount_paise,
-            intent_paise = intent_paise,
-            order_grand_paise = ?order_grand_paise,
-            webhook_currency = %webhook_currency,
-            intent_currency = %intent_currency,
-            "payment.captured amount/currency mismatch - marking as needs_review"
-        );
-        let update_result = txn
-            .execute(Statement::from_sql_and_values(
-                DbBackend::MySql,
-                "UPDATE PaymentIntents SET status = 'needs_review' WHERE intent_id = ?",
-                [intent.intent_id.into()],
-            ))
-            .await
-            .map_err(map_db_error_to_status)?;
-        if update_result.rows_affected() != 1 {
-            return Err(TonicStatus::internal(format!(
-                "expected to mark exactly one PaymentIntent as needs_review, updated {} rows",
-                update_result.rows_affected()
-            )));
-        }
-        if let Some(order_id) = intent.order_id {
-            if let Err(e) = order_state_machine::transition_order_status(
-                txn,
-                order_id,
-                order_state_machine::OrderState::NeedsReview,
-                "payment_mismatch",
-                "system",
-                Some("Amount/currency mismatch - needs review"),
-                Some(PaymentStatus::NeedsReview),
-            )
-            .await
-            {
-                if e.code() != tonic::Code::InvalidArgument {
-                    return Err(e);
-                }
-            }
-        }
-        return Ok(());
-    }
-
-    capture_payment(
+    crate::handlers::payment_intents::capture_evidence::apply_captured_evidence(
         txn,
-        tonic::Request::new(CapturePaymentRequest {
-            intent_id: intent.intent_id,
-            razorpay_payment_id: payment_id.to_string(),
-        }),
+        entity["order_id"].as_str().unwrap_or(""),
+        entity["id"].as_str().unwrap_or(""),
+        entity["amount"].as_i64().unwrap_or(0),
+        entity["currency"].as_str().unwrap_or(""),
     )
-    .await?;
-
-    if let Some(order_id) = intent.order_id {
-        finalize_order_paid(
-            txn,
-            order_id,
-            "payment_captured",
-            "system",
-            "Payment captured",
-        )
-        .await?;
-    }
-
-    Ok(())
+    .await
 }
-
 async fn process_shiprocket_shipment_updates(
     txn: &DatabaseTransaction,
     payload: &serde_json::Value,
@@ -863,226 +816,49 @@ async fn process_razorpay_refund_updates(
     payload: &serde_json::Value,
     event_type: &str,
 ) -> Result<(), TonicStatus> {
-    let refund_entity = payload
-        .get("payload")
-        .and_then(|p| p.get("refund"))
-        .and_then(|r| r.get("entity"));
-
-    let payment_entity = payload
-        .get("payload")
-        .and_then(|p| p.get("payment"))
-        .and_then(|r| r.get("entity"));
-
-    let payment_id = refund_entity
-        .and_then(|x| x.get("payment_id"))
-        .and_then(|x| x.as_str())
-        .or_else(|| {
-            payment_entity
-                .and_then(|x| x.get("id"))
-                .and_then(|x| x.as_str())
-        })
-        .unwrap_or("")
-        .trim()
-        .to_string();
-
-    if payment_id.is_empty() {
-        warn!(event_type, "razorpay refund webhook missing payment id");
-        return Ok(());
-    }
-
-    let gateway_refund_id = refund_entity
-        .and_then(|x| x.get("id"))
-        .and_then(|x| x.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-
-    if gateway_refund_id.is_empty() {
-        warn!(
-            payment_id = %payment_id,
-            event_type,
-            "razorpay refund webhook missing refund id"
-        );
-        return Ok(());
-    }
-
-    let amount_paise = refund_entity
-        .and_then(|x| x.get("amount"))
-        .and_then(|x| x.as_i64())
-        .unwrap_or(0)
-        .max(0);
-    if amount_paise <= 0 {
-        warn!(
-            payment_id = %payment_id,
-            gateway_refund_id = %gateway_refund_id,
-            event_type,
-            "razorpay refund webhook has non-positive refund amount"
-        );
-        return Ok(());
-    }
-
-    let currency = refund_entity
-        .and_then(|x| x.get("currency"))
-        .and_then(|x| x.as_str())
-        .map(|s| s.trim().to_uppercase())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "INR".to_string());
-
-    let status_hint = refund_entity
-        .and_then(|x| x.get("status"))
-        .and_then(|x| x.as_str())
-        .map(|s| s.trim().to_lowercase())
-        .unwrap_or_else(|| event_type.trim().to_lowercase());
-    let refund_status = map_refund_status(&status_hint);
-    info!(
-        event_type,
-        payment_id = %payment_id,
-        gateway_refund_id = %gateway_refund_id,
-        amount_paise,
-        currency = %currency,
-        mapped_refund_status = ?refund_status,
-        "razorpay refund webhook parsed"
-    );
-
-    let Some(intent) = payment_intents::Entity::find()
-        .filter(payment_intents::Column::RazorpayPaymentId.eq(&payment_id))
-        .order_by_desc(payment_intents::Column::IntentId)
+    let r = &payload["payload"]["refund"]["entity"];
+    let payment = r["payment_id"]
+        .as_str()
+        .ok_or_else(|| TonicStatus::failed_precondition("Refund has no payment association"))?;
+    let id = r["id"]
+        .as_str()
+        .ok_or_else(|| TonicStatus::failed_precondition("Refund ID missing"))?;
+    let amount = r["amount"]
+        .as_i64()
+        .ok_or_else(|| TonicStatus::failed_precondition("Refund amount missing"))?;
+    let currency = r["currency"]
+        .as_str()
+        .ok_or_else(|| TonicStatus::failed_precondition("Refund currency missing"))?;
+    let status = r["status"].as_str().unwrap_or(match event_type {
+        "refund.processed" => "processed",
+        "refund.failed" => "failed",
+        "refund.created" => "pending",
+        _ => "unknown",
+    });
+    let intent = payment_intents::Entity::find()
+        .filter(payment_intents::Column::RazorpayPaymentId.eq(payment))
         .one(txn)
         .await
         .map_err(map_db_error_to_status)?
-    else {
-        warn!(
-            payment_id = %payment_id,
-            gateway_refund_id = %gateway_refund_id,
-            "razorpay refund webhook: no payment intent found"
-        );
-        return Ok(());
-    };
-
-    let Some(order_id) = intent.order_id else {
-        warn!(
-            payment_id = %payment_id,
-            gateway_refund_id = %gateway_refund_id,
-            "razorpay refund webhook: payment intent has no order_id"
-        );
-        return Ok(());
-    };
-    info!(
-        order_id,
-        payment_intent_id = intent.intent_id,
-        payment_id = %payment_id,
-        gateway_refund_id = %gateway_refund_id,
-        "razorpay refund webhook resolved order"
-    );
-
-    if refund_status == Status::Processed {
-        // Reuse existing idempotent refund handler for persistence + auto transition to refunded.
-        create_refund(
-            txn,
-            Request::new(CreateRefundRequest {
-                order_id,
-                gateway_refund_id: gateway_refund_id.clone(),
-                amount_paise,
-                currency: Some(currency),
-                line_items_refunded_json: None,
-            }),
-        )
+        .ok_or_else(|| {
+            TonicStatus::failed_precondition("Refund payment missing; reconciliation required")
+        })?;
+    let order = intent
+        .order_id
+        .ok_or_else(|| TonicStatus::failed_precondition("Refund internal order missing"))?;
+    crate::handlers::refunds::evidence::apply(txn, order, payment, id, amount, currency, status)
         .await?;
-        info!(
-            order_id,
-            gateway_refund_id = %gateway_refund_id,
-            amount_paise,
-            "razorpay refund processed: refund recorded and order updated"
-        );
-        return Ok(());
-    }
-
-    // For pending/failed updates, upsert Refunds row and attach timeline events.
-    upsert_refund_row(
-        txn,
-        order_id,
-        &gateway_refund_id,
-        amount_paise,
-        &currency,
-        refund_status.clone(),
-    )
-    .await?;
-
-    let (evt, msg) = if refund_status == Status::Failed {
-        ("refund_failed", "Refund failed at payment gateway")
-    } else {
-        (
-            "refund_initiated",
-            "Refund initiated; awaiting gateway confirmation",
-        )
-    };
-    let _ = create_order_event(
-        txn,
-        Request::new(CreateOrderEventRequest {
-            order_id,
-            event_type: evt.to_string(),
-            from_status: None,
-            to_status: None,
-            actor_type: "system".to_string(),
-            message: Some(msg.to_string()),
-        }),
-    )
-    .await;
-    info!(
-        order_id,
-        gateway_refund_id = %gateway_refund_id,
-        refund_status = ?refund_status,
-        "razorpay refund update recorded on order timeline"
-    );
-
     Ok(())
 }
-
+#[cfg(test)]
 fn map_refund_status(raw: &str) -> Status {
-    let s = raw.trim().to_lowercase();
-    if s.contains("fail") {
-        Status::Failed
-    } else if s.contains("process") || s == "refund.processed" || s == "payment.refunded" {
-        Status::Processed
-    } else {
-        Status::Pending
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "processed" | "refund.processed" | "payment.refunded" => Status::Processed,
+        "failed" | "refund.failed" => Status::Failed,
+        "pending" | "refund.created" => Status::Pending,
+        _ => Status::NeedsReview,
     }
 }
-
-async fn upsert_refund_row(
-    txn: &DatabaseTransaction,
-    order_id: i64,
-    gateway_refund_id: &str,
-    amount_paise: i64,
-    currency: &str,
-    status: Status,
-) -> Result<(), TonicStatus> {
-    if let Some(existing) = refunds::Entity::find()
-        .filter(refunds::Column::GatewayRefundId.eq(gateway_refund_id))
-        .one(txn)
-        .await
-        .map_err(map_db_error_to_status)?
-    {
-        let mut active = existing.into_active_model();
-        active.status = ActiveValue::Set(Some(status));
-        active.update(txn).await.map_err(map_db_error_to_status)?;
-        return Ok(());
-    }
-
-    let row = refunds::ActiveModel {
-        refund_id: ActiveValue::NotSet,
-        order_id: ActiveValue::Set(order_id),
-        gateway_refund_id: ActiveValue::Set(gateway_refund_id.to_string()),
-        amount_paise: ActiveValue::Set((amount_paise.max(0).min(i32::MAX as i64)) as i32),
-        currency: ActiveValue::Set(Some(currency.to_string())),
-        status: ActiveValue::Set(Some(status)),
-        line_items_refunded: ActiveValue::Set(None),
-        created_at: ActiveValue::Set(Some(Utc::now())),
-    };
-    row.insert(txn).await.map_err(map_db_error_to_status)?;
-    Ok(())
-}
-
 async fn auto_transition_order_to_cancelled(
     txn: &DatabaseTransaction,
     order_id: i64,

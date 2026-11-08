@@ -44,7 +44,7 @@ export function JournalPageContent() {
         </p>
       </div>
 
-      <div className="mt-16 flex flex-col gap-16 md:mt-24 md:gap-28">
+      <div className="mt-16 flex flex-col gap-16 overflow-x-clip md:mt-24 md:gap-28">
         {CHAPTERS.map((chapter, i) => {
           const reverse = i % 2 === 1;
           return (

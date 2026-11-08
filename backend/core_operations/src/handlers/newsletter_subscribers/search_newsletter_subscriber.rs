@@ -25,6 +25,10 @@ pub async fn search_newsletter_subscriber(
                     subscriber_id: m.subscriber_id,
                     email: m.email,
                     subscription_date: m.subscription_date.to_rfc3339(),
+                    unsubscribed_at: m
+                        .unsubscribed_at
+                        .map(|v| v.to_rfc3339())
+                        .unwrap_or_default(),
                 })
                 .collect();
             Ok(Response::new(NewsletterSubscribersResponse { items }))

@@ -35,7 +35,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
   return (
-    <SessionProvider>
+    // refetchInterval is in seconds (NextAuth multiplies internally); 300s = 5 minutes, matching
+    // auth.ts's ADMIN_RECHECK_INTERVAL_MS cadence. Without this, a long-lived open tab never
+    // re-syncs a refreshed token into authStore (via StorefrontAuthSync/useSession), so
+    // graphqlClient.ts's Bearer-token calls can keep presenting a stale, backend-rejected token.
+    <SessionProvider refetchInterval={300}>
       {adminRoute ? null : <StorefrontAuthSync />}
       <QueryClientProvider client={queryClient}>
         <LiveAnnouncerProvider>

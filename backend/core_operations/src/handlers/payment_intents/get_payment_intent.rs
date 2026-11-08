@@ -42,6 +42,8 @@ pub async fn get_payment_intent(
             created_at: model.created_at.map(|t| t.to_string()).unwrap_or_default(),
             expires_at: model.expires_at.to_string(),
             razorpay_key_id: key_id.clone(),
+            gateway_fee_paise: model.gateway_fee_paise.map(i64::from),
+            gateway_tax_paise: model.gateway_tax_paise.map(i64::from),
         })
         .collect();
 

@@ -21,6 +21,7 @@ fn make_address(id: i64) -> shipping_addresses::Model {
         apartment_no_or_name: Some("42".into()),
         recipient_name: Some("Test User".into()),
         phone_number: Some("+1 415 555 0101".into()),
+        is_deleted: 0,
     }
 }
 
@@ -117,6 +118,88 @@ async fn get_shipping_address_returns_all_rows() {
     assert!(result.is_ok());
     let ShippingAddressesResponse { items } = result.unwrap().into_inner();
     assert_eq!(items.len(), 2);
+}
+
+#[tokio::test]
+async fn delete_shipping_address_soft_deletes_non_default_address() {
+    use core_operations::handlers::shipping_address::delete_shipping_address;
+
+    // Non-default address: find_by_id, then the soft-delete update (exec + MySQL fetch-back
+    // query) — no reassignment branch since is_default was already 0.
+    let existing = make_address(1);
+    let mut after_delete = existing.clone();
+    after_delete.is_deleted = 1;
+    after_delete.is_default = 0;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        .append_query_results(vec![vec![existing]])
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        }])
+        .append_query_results(vec![vec![after_delete]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(DeleteShippingAddressRequest {
+        shipping_address_id: 1,
+    });
+    let result = delete_shipping_address(&txn, req).await;
+    assert!(result.is_ok(), "delete should succeed: {:?}", result.err());
+    let ShippingAddressesResponse { items } = result.unwrap().into_inner();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].shipping_address_id, 1);
+
+    // The naive hard-delete this replaced would have failed here with a raw FK constraint
+    // error (1451) the moment any real order referenced this address — this soft-delete path
+    // never touches the Orders table at all, so it can't hit that constraint.
+}
+
+#[tokio::test]
+async fn delete_shipping_address_reassigns_default_to_next_remaining_address() {
+    use core_operations::handlers::shipping_address::delete_shipping_address;
+
+    let mut default_addr = make_address(1);
+    default_addr.is_default = 1;
+    let mut after_delete = default_addr.clone();
+    after_delete.is_deleted = 1;
+    after_delete.is_default = 0;
+
+    let mut next_default = make_address(2);
+    next_default.is_default = 0;
+    let mut promoted = next_default.clone();
+    promoted.is_default = 1;
+
+    let db = MockDatabase::new(DatabaseBackend::MySql)
+        // find_by_id(1) — the address being deleted.
+        .append_query_results(vec![vec![default_addr]])
+        // soft-delete update on address 1: exec + MySQL fetch-back query.
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        }])
+        .append_query_results(vec![vec![after_delete]])
+        // find next remaining (non-deleted) address for this user to promote.
+        .append_query_results(vec![vec![next_default.clone()]])
+        // update_many: unset is_default for the user's remaining rows.
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        }])
+        // promote address 2 to default: exec + MySQL fetch-back query.
+        .append_exec_results(vec![MockExecResult {
+            last_insert_id: 0,
+            rows_affected: 1,
+        }])
+        .append_query_results(vec![vec![promoted]])
+        .into_connection();
+    let txn = db.begin().await.expect("begin");
+
+    let req = Request::new(DeleteShippingAddressRequest {
+        shipping_address_id: 1,
+    });
+    let result = delete_shipping_address(&txn, req).await;
+    assert!(result.is_ok(), "delete should succeed: {:?}", result.err());
 }
 
 #[tokio::test]

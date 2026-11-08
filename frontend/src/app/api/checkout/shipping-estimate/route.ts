@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 
@@ -57,11 +58,11 @@ export async function POST(request: Request) {
   });
 
   if (result.errors?.length) {
-    return apiError(
-      result.errors[0]?.message ?? "Failed to estimate shipping",
-      400,
-      "GRAPHQL_ERROR"
+    const { status, message } = graphqlErrorToApiStatus(
+      result.errors,
+      "Failed to estimate shipping"
     );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   return Response.json({

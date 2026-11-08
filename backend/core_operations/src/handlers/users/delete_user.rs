@@ -1,3 +1,4 @@
+use super::user_status::{fetch_status_code_map, resolve_status_code};
 use crate::handlers::db_errors::map_db_error_to_status;
 use core_db_entities::entity::sea_orm_active_enums::AuthProvider;
 use core_db_entities::entity::users;
@@ -20,6 +21,7 @@ pub async fn delete_user(
                     AuthProvider::Google => "google",
                     AuthProvider::Email => "email",
                 };
+                let status_map = fetch_status_code_map(txn).await?;
                 Ok(Response::new(UsersResponse {
                     items: vec![UserResponse {
                         user_id: model.user_id,
@@ -37,6 +39,7 @@ pub async fn delete_user(
                         last_name: model.last_name,
                         gender: model.gender.as_ref().map(super::gender_to_string),
                         date_of_birth: model.date_of_birth.map(|d| d.to_string()),
+                        user_status: resolve_status_code(&status_map, model.user_status_id),
                     }],
                 }))
             }

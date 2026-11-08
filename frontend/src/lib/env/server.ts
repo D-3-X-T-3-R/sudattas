@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { publicEnv, storefrontSiteOrigin } from "@/lib/env/public";
+import { publicGraphqlUrl, storefrontSiteOrigin } from "@/lib/env/public";
 
 const serverEnvSchema = z.object({
   GRAPHQL_URL: z.string().url().optional(),
@@ -41,7 +41,7 @@ if (!parsed.success) {
 export const serverEnv = parsed.data;
 
 export function serverGraphqlUrl(): string {
-  return serverEnv.GRAPHQL_URL ?? publicEnv.NEXT_PUBLIC_GRAPHQL_URL;
+  return serverEnv.GRAPHQL_URL ?? publicGraphqlUrl();
 }
 
 export function graphqlBaseUrl(): string {

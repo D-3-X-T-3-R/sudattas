@@ -54,6 +54,8 @@ jobs:
 
     - name: Build
       working-directory: ./frontend
+      env:
+        NEXT_PUBLIC_GRAPHQL_URL: http://127.0.0.1:8080/v2
       run: npm run build
 
     - name: Cache Next.js build artifacts
@@ -109,6 +111,8 @@ jobs:
 
     - name: Build frontend if cache is cold
       working-directory: ./frontend
+      env:
+        NEXT_PUBLIC_GRAPHQL_URL: http://127.0.0.1:8080/v2
       run: |
         if [ ! -f .next/BUILD_ID ]; then
           npm run build

@@ -14,11 +14,11 @@ export function Footer({ goTo }: FooterProps) {
       <div className="mx-auto grid w-full max-w-[var(--container-max)] gap-10 px-[var(--gutter-mobile)] md:grid-cols-4 md:px-[var(--gutter-tablet)]">
         <div>
           <Image
-            src="/logo.png"
+            src="/hero/sudattas-logo.png"
             alt="Sudatta's"
-            width={300}
-            height={170}
-            className="h-24 w-auto md:h-28"
+            width={1413}
+            height={840}
+            className="h-32 w-auto md:h-40"
           />
           <p className="mt-5 max-w-xs text-sm leading-relaxed text-[var(--color-on-deep-muted)]">
             Handcrafted Indian occasionwear that feels timeless, elegant, and
@@ -61,7 +61,7 @@ export function Footer({ goTo }: FooterProps) {
             </li>
             <li>
               <Link href="/contact-support" className="hover:text-[var(--color-on-deep)]">
-                Styling Support
+                Support
               </Link>
             </li>
             <li>
@@ -89,12 +89,9 @@ export function Footer({ goTo }: FooterProps) {
           <Kicker tone="accent">Contact</Kicker>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-on-deep-muted)]">
             <li>Order support available from your account orders.</li>
-            <li>
-              <Link href="/contact-support" className="hover:text-[var(--color-on-deep)]">
-                Support, styling, and bulk enquiries
-              </Link>
+            <li className="break-words">
+              Email <span className="break-all">sudattasdesignerboutique@gmail.com</span> for quick assistance.
             </li>
-            <li>Email sudattasdesignerboutique@gmail.com for quick assistance.</li>
           </ul>
           <div className="mt-6 flex items-center gap-2 text-xs text-[var(--color-on-deep-muted)]">
             <span className="h-px w-5 bg-[var(--color-gold)]" />

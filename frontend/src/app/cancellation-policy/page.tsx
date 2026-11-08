@@ -4,28 +4,28 @@ export default function CancellationPolicyPage() {
   return (
     <PolicyPageShell
       eyebrow="Cancellation Policy"
-      title="Cancellation is available during eligible fulfillment stages."
-      intro="Sudatta's keeps cancellation windows aligned with payment verification and logistics progression so updates stay accurate for customers and support teams."
+      title="You can cancel your order within 12 hours of placing it."
+      intro="We keep our cancellation window simple, and your order page always shows whether cancellation is still available."
       sections={[
         {
-          heading: "When cancellation is available",
+          heading: "Cancelling within 12 hours",
           body: [
-            "Cancellation is generally available before pickup or shipment booking milestones complete for your order.",
-            "Your order detail timeline shows the latest eligibility state. If cancellation is available, use the in-account action or contact support for assistance.",
+            "You can cancel your order yourself, free of charge, within 12 hours of placing it — just use the cancel option on your order page.",
+            "Once you cancel, we stop the order before it ships and start your refund right away.",
           ],
         },
         {
-          heading: "After pickup or shipment progress",
+          heading: "After the 12-hour window",
           body: [
-            "After courier pickup or shipment progression reaches non-cancellable stages, direct cancellation may not be available.",
-            "In those cases, resolution may continue through support and courier return-to-origin or post-delivery workflows where applicable.",
+            "Once the window closes and your order is on its way, you can no longer cancel it yourself.",
+            "If you still don't want the order, you can refuse it at delivery, or contact support once it arrives — see our Returns & Exchanges page for what happens next.",
           ],
         },
         {
-          heading: "Prepaid and refund processing",
+          heading: "Refunds for prepaid orders",
           body: [
-            "For prepaid orders, refund initiation and settlement depend on payment/refund processing and provider confirmation timelines.",
-            "Refund status appears on your order updates once confirmed through the payment and order systems.",
+            "If you paid online, your refund goes back to your original payment method once your cancellation is processed.",
+            "You'll see your refund status right on your order page as soon as it's confirmed.",
           ],
         },
       ]}

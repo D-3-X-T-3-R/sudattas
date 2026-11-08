@@ -157,7 +157,7 @@ async fn claim_expired_pending_intent_ids(
                  AND os.StatusName IN ('active_sale', 'pending')
                ORDER BY pi.expires_at ASC
                LIMIT ?
-               FOR UPDATE SKIP LOCKED"#,
+               "#,
             [
                 Utc::now().into(),
                 i64::try_from(batch_limit).unwrap_or(i64::MAX).into(),
@@ -201,15 +201,28 @@ async fn system_expire_stale_unpaid_order(
         return Ok(false);
     };
 
+    // The candidate was read without a lock. Capture and callback handlers lock the order
+    // before the intent, so reload the intent under the same lock order before releasing stock.
+    let Some(current_intent) = payment_intents::Entity::find_by_id(intent.intent_id)
+        .lock(sea_orm::sea_query::LockType::Update)
+        .one(txn)
+        .await
+        .map_err(map_db_error_to_status)?
+    else {
+        return Ok(false);
+    };
+    if current_intent.order_id != Some(order_id) {
+        return Ok(false);
+    }
     let from_status_name = load_order_status_name(txn, order.status_id).await?;
-    if let Err(reason) = is_system_expiry_eligible(&order, &from_status_name, intent, now) {
+    if let Err(reason) = is_system_expiry_eligible(&order, &from_status_name, &current_intent, now)
+    {
         warn!(
             intent_id = intent.intent_id,
             order_id,
             skip_reason = reason.as_str(),
             "stale_order_expiry: skipped system expiry for expired intent"
         );
-        mark_intent_failed(txn, intent.intent_id).await?;
         return Ok(false);
     }
 
@@ -266,18 +279,23 @@ pub async fn expire_stale_pending_orders(
     stats.claimed = claimed_intent_ids.len() as u64;
     info!(
         claimed = stats.claimed,
-        "stale_order_expiry: claimed expired unpaid prepaid intents"
+        "stale_order_expiry: selected expired unpaid prepaid intent candidates"
     );
     if claimed_intent_ids.is_empty() {
         txn.commit().await.map_err(map_db_error_to_status)?;
         return Ok(0);
     }
 
-    let expired_intents = payment_intents::Entity::find()
+    let mut expired_intents = payment_intents::Entity::find()
         .filter(payment_intents::Column::IntentId.is_in(claimed_intent_ids))
         .all(&txn)
         .await
         .map_err(map_db_error_to_status)?;
+    // Process in sorted OrderID order (not DB return order, which is unspecified without an
+    // ORDER BY) so that if this batch ever overlaps with another transaction locking multiple
+    // Orders rows, the per-order `FOR UPDATE` locks taken below are always acquired in the same
+    // order, avoiding an InnoDB deadlock (error 1213).
+    expired_intents.sort_by_key(|intent| intent.order_id);
 
     for intent in expired_intents {
         match system_expire_stale_unpaid_order(&txn, &intent).await {
@@ -289,7 +307,7 @@ pub async fn expire_stale_pending_orders(
                     intent_id = intent.intent_id,
                     order_id = ?intent.order_id,
                     error = %err,
-                    "stale_order_expiry: system expiry failed for claimed intent"
+                    "stale_order_expiry: system expiry failed for candidate intent"
                 );
             }
         }

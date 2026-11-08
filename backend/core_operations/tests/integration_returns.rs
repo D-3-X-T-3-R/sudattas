@@ -24,8 +24,35 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, Database, DatabaseBackend,
     DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, Statement, TransactionTrait,
 };
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tonic::{Code, Request};
 use warp::Filter;
+
+type RefundEvidenceFixture = Arc<Mutex<HashMap<String, (String, i64)>>>;
+
+struct ScopedEnvVar {
+    key: &'static str,
+    previous: Option<String>,
+}
+
+impl ScopedEnvVar {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var(key).ok();
+        std::env::set_var(key, value);
+        Self { key, previous }
+    }
+}
+
+impl Drop for ScopedEnvVar {
+    fn drop(&mut self) {
+        if let Some(value) = &self.previous {
+            std::env::set_var(self.key, value);
+        } else {
+            std::env::remove_var(self.key);
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct OrderFixture {
@@ -37,6 +64,10 @@ struct OrderFixture {
     order_detail_qty: i64,
     line_total_minor: i64,
     variant_id: i64,
+    // Needed only for `cleanup_return_test_rows` -- see `place_order_fixture`.
+    role_id: i64,
+    category_id: i64,
+    refund_evidence: RefundEvidenceFixture,
 }
 
 async fn ensure_order_status(txn: &sea_orm::DatabaseTransaction, name: &str) -> i64 {
@@ -121,11 +152,11 @@ async fn make_order_booking_eligible(txn: &sea_orm::DatabaseTransaction, order_i
     .expect("make order booking eligible");
 }
 
-/// `place_order_fixture` always defaults to prepaid (payment_mode: None -> "prepaid" inside
-/// place_order), so it always calls Razorpay's create_order. Without real creds (e.g. in CI),
-/// that fails before the fixture can finish. Mirrors the mock pattern already established in
-/// integration_place_order_atomicity.rs and razorpay_connectivity.rs.
-async fn ensure_razorpay_mock() {
+/// Checkout must confirm Shiprocket serviceability even when shipping is free.
+/// Keep both provider calls on a local fixture before any return assertions run.
+async fn ensure_checkout_provider_mocks() -> RefundEvidenceFixture {
+    let refund_evidence: RefundEvidenceFixture = Arc::new(Mutex::new(HashMap::new()));
+    let refund_lookup = Arc::clone(&refund_evidence);
     // `payment_intents.razorpay_order_id` is unique, and every place_order call generates a
     // fresh receipt (chk_{user_id}_{timestamp_millis}); echoing it back keeps the mocked id
     // unique per call so concurrent/sequential fixtures across this shared dev DB never collide.
@@ -141,32 +172,88 @@ async fn ensure_razorpay_mock() {
                 &serde_json::json!({ "id": format!("order_itest_returns_{receipt}") }),
             )
         });
-    let (addr, server) = warp::serve(orders).bind_ephemeral(([127, 0, 0, 1], 0));
+    let login = warp::path!("v1" / "external" / "auth" / "login")
+        .and(warp::post())
+        .map(|| warp::reply::json(&serde_json::json!({ "token": "itest-returns-token" })));
+    let serviceability = warp::path!("v1" / "external" / "courier" / "serviceability")
+        .and(warp::get())
+        .map(|| {
+            warp::reply::json(&serde_json::json!({ "data": {
+            "available_courier_companies": [
+                { "courier_company_id": 777, "courier_name": "Fixture", "freight_charge": 1 }
+            ]
+        } }))
+        });
+    let refund = warp::path!("v1" / "refunds" / String)
+        .and(warp::get())
+        .map(move |id: String| {
+            let (payment_id, amount) = refund_lookup
+                .lock()
+                .unwrap()
+                .get(&id)
+                .cloned()
+                .expect("unexpected refund evidence request");
+            warp::reply::json(&serde_json::json!({
+                "id": id, "payment_id": payment_id, "amount": amount,
+                "currency": "INR", "status": "processed"
+            }))
+        });
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .expect("bind provider fake");
+    let addr = listener.local_addr().expect("provider fake address");
+    let server = warp::serve(orders.or(login).or(serviceability).or(refund))
+        .incoming(listener)
+        .run();
     tokio::task::spawn(server);
     std::env::set_var("RAZORPAY_KEY_ID", "rzp_test_itest_returns");
     std::env::set_var("RAZORPAY_KEY_SECRET", "itest_returns_secret");
     std::env::set_var("RAZORPAY_API_BASE", format!("http://{}/v1", addr));
+    std::env::set_var(
+        "SHIPROCKET_API_BASE",
+        format!("http://{}/v1/external", addr),
+    );
+    std::env::set_var("SHIPROCKET_EMAIL", "fixture@example.invalid");
+    std::env::set_var("SHIPROCKET_PASSWORD", "fixture-only");
+    std::env::set_var("SHIPROCKET_PICKUP_POSTCODE", "110001");
+    refund_evidence
 }
 
+/// Sets up a user + shipping address + product/variant/inventory + cart item, then calls
+/// `place_order` to create a real order for the caller to run the return flow against.
+///
+/// Setup runs in its own transaction, committed just before calling `place_order`: place_order
+/// now manages its own transactions internally (a short claim/prep transaction, then the
+/// Shiprocket/Razorpay calls with no DB connection held, then a write transaction), so it can no
+/// longer run as a nested savepoint inside a caller-supplied, still-open transaction -- the whole
+/// point of that restructuring is that place_order's connection isn't held hostage across
+/// external calls, which requires its transactions to be independently committable. Fixtures
+/// must therefore already be committed before place_order's own prep phase reads them.
+///
+/// Callers get the resulting ids back both to keep driving the return flow (against a fresh
+/// transaction/connection obtained from `db`) and for the best-effort cleanup they must now do
+/// themselves, since nothing rolls this fixture back automatically anymore.
 async fn place_order_fixture(
-    txn: &sea_orm::DatabaseTransaction,
+    db: &DatabaseConnection,
     tag: i64,
     payment_mode: Option<&str>,
     quantity: i64,
 ) -> OrderFixture {
-    ensure_razorpay_mock().await;
-    let _ = ensure_order_status(txn, "pending").await;
+    let refund_evidence = ensure_checkout_provider_mocks().await;
+
+    let txn = db.begin().await.expect("begin setup transaction");
+    let _ = ensure_order_status(&txn, "pending").await;
 
     let role = user_roles::ActiveModel {
         role_id: ActiveValue::NotSet,
         role_name: ActiveValue::Set(format!("itest_returns_role_{tag}")),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert role");
 
     let user = core_operations::handlers::users::create_user(
-        txn,
+        &txn,
         Request::new(proto::proto::core::CreateUserRequest {
             username: format!("itest_returns_user_{tag}"),
             email: format!("itest_returns_{tag}@example.com"),
@@ -192,6 +279,7 @@ async fn place_order_fixture(
         shipping_address_id: ActiveValue::NotSet,
         user_id: ActiveValue::Set(Some(user_id)),
         is_default: ActiveValue::Set(0),
+        is_deleted: ActiveValue::Set(0),
         country: ActiveValue::Set("IN".to_string()),
         state_region: ActiveValue::Set("KA".to_string()),
         city: ActiveValue::Set("Bengaluru".to_string()),
@@ -201,15 +289,16 @@ async fn place_order_fixture(
         recipient_name: ActiveValue::Set(Some("Test User".to_string())),
         phone_number: ActiveValue::Set(Some("+919999999999".to_string())),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert shipping");
 
     let category = core_db_entities::entity::product_categories::ActiveModel {
         category_id: ActiveValue::NotSet,
+        exchange_eligible: sea_orm::ActiveValue::Set(0),
         name: ActiveValue::Set(format!("itest_returns_cat_{tag}")),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert category");
 
@@ -227,10 +316,12 @@ async fn place_order_fixture(
         has_blouse_piece: ActiveValue::Set(None),
         care_instructions: ActiveValue::Set(None),
         product_status_id: ActiveValue::Set(None),
+        meta_title: ActiveValue::Set(None),
+        meta_description: ActiveValue::Set(None),
         created_at: ActiveValue::Set(Some(Utc::now())),
         updated_at: ActiveValue::Set(None),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert product");
 
@@ -241,7 +332,7 @@ async fn place_order_fixture(
         color_id: ActiveValue::Set(None),
         additional_price: ActiveValue::Set(Some(0)),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert variant");
 
@@ -253,12 +344,12 @@ async fn place_order_fixture(
         reorder_level: ActiveValue::Set(None),
         updated_at: ActiveValue::Set(Some(Utc::now())),
     }
-    .insert(txn)
+    .insert(&txn)
     .await
     .expect("insert inventory");
 
     let cart_item = core_operations::handlers::cart::create_cart_item(
-        txn,
+        &txn,
         Request::new(proto::proto::core::CreateCartItemRequest {
             user_id: Some(user_id),
             variant_id: variant.variant_id,
@@ -274,8 +365,15 @@ async fn place_order_fixture(
     .next()
     .expect("cart row");
 
+    // Commit setup so it's visible to place_order's own (separately-opened) transactions --
+    // place_order no longer runs as a nested savepoint inside our transaction, so anything it
+    // needs to read must already be committed.
+    txn.commit()
+        .await
+        .expect("commit place_order_fixture setup");
+
     let placed = place_order(
-        txn,
+        db,
         Request::new(proto::proto::core::PlaceOrderRequest {
             shipping_address_id: shipping.shipping_address_id,
             user_id,
@@ -294,7 +392,7 @@ async fn place_order_fixture(
 
     let detail = order_details::Entity::find()
         .filter(order_details::Column::OrderId.eq(placed.order_id))
-        .one(txn)
+        .one(db)
         .await
         .expect("query order detail")
         .expect("order detail exists");
@@ -308,10 +406,63 @@ async fn place_order_fixture(
         order_detail_qty: detail.quantity,
         line_total_minor: detail.line_total_minor,
         variant_id: detail.variant_id,
+        role_id: role.role_id,
+        category_id: category.category_id,
+        refund_evidence,
     }
 }
 
-async fn transition_order_to_delivered(txn: &sea_orm::DatabaseTransaction, fx: &OrderFixture) {
+/// Best-effort teardown of everything `place_order_fixture` committed for a test, plus any
+/// return/refund rows a test itself committed on top of that (e.g. `refund_worker_processes_...`
+/// and `full_return_reaches_refunded_state_...` below, which commit their action transaction so
+/// the refund worker -- running on a separate connection -- can see it). Setup used to live
+/// inside the same uncommitted transaction as the place_order call under test and simply never
+/// got committed on rollback; now that setup must be committed (place_order manages its own
+/// transactions and can't run nested inside ours, see `place_order_fixture`), it needs explicit
+/// cleanup instead. Deletes in FK-safe order (children before parents). Every statement is safe
+/// to run even when the row set is empty (most tests roll their action transaction back, so
+/// these never existed to begin with), so one function covers every test in this file. Errors
+/// are logged, not fatal, so a cleanup failure never masks the actual test assertions.
+async fn cleanup_return_test_rows(db: &DatabaseConnection, fx: &OrderFixture) {
+    let deletes: [(&str, &str, i64); 18] = [
+        ("ReturnRequestItems", "order_detail_id", fx.order_detail_id),
+        ("ReturnRequests", "order_id", fx.order_id),
+        ("RefundAttempts", "order_id", fx.order_id),
+        ("Refunds", "order_id", fx.order_id),
+        ("OrderInventoryRestoreItems", "order_id", fx.order_id),
+        ("Shipments", "order_id", fx.order_id),
+        ("PaymentIntents", "order_id", fx.order_id),
+        ("OrderEvents", "order_id", fx.order_id),
+        ("OrderDetails", "OrderID", fx.order_id),
+        ("Orders", "OrderID", fx.order_id),
+        ("Cart", "UserID", fx.user_id),
+        ("Inventory", "VariantID", fx.variant_id),
+        ("ProductVariants", "VariantID", fx.variant_id),
+        ("Products", "CategoryID", fx.category_id),
+        ("ProductCategories", "CategoryID", fx.category_id),
+        ("ShippingAddresses", "UserID", fx.user_id),
+        ("Users", "UserID", fx.user_id),
+        ("UserRoles", "RoleID", fx.role_id),
+    ];
+    for (table, column, id) in deletes {
+        if let Err(e) = db
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::MySql,
+                format!("DELETE FROM `{table}` WHERE `{column}` = ?"),
+                [id.into()],
+            ))
+            .await
+        {
+            eprintln!("warning: cleanup {table} for id={id} failed (non-fatal): {e}");
+        }
+    }
+}
+
+async fn transition_order_to_delivered(
+    txn: &sea_orm::DatabaseTransaction,
+    db: &DatabaseConnection,
+    fx: &OrderFixture,
+) {
     let confirmed_id = ensure_order_status(txn, "confirmed").await;
     let processing_id = ensure_order_status(txn, "processing").await;
 
@@ -345,6 +496,7 @@ async fn transition_order_to_delivered(txn: &sea_orm::DatabaseTransaction, fx: &
 
     core_operations::handlers::orders::admin_mark_order_shipped(
         txn,
+        db,
         Request::new(AdminMarkOrderShippedRequest {
             order_id: fx.order_id,
             awb_code: Some(format!("AWB-{}", fx.order_id)),
@@ -403,6 +555,24 @@ async fn ensure_captured_payment_intent(
     row.intent_id
 }
 
+async fn register_processed_refund_evidence(
+    txn: &sea_orm::DatabaseTransaction,
+    fx: &OrderFixture,
+    attempt_id: i64,
+    gateway_refund_id: &str,
+) {
+    let attempt = refund_attempts::Entity::find_by_id(attempt_id)
+        .one(txn)
+        .await
+        .expect("query refund attempt")
+        .expect("refund attempt exists");
+    let payment_id = attempt.razorpay_payment_id.expect("refund payment ID");
+    fx.refund_evidence.lock().unwrap().insert(
+        gateway_refund_id.to_string(),
+        (payment_id, attempt.amount_sent_to_gateway_paise),
+    );
+}
+
 async fn request_return_for_fixture(
     txn: &sea_orm::DatabaseTransaction,
     fx: &OrderFixture,
@@ -448,10 +618,13 @@ async fn inventory_available_for_variant(
 async fn prepaid_delivered_can_request_full_return_within_window_and_no_immediate_refund_attempt() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 1).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the return flow -- place_order_fixture's own setup transaction is
+    // already committed and gone by the time it returns.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
 
     let ret = request_return_for_fixture(&txn, &fx, 1, "Size issue").await;
     assert_eq!(ret.status.to_lowercase(), "requested");
@@ -465,6 +638,8 @@ async fn prepaid_delivered_can_request_full_return_within_window_and_no_immediat
         .expect("count refund attempts");
     assert_eq!(attempts, 0, "return request must not create refund attempt");
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -472,16 +647,20 @@ async fn prepaid_delivered_can_request_full_return_within_window_and_no_immediat
 async fn prepaid_delivered_partial_return_uses_line_net_total_and_no_shipping_refund_component() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 2).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 2).await;
+
+    // Fresh transaction for the return flow -- see the comment in the previous test.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
 
     let ret = request_return_for_fixture(&txn, &fx, 1, "Color mismatch").await;
     let item = ret.items.first().expect("return item");
     let expected_partial = fx.line_total_minor / fx.order_detail_qty.max(1);
     assert_eq!(item.refund_amount_minor, expected_partial);
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -489,10 +668,12 @@ async fn prepaid_delivered_partial_return_uses_line_net_total_and_no_shipping_re
 async fn cod_delivered_cannot_request_return() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 1).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the return flow -- see the comment in the first test above.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
     txn.execute(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
         "UPDATE Orders SET payment_method = 'cod' WHERE OrderID = ?",
@@ -524,6 +705,8 @@ async fn cod_delivered_cannot_request_return() {
         err.message()
     );
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -531,10 +714,11 @@ async fn cod_delivered_cannot_request_return() {
 async fn prepaid_not_delivered_cannot_request_return_and_post_window_is_rejected() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 1).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
 
+    // Fresh transaction for the return flow -- see the comment in the first test above.
+    let txn = db.begin().await.expect("begin txn");
     let not_delivered = core_operations::handlers::returns::request_return(
         &txn,
         Request::new(RequestReturnRequest {
@@ -555,7 +739,7 @@ async fn prepaid_not_delivered_cannot_request_return_and_post_window_is_rejected
         .to_ascii_lowercase()
         .contains("after delivery"));
 
-    transition_order_to_delivered(&txn, &fx).await;
+    transition_order_to_delivered(&txn, &db, &fx).await;
     txn.execute(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
         r#"UPDATE OrderEvents
@@ -587,6 +771,8 @@ async fn prepaid_not_delivered_cannot_request_return_and_post_window_is_rejected
         .to_ascii_lowercase()
         .contains("window has closed"));
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -594,10 +780,12 @@ async fn prepaid_not_delivered_cannot_request_return_and_post_window_is_rejected
 async fn duplicate_item_return_request_is_rejected() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 1).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the return flow -- see the comment in the first test above.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
     let _ = request_return_for_fixture(&txn, &fx, 1, "Wrong fit").await;
 
     let dup = core_operations::handlers::returns::request_return(
@@ -620,6 +808,8 @@ async fn duplicate_item_return_request_is_rejected() {
         .to_ascii_lowercase()
         .contains("already part of an existing return request"));
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -627,10 +817,12 @@ async fn duplicate_item_return_request_is_rejected() {
 async fn admin_mark_received_creates_durable_refund_attempt_and_inventory_not_restocked() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 1).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the return flow -- see the comment in the first test above.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
     ensure_captured_payment_intent(&txn, &fx, tag).await;
 
     let before_inventory = inventory_available_for_variant(&txn, fx.variant_id).await;
@@ -685,6 +877,8 @@ async fn admin_mark_received_creates_durable_refund_attempt_and_inventory_not_re
         "mark received should only enqueue durable attempt, no immediate refund row"
     );
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -692,10 +886,15 @@ async fn admin_mark_received_creates_durable_refund_attempt_and_inventory_not_re
 async fn refund_worker_processes_return_refund_exactly_once() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let setup_txn = db.begin().await.expect("begin setup txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&setup_txn, tag, None, 1).await;
-    transition_order_to_delivered(&setup_txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the rest of the return/refund flow -- place_order_fixture's own
+    // setup transaction is already committed and gone by the time it returns. This one is
+    // committed below (not rolled back) because the refund worker runs against `db` on its own
+    // connection and needs to see these changes, same as before this restructuring.
+    let setup_txn = db.begin().await.expect("begin setup txn");
+    transition_order_to_delivered(&setup_txn, &db, &fx).await;
     ensure_captured_payment_intent(&setup_txn, &fx, tag).await;
     let requested = request_return_for_fixture(&setup_txn, &fx, 1, "Wrong design").await;
     let received = core_operations::handlers::returns::admin_mark_return_received(
@@ -712,7 +911,7 @@ async fn refund_worker_processes_return_refund_exactly_once() {
     .next()
     .expect("received row");
     let attempt_id = received.refund_attempt_id.expect("attempt id");
-    let gateway_refund_id = format!("gw_ret_once_{tag}");
+    let gateway_refund_id = format!("rfnd_ret_once_{tag}");
     setup_txn
         .execute(Statement::from_sql_and_values(
             DatabaseBackend::MySql,
@@ -724,6 +923,7 @@ async fn refund_worker_processes_return_refund_exactly_once() {
         ))
         .await
         .expect("prepare submitted attempt");
+    register_processed_refund_evidence(&setup_txn, &fx, attempt_id, &gateway_refund_id).await;
     setup_txn.commit().await.expect("commit setup");
 
     let first_processed = cancellation_saga::process_pending_refund_attempts(&db, 25)
@@ -757,6 +957,8 @@ async fn refund_worker_processes_return_refund_exactly_once() {
         .expect("attempt exists");
     assert_eq!(attempt.status, "processed");
     verify_txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -764,10 +966,12 @@ async fn refund_worker_processes_return_refund_exactly_once() {
 async fn multi_step_partial_returns_preserve_exact_line_total_refund() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 3).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 3).await;
+
+    // Fresh transaction for the return flow -- see the comment in the first test above.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
 
     txn.execute(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
@@ -802,6 +1006,8 @@ async fn multi_step_partial_returns_preserve_exact_line_total_refund() {
         "cumulative partial refunds must equal line_total_minor exactly"
     );
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -809,10 +1015,12 @@ async fn multi_step_partial_returns_preserve_exact_line_total_refund() {
 async fn return_window_uses_delivered_transition_timestamp_as_source_of_truth() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 1).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the return flow -- see the comment in the first test above.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
 
     txn.execute(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
@@ -854,6 +1062,8 @@ async fn return_window_uses_delivered_transition_timestamp_as_source_of_truth() 
         .to_ascii_lowercase()
         .contains("window has closed"));
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -861,10 +1071,12 @@ async fn return_window_uses_delivered_transition_timestamp_as_source_of_truth() 
 async fn active_return_items_are_not_cancellable_even_with_stale_fulfillment_flags() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 1).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the return flow -- see the comment in the first test above.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
     let _ = request_return_for_fixture(&txn, &fx, 1, "Do not cancel").await;
     let confirmed_id = ensure_order_status(&txn, "confirmed").await;
 
@@ -899,6 +1111,8 @@ async fn active_return_items_are_not_cancellable_even_with_stale_fulfillment_fla
         err.message()
     );
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -906,10 +1120,12 @@ async fn active_return_items_are_not_cancellable_even_with_stale_fulfillment_fla
 async fn delivered_orders_remain_non_cancellable_even_if_fulfillment_flag_is_stale() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 1).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the return flow -- see the comment in the first test above.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
 
     txn.execute(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
@@ -941,6 +1157,8 @@ async fn delivered_orders_remain_non_cancellable_even_if_fulfillment_flag_is_sta
         err.message()
     );
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -948,10 +1166,12 @@ async fn delivered_orders_remain_non_cancellable_even_if_fulfillment_flag_is_sta
 async fn admin_mark_received_is_idempotent_for_refund_pending_returns() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let txn = db.begin().await.expect("begin txn");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&txn, tag, None, 1).await;
-    transition_order_to_delivered(&txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the return flow -- see the comment in the first test above.
+    let txn = db.begin().await.expect("begin txn");
+    transition_order_to_delivered(&txn, &db, &fx).await;
     ensure_captured_payment_intent(&txn, &fx, tag).await;
 
     let requested = request_return_for_fixture(&txn, &fx, 1, "QC pending").await;
@@ -1000,6 +1220,8 @@ async fn admin_mark_received_is_idempotent_for_refund_pending_returns() {
         "return item state must remain refund_pending after repeat mark-received"
     );
     txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }
 
 #[tokio::test]
@@ -1007,10 +1229,17 @@ async fn admin_mark_received_is_idempotent_for_refund_pending_returns() {
 async fn full_return_reaches_refunded_state_without_cancellation_side_effects() {
     let db = Database::connect(&test_db_url()).await.expect("connect db");
     ensure_return_tables(&db).await;
-    let setup_txn = db.begin().await.expect("begin setup txn");
+    // Keep a paid shipping charge in both CI and local runs. Returning every
+    // item refunds its line total while the captured shipping charge remains.
+    let _paid_shipping = ScopedEnvVar::set("FREE_SHIPPING_THRESHOLD_MINOR", "100000000");
     let tag = Utc::now().timestamp_millis();
-    let fx = place_order_fixture(&setup_txn, tag, None, 1).await;
-    transition_order_to_delivered(&setup_txn, &fx).await;
+    let fx = place_order_fixture(&db, tag, None, 1).await;
+
+    // Fresh transaction for the rest of the return/refund flow -- see the comment in
+    // `refund_worker_processes_return_refund_exactly_once` above (this test follows the same
+    // commit-before-worker-call shape).
+    let setup_txn = db.begin().await.expect("begin setup txn");
+    transition_order_to_delivered(&setup_txn, &db, &fx).await;
     ensure_captured_payment_intent(&setup_txn, &fx, tag).await;
 
     let requested = request_return_for_fixture(&setup_txn, &fx, 1, "Damaged").await;
@@ -1028,7 +1257,7 @@ async fn full_return_reaches_refunded_state_without_cancellation_side_effects() 
     .next()
     .expect("received row");
     let attempt_id = received.refund_attempt_id.expect("attempt id");
-    let gateway_refund_id = format!("gw_ret_final_{tag}");
+    let gateway_refund_id = format!("rfnd_ret_final_{tag}");
     setup_txn
         .execute(Statement::from_sql_and_values(
             DatabaseBackend::MySql,
@@ -1036,10 +1265,11 @@ async fn full_return_reaches_refunded_state_without_cancellation_side_effects() 
                SET status = 'submitted',
                    gateway_refund_id = ?
                WHERE attempt_id = ?"#,
-            [gateway_refund_id.into(), attempt_id.into()],
+            [gateway_refund_id.clone().into(), attempt_id.into()],
         ))
         .await
         .expect("prepare attempt");
+    register_processed_refund_evidence(&setup_txn, &fx, attempt_id, &gateway_refund_id).await;
     setup_txn.commit().await.expect("commit setup");
 
     let _ = cancellation_saga::process_pending_refund_attempts(&db, 25)
@@ -1069,10 +1299,24 @@ async fn full_return_reaches_refunded_state_without_cancellation_side_effects() 
         .await
         .expect("query order")
         .expect("order exists");
+    let recorded_refund = refunds::Entity::find()
+        .filter(refunds::Column::OrderId.eq(fx.order_id))
+        .all(&verify_txn)
+        .await
+        .expect("query recorded refunds");
+    assert_eq!(recorded_refund.len(), 1);
+    assert_eq!(
+        i64::from(recorded_refund[0].amount_paise),
+        fx.line_total_minor
+    );
+    assert!(
+        fx.line_total_minor < order_row.grand_total_minor,
+        "the retained shipping charge makes this a partial payment refund"
+    );
     assert_eq!(
         order_row.payment_status,
-        Some(PaymentStatus::Failed),
-        "refund recording should follow existing refund handler behavior"
+        Some(PaymentStatus::Captured),
+        "returning every item must not mark the captured payment failed while shipping is retained"
     );
     let detail_row = order_details::Entity::find_by_id(fx.order_detail_id)
         .one(&verify_txn)
@@ -1094,4 +1338,6 @@ async fn full_return_reaches_refunded_state_without_cancellation_side_effects() 
         "return flow must not restore sellable inventory automatically"
     );
     verify_txn.rollback().await.ok();
+
+    cleanup_return_test_rows(&db, &fx).await;
 }

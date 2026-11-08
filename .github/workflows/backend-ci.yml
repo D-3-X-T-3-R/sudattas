@@ -279,11 +279,90 @@ jobs:
         # Shiprocket API. razorpay_connectivity is safe to keep: it points
         # RAZORPAY_API_BASE at a local mock server and never calls the real API.
         for test_binary in integration_abandoned_cart_outbox integration_cart integration_coupons integration_order_state integration_payments integration_products integration_refunds integration_reviews integration_shipping integration_users integration_users_carts_orders_products integration_webhooks integration_wishlist integration_launch_concurrency integration_place_order_atomicity integration_returns integration_invoices integration_coupon_redemption_consistency integration_logistics_fulfillment integration_selected_checkout razorpay_connectivity schema_validation; do
-          cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored --test-threads=1
+          if [[ "$test_binary" == "integration_launch_concurrency" ]]; then
+            # Commerce regressions use their own ephemeral MySQL/Redis job below.
+            cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored --skip commerce_regressions --skip integration_verify_and_webhook_overlap_finalize_once --test-threads=1
+          else
+            cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored --test-threads=1
+          fi
         done
         for test_binary in handler_outbox handler_p2 handler_refunds_resolve handler_security; do
           cargo test -p core_operations --test "$test_binary" --all-features --no-fail-fast -- --ignored --test-threads=1
         done
+
+  test-commerce-regressions:
+    name: Commerce Regressions (Offline Providers)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: sudattas_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.RUST_TOOLCHAIN }}
+        components: rustfmt
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          backend/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install protobuf compiler
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler libprotobuf-dev
+
+    - name: Setup isolated test database
+      run: |
+        mysql -h 127.0.0.1 -P 3306 -u root -ptest_password < backend/database/sql_dump/01_schema.sql
+        chmod +x ./backend/scripts/apply_sql_migrations.sh
+        ./backend/scripts/apply_sql_migrations.sh 127.0.0.1 3306 root test_password SUDATTAS ./backend/database/migrations
+
+    - name: Run deterministic commerce regressions
+      working-directory: ./backend
+      env:
+        TEST_DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/SUDATTAS
+        COMMERCE_TEST_ISOLATED_STORAGE: "1"
+        TEST_REDIS_URL: redis://127.0.0.1:6379/15
+        COMMERCE_TEST_ISOLATED_REDIS: "1"
+        RUN_LIVE_LOGISTICS_TESTS: "0"
+        RUN_RAZORPAY_SANDBOX: "0"
+        RAZORPAY_API_BASE: http://127.0.0.1:9/v1
+        SHIPROCKET_API_BASE: http://127.0.0.1:9
+      run: |
+        # The module selector includes the two real Test Mode cases; exclude them.
+        cargo test -p core_operations --test integration_launch_concurrency --all-features commerce_regressions:: -- --ignored --skip razorpay_sandbox:: --test-threads=1
+        cargo test -p core_operations --test integration_launch_concurrency --all-features integration_verify_and_webhook_overlap_finalize_once -- --ignored --test-threads=1
 
   test-e2e-graphql:
     name: E2E GraphQL Tests
@@ -411,7 +490,7 @@ jobs:
   test:
     name: Build and Test
     runs-on: ubuntu-latest
-    needs: [test-schema-entities, test-unit-doc, test-integration, test-e2e-graphql]
+    needs: [test-schema-entities, test-unit-doc, test-integration, test-commerce-regressions, test-e2e-graphql]
 
     steps:
     - name: Aggregate test status

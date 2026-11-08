@@ -516,9 +516,12 @@ async fn process_pending_outbox_events_delivery_fail_claims_once_requeues_and_re
 #[test]
 fn outbox_event_types_are_defined() {
     use core_operations::handlers::outbox::{
-        ABANDONED_CART, DELIVERED, ORDER_PLACED, PAYMENT_CAPTURED, REFUNDED, SHIPPED,
+        ABANDONED_CART, ADMIN_ORDER_EMAIL, ADMIN_ORDER_PUSH, DELIVERED, ORDER_PLACED,
+        PAYMENT_CAPTURED, REFUNDED, SHIPPED,
     };
     let types = [
+        ADMIN_ORDER_EMAIL,
+        ADMIN_ORDER_PUSH,
         ORDER_PLACED,
         PAYMENT_CAPTURED,
         SHIPPED,

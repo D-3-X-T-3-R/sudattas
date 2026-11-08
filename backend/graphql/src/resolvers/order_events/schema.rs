@@ -24,6 +24,7 @@ impl OrderEvent {
     async fn event_type(&self) -> &String {
         &self.event_type
     }
+    #[allow(clippy::wrong_self_convention)]
     async fn from_status(&self) -> &String {
         &self.from_status
     }

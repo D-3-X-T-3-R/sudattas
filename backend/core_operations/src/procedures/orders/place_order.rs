@@ -2,60 +2,41 @@ use crate::handlers::coupons::{
     eligibility::{check_coupon_scope, check_per_customer_limit, CartProduct},
     validate_coupon::check_coupon,
 };
-use crate::handlers::idempotency::compute_request_hash;
+use crate::handlers::db_errors::is_deadlock_status;
+
 use crate::handlers::order_events::create_order_event;
-use crate::integrations::shiprocket::{best_courier_quote_for_checkout, ShiprocketError};
+use crate::integrations::shiprocket::ShiprocketCourierQuote;
 use crate::money::{paise_checked_add, paise_checked_mul};
 
 use crate::handlers::{
     cart::get_cart_items, order_details::create_order_details, orders::create_order,
     orders::order_response, payment_intents::create_payment_intent, products::get_products_by_id,
+    transactions::create_transaction,
 };
 use crate::order_state_machine;
 
-use core_db_entities::entity::prelude::IdempotencyKeys;
 use core_db_entities::entity::{
-    cart, idempotency_keys, orders, product_variants, sea_orm_active_enums::PaymentStatus,
-    sea_orm_active_enums::Status as IdempotencyStatus, shipping_addresses,
+    cart, orders, product_variants, sea_orm_active_enums::PaymentStatus, shipping_addresses,
 };
 use proto::proto::core::{
     CreateOrderDetailRequest, CreateOrderDetailsRequest, CreateOrderEventRequest,
-    CreateOrderRequest, CreatePaymentIntentRequest, GetCartItemsRequest, GetProductsByIdRequest,
-    OrdersResponse, PlaceOrderRequest,
+    CreateOrderRequest, CreatePaymentIntentRequest, CreateTransactionRequest, GetCartItemsRequest,
+    GetProductsByIdRequest, OrdersResponse, PlaceOrderRequest,
 };
 use sea_orm::DbBackend;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, Set,
+    ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
     Statement, TransactionTrait,
 };
 
-use chrono::Utc;
 use sea_orm::DatabaseTransaction;
-use serde_json::json;
+
 use std::collections::{HashMap, HashSet};
 use tonic::{Request, Response, Status};
-use tracing::{info, warn};
-
-fn map_shipping_quote_error(error: ShiprocketError) -> Status {
-    let message = match error {
-        ShiprocketError::NotConfigured => {
-            "Live shipping quote is unavailable because shipping is not configured"
-        }
-        _ => "Live shipping quote is unavailable for this checkout",
-    };
-    Status::unavailable(message)
-}
-
-fn pending_idempotency_ttl_minutes() -> i64 {
-    std::env::var("IDEMPOTENCY_PENDING_TIMEOUT_MINUTES")
-        .ok()
-        .and_then(|value| value.parse::<i64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(15)
-}
+use tracing::info;
 
 #[allow(clippy::result_large_err)]
-fn validate_selected_cart_ids(selected_cart_ids: &[i64]) -> Result<Vec<i64>, Status> {
+pub(super) fn validate_selected_cart_ids(selected_cart_ids: &[i64]) -> Result<Vec<i64>, Status> {
     if selected_cart_ids.is_empty() {
         return Err(Status::failed_precondition(
             "Cannot place order: no selected cart items provided",
@@ -198,7 +179,7 @@ fn qualifies_for_free_shipping(
 }
 
 #[allow(clippy::result_large_err)]
-async fn lock_inventory_row_and_get_available_quantity(
+pub(crate) async fn lock_inventory_row_and_get_available_quantity(
     txn: &DatabaseTransaction,
     variant_id: i64,
 ) -> Result<i64, Status> {
@@ -235,44 +216,146 @@ async fn lock_inventory_row_and_get_available_quantity(
     }
 }
 
+/// Data gathered/validated in the short prep phase, needed by both the external calls that
+/// follow and the write phase after that.
+struct PlaceOrderPrep {
+    normalized_payment_mode: String,
+    is_cod_checkout: bool,
+    cart_items: Vec<proto::proto::core::CartItemResponse>,
+    frozen_lines: Vec<FrozenLinePricing>,
+    gross_paise: i64,
+    applied_discount_total_minor: i64,
+    items_total_minor_after_discount: i64,
+    total_units: i64,
+    coupon_snapshot: Option<(i64, String, i64)>,
+    delivery_postcode: String,
+    qualifies_free_shipping: bool,
+}
+
 pub async fn place_order(
-    txn: &DatabaseTransaction,
+    db: &DatabaseConnection,
     request: Request<PlaceOrderRequest>,
 ) -> Result<Response<OrdersResponse>, Status> {
-    // Run checkout within a nested transaction (savepoint) so any failure
-    // rolls back all place_order side effects before returning to caller.
-    let nested_txn = txn
+    use super::checkout_claim::{self, Claim};
+    let key = request
+        .metadata()
+        .get("idempotency-key")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let mut req = request.into_inner();
+    let hash = checkout_claim::normalize(&mut req)?;
+    let lease = match checkout_claim::claim(db, &req, key, &hash).await? {
+        Claim::Replay(response) => return Ok(response),
+        Claim::Acquired(lease) => lease,
+    };
+    let prep_txn = db
         .begin()
         .await
-        .map_err(|e| Status::internal(format!("failed to begin nested place_order txn: {e}")))?;
-
-    let result = place_order_in_txn(&nested_txn, request).await;
-    match result {
-        Ok(response) => {
-            nested_txn.commit().await.map_err(|e| {
-                Status::internal(format!("failed to commit nested place_order txn: {e}"))
-            })?;
-            Ok(response)
+        .map_err(|e| Status::internal(e.to_string()))?;
+    // Durable replay was resolved above, BEFORE accessing a mutable cart.
+    let prep = match prepare_order(&prep_txn, &req).await {
+        Ok(prep) => {
+            prep_txn
+                .commit()
+                .await
+                .map_err(|e| Status::internal(e.to_string()))?;
+            prep
         }
-        Err(err) => {
-            let _ = nested_txn.rollback().await;
-            Err(err)
+
+        Err(e) => {
+            prep_txn.rollback().await.ok();
+            lease.state(db, "preparing", "retryable", None).await?;
+            return Err(e);
+        }
+    };
+    // Eligibility is mandatory even when shipping PRICE is zero.
+    let quote = match super::estimate_checkout_shipping::eligible_shipping_quote(
+        &prep.delivery_postcode,
+        prep.items_total_minor_after_discount,
+        prep.total_units,
+    )
+    .await
+    {
+        Ok(q) => q,
+        Err(e) => {
+            lease.state(db, "preparing", "retryable", None).await?;
+            return Err(e);
+        }
+    };
+    let shipping_minor = if prep.qualifies_free_shipping {
+        0
+    } else {
+        quote.shipping_amount_minor.max(0)
+    };
+    let grand_total = paise_checked_add(prep.items_total_minor_after_discount, shipping_minor)
+        .map_err(|e| Status::internal(e.to_string()))?;
+    lease.total(db, grand_total).await?;
+    let gateway = if prep.is_cod_checkout {
+        lease.state(db, "preparing", "ready", None).await?;
+        None
+    } else {
+        // Fence and persist BEFORE the outbound write. Crash/timeout here is never
+        // a retryable new purchase: receipt + key remain available to reconciliation.
+        lease.state(db, "preparing", "submitting", None).await?;
+        match crate::razorpay::create_order(grand_total, "INR", &lease.receipt).await {
+            Ok(id) => {
+                lease.state(db, "submitting", "ready", Some(&id)).await?;
+                Some(id)
+            }
+            Err(_) => {
+                lease.state(db, "submitting", "needs_review", None).await?;
+                return Err(Status::unavailable("Payment order outcome unresolved; reconciliation required. Do not place another order."));
+            }
+        }
+    };
+    let mut attempt = 0;
+    loop {
+        let txn = db
+            .begin()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        let result = async {
+            let response = place_order_write(
+                &txn,
+                &req,
+                &prep,
+                Some(quote.clone()),
+                grand_total,
+                shipping_minor,
+                gateway.clone(),
+            )
+            .await?;
+            lease
+                .complete(&txn, response.get_ref().items[0].order_id)
+                .await?;
+            Ok::<_, Status>(response)
+        }
+        .await;
+        match result {
+            Ok(response) => {
+                // An uncertain commit must never release the claim for a second order.
+                txn.commit().await.map_err(|_| {
+                    Status::unavailable("Checkout commit outcome unknown; retry the same key")
+                })?;
+                return Ok(response);
+            }
+            Err(e) => {
+                txn.rollback().await.ok();
+                if attempt < crate::DEADLOCK_MAX_RETRIES && is_deadlock_status(&e) {
+                    attempt += 1;
+                    continue;
+                }
+                lease.state(db, "ready", "needs_review", None).await?;
+                return Err(e);
+            }
         }
     }
 }
-
-async fn place_order_in_txn(
+async fn prepare_order(
     txn: &DatabaseTransaction,
-    request: Request<PlaceOrderRequest>,
-) -> Result<Response<OrdersResponse>, Status> {
-    // Extract idempotency key from gRPC metadata, if present.
-    let metadata = request.metadata().clone();
-    let idempotency_key = metadata
-        .get("idempotency-key")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
-
-    let req = request.into_inner();
+    req: &PlaceOrderRequest,
+) -> Result<PlaceOrderPrep, Status> {
     let selected_cart_ids = validate_selected_cart_ids(&req.selected_cart_ids)?;
     let normalized_payment_mode = req
         .payment_mode
@@ -302,12 +385,7 @@ async fn place_order_in_txn(
         ],
     );
 
-    // Cart/variant/product lookups happen up front so a single, consistently-shaped
-    // payload (including the cart snapshot) can be hashed once and reused both for
-    // replay-detection below and for the hash persisted on the idempotency row further
-    // down. Previously these were computed separately with different payload shapes
-    // (one omitted the cart), so a legitimate retry's hash never matched the persisted
-    // hash and every replay was misclassified as a payload conflict.
+    // Only fresh claims reach mutable cart/pricing reads. Replay was resolved in MySQL.
     let cart_items = get_cart_items(
         txn,
         Request::new(GetCartItemsRequest {
@@ -321,10 +399,7 @@ async fn place_order_in_txn(
 
     let cart_items = pick_selected_cart_items(cart_items, &selected_cart_ids)?;
 
-    let (variant_quantity_map, variant_ids): (HashMap<i64, i64>, Vec<i64>) = cart_items
-        .iter()
-        .map(|item| ((item.variant_id, item.quantity), item.variant_id))
-        .unzip();
+    let variant_ids: Vec<i64> = cart_items.iter().map(|item| item.variant_id).collect();
 
     let variants = product_variants::Entity::find()
         .filter(product_variants::Column::VariantId.is_in(variant_ids.clone()))
@@ -343,146 +418,6 @@ async fn place_order_in_txn(
         .iter()
         .map(|p| (p.product_id, p.clone()))
         .collect();
-
-    // Build a stable representation of the logical request payload for idempotency hashing.
-    let cart_snapshot: Vec<_> = cart_items
-        .iter()
-        .map(|item| {
-            json!({
-                "variant_id": item.variant_id,
-                "quantity": item.quantity,
-            })
-        })
-        .collect();
-    let payload_json = json!({
-        "user_id": req.user_id,
-        "shipping_address_id": req.shipping_address_id,
-        "coupon_code": req.coupon_code,
-        "selected_cart_ids": selected_cart_ids,
-        "payment_mode": normalized_payment_mode.as_str(),
-        "cart": cart_snapshot,
-    });
-    let request_hash = compute_request_hash(&payload_json.to_string());
-
-    // If an idempotency key is present, check for an existing Processed/Pending result.
-    // For Processed we must distinguish replay (same payload) from conflict (different payload):
-    // compare request_hash (which includes the cart snapshot); if different, return AlreadyExists.
-    const IDEMPOTENCY_SCOPE: &str = "place_order";
-    if let Some(ref key) = idempotency_key {
-        if let Some(existing) = IdempotencyKeys::find()
-            .filter(idempotency_keys::Column::Scope.eq(IDEMPOTENCY_SCOPE))
-            .filter(idempotency_keys::Column::Key.eq(key.as_str()))
-            .one(txn)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-        {
-            match existing.status {
-                IdempotencyStatus::Processed => {
-                    if existing.request_hash != request_hash {
-                        return Err(Status::already_exists(
-                            "Idempotency key reuse with different payload",
-                        ));
-                    }
-                    let order_id: i64 = existing
-                        .response_ref
-                        .as_ref()
-                        .and_then(|s| s.parse().ok())
-                        .ok_or_else(|| {
-                            Status::internal("Invalid response_ref in idempotency_keys")
-                        })?;
-                    let existing_order = orders::Entity::find_by_id(order_id)
-                        .one(txn)
-                        .await
-                        .map_err(|e| Status::internal(e.to_string()))?
-                        .ok_or_else(|| {
-                            Status::internal("Order referenced by idempotency_keys not found")
-                        })?;
-                    info!(
-                        order_id = existing_order.order_id,
-                        user_id = existing_order.user_id,
-                        "place_order idempotent replay – returning existing order"
-                    );
-                    return Ok(Response::new(OrdersResponse {
-                        items: vec![order_response::from_model(&existing_order)],
-                    }));
-                }
-                IdempotencyStatus::Pending => {
-                    let stale_before =
-                        Utc::now() - chrono::Duration::minutes(pending_idempotency_ttl_minutes());
-                    if existing.created_at < stale_before {
-                        warn!(
-                            idempotency_key = %key,
-                            created_at = %existing.created_at,
-                            "stale pending idempotency key detected; marking failed for safe retry"
-                        );
-                        let mut active: idempotency_keys::ActiveModel = existing.into();
-                        active.status = Set(IdempotencyStatus::Failed);
-                        active
-                            .update(txn)
-                            .await
-                            .map_err(|e| Status::internal(e.to_string()))?;
-                    } else {
-                        return Err(Status::unavailable(
-                            "Idempotent place_order still in progress; retry later",
-                        ));
-                    }
-                }
-                IdempotencyStatus::Failed => {
-                    // Allow retry; fall through to place order and update row later.
-                }
-                IdempotencyStatus::ClientVerified | IdempotencyStatus::NeedsReview => {
-                    // Not used for idempotency_keys; treat like Pending if ever seen.
-                    return Err(Status::unavailable(
-                        "Idempotent place_order still in progress; retry later",
-                    ));
-                }
-            }
-        }
-    }
-
-    // If an idempotency key is provided, enforce payload consistency and insert Pending row if new.
-    // (Processed/Pending replay already returned above.)
-    if let Some(ref key) = idempotency_key {
-        if let Some(existing) = IdempotencyKeys::find()
-            .filter(idempotency_keys::Column::Scope.eq(IDEMPOTENCY_SCOPE))
-            .filter(idempotency_keys::Column::Key.eq(key.as_str()))
-            .one(txn)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-        {
-            // Same key, different payload → conflict.
-            if existing.request_hash != request_hash {
-                return Err(Status::already_exists(
-                    "Idempotency key reuse with different payload",
-                ));
-            }
-            // Existing row is Failed (Processed/Pending already returned above); allow retry, no insert.
-        } else {
-            // Insert a fresh in_progress row. We update it to completed/failed later.
-            let ttl_hours = std::env::var("IDEMPOTENCY_WINDOW_HOURS")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(24_i64);
-            let now = Utc::now();
-            let expires = now + chrono::Duration::hours(ttl_hours);
-
-            let active = idempotency_keys::ActiveModel {
-                id: Default::default(),
-                scope: Set(IDEMPOTENCY_SCOPE.to_string()),
-                key: Set(key.to_string()),
-                request_hash: Set(request_hash.clone()),
-                response_ref: Set(None),
-                status: Set(IdempotencyStatus::Pending),
-                created_at: Set(now),
-                expires_at: Set(expires),
-            };
-
-            active
-                .insert(txn)
-                .await
-                .map_err(|e| Status::internal(e.to_string()))?;
-        }
-    }
 
     // Compute immutable line snapshots and gross amount in paise.
     let mut frozen_lines: Vec<FrozenLinePricing> = Vec::with_capacity(cart_items.len());
@@ -603,59 +538,32 @@ async fn place_order_in_txn(
         items_total_minor_after_discount,
         free_shipping_threshold_minor,
     );
-    let shipping_quote = if qualifies_free_shipping {
-        None
-    } else {
-        Some(
-            match best_courier_quote_for_checkout(
-                delivery_postcode.as_str(),
-                items_total_minor_after_discount,
-                total_units,
-            )
-            .await
-            {
-                Ok(Some(quote)) => quote,
-                Ok(None) => {
-                    warn!("checkout shipping quote unavailable without courier result");
-                    return Err(Status::unavailable(
-                        "Live shipping quote is unavailable for this checkout",
-                    ));
-                }
-                Err(error) => {
-                    warn!("checkout shipping quote failed: {}", error);
-                    return Err(map_shipping_quote_error(error));
-                }
-            },
-        )
-    };
-    let shipping_minor = shipping_quote
-        .as_ref()
-        .map(|q| q.shipping_amount_minor.max(0))
-        .unwrap_or(0);
-    let grand_total_paise = paise_checked_add(items_total_minor_after_discount, shipping_minor)
-        .map_err(|e| Status::internal(format!("Overflow computing grand total in paise: {}", e)))?;
 
-    // Create the Razorpay gateway order before any DB writes for this checkout (COD
-    // skips this entirely). This keeps the external call out of the inventory
-    // FOR UPDATE lock window below: if Razorpay fails, nothing has been written yet
-    // and the whole nested transaction simply rolls back — no order, no inventory
-    // decrement, cart untouched. If Razorpay succeeds but a later step in this
-    // transaction fails (e.g. a stock race), the Razorpay order is just never used;
-    // it's never paid and expires on Razorpay's side, which is harmless.
-    let prepaid_razorpay_order_id: Option<String> = if is_cod_checkout {
-        None
-    } else {
-        let mut receipt = format!("chk_{}_{}", req.user_id, Utc::now().timestamp_millis());
-        receipt.truncate(40);
-        Some(
-            crate::razorpay::create_order(grand_total_paise, "INR", &receipt)
-                .await
-                .map_err(|e| {
-                    Status::unavailable(format!("Unable to create Razorpay order: {e}"))
-                })?,
-        )
-    };
+    Ok(PlaceOrderPrep {
+        normalized_payment_mode,
+        is_cod_checkout,
+        cart_items,
+        frozen_lines,
+        gross_paise,
+        applied_discount_total_minor,
+        items_total_minor_after_discount,
+        total_units,
+        coupon_snapshot,
+        delivery_postcode,
+        qualifies_free_shipping,
+    })
+}
 
+#[allow(clippy::too_many_arguments)]
+async fn place_order_write(
+    txn: &DatabaseTransaction,
+    req: &PlaceOrderRequest,
+    prep: &PlaceOrderPrep,
+    shipping_quote: Option<ShiprocketCourierQuote>,
+    grand_total_paise: i64,
+    shipping_minor: i64,
+    prepaid_razorpay_order_id: Option<String>,
+) -> Result<Response<OrdersResponse>, Status> {
     let pending_status_id = order_state_machine::get_status_id(txn, "active_sale")
         .await
         .map_err(|e| Status::internal(e.to_string()))?
@@ -664,39 +572,40 @@ async fn place_order_in_txn(
             .map_err(|e| Status::internal(e.to_string()))?)
         .ok_or_else(|| Status::internal("OrderStatus 'active_sale' not found"))?;
 
-    let create_order = create_order(
+    let create_order_result = create_order(
         txn,
         Request::new(CreateOrderRequest {
             shipping_address_id: req.shipping_address_id,
             status_id: pending_status_id,
             user_id: req.user_id,
             total_amount_paise: grand_total_paise,
-            subtotal_minor: Some(gross_paise),
+            subtotal_minor: Some(prep.gross_paise),
             shipping_minor: Some(shipping_minor),
             tax_total_minor: Some(0),
-            discount_total_minor: Some(applied_discount_total_minor),
+            discount_total_minor: Some(prep.applied_discount_total_minor),
             grand_total_minor: Some(grand_total_paise),
-            applied_coupon_id: coupon_snapshot.as_ref().map(|s| s.0),
-            applied_coupon_code: coupon_snapshot.as_ref().map(|s| s.1.clone()),
-            applied_discount_paise: coupon_snapshot.as_ref().map(|s| s.2 as i32),
+            applied_coupon_id: prep.coupon_snapshot.as_ref().map(|s| s.0),
+            applied_coupon_code: prep.coupon_snapshot.as_ref().map(|s| s.1.clone()),
+            applied_discount_paise: prep.coupon_snapshot.as_ref().map(|s| s.2 as i32),
+            payment_method: prep.normalized_payment_mode.clone(),
         }),
     )
     .await?
     .into_inner()
     .items
     .first()
-    .unwrap()
-    .clone();
+    .cloned()
+    .ok_or_else(|| Status::internal("create_order returned no order"))?;
 
     info!(
-        order_id = create_order.order_id,
-        public_order_ref = %create_order.public_order_ref,
-        user_id = create_order.user_id,
-        payment_mode = %normalized_payment_mode,
+        order_id = create_order_result.order_id,
+        public_order_ref = %create_order_result.public_order_ref,
+        user_id = create_order_result.user_id,
+        payment_mode = %prep.normalized_payment_mode,
         "place_order created order"
     );
 
-    let order_created_at = orders::Entity::find_by_id(create_order.order_id)
+    let order_created_at = orders::Entity::find_by_id(create_order_result.order_id)
         .one(txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?
@@ -720,11 +629,11 @@ async fn place_order_in_txn(
                updated_at = UTC_TIMESTAMP()
            WHERE OrderID = ?"#,
         [
-            normalized_payment_mode.clone().into(),
+            prep.normalized_payment_mode.clone().into(),
             cancel_window_ends_at.into(),
             earliest_booking_at.into(),
             pickup_target_at.into(),
-            create_order.order_id.into(),
+            create_order_result.order_id.into(),
         ],
     ))
     .await
@@ -740,10 +649,10 @@ async fn place_order_in_txn(
                updated_at = UTC_TIMESTAMP()
            WHERE OrderID = ?"#,
         [
-            gross_paise.into(),
-            items_total_minor_after_discount.into(),
+            prep.gross_paise.into(),
+            prep.items_total_minor_after_discount.into(),
             shipping_minor.into(),
-            create_order.order_id.into(),
+            create_order_result.order_id.into(),
         ],
     ))
     .await
@@ -751,13 +660,13 @@ async fn place_order_in_txn(
 
     let mut order_details: Vec<CreateOrderDetailRequest> = Vec::new();
 
-    for line in &frozen_lines {
+    for line in &prep.frozen_lines {
         let unit_price_minor = i32::try_from(line.unit_price_minor)
             .map_err(|_| Status::internal("unit_price_minor overflow"))?;
         let line_discount_minor = i32::try_from(line.discount_minor)
             .map_err(|_| Status::internal("line discount overflow"))?;
         order_details.push(CreateOrderDetailRequest {
-            order_id: create_order.order_id,
+            order_id: create_order_result.order_id,
             variant_id: line.variant_id,
             quantity: line.quantity,
             price_paise: line.net_line_minor,
@@ -777,20 +686,37 @@ async fn place_order_in_txn(
     .into_inner()
     .items;
 
-    if created_order_details.len() != frozen_lines.len() {
+    if created_order_details.len() != prep.frozen_lines.len() {
         return Err(Status::internal(format!(
             "OrderDetails insert mismatch: expected {}, inserted {}",
-            frozen_lines.len(),
+            prep.frozen_lines.len(),
             created_order_details.len()
         )));
     }
 
-    // Reserve inventory only after order + order details were fully persisted in the
-    // nested place_order transaction. Any later failure will roll this reservation back.
-    for (variant_id, quantity) in &variant_quantity_map {
-        let qty = *quantity;
+    // Reserve inventory only after order + order details were fully persisted in this write
+    // transaction. Any later failure will roll this reservation back.
+    //
+    // Rows are locked in sorted VariantID order (not HashMap iteration order, which is
+    // unspecified) so two concurrent place_order calls whose carts share overlapping
+    // variants always acquire the FOR UPDATE locks in the same order, avoiding an InnoDB
+    // deadlock (error 1213) between them.
+    let mut variant_quantity_map: HashMap<i64, i64> = HashMap::new();
+    for item in &prep.cart_items {
+        if item.quantity <= 0 {
+            return Err(Status::invalid_argument("Cart quantity must be positive"));
+        }
+        let total = variant_quantity_map.entry(item.variant_id).or_insert(0);
+        *total = total
+            .checked_add(item.quantity)
+            .ok_or_else(|| Status::invalid_argument("Cart quantity overflow"))?;
+    }
+    let mut variant_ids_sorted: Vec<i64> = variant_quantity_map.keys().copied().collect();
+    variant_ids_sorted.sort_unstable();
+    for variant_id in variant_ids_sorted {
+        let qty = variant_quantity_map[&variant_id];
         let quantity_available =
-            lock_inventory_row_and_get_available_quantity(txn, *variant_id).await?;
+            lock_inventory_row_and_get_available_quantity(txn, variant_id).await?;
         if quantity_available < qty {
             crate::observability::record_inventory_update_failure_total();
             return Err(Status::failed_precondition(format!(
@@ -804,7 +730,7 @@ async fn place_order_in_txn(
                 r#"UPDATE Inventory
                    SET QuantityAvailable = QuantityAvailable - ?
                    WHERE VariantID = ?"#,
-                [qty.into(), (*variant_id).into()],
+                [qty.into(), variant_id.into()],
             ))
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
@@ -826,36 +752,37 @@ async fn place_order_in_txn(
     }
 
     let selected_snapshot_condition =
-        cart_items.iter().fold(Condition::any(), |condition, item| {
-            condition.add(
-                Condition::all()
-                    .add(cart::Column::CartId.eq(item.cart_id))
-                    .add(cart::Column::VariantId.eq(item.variant_id))
-                    .add(cart::Column::Quantity.eq(item.quantity)),
-            )
-        });
+        prep.cart_items
+            .iter()
+            .fold(Condition::any(), |condition, item| {
+                condition.add(
+                    Condition::all()
+                        .add(cart::Column::CartId.eq(item.cart_id))
+                        .add(cart::Column::VariantId.eq(item.variant_id))
+                        .add(cart::Column::Quantity.eq(item.quantity)),
+                )
+            });
     let delete_result = cart::Entity::delete_many()
         .filter(cart::Column::UserId.eq(req.user_id))
         .filter(selected_snapshot_condition)
         .exec(txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?;
-    if delete_result.rows_affected != cart_items.len() as u64 {
+    if delete_result.rows_affected != prep.cart_items.len() as u64 {
         return Err(Status::internal(
             "Selected cart items changed during checkout; please refresh your cart and try again",
         ));
     }
 
-    if !is_cod_checkout {
-        // Persist the payment intent using the Razorpay order id obtained above
-        // (before any DB writes) — this is a DB-only write here, no network call,
-        // so it doesn't reintroduce holding the inventory locks during a Razorpay
-        // round-trip.
+    if !prep.is_cod_checkout {
+        // Persist the payment intent using the Razorpay order id obtained in phase 2 —
+        // this is a DB-only write here, no network call, so it doesn't reintroduce holding
+        // the inventory locks (or a connection) during a Razorpay round-trip.
         let amount_paise = grand_total_paise;
         let _payment_intent = create_payment_intent(
             txn,
             tonic::Request::new(CreatePaymentIntentRequest {
-                order_id: create_order.order_id,
+                order_id: create_order_result.order_id,
                 user_id: req.user_id,
                 amount_paise,
                 currency: Some("INR".to_string()),
@@ -876,7 +803,7 @@ async fn place_order_in_txn(
         // email; a raw UPDATE bypassed it, so COD customers never received one.
         order_state_machine::transition_order_status(
             txn,
-            create_order.order_id,
+            create_order_result.order_id,
             order_state_machine::OrderState::Paid,
             "cod_order_confirmed",
             "customer",
@@ -887,8 +814,23 @@ async fn place_order_in_txn(
 
         let _ = crate::handlers::invoices::ensure_invoice_for_order(
             txn,
-            create_order.order_id,
+            create_order_result.order_id,
             "cod_confirmed",
+        )
+        .await?;
+
+        // Record the COD acceptance as a real transaction — COD orders never get a
+        // payment_intents row (that table is Razorpay-gateway-specific), so this is the
+        // only automatic ledger entry a COD order ever gets. Safe to insert unconditionally
+        // here: this branch only runs once, on the order's initial creation (a replayed
+        // idempotency-key request returns the stored response before reaching this code).
+        let _ = create_transaction(
+            txn,
+            tonic::Request::new(CreateTransactionRequest {
+                user_id: req.user_id,
+                amount_paise: grand_total_paise,
+                r#type: "cod_payment".to_string(),
+            }),
         )
         .await?;
     }
@@ -897,14 +839,14 @@ async fn place_order_in_txn(
     let _ = create_order_event(
         txn,
         tonic::Request::new(CreateOrderEventRequest {
-            order_id: create_order.order_id,
+            order_id: create_order_result.order_id,
             event_type: "order_placed".to_string(),
             from_status: None,
             to_status: Some("processing".to_string()),
             actor_type: "customer".to_string(),
             message: Some(format!(
                 "Order {} placed successfully{}",
-                create_order.order_id,
+                create_order_result.order_id,
                 shipping_quote
                     .as_ref()
                     .map(|q| format!(
@@ -918,27 +860,8 @@ async fn place_order_in_txn(
     )
     .await;
 
-    // If we have an idempotency key, mark this operation as completed and store
-    // the created order_id as the response_ref so replays can return it.
-    if let Some(key) = idempotency_key {
-        if let Some(existing) = IdempotencyKeys::find()
-            .filter(idempotency_keys::Column::Scope.eq(IDEMPOTENCY_SCOPE))
-            .filter(idempotency_keys::Column::Key.eq(key.as_str()))
-            .one(txn)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-        {
-            let mut active: idempotency_keys::ActiveModel = existing.into();
-            active.status = Set(IdempotencyStatus::Processed);
-            active.response_ref = Set(Some(create_order.order_id.to_string()));
-            active
-                .update(txn)
-                .await
-                .map_err(|e| Status::internal(e.to_string()))?;
-        }
-    }
-
-    let persisted_order = orders::Entity::find_by_id(create_order.order_id)
+    // The caller commits the replay reference with this order and stock mutation.
+    let persisted_order = orders::Entity::find_by_id(create_order_result.order_id)
         .one(txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?

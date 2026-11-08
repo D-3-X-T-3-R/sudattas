@@ -1,6 +1,7 @@
 import {
   apiError,
   callGraphqlAsCustomer,
+  graphqlErrorToApiStatus,
   requireAuthenticatedCustomerUserId,
 } from "@/lib/server-session-auth";
 import { canonicalOrderStatusName, statusNameFromId } from "@/lib/order-state";
@@ -69,18 +70,15 @@ export async function GET() {
   ]);
 
   if (ordersResult.errors?.length) {
-    return apiError(
-      ordersResult.errors[0]?.message ?? "Failed to load orders",
-      400,
-      "GRAPHQL_ERROR"
-    );
+    const { status, message } = graphqlErrorToApiStatus(ordersResult.errors, "Failed to load orders");
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
   if (statusesResult.errors?.length) {
-    return apiError(
-      statusesResult.errors[0]?.message ?? "Failed to load order statuses",
-      400,
-      "GRAPHQL_ERROR"
+    const { status, message } = graphqlErrorToApiStatus(
+      statusesResult.errors,
+      "Failed to load order statuses"
     );
+    return apiError(message, status, "GRAPHQL_ERROR");
   }
 
   const statusNameById = new Map(

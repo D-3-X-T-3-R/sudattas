@@ -90,8 +90,25 @@ pub(super) fn reset_circuit_breaker_for_test() {
     CIRCUIT_OPEN_UNTIL.store(0, Ordering::Relaxed);
 }
 
+/// Shared, lazily-initialized channel. tonic `Channel`s multiplex many concurrent RPCs over
+/// a single HTTP/2 connection and transparently reconnect on transport failure, so they are
+/// safe (and intended) to be cloned and reused across calls rather than re-dialed per request.
+/// Caching this once here — instead of calling `Endpoint::connect()` fresh on every GraphQL
+/// resolver invocation — avoids opening a new TCP connection per request.
+static CHANNEL: tokio::sync::OnceCell<Channel> = tokio::sync::OnceCell::const_new();
+
 /// Build a gRPC channel with timeout and optional connect retry.
 async fn connect_channel() -> Result<Channel, GqlError> {
+    CHANNEL
+        .get_or_try_init(connect_channel_uncached)
+        .await
+        .cloned()
+}
+
+/// Establishes a brand-new connection, with the existing retry + circuit-breaker behavior.
+/// Only invoked by `connect_channel` the first time (or after a prior attempt failed, since
+/// `OnceCell::get_or_try_init` retries on `Err` rather than caching the failure).
+async fn connect_channel_uncached() -> Result<Channel, GqlError> {
     if is_circuit_open() {
         return Err(GqlError::new(
             "gRPC circuit breaker open; try again later",

@@ -3,7 +3,7 @@ use crate::handlers::coupons::{
     validate_coupon::check_coupon,
 };
 use crate::handlers::{cart::get_cart_items, products::get_products_by_id};
-use crate::integrations::shiprocket::{best_courier_quote_for_checkout, ShiprocketError};
+use crate::integrations::shiprocket::best_courier_quote_for_checkout;
 use crate::money::{paise_checked_add, paise_checked_mul};
 
 use core_db_entities::entity::{product_variants, shipping_addresses};
@@ -11,18 +11,25 @@ use proto::proto::core::{
     EstimateCheckoutShippingRequest, EstimateCheckoutShippingResponse, GetCartItemsRequest,
     GetProductsByIdRequest,
 };
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
 use tonic::{Request, Response, Status};
 use tracing::warn;
 
-fn map_shipping_quote_error(error: ShiprocketError) -> Status {
-    let message = match error {
-        ShiprocketError::NotConfigured => {
-            "Live shipping quote is unavailable because shipping is not configured"
-        }
-        _ => "Live shipping quote is unavailable for this checkout",
-    };
-    Status::unavailable(message)
+/// Free shipping changes price, not destination eligibility.
+pub(super) async fn eligible_shipping_quote(
+    pin: &str,
+    amount: i64,
+    units: i64,
+) -> Result<crate::integrations::shiprocket::ShiprocketCourierQuote, Status> {
+    match best_courier_quote_for_checkout(pin, amount, units).await {
+        Ok(Some(quote)) => Ok(quote),
+        Ok(None) => Err(Status::failed_precondition(
+            "Delivery is unavailable for this PIN code",
+        )),
+        Err(_) => Err(Status::unavailable(
+            "Unable to confirm delivery eligibility; please retry before paying",
+        )),
+    }
 }
 
 #[allow(clippy::result_large_err)]
@@ -76,14 +83,22 @@ fn pick_selected_cart_items(
 }
 
 pub async fn estimate_checkout_shipping(
-    txn: &DatabaseTransaction,
+    db: &DatabaseConnection,
     request: Request<EstimateCheckoutShippingRequest>,
 ) -> Result<Response<EstimateCheckoutShippingResponse>, Status> {
     let req = request.into_inner();
     let selected_cart_ids = validate_selected_cart_ids(&req.selected_cart_ids)?;
 
+    // This endpoint is read-only (no writes), so the DB transaction only needs to stay open
+    // for the reads below; it is committed before the Shiprocket call further down so that
+    // call (up to 90s) doesn't hold a pooled connection idle.
+    let txn = db
+        .begin()
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+
     let cart_items = get_cart_items(
-        txn,
+        &txn,
         Request::new(GetCartItemsRequest {
             user_id: Some(req.user_id),
             session_id: None,
@@ -98,11 +113,11 @@ pub async fn estimate_checkout_shipping(
     let variant_ids: Vec<i64> = cart_items.iter().map(|item| item.variant_id).collect();
     let variants = product_variants::Entity::find()
         .filter(product_variants::Column::VariantId.is_in(variant_ids))
-        .all(txn)
+        .all(&txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?;
     let product_ids: Vec<i64> = variants.iter().map(|v| v.product_id).collect();
-    let products = get_products_by_id(txn, Request::new(GetProductsByIdRequest { product_ids }))
+    let products = get_products_by_id(&txn, Request::new(GetProductsByIdRequest { product_ids }))
         .await?
         .into_inner()
         .items;
@@ -136,7 +151,7 @@ pub async fn estimate_checkout_shipping(
     }
 
     let (total_paise, note_coupon) = if let Some(ref code) = req.coupon_code {
-        match check_coupon(txn, code, gross_paise, false).await {
+        match check_coupon(&txn, code, gross_paise, false).await {
             Ok(result) if result.is_valid => {
                 let cart_for_scope: Vec<CartProduct> = cart_items
                     .iter()
@@ -149,10 +164,10 @@ pub async fn estimate_checkout_shipping(
                         })
                     })
                     .collect();
-                let ok_per_customer = check_per_customer_limit(txn, result.coupon_id, req.user_id)
+                let ok_per_customer = check_per_customer_limit(&txn, result.coupon_id, req.user_id)
                     .await
                     .unwrap_or(false);
-                let ok_scope = check_coupon_scope(txn, result.coupon_id, &cart_for_scope)
+                let ok_scope = check_coupon_scope(&txn, result.coupon_id, &cart_for_scope)
                     .await
                     .unwrap_or(false);
                 if ok_per_customer && ok_scope {
@@ -175,7 +190,7 @@ pub async fn estimate_checkout_shipping(
     };
 
     let shipping_address = shipping_addresses::Entity::find_by_id(req.shipping_address_id)
-        .one(txn)
+        .one(&txn)
         .await
         .map_err(|e| Status::internal(e.to_string()))?
         .ok_or_else(|| {
@@ -192,38 +207,23 @@ pub async fn estimate_checkout_shipping(
     let delivery_postcode = shipping_address.postal_code.trim().to_string();
     let total_units: i64 = cart_items.iter().map(|item| item.quantity.max(1)).sum();
 
+    // All reads for this estimate are done; release the connection before the Shiprocket
+    // call below (up to 90s) rather than holding it idle for the round-trip.
+    txn.commit()
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+
     let free_shipping_threshold_minor = crate::order_policy::free_shipping_threshold_minor();
     let qualifies_free_shipping = total_paise >= free_shipping_threshold_minor;
-    let quote = if qualifies_free_shipping {
-        None
+    let quote = Some(eligible_shipping_quote(&delivery_postcode, total_paise, total_units).await?);
+    let shipping_amount_paise = if qualifies_free_shipping {
+        0
     } else {
-        Some(
-            match best_courier_quote_for_checkout(
-                delivery_postcode.as_str(),
-                total_paise,
-                total_units,
-            )
-            .await
-            {
-                Ok(Some(value)) => value,
-                Ok(None) => {
-                    warn!("checkout shipping estimate quote unavailable without courier result");
-                    return Err(Status::unavailable(
-                        "Live shipping quote is unavailable for this checkout",
-                    ));
-                }
-                Err(error) => {
-                    warn!("checkout shipping estimate quote failed: {}", error);
-                    return Err(map_shipping_quote_error(error));
-                }
-            },
-        )
+        quote
+            .as_ref()
+            .map(|q| q.shipping_amount_minor.max(0))
+            .unwrap_or(0)
     };
-
-    let shipping_amount_paise = quote
-        .as_ref()
-        .map(|q| q.shipping_amount_minor.max(0))
-        .unwrap_or(0);
     let order_total_paise = paise_checked_add(total_paise, shipping_amount_paise)
         .map_err(|e| Status::internal(format!("Overflow computing order total: {}", e)))?;
 

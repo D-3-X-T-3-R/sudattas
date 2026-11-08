@@ -14,6 +14,19 @@ pub async fn search_product(
 
     let mut query = products::Entity::find();
 
+    if let Some(code) = req.product_status_code.as_deref() {
+        // Resolved against the DB rather than a hardcoded id — see product_status_code's doc
+        // comment in messages.proto. If the code doesn't resolve to any row (e.g. a typo, or a
+        // seed value that changed), fail closed with an empty result rather than silently
+        // dropping the restriction and showing everything.
+        match crate::product_state::get_status_id(txn, code).await? {
+            Some(status_id) => {
+                query = query.filter(products::Column::ProductStatusId.eq(status_id));
+            }
+            None => return Ok(Response::new(ProductsResponse { items: vec![] })),
+        }
+    }
+
     if let Some(mood_id) = req.mood_id {
         if mood_id != 0 {
             let product_ids: Vec<i64> = product_mood_mapping::Entity::find()
@@ -81,6 +94,8 @@ pub async fn search_product(
                         has_blouse_piece: model.has_blouse_piece.map(|v| v != 0),
                         care_instructions: model.care_instructions,
                         product_status_id: model.product_status_id,
+                        meta_title: model.meta_title,
+                        meta_description: model.meta_description,
                     }
                 })
                 .collect();

@@ -19,7 +19,7 @@ pub use security::jwks_loader::JWKSet;
 use query_handler::mutation_root::MutationRoot;
 use query_handler::query_root::QueryRoot;
 
-pub type Schema = RootNode<'static, QueryRoot, MutationRoot, EmptySubscription<Context>>;
+pub type Schema = RootNode<QueryRoot, MutationRoot, EmptySubscription<Context>>;
 
 /// Build the GraphQL schema (queries + mutations). Used by the server and by tests.
 pub fn schema() -> Schema {

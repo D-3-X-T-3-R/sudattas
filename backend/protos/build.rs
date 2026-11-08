@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .extern_path(".google.protobuf.Timestamp", "::prost_wkt_types::Timestamp")
         .extern_path(".google.protobuf.Value", "::prost_wkt_types::Value")
         .out_dir("./src/generated/")
-        .compile_with_config(
+        .compile_protos_with_config(
             config,
             &["proto/messages.proto", "proto/services.proto"],
             &["protos/proto"],

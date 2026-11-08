@@ -62,7 +62,7 @@ function CategoryCard({
           loading="lazy"
         />
       </div>
-      <div className="flex items-center justify-between gap-3 border-t border-[var(--color-line)] p-3.5 md:p-4">
+      <div className="flex flex-col items-start gap-1.5 border-t border-[var(--color-line)] p-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 md:p-4">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
             Category
@@ -128,7 +128,7 @@ export function CategoriesSection({
           />
         </ScrollReveal>
 
-        <div className="mx-auto mt-4 grid max-w-[1450px] grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mx-auto mt-4 grid max-w-[1450px] grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
           <AnimatePresence initial={false}>
             {visible.map((item, idx) => (
               <motion.div

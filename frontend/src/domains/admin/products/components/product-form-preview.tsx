@@ -22,7 +22,7 @@ interface ProductFormPreviewProps {
 function PreviewCard({ name, priceRupees, categoryName, statusLabel, imageUrl }: ProductFormPreviewProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--color-line)] bg-white">
-      <div className="aspect-square w-full bg-[var(--color-surface-soft)]">
+      <div className="aspect-[2/3] w-full bg-[var(--color-surface-soft)]">
         {imageUrl ? (
           <img src={imageUrl} alt="" className="h-full w-full object-cover" />
         ) : (

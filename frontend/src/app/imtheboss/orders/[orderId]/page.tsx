@@ -14,6 +14,8 @@ import {
   type AdminOrderDetail,
 } from "@/lib/admin-order-detail";
 import { OrderDetailStatusEditor } from "@/domains/admin/orders/components/order-detail-status-editor";
+import { OrderTimelineCard } from "@/domains/admin/orders/components/order-timeline-card";
+import { OrderShipmentCard } from "@/domains/admin/orders/components/order-shipment-card";
 import { toRouteFailureUi } from "@/lib/route-state";
 import { formatOrderDate, getStatusLabel } from "@/domains/admin/orders/utils";
 import { AdminPageShell } from "@/components/admin/admin-page-shell";
@@ -187,6 +189,13 @@ export default function AdminOrderDetailPage() {
                     <dd className="mt-0.5 text-[var(--color-ink)]">{order.shippingAddressId}</dd>
                   </div>
                 </dl>
+                {order.invoiceAvailable ? (
+                  <Button asChild variant="outline" size="sm" className="mt-4">
+                    <a href={`/api/admin/orders/${encodeURIComponent(order.orderId)}/invoice`}>
+                      Download invoice
+                    </a>
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -230,6 +239,10 @@ export default function AdminOrderDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            <OrderShipmentCard orderId={order.orderId} />
+
+            <OrderTimelineCard orderId={order.orderId} events={order.events} />
           </div>
 
           <div className="space-y-6">

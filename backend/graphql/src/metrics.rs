@@ -9,13 +9,13 @@ const OUTCOME_ERROR: &str = "error";
 
 /// GraphQL request duration in seconds (histogram).
 pub fn record_graphql_request_duration_seconds(duration_sec: f64) {
-    metrics::histogram!("graphql_request_duration_seconds", duration_sec);
+    metrics::histogram!("graphql_request_duration_seconds").record(duration_sec);
 }
 
 /// GraphQL request count by outcome (counter).
 pub fn record_graphql_request_total(success: bool) {
     let outcome = if success { OUTCOME_OK } else { OUTCOME_ERROR };
-    metrics::counter!("graphql_requests_total", 1, "outcome" => outcome);
+    metrics::counter!("graphql_requests_total", "outcome" => outcome).increment(1);
 }
 
 /// Place order: total and by outcome/reason (counter).
@@ -26,33 +26,34 @@ pub fn record_place_order_total(success: bool, reason: Option<&str>) {
         Some("idempotency") => "idempotency",
         _ => "error",
     };
-    metrics::counter!("place_order_total", 1, "outcome" => outcome, "reason" => reason_static);
+    metrics::counter!("place_order_total", "outcome" => outcome, "reason" => reason_static)
+        .increment(1);
 }
 
 /// Payment capture: total and by outcome (counter).
 pub fn record_capture_payment_total(success: bool) {
     let outcome = if success { OUTCOME_OK } else { OUTCOME_ERROR };
-    metrics::counter!("capture_payment_total", 1, "outcome" => outcome);
+    metrics::counter!("capture_payment_total", "outcome" => outcome).increment(1);
 }
 
 /// Webhook: invalid or missing signature rejected at HTTP boundary (counter).
 pub fn record_webhook_invalid_signature_total() {
-    metrics::counter!("webhook_invalid_signature_total", 1);
+    metrics::counter!("webhook_invalid_signature_total").increment(1);
 }
 
 /// Webhook: accepted and forwarded to gRPC (counter).
 pub fn record_webhook_accepted_total() {
-    metrics::counter!("webhook_accepted_total", 1);
+    metrics::counter!("webhook_accepted_total").increment(1);
 }
 
 /// Admin authorization denied at GraphQL resolver boundary.
 pub fn record_admin_authz_denied_total() {
-    metrics::counter!("graphql_admin_authz_denied_total", 1);
+    metrics::counter!("graphql_admin_authz_denied_total").increment(1);
 }
 
 /// Admin authorization denied with reason label (e.g. not_admin, not_jwt, role_lookup_failed).
 pub fn record_admin_authz_denied_reason_total(reason: &'static str) {
-    metrics::counter!("graphql_admin_authz_denied_reason_total", 1, "reason" => reason);
+    metrics::counter!("graphql_admin_authz_denied_reason_total", "reason" => reason).increment(1);
 }
 
 /// Admin role resolution attempt outcome/source.
@@ -61,15 +62,15 @@ pub fn record_admin_authz_denied_reason_total(reason: &'static str) {
 pub fn record_admin_role_resolution_total(source: &'static str, outcome: &'static str) {
     metrics::counter!(
         "graphql_admin_role_resolution_total",
-        1,
         "source" => source,
         "outcome" => outcome
-    );
+    )
+    .increment(1);
 }
 
 /// Auth rejection at HTTP boundary before GraphQL execution.
 pub fn record_auth_rejection_total(kind: &'static str) {
-    metrics::counter!("graphql_auth_rejection_total", 1, "kind" => kind);
+    metrics::counter!("graphql_auth_rejection_total", "kind" => kind).increment(1);
 }
 
 #[cfg(test)]
