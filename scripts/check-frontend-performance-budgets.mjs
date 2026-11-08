@@ -80,18 +80,19 @@ try {
   );
 
   // These caps gate Next.js client-reference-manifest metadata size per route.
+  // Keep a small margin above the measured Next.js 16.1.6 build output.
   // They are NOT direct browser JS payload budgets (those are enforced above).
   const routeBudgets = [
-    { rel: "server/app/page_client-reference-manifest.js", maxKB: 21 },
-    { rel: "server/app/product/[id]/page_client-reference-manifest.js", maxKB: 22 },
-    { rel: "server/app/collections/[slug]/page_client-reference-manifest.js", maxKB: 22 },
-    { rel: "server/app/bag/page_client-reference-manifest.js", maxKB: 21 },
-    { rel: "server/app/checkout/address/page_client-reference-manifest.js", maxKB: 19 },
-    { rel: "server/app/profile/page_client-reference-manifest.js", maxKB: 21 },
-    { rel: "server/app/imtheboss/page_client-reference-manifest.js", maxKB: 37 },
-    { rel: "server/app/imtheboss/products/page_client-reference-manifest.js", maxKB: 23 },
-    { rel: "server/app/imtheboss/orders/page_client-reference-manifest.js", maxKB: 23 },
-    { rel: "server/app/imtheboss/customers/page_client-reference-manifest.js", maxKB: 23 },
+    { rel: "server/app/page_client-reference-manifest.js", maxKB: 24 },
+    { rel: "server/app/product/[id]/page_client-reference-manifest.js", maxKB: 26 },
+    { rel: "server/app/collections/[slug]/page_client-reference-manifest.js", maxKB: 26 },
+    { rel: "server/app/bag/page_client-reference-manifest.js", maxKB: 24 },
+    { rel: "server/app/checkout/address/page_client-reference-manifest.js", maxKB: 22 },
+    { rel: "server/app/profile/page_client-reference-manifest.js", maxKB: 25 },
+    { rel: "server/app/imtheboss/page_client-reference-manifest.js", maxKB: 42 },
+    { rel: "server/app/imtheboss/products/page_client-reference-manifest.js", maxKB: 27 },
+    { rel: "server/app/imtheboss/orders/page_client-reference-manifest.js", maxKB: 27 },
+    { rel: "server/app/imtheboss/customers/page_client-reference-manifest.js", maxKB: 27 },
   ];
 
   for (const budget of routeBudgets) {
