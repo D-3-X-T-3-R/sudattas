@@ -20,157 +20,140 @@ function containsAny(query: string, roots: string[]): boolean {
   return roots.some((root) => new RegExp(`\\b${root}\\b`).test(normalized));
 }
 
-function resolveAdminRoute(query: string): string {
-  if (
-    containsAny(query, [
+const ADMIN_ROUTES = [
+  {
+    route: "/api/admin/shipments",
+    roots: [
       "getShipment",
       "createShipment",
       "updateShipment",
       "adminMarkOrderShipped",
       "adminMarkOrderDelivered",
       "syncOrderShipmentsFromShiprocket",
-    ])
-  ) {
-    return "/api/admin/shipments";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/reviews",
+    roots: [
       "searchReview",
       "updateReview",
       "deleteReview",
       "adminUpdateReviewStatus",
-    ])
-  ) {
-    return "/api/admin/reviews";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/customers",
+    roots: [
       "searchUser",
       "updateUser",
       "createUser",
       "deleteUser",
       "setUserStatus",
       "adminExportUserPii",
-    ])
-  ) {
-    return "/api/admin/customers";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/coupons",
+    roots: [
       "searchCouponAdmin",
       "createCouponAdmin",
       "updateCouponAdmin",
       "deleteCouponAdmin",
-    ])
-  ) {
-    return "/api/admin/coupons";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/transactions",
+    roots: [
       "createTransaction",
       "searchTransaction",
       "updateTransaction",
       "deleteTransaction",
-    ])
-  ) {
-    return "/api/admin/transactions";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/roles",
+    roots: [
       "createUserRole",
       "searchUserRole",
       "updateUserRole",
       "deleteUserRole",
-    ])
-  ) {
-    return "/api/admin/roles";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/activity-log",
+    roots: [
       "searchUserActivity",
       "searchEventLog",
       "createUserActivity",
       "createEventLog",
       "deleteUserActivity",
       "deleteEventLog",
-    ])
-  ) {
-    return "/api/admin/activity-log";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/newsletter",
+    roots: [
       "searchNewsletterSubscriber",
       "createNewsletterSubscriber",
       "updateNewsletterSubscriber",
       "deleteNewsletterSubscriber",
       "sendNewsletterCampaign",
       "searchNewsletterCampaign",
-    ])
-  ) {
-    return "/api/admin/newsletter";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/shipping-methods",
+    roots: [
       "searchShippingMethod",
       "createShippingMethod",
       "updateShippingMethod",
       "deleteShippingMethod",
-    ])
-  ) {
-    return "/api/admin/shipping-methods";
-  }
-
-  if (containsAny(query, ["abandonedCartSettings", "updateAbandonedCartSettings"])) {
-    return "/api/admin/app-settings";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/app-settings",
+    roots: [
+      "abandonedCartSettings",
+      "updateAbandonedCartSettings",
+    ],
+  },
+  {
+    route: "/api/admin/returns",
+    roots: [
       "searchReturnRequests",
       "adminMarkReturnReceived",
       "adminUpdateReturnStatus",
-    ])
-  ) {
-    return "/api/admin/returns";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/exchanges",
+    roots: [
       "searchExchangeRequests",
       "adminMarkExchangeReceived",
       "adminUpdateExchangeStatus",
       "scheduleExchangePickup",
       "syncExchangePickup",
-    ])
-  ) {
-    return "/api/admin/exchanges";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/refunds",
+    roots: [
       "getRefunds",
       "createRefund",
       "searchRefundAttempts",
       "resolveRefundAttemptNeedsReview",
-    ])
-  ) {
-    return "/api/admin/refunds";
-  }
-
-  if (containsAny(query, ["searchPaymentIntent", "getPaymentIntent"])) {
-    return "/api/admin/payment-intents";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/payment-intents",
+    roots: [
+      "searchPaymentIntent",
+      "getPaymentIntent",
+    ],
+  },
+  {
+    route: "/api/admin/orders",
+    roots: [
       "searchOrder",
       "searchOrderStatus",
       "updateOrder",
@@ -186,13 +169,11 @@ function resolveAdminRoute(query: string): string {
       "createOrderEvent",
       "getShippingAddresses",
       "createShippingAddress",
-    ])
-  ) {
-    return "/api/admin/orders";
-  }
-
-  if (
-    containsAny(query, [
+    ],
+  },
+  {
+    route: "/api/admin/products",
+    roots: [
       "searchCategory",
       "createCategory",
       "updateCategory",
@@ -247,10 +228,10 @@ function resolveAdminRoute(query: string): string {
       "confirmImageUpload",
       "syncProductImages",
       "shopHighlightMoods",
-    ])
-  ) {
-    return "/api/admin/products";
-  }
+    ],
+  },
+];
 
-  return "/api/admin/graphql";
+function resolveAdminRoute(query: string): string {
+  return ADMIN_ROUTES.find(({ roots }) => containsAny(query, roots))?.route ?? "/api/admin/graphql";
 }

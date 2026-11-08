@@ -85,7 +85,7 @@ function ComposeCampaignCard({ activeCount }: { activeCount: number }) {
     <AdminTableCard title="Compose campaign" icon={<Send className="h-4 w-4 text-[var(--color-green)]" />}>
       <p className="mb-4 text-sm text-[var(--color-muted)]">
         Sends immediately to all {activeCount} currently-subscribed email{activeCount === 1 ? "" : "s"} —
-        there's no draft or scheduled state. Recipients get it wrapped in the site's branded
+        there&apos;s no draft or scheduled state. Recipients get it wrapped in the site&apos;s branded
         template automatically, with a working unsubscribe link.
       </p>
       <div className="space-y-4">
@@ -153,7 +153,7 @@ function ComposeCampaignCard({ activeCount }: { activeCount: number }) {
         <DialogContent className="sm:max-w-md">
           <p className="text-[15px] leading-relaxed text-[var(--color-ink)]">
             Send <strong>&ldquo;{subject}&rdquo;</strong> to all {activeCount} subscribed email
-            {activeCount === 1 ? "" : "s"} now? This sends for real — there's no preview or undo
+            {activeCount === 1 ? "" : "s"} now? This sends for real — there&apos;s no preview or undo
             once it starts.
           </p>
           <div className="mt-5 flex justify-end gap-2">

@@ -27,7 +27,7 @@ function formatDate(raw: string): string {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function AdminExchangesPage() {
+function useExchangeRequests() {
   const queryClient = useQueryClient();
   const [rowError, setRowError] = useState<Record<string, string>>({});
 
@@ -83,6 +83,77 @@ export default function AdminExchangesPage() {
       setError(exchangeId, err.message || "Failed to refresh pickup tracking."),
   });
 
+  return {
+    exchangesQuery,
+    rowError,
+    receivedMutation,
+    statusMutation,
+    schedulePickupMutation,
+    syncPickupMutation,
+  };
+}
+
+function ExchangeEmptyState({
+  isLoading,
+  isError,
+  count,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  count: number;
+}) {
+  return (
+    <>
+      {isLoading ? (
+        <p className="py-8 text-center text-sm text-[var(--color-muted)]">Loading exchanges…</p>
+      ) : null}
+      {isError ? (
+        <p className="py-8 text-center text-sm text-rose-700">Could not load exchange requests.</p>
+      ) : null}
+      {!isLoading && !isError && count === 0 ? (
+        <p className="py-8 text-center text-sm text-[var(--color-muted)]">No exchange requests yet.</p>
+      ) : null}
+    </>
+  );
+}
+
+function ExchangeItemDetails({ ex }: { ex: ExchangeRequestRow }) {
+  return (
+    <div className="mt-2.5 overflow-x-auto">
+      <table className="w-full min-w-[420px] border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
+            <th className="pb-1.5 pr-4 font-medium">Order item</th>
+            <th className="pb-1.5 pr-4 font-medium">Qty</th>
+            <th className="pb-1.5 pr-4 font-medium">Desired variant</th>
+            <th className="pb-1.5 font-medium">Replacement order</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="py-1.5 pr-4 text-[var(--color-ink)]">#{ex.orderDetailId}</td>
+            <td className="py-1.5 pr-4 text-[var(--color-muted)]">{ex.quantity}</td>
+            <td className="py-1.5 pr-4 text-[var(--color-ink)]">#{ex.desiredVariantId}</td>
+            <td className="py-1.5 text-[var(--color-muted)]">
+              {ex.replacementOrderId ? `#${ex.replacementOrderId}` : "—"}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function AdminExchangesPage() {
+  const {
+    exchangesQuery,
+    rowError,
+    receivedMutation,
+    statusMutation,
+    schedulePickupMutation,
+    syncPickupMutation,
+  } = useExchangeRequests();
+
   const exchanges = exchangesQuery.data ?? [];
 
   return (
@@ -93,15 +164,11 @@ export default function AdminExchangesPage() {
     >
       <AdminGroupTabs tabs={ORDERS_GROUP_TABS} />
       <AdminTableCard title="Exchange requests" icon={<Repeat className="h-4 w-4 text-[var(--color-green)]" />}>
-        {exchangesQuery.isLoading ? (
-          <p className="py-8 text-center text-sm text-[var(--color-muted)]">Loading exchanges…</p>
-        ) : null}
-        {exchangesQuery.isError ? (
-          <p className="py-8 text-center text-sm text-rose-700">Could not load exchange requests.</p>
-        ) : null}
-        {!exchangesQuery.isLoading && !exchangesQuery.isError && exchanges.length === 0 ? (
-          <p className="py-8 text-center text-sm text-[var(--color-muted)]">No exchange requests yet.</p>
-        ) : null}
+        <ExchangeEmptyState
+          isLoading={exchangesQuery.isLoading}
+          isError={exchangesQuery.isError}
+          count={exchanges.length}
+        />
 
         {!exchangesQuery.isLoading && !exchangesQuery.isError && exchanges.length > 0 ? (
           <div className="space-y-3">
@@ -134,28 +201,7 @@ export default function AdminExchangesPage() {
                     <StatusBadge label={ex.status} />
                   </div>
 
-                  <div className="mt-2.5 overflow-x-auto">
-                    <table className="w-full min-w-[420px] border-collapse text-sm">
-                      <thead>
-                        <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
-                          <th className="pb-1.5 pr-4 font-medium">Order item</th>
-                          <th className="pb-1.5 pr-4 font-medium">Qty</th>
-                          <th className="pb-1.5 pr-4 font-medium">Desired variant</th>
-                          <th className="pb-1.5 font-medium">Replacement order</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="py-1.5 pr-4 text-[var(--color-ink)]">#{ex.orderDetailId}</td>
-                          <td className="py-1.5 pr-4 text-[var(--color-muted)]">{ex.quantity}</td>
-                          <td className="py-1.5 pr-4 text-[var(--color-ink)]">#{ex.desiredVariantId}</td>
-                          <td className="py-1.5 text-[var(--color-muted)]">
-                            {ex.replacementOrderId ? `#${ex.replacementOrderId}` : "—"}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  <ExchangeItemDetails ex={ex} />
 
                   {ex.pickupAwbCode ? (
                     <div className="mt-2.5 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] p-2.5 text-sm">
@@ -168,7 +214,7 @@ export default function AdminExchangesPage() {
                         {ex.pickupScheduledAt ? ` · Booked ${formatDate(ex.pickupScheduledAt)}` : ""}
                       </p>
                     </div>
-                  ) : null}
+                    ) : null}
 
                   {isOpen || needsReceivedRetry ? (
                     <div className="mt-3 flex flex-wrap gap-1.5">
@@ -253,14 +299,14 @@ export default function AdminExchangesPage() {
                         Cancel
                       </Button>
                     </div>
-                  ) : null}
+                    ) : null}
                   {needsReceivedRetry ? (
                     <p className="mt-2 text-sm text-amber-700">
                       Item received but the replacement order hasn&apos;t been created yet (likely the
                       desired size is out of stock) — click &ldquo;Mark received&rdquo; again to retry
                       once stock is available.
                     </p>
-                  ) : null}
+                    ) : null}
                   {rowError[ex.exchangeId] && (
                     <p className="mt-2 text-sm text-red-600" role="alert">
                       {rowError[ex.exchangeId]}
@@ -270,7 +316,7 @@ export default function AdminExchangesPage() {
               );
             })}
           </div>
-        ) : null}
+          ) : null}
       </AdminTableCard>
     </AdminPageShell>
   );

@@ -56,17 +56,10 @@ export function CustomerProfileDialog({
   );
 }
 
-function CustomerProfileDialogBody({
-  customer,
-  orderStats,
-  onUpdated,
-  onClose,
-}: {
-  customer: CustomerListRow;
-  orderStats: Map<string, { count: number; totalPaise: number }>;
-  onUpdated: (updated: CustomerListRow) => void;
-  onClose: () => void;
-}) {
+function useCustomerProfile(
+  customer: CustomerListRow,
+  onUpdated: (updated: CustomerListRow) => void
+) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState(customer.fullName ?? "");
@@ -122,6 +115,96 @@ function CustomerProfileDialogBody({
     },
     onError: (err: Error) => setPiiError(err.message || "Failed to export PII."),
   });
+
+  return {
+    editing, setEditing, fullName, setFullName, address, setAddress, phone, setPhone,
+    error, statusConfirmOpen, setStatusConfirmOpen, statusError, setStatusError,
+    piiError, isDeactivated, updateMutation, statusMutation, exportPiiMutation,
+  };
+}
+
+function CustomerStatusConfirmation({
+  customer,
+  profile,
+}: {
+  customer: CustomerListRow;
+  profile: ReturnType<typeof useCustomerProfile>;
+}) {
+  const { statusConfirmOpen, setStatusConfirmOpen, statusError, isDeactivated, statusMutation } =
+    profile;
+  return (
+    <Dialog
+      open={statusConfirmOpen}
+      onOpenChange={(open) => !open && !statusMutation.isPending && setStatusConfirmOpen(false)}
+    >
+      <DialogContent className="sm:max-w-md">
+        <p className="text-[15px] leading-relaxed text-[var(--color-ink)]">
+          {isDeactivated ? (
+            <>
+              Reactivate <strong>{customer.fullName ?? customer.username ?? customer.email}</strong>?
+              They&rsquo;ll be able to log in and use their account again immediately.
+            </>
+          ) : (
+            <>
+              Deactivate <strong>{customer.fullName ?? customer.username ?? customer.email}</strong>?
+              They won&rsquo;t be able to log in, check out, or take any account action until
+              reactivated — existing orders are unaffected. Changes may take up to a few
+              minutes to take effect everywhere.
+            </>
+          )}
+        </p>
+        {statusError && (
+          <p className="mt-2 text-sm text-red-600" role="alert">
+            {statusError}
+          </p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setStatusConfirmOpen(false)}
+            disabled={statusMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="outline"
+            className={
+              isDeactivated
+                ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                : "border-red-200 text-red-600 hover:bg-red-50"
+            }
+            onClick={() => statusMutation.mutate()}
+            disabled={statusMutation.isPending}
+          >
+            {statusMutation.isPending
+              ? "Saving…"
+              : isDeactivated
+                ? "Reactivate"
+                : "Deactivate"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CustomerProfileDialogBody({
+  customer,
+  orderStats,
+  onUpdated,
+  onClose,
+}: {
+  customer: CustomerListRow;
+  orderStats: Map<string, { count: number; totalPaise: number }>;
+  onUpdated: (updated: CustomerListRow) => void;
+  onClose: () => void;
+}) {
+  const profile = useCustomerProfile(customer, onUpdated);
+  const {
+    editing, setEditing, fullName, setFullName, address, setAddress, phone, setPhone,
+    error, setStatusConfirmOpen, setStatusError, piiError, isDeactivated,
+    updateMutation, exportPiiMutation,
+  } = profile;
 
   return (
     <div className="space-y-4 text-[15px]">
@@ -281,58 +364,7 @@ function CustomerProfileDialogBody({
         </div>
       )}
 
-      <Dialog
-        open={statusConfirmOpen}
-        onOpenChange={(open) => !open && !statusMutation.isPending && setStatusConfirmOpen(false)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <p className="text-[15px] leading-relaxed text-[var(--color-ink)]">
-            {isDeactivated ? (
-              <>
-                Reactivate <strong>{customer.fullName ?? customer.username ?? customer.email}</strong>?
-                They&rsquo;ll be able to log in and use their account again immediately.
-              </>
-            ) : (
-              <>
-                Deactivate <strong>{customer.fullName ?? customer.username ?? customer.email}</strong>?
-                They won&rsquo;t be able to log in, check out, or take any account action until
-                reactivated — existing orders are unaffected. Changes may take up to a few
-                minutes to take effect everywhere.
-              </>
-            )}
-          </p>
-          {statusError && (
-            <p className="mt-2 text-sm text-red-600" role="alert">
-              {statusError}
-            </p>
-          )}
-          <div className="mt-5 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setStatusConfirmOpen(false)}
-              disabled={statusMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              className={
-                isDeactivated
-                  ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                  : "border-red-200 text-red-600 hover:bg-red-50"
-              }
-              onClick={() => statusMutation.mutate()}
-              disabled={statusMutation.isPending}
-            >
-              {statusMutation.isPending
-                ? "Saving…"
-                : isDeactivated
-                  ? "Reactivate"
-                  : "Deactivate"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CustomerStatusConfirmation customer={customer} profile={profile} />
     </div>
   );
 }

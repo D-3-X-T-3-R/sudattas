@@ -26,7 +26,7 @@ function formatDate(raw: string): string {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function AdminRefundsPage() {
+function useRefundData() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const actorId = session?.user?.email ?? "admin";
@@ -80,6 +80,83 @@ export default function AdminRefundsPage() {
     },
     onError: (err: Error) => setCreateError(err.message || "Failed to record refund."),
   });
+
+  return {
+    attemptRowError,
+    newOrderId,
+    setNewOrderId,
+    newGatewayRefundId,
+    setNewGatewayRefundId,
+    newAmountRupees,
+    setNewAmountRupees,
+    createError,
+    attemptsQuery,
+    refundsQuery,
+    resolveMutation,
+    createRefundMutation,
+  };
+}
+
+function RefundForm({ data }: { data: ReturnType<typeof useRefundData> }) {
+  const {
+    newOrderId,
+    setNewOrderId,
+    newGatewayRefundId,
+    setNewGatewayRefundId,
+    newAmountRupees,
+    setNewAmountRupees,
+    createError,
+    createRefundMutation,
+  } = data;
+  return (
+    <div className="mt-4 border-t border-[var(--color-line)] pt-4">
+      <p className="mb-2 text-sm font-medium text-[var(--color-muted)]">Record a refund</p>
+      <div className="flex flex-wrap items-end gap-2.5">
+        <Input
+          value={newOrderId}
+          onChange={(e) => setNewOrderId(e.target.value)}
+          placeholder="Order ID"
+          className="h-10 max-w-[8rem] rounded-lg text-[15px]"
+        />
+        <Input
+          value={newGatewayRefundId}
+          onChange={(e) => setNewGatewayRefundId(e.target.value)}
+          placeholder="Gateway refund ID"
+          className="h-10 max-w-[14rem] rounded-lg text-[15px]"
+        />
+        <Input
+          value={newAmountRupees}
+          onChange={(e) => setNewAmountRupees(e.target.value)}
+          placeholder="Amount (₹)"
+          className="h-10 max-w-[10rem] rounded-lg text-[15px]"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={
+            !newOrderId.trim() ||
+            !newGatewayRefundId.trim() ||
+            !newAmountRupees.trim() ||
+            createRefundMutation.isPending
+          }
+          onClick={() => createRefundMutation.mutate()}
+        >
+          {createRefundMutation.isPending ? "Recording…" : "Record"}
+        </Button>
+      </div>
+      {createError && (
+        <p className="mt-2 text-sm text-red-600" role="alert">
+          {createError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export default function AdminRefundsPage() {
+  const data = useRefundData();
+  const { attemptRowError, attemptsQuery, refundsQuery, resolveMutation } = data;
 
   const attempts = attemptsQuery.data ?? [];
   const refunds = refundsQuery.data ?? [];
@@ -231,48 +308,7 @@ export default function AdminRefundsPage() {
           </div>
         ) : null}
 
-        <div className="mt-4 border-t border-[var(--color-line)] pt-4">
-          <p className="mb-2 text-sm font-medium text-[var(--color-muted)]">Record a refund</p>
-          <div className="flex flex-wrap items-end gap-2.5">
-            <Input
-              value={newOrderId}
-              onChange={(e) => setNewOrderId(e.target.value)}
-              placeholder="Order ID"
-              className="h-10 max-w-[8rem] rounded-lg text-[15px]"
-            />
-            <Input
-              value={newGatewayRefundId}
-              onChange={(e) => setNewGatewayRefundId(e.target.value)}
-              placeholder="Gateway refund ID"
-              className="h-10 max-w-[14rem] rounded-lg text-[15px]"
-            />
-            <Input
-              value={newAmountRupees}
-              onChange={(e) => setNewAmountRupees(e.target.value)}
-              placeholder="Amount (₹)"
-              className="h-10 max-w-[10rem] rounded-lg text-[15px]"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={
-                !newOrderId.trim() ||
-                !newGatewayRefundId.trim() ||
-                !newAmountRupees.trim() ||
-                createRefundMutation.isPending
-              }
-              onClick={() => createRefundMutation.mutate()}
-            >
-              {createRefundMutation.isPending ? "Recording…" : "Record"}
-            </Button>
-          </div>
-          {createError && (
-            <p className="mt-2 text-sm text-red-600" role="alert">
-              {createError}
-            </p>
-          )}
-        </div>
+        <RefundForm data={data} />
       </AdminTableCard>
     </AdminPageShell>
   );
