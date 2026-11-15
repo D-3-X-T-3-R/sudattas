@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { SlidersHorizontal, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProductCard } from "@/components/product-card";
+import type { ProductTransitionOrigin } from "@/components/product-card";
 import type { Product } from "@/lib/schemas";
 import { Section } from "@/components/ui/section";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -28,7 +29,7 @@ export interface ExploreSectionProps {
   catalog: StorefrontCatalogController;
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
-  onQuickView: (p: Product) => void;
+  onQuickView: (p: Product, origin: ProductTransitionOrigin) => void;
 }
 
 function PriceRange({
@@ -221,7 +222,7 @@ function ProductResults({
   products: Product[];
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
-  onQuickView: (p: Product) => void;
+  onQuickView: (p: Product, origin: ProductTransitionOrigin) => void;
   onReset: () => void;
 }) {
   if (products.length === 0) {
@@ -251,6 +252,7 @@ function ProductResults({
             wished={!!wishlist[product.id]}
             onToggleWish={onToggleWish}
             onQuickView={onQuickView}
+            transitionScope="explore"
           />
         </ScrollReveal>
       ))}

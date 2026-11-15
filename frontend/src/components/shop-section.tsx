@@ -1,6 +1,6 @@
 "use client";
 
-import { ProductCard } from "@/components/product-card";
+import { ProductCard, type ProductTransitionOrigin } from "@/components/product-card";
 import type { Product } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/ui/section";
@@ -11,7 +11,7 @@ export interface ShopSectionProps {
   products: Product[];
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
-  onQuickView: (p: Product) => void;
+  onQuickView: (p: Product, origin: ProductTransitionOrigin) => void;
   onViewAll?: () => void;
 }
 
@@ -52,6 +52,7 @@ export function ShopSection({
               wished={!!wishlist[p.id]}
               onToggleWish={onToggleWish}
               onQuickView={onQuickView}
+              transitionScope="shop"
             />
           </ScrollReveal>
         ))}

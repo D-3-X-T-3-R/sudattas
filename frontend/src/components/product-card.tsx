@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { INR } from "@/lib/constants";
@@ -24,9 +25,16 @@ export interface ProductCardProps {
   product: Product;
   wished: boolean;
   onToggleWish: (p: Product) => void;
-  onQuickView: (p: Product) => void;
+  onQuickView: (p: Product, origin: ProductTransitionOrigin) => void;
   featured?: boolean;
+  transitionScope?: string;
 }
+
+export type ProductTransitionOrigin = {
+  rect: { top: number; left: number; width: number; height: number };
+  imageSrc: string;
+  transitionKey: string;
+};
 
 export function ProductCard({
   product,
@@ -34,15 +42,29 @@ export function ProductCard({
   onToggleWish,
   onQuickView,
   featured = false,
+  transitionScope = "products",
 }: ProductCardProps) {
   const hasHoverImage = !!product.hoverImage && product.hoverImage !== product.image;
+  const transitionKey = `${transitionScope}:${product.id}`;
 
   return (
     <article className={cn("group flex flex-col", featured && "h-full")}>
       <div className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)]">
-        <button
-          type="button"
-          onClick={() => onQuickView(product)}
+        <Link
+          href={`/product/${product.id}`}
+          data-product-transition-key={transitionKey}
+          onClick={(event) => {
+            // Desktop uses the Link's normal route navigation. The shared-image
+            // transition is intentionally limited to the mobile layout.
+            if (window.innerWidth >= 768) return;
+            event.preventDefault();
+            const rect = event.currentTarget.getBoundingClientRect();
+            onQuickView(product, {
+              rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+              imageSrc: product.image || PLACEHOLDER_IMAGE,
+              transitionKey,
+            });
+          }}
           className="relative block w-full text-left aspect-[2/3]"
           aria-label={`View ${product.name}`}
         >
@@ -67,7 +89,7 @@ export function ProductCard({
               unoptimized={isExternalProductImage(product.hoverImage)}
             />
           ) : null}
-        </button>
+        </Link>
 
         <span className="pointer-events-none absolute left-3 top-3 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)]/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-green)] backdrop-blur-sm">
           New

@@ -20,6 +20,7 @@ import { Section } from "@/components/ui/section";
 import { TrustStrip } from "@/components/trust-strip";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
+import { finishProductReturnTransition, navigateToProductWithTransition } from "@/lib/product-page-transition";
 
 const StorySection = dynamic(() => import("@/components/story-section").then((m) => m.StorySection), {
   loading: () => (
@@ -65,6 +66,10 @@ export function Storefront() {
   useStorefrontNavigationEffects({ pathname, reduceMotion, loadingProducts });
 
   useEffect(() => {
+    if (!loadingProducts) finishProductReturnTransition();
+  }, [loadingProducts]);
+
+  useEffect(() => {
     void ensureGuestSession();
   }, []);
 
@@ -100,7 +105,6 @@ export function Storefront() {
     return () => window.removeEventListener(PENDING_HOME_MOOD_EVENT, applyPendingMood);
   }, [loadingProducts, applyShopMoodFilter]);
 
-  const goToProduct = (id: string) => router.push(`/product/${id}`);
   const goToWithMotion = (id: string, instant?: boolean) => goTo(id, instant ?? reduceMotion);
 
   return (
@@ -164,7 +168,7 @@ export function Storefront() {
           products={products}
           wishlist={wishlist}
           onToggleWish={toggleWish}
-          onQuickView={(product) => goToProduct(product.id)}
+          onQuickView={(product, origin) => navigateToProductWithTransition(router, product, origin)}
           onViewAll={() => {
             catalog.setSort("Featured");
             goTo("explore", reduceMotion);
@@ -191,13 +195,14 @@ export function Storefront() {
           catalog={catalog}
           wishlist={wishlist}
           onToggleWish={toggleWish}
-          onQuickView={(product) => goToProduct(product.id)}
+          onQuickView={(product, origin) => navigateToProductWithTransition(router, product, origin)}
         />
       )}
 
       {/* <JournalTeaserSection /> */}
       <StorySection />
       <Footer goTo={goToWithMotion} />
+
 
     </div>
   );
