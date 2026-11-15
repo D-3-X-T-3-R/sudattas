@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Menu, Heart, ShoppingBag } from "lucide-react";
+import { Search, Heart, ShoppingBag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { setPendingHomeSection } from "@/hooks/use-scroll-to";
@@ -12,11 +12,11 @@ import { freeShippingThresholdMinor } from "@/lib/env/public";
 
 const NAV_LINKS = [
   { type: "section", id: "top", label: "Home" },
-  { type: "section", id: "category-collections", label: "Collections" },
+  { type: "section", id: "category-collections", label: "Categories" },
   { type: "section", id: "shop", label: "New Arrivals" },
   { type: "section", id: "collections", label: "Moods" },
   { type: "section", id: "explore", label: "Explore" },
-  { type: "section", id: "journal", label: "Journal" },
+  // { type: "section", id: "journal", label: "Journal" },
   { type: "route", href: "/about", label: "About Us" },
 ] as const;
 
@@ -32,6 +32,8 @@ export interface HeaderProps {
   cartCount: number;
   wishCount: number;
   setMenuOpen: (open: boolean) => void;
+  menuOpen?: boolean;
+  menuPresent?: boolean;
   goTo: (id: string, instant?: boolean) => void;
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
@@ -83,10 +85,6 @@ function AnnouncementBanner() {
   return (
     <div
       className="overflow-hidden bg-[var(--color-green)] py-2"
-      style={{
-        backgroundImage:
-          "repeating-linear-gradient(135deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 7px)",
-      }}
     >
       <div className="announcement-marquee flex whitespace-nowrap">
         <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-on-deep)]">
@@ -106,6 +104,8 @@ export function Header({
   cartCount,
   wishCount,
   setMenuOpen,
+  menuOpen = false,
+  menuPresent = menuOpen,
   goTo,
   searchOpen,
   setSearchOpen,
@@ -136,6 +136,7 @@ export function Header({
     <header
       className={cn(
         "sticky top-0 z-40 w-full border-b border-[var(--color-line)] bg-[var(--color-surface)]/96 backdrop-blur",
+        menuPresent && "z-[60]",
         scrolled && "shadow-[0_5px_18px_rgba(45,42,38,0.07)]"
       )}
     >
@@ -146,11 +147,17 @@ export function Header({
         <div className="relative mx-auto flex h-14 w-full max-w-[var(--container-max)] items-center justify-between px-[var(--gutter-mobile)]">
           <button
             type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open menu"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-[var(--color-line-strong)] bg-[var(--color-surface-soft)] text-[var(--color-green)] shadow-[var(--shadow-subtle)] transition-colors hover:border-[var(--color-gold)] hover:text-[var(--color-green-2)]"
+            id="mobile-menu-toggle"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-green)] transition-colors hover:text-[var(--color-green-2)]"
           >
-            <Menu size={20} strokeWidth={2.2} />
+            <span aria-hidden="true" className="relative h-5 w-5">
+              <span className={cn("absolute left-0 top-[3px] h-0.5 w-5 rounded-full bg-current transition-transform duration-200 motion-reduce:transition-none", menuOpen && "translate-y-[6px] rotate-45")} />
+              <span className={cn("absolute left-0 top-[9px] h-0.5 w-5 rounded-full bg-current transition-opacity duration-200 motion-reduce:transition-none", menuOpen && "opacity-0")} />
+              <span className={cn("absolute left-0 top-[15px] h-0.5 w-5 rounded-full bg-current transition-transform duration-200 motion-reduce:transition-none", menuOpen && "-translate-y-[6px] -rotate-45")} />
+            </span>
           </button>
 
           <Logo className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
@@ -200,6 +207,7 @@ export function Header({
               <button
                 type="button"
                 onClick={() => setSearchOpen(!searchOpen)}
+                data-site-search
                 className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent text-[var(--color-ink)] transition-colors hover:border-[var(--color-line)] hover:text-[var(--color-green)]"
                 aria-label="Search"
               >
@@ -225,7 +233,7 @@ export function Header({
           </div>
 
           {searchOpen ? (
-            <div className="absolute left-auto right-[var(--gutter-tablet)] top-full z-50 mt-2 w-[420px] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-soft)]">
+            <div data-site-search className="absolute left-auto right-[var(--gutter-tablet)] top-full z-50 mt-2 w-[420px] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-soft)]">
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -239,7 +247,7 @@ export function Header({
       </div>
 
       {searchOpen ? (
-        <div className="fixed left-[var(--gutter-mobile)] right-[var(--gutter-mobile)] top-[calc(env(safe-area-inset-top)+4.55rem)] z-50 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-soft)] lg:hidden">
+        <div data-site-search className="fixed left-[var(--gutter-mobile)] right-[var(--gutter-mobile)] top-[calc(env(safe-area-inset-top)+4.55rem)] z-50 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-soft)] lg:hidden">
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}

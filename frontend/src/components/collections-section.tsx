@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { MobileCardRow } from "@/components/ui/mobile-card-row";
 import Image from "next/image";
-import { ChevronRight } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { COLLECTIONS } from "@/lib/constants";
 import { COLLECTION_IMAGES } from "@/lib/seed-data";
@@ -31,18 +31,18 @@ type MoodCardVariant = "sm" | "md" | "feature";
 
 const moodCard = {
   sm: {
-    media: "aspect-[4/5]",
-    panel: "min-h-[118px] p-3.5 md:min-h-[142px] md:p-4 lg:min-h-[154px] flex flex-1 flex-col",
+    media: "aspect-[2/3]",
+    panel: "p-3.5 md:p-4",
     title: "text-[1.08rem] md:text-[1.3rem]",
   },
   md: {
-    media: "aspect-[4/5]",
-    panel: "min-h-[118px] p-3.5 md:min-h-[142px] md:p-4 lg:min-h-[154px] flex flex-1 flex-col",
+    media: "aspect-[2/3]",
+    panel: "p-3.5 md:p-4",
     title: "text-[1.1rem] md:text-[1.45rem]",
   },
   feature: {
-    media: "aspect-[4/5] md:aspect-[5/6] lg:aspect-[4/5]",
-    panel: "min-h-[118px] p-3.5 md:min-h-[142px] lg:min-h-[154px] md:p-5 flex flex-1 flex-col",
+    media: "aspect-[2/3]",
+    panel: "p-3.5 md:p-5",
     title: "text-[1.1rem] md:text-[1.55rem]",
   },
 } as const;
@@ -88,27 +88,20 @@ export function CollectionCard({
           alt={c.key}
           fill
           className="object-cover transition duration-500 ease-out group-hover:scale-[1.03]"
-          sizes="(max-width: 768px) 50vw, 25vw"
+          sizes="(max-width: 1023px) 50vw, 33vw"
           loading="lazy"
         />
       </div>
       <div className={cn("border-t border-[var(--color-line)]", tone.panel)}>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
-          {c.isMood ? "Mood" : "Collection"}
-        </p>
         <p
           className={cn(
-            "mt-1 h-[2.8rem] overflow-hidden font-display leading-[1.15] text-[var(--color-ink)] md:h-[3.1rem] lg:h-[3.45rem]",
+            "overflow-hidden font-display leading-[1.15] text-[var(--color-ink)]",
             tone.title
           )}
           style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}
         >
           {c.blurb}
         </p>
-        <span className="mt-auto pt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)]">
-          Explore
-          <ChevronRight className="h-3.5 w-3.5" />
-        </span>
       </div>
     </button>
   );
@@ -136,11 +129,7 @@ export function CollectionsSection({
   }));
 
   const displayCollections: DisplayCollection[] =
-    moods.length > 0
-      ? showAll
-        ? allMoodItems
-        : allMoodItems.slice(0, 6)
-      : defaultCollections.slice(0, 6);
+    moods.length > 0 ? allMoodItems : defaultCollections;
 
   if (displayCollections.length === 0) return null;
 
@@ -156,7 +145,7 @@ export function CollectionsSection({
               <button
                 type="button"
                 onClick={() => setShowAll((v) => !v)}
-                className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)] hover:text-[var(--color-gold)]"
+                className="hidden text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)] hover:text-[var(--color-gold)] md:inline-flex"
               >
                 {showAll ? "Show Less" : "View All"}
               </button>
@@ -165,7 +154,7 @@ export function CollectionsSection({
         />
       </ScrollReveal>
 
-      <div className="mx-auto mt-4 grid max-w-[1300px] grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+      <MobileCardRow itemCount={displayCollections.length} label="Moods" reduceMotion={reduceMotion} className="mx-auto mt-4 flex max-w-[1300px] snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-3 md:grid md:snap-none md:grid-cols-2 md:gap-5 md:overflow-visible md:pb-0 lg:grid-cols-3">
         <AnimatePresence initial={false}>
           {displayCollections.map((item, idx) => (
             <motion.div
@@ -174,7 +163,7 @@ export function CollectionsSection({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="h-full"
+              className={`h-full min-w-0 shrink-0 basis-[calc((100%-0.75rem)/2)] snap-start md:basis-auto ${idx >= 6 && (!showAll || moods.length === 0) ? "md:hidden" : ""}`}
             >
               <CollectionCard
                 c={item}
@@ -187,7 +176,7 @@ export function CollectionsSection({
             </motion.div>
           ))}
         </AnimatePresence>
-      </div>
+      </MobileCardRow>
     </Section>
   );
 }

@@ -34,10 +34,14 @@ const DialogContent = React.forwardRef<
     titleClassName?: string;
     showClose?: boolean;
     contentClassName?: string;
+    headerClassName?: string;
+    closeButtonClassName?: string;
+    overlayClassName?: string;
+    closeIcon?: React.ReactNode;
   }
->(({ className, children, title, titleClassName, showClose = true, contentClassName, ...props }, ref) => (
+>(({ className, children, title, titleClassName, showClose = true, contentClassName, headerClassName, closeButtonClassName, overlayClassName, closeIcon, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
       aria-describedby={undefined}
@@ -48,7 +52,7 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {(title || showClose) ? (
-        <div className="flex items-center justify-between border-b border-[var(--color-line)] px-4 py-3">
+        <div className={cn("flex items-center justify-between border-b border-[var(--color-line)] px-4 py-3", headerClassName)}>
           {title ? (
             <DialogPrimitive.Title
               className={cn(
@@ -63,8 +67,8 @@ const DialogContent = React.forwardRef<
           )}
           {showClose && (
             <DialogPrimitive.Close asChild>
-              <Button variant="outline" size="icon" aria-label="Close">
-                <X className="h-5 w-5" />
+              <Button variant="outline" size="icon" aria-label="Close" className={closeButtonClassName}>
+                {closeIcon ?? <X className="h-5 w-5" />}
               </Button>
             </DialogPrimitive.Close>
           )}

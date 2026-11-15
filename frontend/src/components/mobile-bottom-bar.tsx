@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, Search, ShoppingBag, User } from "lucide-react";
+import { Heart, Home, Search, ShoppingBag, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface MobileBottomBarProps {
@@ -20,13 +20,13 @@ export function MobileBottomBar({
   onSearchOpen,
 }: MobileBottomBarProps) {
   const itemClass =
-    "relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-green)]";
+    "relative flex min-h-12 min-w-0 items-center justify-center rounded-full px-1 text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-green)]";
   const iconWrapClass =
     "relative inline-flex h-6 w-6 items-center justify-center";
 
   return (
     <nav
-      className="mobile-bottom-bar fixed z-40 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)]/98 shadow-[0_10px_30px_rgba(45,42,38,0.18)] backdrop-blur will-change-transform [backface-visibility:hidden] [transform:translateZ(0)] lg:hidden"
+      className="mobile-bottom-bar fixed z-40 mx-auto w-[80%] max-w-sm rounded-full border border-[var(--color-line)] bg-[var(--color-surface)]/98 shadow-[0_10px_30px_rgba(45,42,38,0.18)] backdrop-blur will-change-transform [backface-visibility:hidden] [transform:translateZ(0)] lg:hidden"
       style={{
         bottom: "calc(0.75rem + env(safe-area-inset-bottom))",
         left: "max(0.75rem, env(safe-area-inset-left))",
@@ -34,28 +34,31 @@ export function MobileBottomBar({
       }}
       aria-label="Mobile utilities"
     >
-      <div className="mx-auto grid w-full grid-cols-4 gap-1 px-2 py-1.5">
+      <div className="mx-auto grid w-full grid-cols-5 gap-1 px-2 py-1.5">
+        <Link href="/" className={itemClass} aria-label="Home">
+          <span className={iconWrapClass}>
+            <Home className="h-5 w-5" />
+          </span>
+        </Link>
+
         {authenticated ? (
           <Link href="/profile" className={itemClass} aria-label="Profile">
             <span className={iconWrapClass}>
               <User className="h-5 w-5" />
             </span>
-            <span className="truncate">Profile</span>
           </Link>
         ) : (
           <button type="button" onClick={onProfileOpen} className={itemClass} aria-label="Sign in">
             <span className={iconWrapClass}>
               <User className="h-5 w-5" />
             </span>
-            <span className="truncate">Profile</span>
           </button>
         )}
 
-        <button type="button" onClick={onSearchOpen} className={itemClass} aria-label="Search">
+        <button data-site-search type="button" onClick={onSearchOpen} className={itemClass} aria-label="Search">
           <span className={iconWrapClass}>
             <Search className="h-5 w-5" />
           </span>
-          <span className="truncate">Search</span>
         </button>
 
         <Link
@@ -71,7 +74,6 @@ export function MobileBottomBar({
               </span>
             )}
           </span>
-          <span className="truncate">Wishlist</span>
         </Link>
 
         <Link
@@ -87,7 +89,6 @@ export function MobileBottomBar({
               </span>
             )}
           </span>
-          <span className="truncate">Bag</span>
         </Link>
       </div>
     </nav>

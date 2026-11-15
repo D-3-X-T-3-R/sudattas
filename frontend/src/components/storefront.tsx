@@ -8,14 +8,14 @@ import { useStorefront } from "@/context/storefront-context";
 import { useStorefrontCatalog } from "@/domains/storefront/hooks/use-storefront-catalog";
 import { useStorefrontNavigationEffects } from "@/domains/storefront/hooks/use-storefront-navigation-effects";
 import { ensureGuestSession } from "@/lib/session";
-import { consumePendingHomeCollection, goTo, PENDING_HOME_COLLECTION_EVENT } from "@/hooks/use-scroll-to";
+import { consumePendingHomeCollection, consumePendingHomeMood, goTo, PENDING_HOME_COLLECTION_EVENT, PENDING_HOME_MOOD_EVENT } from "@/hooks/use-scroll-to";
 import { HeroSection } from "@/components/hero-section";
 import { CollectionsSection } from "@/components/collections-section";
 import { CategoriesSection } from "@/components/categories-section";
 import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
 import { FullBleedVideoSection } from "@/components/full-bleed-video-section";
-import { JournalTeaserSection } from "@/components/journal-teaser-section";
+// import { JournalTeaserSection } from "@/components/journal-teaser-section";
 import { Section } from "@/components/ui/section";
 import { TrustStrip } from "@/components/trust-strip";
 import { useToast } from "@/components/ui/toast";
@@ -89,6 +89,17 @@ export function Storefront() {
     return () => window.removeEventListener(PENDING_HOME_COLLECTION_EVENT, onPendingCollection);
   }, [setCollection]);
 
+  useEffect(() => {
+    const applyPendingMood = () => {
+      if (loadingProducts) return;
+      const moodId = consumePendingHomeMood();
+      if (moodId) void applyShopMoodFilter(moodId);
+    };
+    applyPendingMood();
+    window.addEventListener(PENDING_HOME_MOOD_EVENT, applyPendingMood);
+    return () => window.removeEventListener(PENDING_HOME_MOOD_EVENT, applyPendingMood);
+  }, [loadingProducts, applyShopMoodFilter]);
+
   const goToProduct = (id: string) => router.push(`/product/${id}`);
   const goToWithMotion = (id: string, instant?: boolean) => goTo(id, instant ?? reduceMotion);
 
@@ -120,6 +131,15 @@ export function Storefront() {
       <CategoriesSection
         categories={categories.filter((category) => collectionOptions.includes(category.name))}
         onPickCategory={(name) => setCollection(name)}
+        reduceMotion={reduceMotion}
+      />
+
+      <CollectionsSection
+        setCollection={setCollection}
+        moods={moods}
+        onPickMood={(mood) => {
+          void applyShopMoodFilter(mood.moodId);
+        }}
         reduceMotion={reduceMotion}
       />
 
@@ -160,15 +180,6 @@ export function Storefront() {
         body="From loom to wardrobe — every piece is finished by hand, in small batches, with time-honoured techniques."
       />
 
-      <CollectionsSection
-        setCollection={setCollection}
-        moods={moods}
-        onPickMood={(mood) => {
-          void applyShopMoodFilter(mood.moodId);
-        }}
-        reduceMotion={reduceMotion}
-      />
-
       {loadingProducts ? (
         <Section id="explore">
           <div className="flex justify-center py-16">
@@ -184,7 +195,7 @@ export function Storefront() {
         />
       )}
 
-      <JournalTeaserSection />
+      {/* <JournalTeaserSection /> */}
       <StorySection />
       <Footer goTo={goToWithMotion} />
 

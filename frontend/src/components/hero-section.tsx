@@ -20,7 +20,7 @@ export function HeroSection() {
       <div className="mx-auto w-full max-w-[var(--container-max)] px-[var(--gutter-mobile)] md:px-[var(--gutter-tablet)]">
         <div className="grid overflow-hidden rounded-lg border border-[var(--color-line)] shadow-[var(--shadow-soft)] lg:grid-cols-[30fr_70fr] lg:max-h-[800px]">
 
-          {/* Left: woven-texture brand panel */}
+          {/* Left: forest-green brand panel */}
           <div className="bg-deep-feature relative order-2 flex flex-col justify-center gap-5 px-6 py-8 sm:px-10 sm:py-10 lg:order-1 lg:px-10 lg:py-12">
             <div className="ornament-rule ornament-rule--inverse w-28">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-gold)]" />

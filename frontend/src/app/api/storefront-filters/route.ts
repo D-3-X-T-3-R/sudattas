@@ -103,6 +103,7 @@ async function fetchThumbnails(
 const HIGHLIGHT = { recentProductLimit: 100, maxMoods: 12 } as const;
 
 export async function GET(request: Request) {
+  const listedOnly = new URL(request.url).searchParams.get("listedOnly") === "1";
   const forwardedHeaders = forwardedIpHeadersFromRequest(request);
   const headerSessionId = request.headers.get("x-session-id")?.trim() || null;
   let sessionId = headerSessionId;
@@ -118,7 +119,7 @@ export async function GET(request: Request) {
     });
   }
   // Catalog filters are the same for every user — use a single shared cache key.
-  const cacheKey = "global";
+  const cacheKey = listedOnly ? "listed-only" : "global";
   const now = Date.now();
 
   const cached = filterCache.get(cacheKey);
@@ -140,11 +141,13 @@ export async function GET(request: Request) {
         const [categories, occasions, moodsRes] = await Promise.all([
           fetchCategoriesWithSession(activeSessionId, forwardedHeaders),
           fetchOccasionsWithSession(activeSessionId, forwardedHeaders),
-          fetchShopHighlightMoodsWithSession(activeSessionId, HIGHLIGHT, forwardedHeaders),
+          listedOnly
+            ? fetchProductMoodsWithSession(activeSessionId, forwardedHeaders)
+            : fetchShopHighlightMoodsWithSession(activeSessionId, HIGHLIGHT, forwardedHeaders),
         ]);
 
         let moods = normalizeMoodRows(moodsRes as unknown[]);
-        if (moods.length === 0) {
+        if (!listedOnly && moods.length === 0) {
           const fallbackRaw = await fetchProductMoodsWithSession(activeSessionId, forwardedHeaders);
           moods = normalizeMoodRows(fallbackRaw as unknown[]).sort(
             (a, b) => (parseInt(b.moodId, 10) || 0) - (parseInt(a.moodId, 10) || 0)
@@ -153,6 +156,26 @@ export async function GET(request: Request) {
         }
 
         const rawCategories = categories.map((c) => ({ categoryId: c.categoryId, name: c.name }));
+        if (listedOnly) {
+          // Check each group directly: a capped bulk product list can miss populated groups.
+          // Product presence is independent of stock quantity or thumbnail availability.
+          const [categoryMatches, moodMatches] = await Promise.all([
+            Promise.all(rawCategories.map(async (category) => {
+              const products = await fetchProductsListWithSession(activeSessionId, { categoryId: category.categoryId, limit: "1" }, forwardedHeaders);
+              return products.length > 0 ? category : null;
+            })),
+            Promise.all(moods.filter((mood) => mood.moodId).map(async (mood) => {
+              const products = await fetchProductsListWithSession(activeSessionId, { moodId: mood.moodId, limit: "1" }, forwardedHeaders);
+              return products.length > 0 ? mood : null;
+            })),
+          ]);
+          return {
+            categories: categoryMatches.filter((category) => category !== null),
+            occasions: [],
+            moods: moodMatches.filter((mood) => mood !== null),
+            error: null,
+          };
+        }
         const { moodThumbs, categoryThumbs } = await fetchThumbnails(
           activeSessionId,
           moods,

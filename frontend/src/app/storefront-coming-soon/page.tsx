@@ -45,15 +45,6 @@ export default async function StorefrontComingSoonPage({
 
   return (
     <main className={styles.page}>
-      <div className={styles.fabricField} aria-hidden="true">
-        <span className={styles.printLayer} />
-        <span className={styles.weftLayer} />
-        <span className={styles.goldMeasure} />
-        <span className={styles.threadOne} />
-        <span className={styles.threadTwo} />
-        <span className={styles.threadThree} />
-      </div>
-
       <section className={styles.content} aria-labelledby="coming-soon-title">
         <p className={styles.eyebrow}>SUDATTA&apos;S DESIGNER BOUTIQUE</p>
         <h1 id="coming-soon-title" className={styles.heading}>

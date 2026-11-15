@@ -17,6 +17,9 @@ interface SheetProps {
   headerClassName?: string;
   bodyClassName?: string;
   closeButtonClassName?: string;
+  hideHeader?: boolean;
+  externalToggleId?: string;
+  onExitComplete?: () => void;
 }
 
 const Sheet = ({
@@ -30,6 +33,9 @@ const Sheet = ({
   headerClassName,
   bodyClassName,
   closeButtonClassName,
+  hideHeader = false,
+  externalToggleId,
+  onExitComplete,
 }: SheetProps) => {
   const fromX = side === "left" ? -420 : 420;
   const titleId = React.useId();
@@ -45,13 +51,15 @@ const Sheet = ({
       const selector = [
         "a[href]",
         "button:not([disabled])",
+        "summary",
         "input:not([disabled])",
         "select:not([disabled])",
         "textarea:not([disabled])",
         "[tabindex]:not([tabindex='-1'])",
       ].join(",");
-      return Array.from(panelRef.current.querySelectorAll<HTMLElement>(selector)).filter(
-        (element) => !element.hasAttribute("aria-hidden")
+      const toggle = externalToggleId ? document.getElementById(externalToggleId) : null;
+      return [...(toggle ? [toggle] : []), ...Array.from(panelRef.current.querySelectorAll<HTMLElement>(selector))].filter(
+        (element) => !element.closest('[inert], [aria-hidden="true"]')
       );
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -70,7 +78,15 @@ const Sheet = ({
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
 
-      if (!active || !panelRef.current?.contains(active)) {
+      if (externalToggleId) {
+        event.preventDefault();
+        const currentIndex = active ? focusable.indexOf(active) : -1;
+        const nextIndex = currentIndex < 0 ? 0 : (currentIndex + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length;
+        focusable[nextIndex].focus();
+        return;
+      }
+
+      if (!active || !focusable.includes(active)) {
         event.preventDefault();
         first.focus();
         return;
@@ -95,10 +111,10 @@ const Sheet = ({
       document.removeEventListener("keydown", onKeyDown);
       previousFocusRef.current?.focus();
     };
-  }, [onClose, open]);
+  }, [onClose, open, externalToggleId]);
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={onExitComplete}>
       {open && (
         <>
           <motion.div
@@ -123,10 +139,11 @@ const Sheet = ({
             )}
             role="dialog"
             aria-modal="true"
+            aria-owns={externalToggleId}
             aria-labelledby={titleId}
             tabIndex={-1}
           >
-            <div
+            {hideHeader ? <span id={titleId} className="sr-only">{title}</span> : <div
               className={cn(
                 "flex items-center justify-between border-b border-[var(--color-line)] p-4 pt-[calc(1rem+env(safe-area-inset-top))]",
                 headerClassName
@@ -148,7 +165,7 @@ const Sheet = ({
               >
                 <X className="h-5 w-5" />
               </Button>
-            </div>
+            </div>}
             <div className={cn("flex-1 overflow-auto p-5", bodyClassName)}>{children}</div>
           </motion.div>
         </>

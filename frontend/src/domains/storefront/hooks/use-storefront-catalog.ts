@@ -575,7 +575,7 @@ function useExploreFilterOptions(products: Product[], selectedCategories: string
   };
 }
 
-function useExploreFilters(
+export function useExploreFilters(
   products: Product[],
   shopMoodId: string | null,
   applyShopMoodFilter: (nextMoodId: string | null) => Promise<void>

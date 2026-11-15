@@ -117,33 +117,17 @@ export function FullBleedVideoSection({
   onCtaClick,
   align = "left",
 }: FullBleedVideoSectionProps) {
-  const windowRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
   const headerHeight = useHeaderHeight();
   const isRight = align === "right";
   const isMobile = useIsMobile();
   const usePlaylist = isMobile && !!mobilePlaylist && mobilePlaylist.length > 0;
 
-  useEffect(() => {
-    const el = windowRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), {
-      threshold: 0,
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <div id={id}>
-      {/* The video+content are truly fixed to the viewport (below the sticky header) and never
-          move. Visibility is toggled by an IntersectionObserver watching the "window" div below,
-          fading in/out as it scrolls through view. The next section in the page always has its own
-          opaque background, which safely absorbs the unavoidable one-viewport overlap as this
-          fades out. */}
+    <div id={id} className="relative isolate h-[160vh] overflow-clip bg-[var(--color-deep)]">
+      {/* Pin the video inside this section; its bounds keep media and copy out of adjacent content. */}
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-0 -z-10 overflow-hidden transition-opacity duration-500 ease-out"
-        style={{ top: headerHeight, opacity: visible ? 1 : 0 }}
+        className="pointer-events-none sticky w-full overflow-hidden"
+        style={{ top: headerHeight, height: `calc(100svh - ${headerHeight}px)` }}
       >
         {usePlaylist ? (
           <PlaylistVideo playlist={mobilePlaylist!} />
@@ -198,7 +182,6 @@ export function FullBleedVideoSection({
           ) : null}
         </div>
       </div>
-      <div ref={windowRef} className="h-[160vh] w-full" aria-hidden="true" />
     </div>
   );
 }
