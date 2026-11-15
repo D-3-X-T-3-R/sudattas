@@ -56,29 +56,32 @@ function StorefrontLoginDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-sm"
+        className="max-w-sm max-md:!border-[var(--color-gold)] max-md:!bg-[#0F3D2E]"
         contentClassName="flex flex-col items-center px-8 py-10 text-center sm:px-10"
+        headerClassName="max-md:hidden"
         aria-describedby="login-dialog-desc"
       >
-        <Image
-          src="/hero/sudattas-logo.png"
-          alt="Sudatta's Designer Boutique"
-          width={148}
-          height={88}
-          priority
-          unoptimized
-          className="h-12 w-auto object-contain"
-        />
+        <div className="flex w-full justify-center">
+          <Image
+            src="/hero/sudattas-logo.png"
+            alt="Sudatta's Designer Boutique"
+            width={220}
+            height={130}
+            priority
+            unoptimized
+            className="h-28 w-auto object-contain md:h-12"
+          />
+        </div>
 
         <Kicker tone="accent" className="mt-7">
           Welcome
         </Kicker>
-        <SectionHeading className="mt-2 text-[1.6rem] leading-tight md:text-[1.85rem]">
+        <SectionHeading className="mt-2 text-[1.6rem] leading-tight max-md:text-[#F6F3EA] md:text-[1.85rem]">
           Sign in to continue
         </SectionHeading>
         <p
           id="login-dialog-desc"
-          className="mt-3 max-w-[26rem] text-sm leading-relaxed text-[var(--color-muted)]"
+          className="mt-3 max-w-[26rem] text-sm leading-relaxed text-[var(--color-muted)] max-md:text-[#F6F3EA]/80"
         >
           Sign in with Google to track orders, save your wishlist, and check out faster.
         </p>
@@ -95,7 +98,7 @@ function StorefrontLoginDialog({
           Continue with Google
         </Button>
 
-        <p className="mt-6 text-xs leading-relaxed text-[var(--color-muted)]">
+        <p className="mt-6 text-xs leading-relaxed text-[var(--color-muted)] max-md:text-[#F6F3EA]/70">
           By continuing, you agree to Sudatta&apos;s Terms and Privacy Policy.
         </p>
       </DialogContent>
