@@ -38,7 +38,7 @@ const contentSecurityPolicy = [
   // happens on save — without it here, those previews silently fail to render (broken-image
   // icon) while every already-uploaded image (served from r2.dev, already allow-listed above)
   // renders fine, since blob: URLs only ever exist client-side in that one flow.
-  `img-src 'self' data: blob: https://images.unsplash.com https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev https://*.r2.dev https://*.razorpay.com${imageHost ? ` https://${imageHost}` : ""}`,
+  `img-src 'self' data: blob: https://images.unsplash.com https://*.googleusercontent.com https://pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev https://*.r2.dev https://*.razorpay.com${imageHost ? ` https://${imageHost}` : ""}`,
   "font-src 'self' data:",
   // r2.cloudflarestorage.com (not r2.dev — that's the public *viewing* CDN host, already in
   // img-src) is the S3-compatible API host the browser PUTs directly to for a presigned image
@@ -78,6 +78,11 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "pub-0c27e99980dc4e98b13e90c4b24edd19.r2.dev",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "**.googleusercontent.com",
         pathname: "/**",
       },
       ...(imageHost

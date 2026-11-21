@@ -14,6 +14,37 @@
 .filter-popup-overlay[data-state="open"] { animation: filter-overlay-enter 280ms ease-out; }
 .filter-popup-overlay[data-state="closed"] { animation: filter-overlay-exit 240ms ease-in; }
 
+@media (max-width: 1023px) {
+  .profile-mobile-content {
+    --profile-tab-panel: rgba(251, 249, 244, 0.74);
+  }
+
+  .account-mobile-tabs {
+    align-items: center;
+  }
+
+  .profile-mobile-content {
+    background: var(--profile-tab-panel);
+    border-radius: 1.25rem;
+    padding: 0.75rem 1rem 1rem;
+  }
+
+  .profile-mobile-tab {
+    height: 3.5rem;
+    margin-top: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .profile-mobile-tab[aria-current="page"] {
+    align-items: center;
+    height: 3.5rem;
+    margin-top: 0;
+    padding-top: 0;
+    transform: none;
+  }
+}
+
 @keyframes filter-popup-enter {
   from { opacity: 0; scale: 0.96; }
   to { opacity: 1; scale: 1; }
