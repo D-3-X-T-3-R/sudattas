@@ -22,9 +22,28 @@ export function SiteHeader() {
   const { openLogin } = useStorefrontLogin();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPresent, setMenuPresent] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const reduceMotion = !!useReducedMotion();
-  useLockBodyScroll(menuOpen);
+  useLockBodyScroll(menuPresent);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const dismissOutsideSearch = (event: MouseEvent) => {
+      if (event.target instanceof Element && !event.target.closest("[data-site-search]")) {
+        setSearchOpen(false);
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSearchOpen(false);
+    };
+    document.addEventListener("click", dismissOutsideSearch);
+    document.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.removeEventListener("click", dismissOutsideSearch);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [searchOpen]);
 
   useEffect(() => {
     const className = "storefront-mobile-utilities";
@@ -52,7 +71,12 @@ export function SiteHeader() {
         setQuery={setQuery}
         cartCount={cartCount}
         wishCount={wishCount}
-        setMenuOpen={setMenuOpen}
+        setMenuOpen={(open) => {
+          if (open) setMenuPresent(true);
+          setMenuOpen(open);
+        }}
+        menuOpen={menuOpen}
+        menuPresent={menuPresent}
         goTo={(id, instant) => goTo(id, instant ?? reduceMotion)}
         searchOpen={searchOpen}
         setSearchOpen={setSearchOpen}
@@ -84,7 +108,7 @@ export function SiteHeader() {
       <MenuDrawer
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        setCollection={() => {}}
+        onExitComplete={() => { if (!menuOpen) setMenuPresent(false); }}
         reduceMotion={reduceMotion}
       />
       <MobileBottomBar

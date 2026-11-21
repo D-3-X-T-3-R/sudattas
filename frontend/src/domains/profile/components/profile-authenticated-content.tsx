@@ -732,20 +732,22 @@ function ProfileSidebarItem({
       type="button"
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={`flex w-full items-center gap-3 rounded-md border-l-2 px-4 py-3 text-left transition duration-200 ${
+      className={`profile-mobile-tab flex aspect-square w-14 items-center justify-center justify-self-center rounded-full border p-0 text-center transition duration-300 lg:aspect-auto lg:w-full lg:justify-start lg:gap-3 lg:rounded-md lg:border-y-0 lg:border-r-0 lg:border-l-2 lg:px-4 lg:py-3 lg:text-left ${
         active
-          ? "border-[var(--color-gold)] bg-[var(--color-surface-soft)] text-[var(--color-green)]"
-          : "border-transparent text-[var(--color-ink)] hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-green)]"
+          ? "border-2 border-[#D7B261] bg-[#0F3D2E] text-white shadow-[0_8px_18px_rgba(15,61,46,0.18)] lg:border-[var(--color-gold)] lg:bg-[var(--color-surface-soft)] lg:text-[var(--color-green)] lg:shadow-none"
+          : "border-transparent bg-transparent text-[var(--color-green)] hover:bg-transparent lg:border-transparent lg:text-[var(--color-ink)] lg:hover:bg-[var(--color-surface-soft)] lg:hover:text-[var(--color-green)]"
       }`}
     >
       <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${
-          active ? "text-[var(--color-gold)]" : "text-[var(--color-muted)]"
+        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition lg:h-9 lg:w-9 ${
+          active
+            ? "border-0 bg-transparent text-white shadow-none lg:text-[var(--color-gold)]"
+            : "border border-[var(--color-green)]/10 bg-white/55 text-[var(--color-green)] lg:border-0 lg:bg-transparent lg:text-[var(--color-muted)]"
         }`}
       >
-        <Icon className="h-5 w-5" />
+        <Icon className="h-6 w-6 lg:h-5 lg:w-5" />
       </span>
-      <span className="text-[12px] font-semibold uppercase leading-5 tracking-[0.2em]">{label}</span>
+      <span className="sr-only text-[12px] font-semibold uppercase leading-5 tracking-[0.2em] lg:not-sr-only">{label}</span>
     </button>
   );
 }
@@ -766,6 +768,7 @@ function AccountCard({ children, className }: { children: ReactNode; className?:
 type ProfileAuthenticatedContentProps = {
   displayName: string;
   displayEmail: string;
+  profileImage?: string | null;
   loginMethodLabel: string;
   /** Same data already loaded to populate this page — reused for the "Download my data" export, not a fresh fetch. */
   accountProfile: AccountProfileRow | null;
@@ -804,6 +807,7 @@ type ProfileAuthenticatedContentProps = {
 export function ProfileAuthenticatedContent({
   displayName,
   displayEmail,
+  profileImage,
   loginMethodLabel,
   accountProfile,
   error,
@@ -983,7 +987,6 @@ export function ProfileAuthenticatedContent({
     }
   };
 
-  const firstName = displayName.trim().split(/\s+/)[0] || displayName;
   const defaultAddress = addresses.find((a) => a.isDefault) ?? addresses[0];
 
   const supportIssues = useMemo(() => {
@@ -1080,44 +1083,64 @@ export function ProfileAuthenticatedContent({
     { id: "settings", label: "Account Settings", Icon: ShieldIcon },
     { id: "support", label: "Support", Icon: HeadsetIcon },
   ];
+  const activeNavLabel = activeNav === "profile"
+    ? "Edit profile"
+    : navItems.find((item) => item.id === activeNav)?.label;
 
   const mainShell = (
-    <div className="mx-auto w-full max-w-[1440px] px-[var(--gutter-mobile)] pb-16 pt-6 md:px-[var(--gutter-tablet)]">
-      <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
+    <div className="mx-auto w-full max-w-[1440px] px-[var(--gutter-mobile)] pb-16 pt-4 md:px-[var(--gutter-tablet)] lg:pt-6">
+      <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-8">
         <aside className="lg:sticky lg:top-24">
-          <div className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-6">
-            <Kicker tone="inverse">Sudatta&apos;s</Kicker>
-            <div className="mt-6 flex items-center gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-[var(--color-gold)]/30 bg-white/5 text-[var(--color-gold-soft)] shadow-[0_0_0_4px_rgba(201,166,70,0.08)]">
-                <UserIcon className="h-7 w-7" />
+          <div className="flex flex-col items-center justify-center rounded-2xl px-4 pb-2 pt-1 text-center lg:min-h-[196px] lg:items-start lg:rounded-lg lg:bg-[var(--color-green)] lg:p-6 lg:text-left">
+            <Kicker tone="inverse" className="hidden lg:block">Sudatta&apos;s</Kicker>
+            <div className="flex w-full max-w-sm flex-row items-center justify-center gap-4 lg:mt-6 lg:max-w-none lg:justify-start">
+              <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--color-gold)] bg-[var(--color-surface)] text-[var(--color-green)] shadow-[0_0_0_5px_rgba(201,166,70,0.12)] lg:h-16 lg:w-16 lg:border lg:border-[var(--color-gold)]/30 lg:bg-white/5 lg:text-[var(--color-gold-soft)] lg:shadow-[0_0_0_4px_rgba(201,166,70,0.08)]">
+                {profileImage ? (
+                  <Image
+                    src={profileImage}
+                    alt={`${displayName}'s profile photo`}
+                    fill
+                    sizes="(max-width: 1023px) 96px, 64px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <UserIcon className="h-9 w-9 lg:h-7 lg:w-7" />
+                )}
               </div>
-              <div className="min-w-0">
-                <p className="font-display text-[2rem] leading-none text-white">{firstName}</p>
+              <div className="min-w-0 text-left">
+                <p className="font-display text-xl font-semibold leading-tight text-[var(--color-ink)] lg:text-[2rem] lg:font-normal lg:leading-none lg:text-white">{displayName}</p>
+                <p className="mt-1.5 max-w-[16rem] truncate rounded-full bg-[var(--color-green)] px-3 py-1 text-[10px] font-medium text-white lg:hidden">
+                  {displayEmail}
+                </p>
               </div>
             </div>
           </div>
 
-          <nav className="mt-6 flex flex-col space-y-1" aria-label="Account sections">
-            {navItems.map((item) => (
-              <ProfileSidebarItem
-                key={item.id}
-                icon={item.Icon}
-                label={item.label}
-                active={activeNav === item.id}
-                onClick={() => setActiveNav(item.id)}
-              />
-            ))}
-          </nav>
+          <div className="lg:contents">
+            <nav className="account-mobile-tabs mx-auto mt-4 grid max-w-sm grid-cols-5 gap-3 lg:mt-6 lg:flex lg:max-w-none lg:flex-col lg:space-y-1" aria-label="Account sections">
+              {navItems.map((item) => (
+                <ProfileSidebarItem
+                  key={item.id}
+                  icon={item.Icon}
+                  label={item.label}
+                  active={activeNav === item.id}
+                  onClick={() => setActiveNav(item.id)}
+                />
+              ))}
+            </nav>
 
-          <Button type="button" variant="outline" onClick={onSignOut} className="mt-6 w-full">
+          </div>
+
+          <Button type="button" variant="outline" onClick={onSignOut} className="mt-6 hidden w-full lg:inline-flex">
             Sign out
           </Button>
         </aside>
 
-        <main className="min-w-0">
+        <main className="profile-mobile-content min-w-0">
+          <p className="pb-3 text-sm font-semibold text-[var(--color-ink)] lg:hidden">{activeNavLabel}</p>
           {activeNav === "orders" ? (
             <div className="flex flex-col gap-6">
-              <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
+              <section className="bg-deep-feature hidden min-h-[196px] flex-col justify-center rounded-lg p-7 lg:flex">
                 <HeroHeading inverse size="sm">Recent Orders</HeroHeading>
               </section>
               <div role="region" aria-label="Order list">
@@ -1250,9 +1273,9 @@ export function ProfileAuthenticatedContent({
                       return (
                         <article
                           key={key}
-                          className="group flex flex-col gap-6 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-subtle)] sm:flex-row sm:items-stretch sm:p-6"
+                          className="group grid grid-cols-[6rem_minmax(0,1fr)] items-start gap-4 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-subtle)] sm:flex sm:items-stretch sm:gap-6 sm:p-6"
                         >
-                          <div className="relative h-28 w-full shrink-0 overflow-hidden rounded-md bg-[var(--color-surface-soft)] sm:h-auto sm:min-h-[7rem] sm:w-24">
+                          <div className="relative aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-md bg-[var(--color-surface-soft)] sm:aspect-auto sm:h-auto sm:min-h-[7rem]">
                             {thumbUrl ? (
                               <Image
                                 src={thumbUrl}
@@ -1409,7 +1432,7 @@ export function ProfileAuthenticatedContent({
                               </p>
                             ) : null}
                           </div>
-                          <div className="flex shrink-0 flex-col items-stretch gap-2 sm:min-w-[180px]">
+                          <div className="col-span-2 flex shrink-0 flex-col items-stretch gap-2 sm:min-w-[180px]">
                             {showRefundTracking ? (
                               <RefundTrackingPanel state={refundTrackingState} />
                             ) : (
@@ -1457,41 +1480,39 @@ export function ProfileAuthenticatedContent({
             <div className="flex flex-col gap-8">
         {activeNav === "profile" && (
           <>
-            <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
-              <HeroHeading inverse size="sm">{displayName}</HeroHeading>
+            <section className="bg-deep-feature hidden min-h-[196px] flex-col justify-center rounded-lg p-7 lg:flex">
+              <HeroHeading inverse size="sm">My Profile</HeroHeading>
               <p className="mt-3 text-[var(--color-on-deep-muted)]">{displayEmail}</p>
             </section>
 
-            <AccountCard className="mt-8">
-              <Kicker>Edit Profile</Kicker>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="profile-first-name" className="mb-1 block text-xs text-[var(--color-muted)]">
+            <AccountCard className="mt-0 max-lg:rounded-none max-lg:border-transparent max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none lg:mt-8">
+              <div className="grid gap-3 lg:mt-5 lg:grid-cols-2 lg:gap-4">
+                <div className="relative rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] transition focus-within:border-[var(--color-green)] focus-within:ring-2 focus-within:ring-[var(--color-focus)] max-lg:border-[var(--color-green)]/15 max-lg:bg-white/30">
+                  <label htmlFor="profile-first-name" className="pointer-events-none absolute -top-2 left-3 z-10 bg-[var(--color-surface)] px-1.5 text-[10px] leading-4 text-[var(--color-muted)] max-lg:bg-[#F7FAF6]">
                     First name *
                   </label>
                   <Input
                     id="profile-first-name"
                     value={profileForm.firstName}
                     onChange={(e) => setProfileForm((p) => ({ ...p, firstName: e.target.value }))}
-                    className="h-10"
+                    className="!h-12 !rounded-lg !border-0 !bg-transparent px-3 !ring-0 focus:!bg-transparent"
                   />
                 </div>
-                <div>
-                  <label htmlFor="profile-last-name" className="mb-1 block text-xs text-[var(--color-muted)]">
+                <div className="relative rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] transition focus-within:border-[var(--color-green)] focus-within:ring-2 focus-within:ring-[var(--color-focus)] max-lg:border-[var(--color-green)]/15 max-lg:bg-white/30">
+                  <label htmlFor="profile-last-name" className="pointer-events-none absolute -top-2 left-3 z-10 bg-[var(--color-surface)] px-1.5 text-[10px] leading-4 text-[var(--color-muted)] max-lg:bg-[#F7FAF6]">
                     Last name
                   </label>
                   <Input
                     id="profile-last-name"
                     value={profileForm.lastName}
                     onChange={(e) => setProfileForm((p) => ({ ...p, lastName: e.target.value }))}
-                    className="h-10"
+                    className="!h-12 !rounded-lg !border-0 !bg-transparent px-3 !ring-0 focus:!bg-transparent"
                   />
                 </div>
 
-                <div>
-                  <p className="mb-1 block text-xs text-[var(--color-muted)]">Gender</p>
-                  <div className="flex h-10 items-center gap-5">
+                <fieldset className="min-h-12 rounded-lg border border-[var(--color-line)] px-3 pb-1 max-lg:border-[var(--color-green)]/15 max-lg:bg-white/30">
+                  <legend className="bg-[var(--color-surface)] px-1.5 text-[10px] leading-4 text-[var(--color-muted)] max-lg:bg-[#F7FAF6]">Gender</legend>
+                  <div className="flex flex-wrap items-center gap-4">
                     {(["male", "female", "other"] as const).map((option) => (
                       <label key={option} className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-[var(--color-ink)]">
                         <input
@@ -1506,10 +1527,10 @@ export function ProfileAuthenticatedContent({
                       </label>
                     ))}
                   </div>
-                </div>
+                </fieldset>
 
-                <div>
-                  <label htmlFor="profile-dob" className="mb-1 block text-xs text-[var(--color-muted)]">
+                <div className="relative rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] transition focus-within:border-[var(--color-green)] focus-within:ring-2 focus-within:ring-[var(--color-focus)] max-lg:border-[var(--color-green)]/15 max-lg:bg-white/30">
+                  <label htmlFor="profile-dob" className="pointer-events-none absolute -top-2 left-3 z-10 bg-[var(--color-surface)] px-1.5 text-[10px] leading-4 text-[var(--color-muted)] max-lg:bg-[#F7FAF6]">
                     Date of Birth
                   </label>
                   <Input
@@ -1518,45 +1539,43 @@ export function ProfileAuthenticatedContent({
                     value={profileForm.dateOfBirth}
                     max={new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setProfileForm((p) => ({ ...p, dateOfBirth: e.target.value }))}
-                    className="h-10"
+                    className="!h-12 !rounded-lg !border-0 !bg-transparent px-3 !ring-0 focus:!bg-transparent"
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="profile-mobile-number" className="mb-1 block text-xs text-[var(--color-muted)]">
+                <div className="relative rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] transition focus-within:border-[var(--color-green)] focus-within:ring-2 focus-within:ring-[var(--color-focus)] max-lg:border-[var(--color-green)]/15 max-lg:bg-white/30">
+                  <label htmlFor="profile-mobile-number" className="pointer-events-none absolute -top-2 left-3 z-10 bg-[var(--color-surface)] px-1.5 text-[10px] leading-4 text-[var(--color-muted)] max-lg:bg-[#F7FAF6]">
                     Mobile Number *
                   </label>
                   <Input
                     id="profile-mobile-number"
                     value={profileForm.phoneNumber}
                     onChange={(e) => setProfileForm((p) => ({ ...p, phoneNumber: e.target.value }))}
-                    className="h-10"
+                    className="!h-12 !rounded-lg !border-0 !bg-transparent px-3 !ring-0 focus:!bg-transparent"
                   />
                 </div>
 
-                <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <p className="text-xs text-[var(--color-muted)]">Default Address</p>
-                    <button
-                      type="button"
-                      onClick={() => setActiveNav("addresses")}
-                      className="text-xs font-semibold text-[var(--color-green)] underline-offset-2 hover:underline"
-                    >
-                      Change/Edit
-                    </button>
-                  </div>
-                  <p className="min-h-10 rounded-md border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 py-2 text-sm leading-relaxed text-[var(--color-ink)]">
+                <fieldset className="relative min-h-12 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-soft)] px-3 pb-2 max-lg:border-[var(--color-green)]/15 max-lg:bg-white/30">
+                  <legend className="bg-[var(--color-surface)] px-1.5 text-[10px] leading-4 text-[var(--color-muted)] max-lg:bg-[#F7FAF6]">Default Address</legend>
+                  <button
+                    type="button"
+                    onClick={() => setActiveNav("addresses")}
+                    className="absolute right-3 top-1 text-[10px] font-semibold text-[var(--color-green)] underline-offset-2 hover:underline"
+                  >
+                    Change/Edit
+                  </button>
+                  <p className="text-sm leading-relaxed text-[var(--color-ink)]">
                     {defaultAddress ? formatAddress(defaultAddress) : "No default address saved yet."}
                   </p>
-                </div>
+                </fieldset>
               </div>
 
-              <div className="mt-6 flex justify-center">
+              <div className="mt-5 flex justify-center">
                 <Button
                   type="button"
                   onClick={() => void updateProfile()}
                   disabled={!canSaveProfile || savingProfile}
-                  className="px-10"
+                  className="w-full rounded-lg px-10 lg:w-auto"
                 >
                   {savingProfile ? "Saving..." : "Save"}
                 </Button>
@@ -1567,7 +1586,7 @@ export function ProfileAuthenticatedContent({
 
         {activeNav === "addresses" && (
           <div className="space-y-8">
-            <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
+            <section className="bg-deep-feature hidden min-h-[196px] flex-col justify-center rounded-lg p-7 lg:flex">
               <HeroHeading inverse size="sm">Saved Addresses</HeroHeading>
             </section>
 
@@ -1806,7 +1825,7 @@ export function ProfileAuthenticatedContent({
 
         {activeNav === "settings" && (
           <div className="space-y-8">
-            <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
+            <section className="bg-deep-feature hidden min-h-[196px] flex-col justify-center rounded-lg p-7 lg:flex">
               <HeroHeading inverse size="sm">Account Settings</HeroHeading>
             </section>
             <AccountCard>
@@ -1838,7 +1857,7 @@ export function ProfileAuthenticatedContent({
 
         {activeNav === "support" && (
           <div className="space-y-8">
-            <section className="bg-deep-feature flex min-h-[196px] flex-col justify-center rounded-lg p-7">
+            <section className="bg-deep-feature hidden min-h-[196px] flex-col justify-center rounded-lg p-7 lg:flex">
               <HeroHeading inverse size="sm">Support</HeroHeading>
             </section>
             <div className="grid gap-6 lg:grid-cols-2">

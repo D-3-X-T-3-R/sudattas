@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { MobileCardRow } from "@/components/ui/mobile-card-row";
 import Image from "next/image";
-import { ChevronRight } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { goTo } from "@/hooks/use-scroll-to";
@@ -52,29 +52,20 @@ function CategoryCard({
       }}
       className="group h-full w-full overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] text-left shadow-[var(--shadow-subtle)]"
     >
-      <div className="relative aspect-[4/5] w-full overflow-hidden">
+      <div className="relative aspect-[2/3] w-full overflow-hidden">
         <Image
           src={imgSrc}
           alt={item.key}
           fill
           className="object-cover transition duration-500 ease-out group-hover:scale-[1.03]"
-          sizes="(max-width: 768px) 50vw, 25vw"
+          sizes="(max-width: 1023px) 50vw, 33vw"
           loading="lazy"
         />
       </div>
-      <div className="flex flex-col items-start gap-1.5 border-t border-[var(--color-line)] p-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 md:p-4">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
-            Category
-          </p>
-          <p className="mt-1 truncate font-display text-[1.1rem] leading-[1.15] text-[var(--color-ink)] md:text-[1.3rem]">
-            {item.blurb}
-          </p>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)]">
-          Explore
-          <ChevronRight className="h-3.5 w-3.5" />
-        </span>
+      <div className="border-t border-[var(--color-line)] p-3.5 md:p-4">
+        <p className="truncate font-display text-[1.1rem] leading-[1.15] text-[var(--color-ink)] md:text-[1.3rem]">
+          {item.blurb}
+        </p>
       </div>
     </button>
   );
@@ -104,7 +95,6 @@ export function CategoriesSection({
           ...availablePlaceholders.slice(0, MIN_CATEGORY_TILES - realItems.length),
         ];
 
-  const visible = showAll ? items : items.slice(0, 6);
 
   return (
     <section id="category-collections" className="bg-[var(--color-section-alt)] py-6 md:py-10">
@@ -119,7 +109,7 @@ export function CategoriesSection({
                 <button
                   type="button"
                   onClick={() => setShowAll((v) => !v)}
-                  className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)] hover:text-[var(--color-gold)]"
+                  className="hidden text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)] hover:text-[var(--color-gold)] md:inline-flex"
                 >
                   {showAll ? "Show Less" : "View All"}
                 </button>
@@ -128,11 +118,12 @@ export function CategoriesSection({
           />
         </ScrollReveal>
 
-        <div className="mx-auto mt-4 grid max-w-[1450px] grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+        <MobileCardRow itemCount={items.length} label="Categories" reduceMotion={reduceMotion} className="mx-auto mt-4 flex max-w-[1450px] snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-3 md:grid md:snap-none md:grid-cols-2 md:gap-5 md:overflow-visible md:pb-0 lg:grid-cols-3">
           <AnimatePresence initial={false}>
-            {visible.map((item, idx) => (
+            {items.map((item, idx) => (
               <motion.div
                 key={item.key}
+                className={`min-w-0 shrink-0 basis-[calc((100%-0.75rem)/2)] snap-start md:basis-auto ${!showAll && idx >= 6 ? "md:hidden" : ""}`}
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
@@ -147,7 +138,7 @@ export function CategoriesSection({
               </motion.div>
             ))}
           </AnimatePresence>
-        </div>
+        </MobileCardRow>
       </div>
     </section>
   );

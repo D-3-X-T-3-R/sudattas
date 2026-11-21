@@ -1,5 +1,101 @@
 @import "tailwindcss";
 
+.animate-pdp-page-enter {
+  animation: pdp-page-enter 360ms ease-out;
+}
+
+@keyframes pdp-page-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.filter-popup[data-state="open"] { animation: filter-popup-enter 280ms cubic-bezier(0.22, 1, 0.36, 1); }
+.filter-popup[data-state="closed"] { animation: filter-popup-exit 240ms cubic-bezier(0.4, 0, 0.2, 1); }
+.filter-popup-overlay[data-state="open"] { animation: filter-overlay-enter 280ms ease-out; }
+.filter-popup-overlay[data-state="closed"] { animation: filter-overlay-exit 240ms ease-in; }
+
+@media (max-width: 1023px) {
+  .profile-mobile-content {
+    --profile-tab-panel: rgba(251, 249, 244, 0.74);
+  }
+
+  .account-mobile-tabs {
+    align-items: center;
+  }
+
+  .profile-mobile-content {
+    background: var(--profile-tab-panel);
+    border-radius: 1.25rem;
+    padding: 0.75rem 1rem 1rem;
+  }
+
+  .profile-mobile-tab {
+    height: 3.5rem;
+    margin-top: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .profile-mobile-tab[aria-current="page"] {
+    align-items: center;
+    height: 3.5rem;
+    margin-top: 0;
+    padding-top: 0;
+    transform: none;
+  }
+}
+
+@keyframes filter-popup-enter {
+  from { opacity: 0; scale: 0.96; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes filter-popup-exit {
+  from { opacity: 1; scale: 1; }
+  to { opacity: 0; scale: 0.96; }
+}
+@keyframes filter-overlay-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes filter-overlay-exit { from { opacity: 1; } to { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pdp-page-enter { animation: none; }
+  .filter-popup[data-state], .filter-popup-overlay[data-state] { animation: none; }
+}
+
+.explore-sort-menu {
+  transform-origin: var(--radix-select-content-transform-origin);
+}
+
+.explore-sort-menu[data-state="open"] {
+  animation: explore-sort-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.explore-sort-menu[data-state="closed"] {
+  animation: explore-sort-exit 180ms ease-in-out;
+}
+
+@keyframes explore-sort-enter {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.explore-sort-menu[data-side="top"][data-state="open"] {
+  animation-name: explore-sort-enter-up;
+}
+
+@keyframes explore-sort-exit {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+
+@keyframes explore-sort-enter-up {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .explore-sort-menu[data-state] { animation: none; }
+}
+
 html {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -212,14 +308,9 @@ textarea {
   transform: scale(1.03);
 }
 
-/* Deep tonal band for feature/CTA sections — woven canvas texture echoes the brand mark */
+/* Solid forest-green background for feature and CTA sections */
 .bg-deep-feature {
-  background-color: var(--color-deep);
-  background-image:
-    radial-gradient(ellipse at 18% 20%, rgba(201, 166, 70, 0.08) 0%, transparent 55%),
-    url('/hero/logo_weave_pattern.png');
-  background-repeat: repeat;
-  background-size: auto, 180px;
+  background: #0F3D2E;
   color: var(--color-on-deep);
 }
 

@@ -24,6 +24,7 @@ type AuthenticatedSectionProps = {
   openLogin: (returnTo?: string) => void;
   displayName: string;
   displayEmail: string;
+  profileImage?: string | null;
   loginMethodLabel: string;
   accountProfile: AccountProfileRow | null;
   error: string | null;
@@ -140,6 +141,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
     openLogin,
     displayName,
     displayEmail,
+    profileImage,
     loginMethodLabel,
     accountProfile,
     error,
@@ -181,6 +183,7 @@ function AuthenticatedProfileSection(props: AuthenticatedSectionProps) {
       <ProfileAuthenticatedContent
         displayName={displayName}
         displayEmail={displayEmail}
+        profileImage={profileImage}
         loginMethodLabel={loginMethodLabel}
         accountProfile={accountProfile}
         error={error}
@@ -609,7 +612,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
-      <PageShell wide containerClassName="pt-4 pb-10 md:pt-6">
+      <PageShell wide className="max-lg:bg-[#EAF4F1]" containerClassName="pt-4 pb-10 max-lg:px-0 max-lg:pt-0 md:pt-6">
         {loadingSession ? (
           <p className="text-sm text-[var(--color-muted)]">Loading profile...</p>
         ) : !authenticated ? (
@@ -621,6 +624,7 @@ export default function ProfilePage() {
             openLogin={openLogin}
             displayName={displayName}
             displayEmail={displayEmail}
+            profileImage={session?.user?.image}
             loginMethodLabel={loginMethodLabel}
             accountProfile={accountProfile}
             error={error}

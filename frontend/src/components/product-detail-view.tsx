@@ -90,7 +90,7 @@ function ProductGallery({
         ))}
       </div>
 
-      <div className="order-1 relative aspect-[2/3] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] shadow-[var(--shadow-soft)] md:order-2">
+      <div id="pdp-main-image" className="order-1 relative aspect-[2/3] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface-soft)] shadow-[var(--shadow-soft)] md:order-2">
         <Image
           src={mainImage}
           alt={productName}

@@ -8,18 +8,19 @@ import { useStorefront } from "@/context/storefront-context";
 import { useStorefrontCatalog } from "@/domains/storefront/hooks/use-storefront-catalog";
 import { useStorefrontNavigationEffects } from "@/domains/storefront/hooks/use-storefront-navigation-effects";
 import { ensureGuestSession } from "@/lib/session";
-import { consumePendingHomeCollection, goTo, PENDING_HOME_COLLECTION_EVENT } from "@/hooks/use-scroll-to";
+import { consumePendingHomeCollection, consumePendingHomeMood, goTo, PENDING_HOME_COLLECTION_EVENT, PENDING_HOME_MOOD_EVENT } from "@/hooks/use-scroll-to";
 import { HeroSection } from "@/components/hero-section";
 import { CollectionsSection } from "@/components/collections-section";
 import { CategoriesSection } from "@/components/categories-section";
 import { ShopSection } from "@/components/shop-section";
 import { ExploreSection } from "@/components/explore-section";
 import { FullBleedVideoSection } from "@/components/full-bleed-video-section";
-import { JournalTeaserSection } from "@/components/journal-teaser-section";
+// import { JournalTeaserSection } from "@/components/journal-teaser-section";
 import { Section } from "@/components/ui/section";
 import { TrustStrip } from "@/components/trust-strip";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/loading";
+import { finishProductReturnTransition, navigateToProductWithTransition } from "@/lib/product-page-transition";
 
 const StorySection = dynamic(() => import("@/components/story-section").then((m) => m.StorySection), {
   loading: () => (
@@ -65,6 +66,10 @@ export function Storefront() {
   useStorefrontNavigationEffects({ pathname, reduceMotion, loadingProducts });
 
   useEffect(() => {
+    if (!loadingProducts) finishProductReturnTransition();
+  }, [loadingProducts]);
+
+  useEffect(() => {
     void ensureGuestSession();
   }, []);
 
@@ -89,7 +94,17 @@ export function Storefront() {
     return () => window.removeEventListener(PENDING_HOME_COLLECTION_EVENT, onPendingCollection);
   }, [setCollection]);
 
-  const goToProduct = (id: string) => router.push(`/product/${id}`);
+  useEffect(() => {
+    const applyPendingMood = () => {
+      if (loadingProducts) return;
+      const moodId = consumePendingHomeMood();
+      if (moodId) void applyShopMoodFilter(moodId);
+    };
+    applyPendingMood();
+    window.addEventListener(PENDING_HOME_MOOD_EVENT, applyPendingMood);
+    return () => window.removeEventListener(PENDING_HOME_MOOD_EVENT, applyPendingMood);
+  }, [loadingProducts, applyShopMoodFilter]);
+
   const goToWithMotion = (id: string, instant?: boolean) => goTo(id, instant ?? reduceMotion);
 
   return (
@@ -123,6 +138,15 @@ export function Storefront() {
         reduceMotion={reduceMotion}
       />
 
+      <CollectionsSection
+        setCollection={setCollection}
+        moods={moods}
+        onPickMood={(mood) => {
+          void applyShopMoodFilter(mood.moodId);
+        }}
+        reduceMotion={reduceMotion}
+      />
+
       <FullBleedVideoSection
         id="block-print-story"
         src="/videos/block_print_story_new.mp4"
@@ -144,7 +168,7 @@ export function Storefront() {
           products={products}
           wishlist={wishlist}
           onToggleWish={toggleWish}
-          onQuickView={(product) => goToProduct(product.id)}
+          onQuickView={(product, origin) => navigateToProductWithTransition(router, product, origin)}
           onViewAll={() => {
             catalog.setSort("Featured");
             goTo("explore", reduceMotion);
@@ -160,15 +184,6 @@ export function Storefront() {
         body="From loom to wardrobe — every piece is finished by hand, in small batches, with time-honoured techniques."
       />
 
-      <CollectionsSection
-        setCollection={setCollection}
-        moods={moods}
-        onPickMood={(mood) => {
-          void applyShopMoodFilter(mood.moodId);
-        }}
-        reduceMotion={reduceMotion}
-      />
-
       {loadingProducts ? (
         <Section id="explore">
           <div className="flex justify-center py-16">
@@ -180,13 +195,14 @@ export function Storefront() {
           catalog={catalog}
           wishlist={wishlist}
           onToggleWish={toggleWish}
-          onQuickView={(product) => goToProduct(product.id)}
+          onQuickView={(product, origin) => navigateToProductWithTransition(router, product, origin)}
         />
       )}
 
-      <JournalTeaserSection />
+      {/* <JournalTeaserSection /> */}
       <StorySection />
       <Footer goTo={goToWithMotion} />
+
 
     </div>
   );

@@ -1,13 +1,18 @@
 "use client";
 
-import { X } from "lucide-react";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { SlidersHorizontal, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProductCard } from "@/components/product-card";
+import type { ProductTransitionOrigin } from "@/components/product-card";
 import type { Product } from "@/lib/schemas";
 import { Section } from "@/components/ui/section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { EmptyState } from "@/components/ui/page-shell";
 import {
   EXPLORE_SORT_OPTIONS,
+  useExploreFilters,
   type AvailabilityValue,
   type BlouseValue,
   type ExploreSortOption,
@@ -24,14 +29,14 @@ export interface ExploreSectionProps {
   catalog: StorefrontCatalogController;
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
-  onQuickView: (p: Product) => void;
+  onQuickView: (p: Product, origin: ProductTransitionOrigin) => void;
 }
 
 function PriceRange({
   catalog,
   idPrefix,
 }: {
-  catalog: StorefrontCatalogController;
+  catalog: ReturnType<typeof useExploreFilters>;
   idPrefix: string;
 }) {
   return (
@@ -56,22 +61,18 @@ function SortSelect({
   className?: string;
 }) {
   return (
-    <label className={cn("block", className)}>
-      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
-        Sort
-      </span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value as ExploreSortOption)}
-        className="h-10 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-green)] focus:ring-2 focus:ring-[var(--color-focus)]"
-      >
-        {EXPLORE_SORT_OPTIONS.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className={className}>
+      <Select value={value} onValueChange={(nextValue) => onChange(nextValue as ExploreSortOption)}>
+        <SelectTrigger aria-label="Sort products" className="h-10 gap-3 [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-200 data-[state=open]:[&>svg]:rotate-180 motion-reduce:[&>svg]:transition-none">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="explore-sort-menu min-w-[var(--radix-select-trigger-width)]" align="end">
+          {EXPLORE_SORT_OPTIONS.map((option) => (
+            <SelectItem key={option} value={option}>{option}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -79,7 +80,7 @@ function FilterGroups({
   catalog,
   idPrefix,
 }: {
-  catalog: StorefrontCatalogController;
+  catalog: ReturnType<typeof useExploreFilters>;
   idPrefix: string;
 }) {
   return (
@@ -117,6 +118,8 @@ function FilterGroups({
       {catalog.filterVisibility.size ? (
         <CheckboxGroup
           title="Size"
+          singleRow
+          showCounts={false}
           options={catalog.sizeOptions}
           selected={catalog.selectedSizes}
           onToggle={(value) =>
@@ -127,6 +130,7 @@ function FilterGroups({
       {catalog.filterVisibility.craft ? (
         <SelectFilter
           title="Craft"
+          openUpward
           id={`${idPrefix}-craft-filter`}
           options={catalog.craftOptions}
           value={catalog.selectedCrafts[0] ?? ""}
@@ -166,7 +170,7 @@ function FiltersPanel({
   idPrefix,
   flat = false,
 }: {
-  catalog: StorefrontCatalogController;
+  catalog: ReturnType<typeof useExploreFilters>;
   idPrefix: string;
   flat?: boolean;
 }) {
@@ -179,7 +183,7 @@ function FiltersPanel({
         flat && "rounded-none border-0 bg-transparent p-0 shadow-none"
       )}
     >
-      <div className="flex min-h-9 items-center justify-between gap-3">
+      {!flat && <div className="flex min-h-9 items-center justify-between gap-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted)]">
           Filter By
         </p>
@@ -187,17 +191,16 @@ function FiltersPanel({
           type="button"
           onClick={catalog.hasActiveFilters ? catalog.resetFilters : undefined}
           disabled={!catalog.hasActiveFilters}
-          aria-hidden={!catalog.hasActiveFilters}
           tabIndex={catalog.hasActiveFilters ? undefined : -1}
           className={cn(
             "inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md border border-[var(--color-line)] px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-green)] hover:border-[var(--color-gold)]",
-            !catalog.hasActiveFilters && "invisible pointer-events-none"
+            !catalog.hasActiveFilters && "invisible"
           )}
         >
           <X size={13} />
           Reset
         </button>
-      </div>
+      </div>}
       {hasVisibleFilters ? (
         <FilterGroups catalog={catalog} idPrefix={idPrefix} />
       ) : (
@@ -219,7 +222,7 @@ function ProductResults({
   products: Product[];
   wishlist: Record<string, boolean>;
   onToggleWish: (p: Product) => void;
-  onQuickView: (p: Product) => void;
+  onQuickView: (p: Product, origin: ProductTransitionOrigin) => void;
   onReset: () => void;
 }) {
   if (products.length === 0) {
@@ -249,6 +252,7 @@ function ProductResults({
             wished={!!wishlist[product.id]}
             onToggleWish={onToggleWish}
             onQuickView={onQuickView}
+            transitionScope="explore"
           />
         </ScrollReveal>
       ))}
@@ -256,13 +260,46 @@ function ProductResults({
   );
 }
 
+const ignoreMoodChange = async () => {};
+
 export function ExploreSection({
   catalog,
   wishlist,
   onToggleWish,
   onQuickView,
 }: ExploreSectionProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const draft = useExploreFilters(catalog.products, null, ignoreMoodChange);
+  const changeFiltersOpen = (open: boolean) => {
+    if (open) {
+    draft.setSelectedCategories(catalog.selectedCategories);
+    draft.setSelectedFabrics(catalog.selectedFabrics);
+    draft.setSelectedOccasions(catalog.selectedOccasions);
+    draft.setSelectedSizes(catalog.selectedSizes);
+    draft.setSelectedCrafts(catalog.selectedCrafts);
+    draft.setSelectedBlouse(catalog.selectedBlouse);
+    draft.setSelectedAvailability(catalog.selectedAvailability);
+    draft.setMinPrice(catalog.minPrice);
+    draft.setMaxPrice(catalog.maxPrice);
+    draft.setQuery(catalog.query);
+    }
+    setFiltersOpen(open);
+  };
+  const applyFilters = () => {
+    catalog.setSelectedCategories(draft.selectedCategories);
+    catalog.setSelectedFabrics(draft.selectedFabrics);
+    catalog.setSelectedOccasions(draft.selectedOccasions);
+    catalog.setSelectedSizes(draft.selectedSizes);
+    catalog.setSelectedCrafts(draft.selectedCrafts);
+    catalog.setSelectedBlouse(draft.selectedBlouse);
+    catalog.setSelectedAvailability(draft.selectedAvailability);
+    catalog.setMinPrice(draft.minPrice);
+    catalog.setMaxPrice(draft.maxPrice);
+    catalog.setQuery(draft.query);
+    setFiltersOpen(false);
+  };
   return (
+    <Dialog open={filtersOpen} onOpenChange={changeFiltersOpen}>
     <Section id="explore">
       <ScrollReveal>
         <header className="border-b border-[var(--color-line)] pb-6 md:pb-8">
@@ -272,32 +309,47 @@ export function ExploreSection({
               Explore
             </h2>
             <div className="flex items-center justify-between gap-3 md:flex-1 md:items-end md:justify-end">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)] md:pb-2">
-                {catalog.filtered.length} items
-              </span>
-              <SortSelect
+              <div className="flex w-full items-center justify-between gap-2 md:w-auto">
+
+                <DialogTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Filters"
+                  className={cn(
+                    "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-green)] md:hidden",
+                    (filtersOpen || catalog.hasActiveFilters) && "border-[var(--color-green)] bg-[var(--color-surface-soft)]"
+                  )}
+                >
+                  <SlidersHorizontal aria-hidden="true" className="h-5 w-5" />
+                </button>
+                </DialogTrigger>
+                <SortSelect
                 value={catalog.sort}
                 onChange={catalog.setSort}
                 className="min-w-[9.5rem] md:min-w-[12rem]"
-              />
+                />
+              </div>
             </div>
           </div>
         </header>
       </ScrollReveal>
 
-      <div className="mt-6 md:hidden">
-        <details className="overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-subtle)]">
-          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-green)] marker:hidden">
-            <span>Filters</span>
-            <span className="text-[10px] tracking-[0.14em] text-[var(--color-muted)]">
-              Refine
-            </span>
-          </summary>
-          <div className="border-t border-[var(--color-line)] p-4">
-            <FiltersPanel catalog={catalog} idPrefix="explore-mobile" flat />
-          </div>
-        </details>
-      </div>
+      <DialogContent title="Filters" titleClassName="sr-only" showClose={false} headerClassName="sr-only" overlayClassName="filter-popup-overlay" className="filter-popup max-h-[90dvh] max-w-md rounded-2xl" contentClassName="max-h-[90dvh] overflow-y-auto overscroll-contain p-4">
+        <FiltersPanel catalog={draft} idPrefix="explore-mobile" flat />
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={draft.resetFilters}
+            disabled={!draft.hasActiveFilters}
+            className="min-h-11 rounded-md border border-[var(--color-green)] px-4 text-sm font-semibold text-[var(--color-green)] transition-colors hover:bg-[var(--color-surface-soft)] disabled:cursor-not-allowed disabled:border-[var(--color-line)] disabled:text-[var(--color-muted)] disabled:opacity-50"
+          >
+            RESET
+          </button>
+          <button type="button" onClick={applyFilters} className="min-h-11 rounded-md bg-[var(--color-green)] px-4 text-sm font-semibold text-[var(--color-on-deep)]">
+            APPLY
+          </button>
+        </div>
+      </DialogContent>
 
       <div className="mt-8 grid items-start gap-6 md:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="hidden md:block">
@@ -314,5 +366,6 @@ export function ExploreSection({
         </div>
       </div>
     </Section>
+    </Dialog>
   );
 }

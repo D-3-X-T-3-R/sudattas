@@ -10,6 +10,7 @@ import { Footer } from "@/components/footer";
 import { Section } from "@/components/ui/section";
 import { Spinner } from "@/components/ui/loading";
 import { useToast } from "@/components/ui/toast";
+import { finishProductReturnTransition, navigateToProductWithTransition } from "@/lib/product-page-transition";
 
 export function StorefrontExploreListingPage() {
   const router = useRouter();
@@ -20,6 +21,10 @@ export function StorefrontExploreListingPage() {
   useEffect(() => {
     void ensureGuestSession();
   }, []);
+
+  useEffect(() => {
+    if (!catalog.loadingProducts) finishProductReturnTransition();
+  }, [catalog.loadingProducts]);
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -53,7 +58,7 @@ export function StorefrontExploreListingPage() {
           catalog={catalog}
           wishlist={wishlist}
           onToggleWish={toggleWish}
-          onQuickView={(product) => router.push(`/product/${product.id}`)}
+          onQuickView={(product, origin) => navigateToProductWithTransition(router, product, origin)}
         />
       )}
 

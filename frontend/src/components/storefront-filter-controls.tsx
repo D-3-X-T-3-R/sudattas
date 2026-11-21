@@ -2,6 +2,7 @@
 
 import { formatInrFromPaise } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 export type StorefrontFilterOption = { value: string; label: string; count: number };
 
@@ -29,6 +30,7 @@ export function SelectFilter({
   options,
   onChange,
   allLabel = "All",
+  openUpward = false,
 }: {
   title: string;
   id: string;
@@ -36,25 +38,23 @@ export function SelectFilter({
   options: StorefrontFilterOption[];
   onChange: (value: string) => void;
   allLabel?: string;
+  openUpward?: boolean;
 }) {
   return (
     <FilterGroupShell title={title}>
-      <label className="mt-3 block" htmlFor={id}>
-        <span className="sr-only">{title}</span>
-        <select
-          id={id}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="h-10 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-green)] focus:ring-2 focus:ring-[var(--color-focus)]"
-        >
-          <option value="">{allLabel}</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="mt-3 min-w-0">
+        <Select value={value || "__all__"} onValueChange={(next) => onChange(next === "__all__" ? "" : next)}>
+          <SelectTrigger id={id} aria-label={title} className="h-10 min-w-0 gap-3 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-200 data-[state=open]:[&>svg]:rotate-180 motion-reduce:[&>svg]:transition-none">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent side={openUpward ? "top" : "bottom"} sideOffset={4} align="start" collisionPadding={16} className="explore-sort-menu z-[70] w-[var(--radix-select-trigger-width)] min-w-0 max-w-[calc(100vw-2rem)]">
+            <SelectItem value="__all__">{allLabel}</SelectItem>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value} className="break-words">{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </FilterGroupShell>
   );
 }
@@ -64,19 +64,23 @@ export function CheckboxGroup({
   options,
   selected,
   onToggle,
+  singleRow = false,
+  showCounts = true,
 }: {
   title: string;
   options: StorefrontFilterOption[];
   selected: string[];
   onToggle: (value: string) => void;
+  singleRow?: boolean;
+  showCounts?: boolean;
 }) {
   return (
     <FilterGroupShell title={title}>
-      <div className="mt-3 space-y-1.5">
+      <div className={cn("mt-3", singleRow ? "flex flex-nowrap gap-2 overflow-x-auto" : "space-y-1.5")}>
         {options.map((option) => (
           <label
             key={option.value}
-            className="flex min-h-10 cursor-pointer items-center justify-between gap-3 rounded-md px-1.5 py-2 text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-soft)]"
+            className={cn("flex min-h-10 cursor-pointer items-center justify-between gap-3 rounded-md px-1.5 py-2 text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-soft)]", singleRow && "shrink-0 whitespace-nowrap")}
           >
             <span className="flex min-w-0 items-center gap-2">
               <input
@@ -87,9 +91,9 @@ export function CheckboxGroup({
               />
               <span className="min-w-0 break-words">{option.label}</span>
             </span>
-            <span className="shrink-0 text-xs text-[var(--color-muted)]">
+            {showCounts && <span className="shrink-0 text-xs text-[var(--color-muted)]">
               {option.count}
-            </span>
+            </span>}
           </label>
         ))}
       </div>

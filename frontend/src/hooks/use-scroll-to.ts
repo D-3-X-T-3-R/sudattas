@@ -4,6 +4,23 @@ const PENDING_HOME_SECTION_KEY = "pendingHomeSection";
 const PENDING_HOME_FROM_OTHER_PAGE_KEY = "pendingHomeFromOtherPage";
 const PENDING_HOME_COLLECTION_KEY = "pendingHomeCollection";
 export const PENDING_HOME_COLLECTION_EVENT = "pending-home-collection";
+const PENDING_HOME_MOOD_KEY = "pendingHomeMood";
+export const PENDING_HOME_MOOD_EVENT = "pending-home-mood";
+
+export function setPendingHomeMood(moodId: string): void {
+  try {
+    sessionStorage.setItem(PENDING_HOME_MOOD_KEY, moodId);
+    window.dispatchEvent(new Event(PENDING_HOME_MOOD_EVENT));
+  } catch { /* browser storage may be unavailable */ }
+}
+
+export function consumePendingHomeMood(): string | null {
+  try {
+    const moodId = sessionStorage.getItem(PENDING_HOME_MOOD_KEY);
+    sessionStorage.removeItem(PENDING_HOME_MOOD_KEY);
+    return moodId;
+  } catch { return null; }
+}
 
 /** Used before `router.push('/')` from bag/wishlist/etc. */
 export function setPendingHomeSection(
